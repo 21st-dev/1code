@@ -169,7 +169,7 @@ export function resolveDesktopPermissionPolicy({
           : {
               runtime: "codex",
               adapterSource: "acp-temporary-compat",
-              acpMode: "auto",
+              acpMode: "read-only",
               controlLevel: "guarded",
               observedToolPolicy: DISABLED_OBSERVATION,
               requiresPermissionHandler: true,
@@ -216,7 +216,7 @@ export function resolveDesktopPermissionPolicy({
         : {
             runtime: "codex",
             adapterSource: "acp-temporary-compat",
-            acpMode: "auto",
+            acpMode: "read-only",
             controlLevel: "observe",
             observedToolPolicy: {
               enabled: true,

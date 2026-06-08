@@ -15,6 +15,7 @@ import { getClaudeShellEnvironment } from "../claude/env"
 import { getCodexRunRequiredCapability } from "../../../shared/codex-runtime-capabilities"
 import { resolveCodexAcpBinaryPath } from "./acp-path"
 import {
+  cleanupCodexAcpProvider,
   getOrCreateCodexAcpProvider,
   type CodexAcpMcpServerForSession,
 } from "./acp-adapter"
@@ -31,6 +32,7 @@ import {
   getCodexErrorDiagnostics,
   isCodexAuthError,
 } from "./errors"
+import { decideCodexAcpToolPermission } from "./acp-permission"
 import {
   prepareCodexAcpPrompt,
   type CodexPromptLongTextAttachment,
@@ -94,6 +96,12 @@ function emitUnsupportedSafetyCapability(
   emit({ type: "finish" })
 }
 
+function guardEventToolUseId(event: AgentGuardEvent): string | null {
+  return typeof event.toolUseId === "string" && event.toolUseId.length > 0
+    ? event.toolUseId
+    : null
+}
+
 export function createCodexAcpTemporaryCompatAdapter({
   appManagedApiKey,
   providerProfile,
@@ -129,6 +137,14 @@ export function createCodexAcpTemporaryCompatAdapter({
         appManagedApiKey: providerProfile ? null : appManagedApiKey,
         providerProfile,
       })
+      const cleanupProvider = () => {
+        cleanupCodexAcpProvider(request.context.subChatId)
+      }
+      if (request.signal.aborted) {
+        cleanupProvider()
+      } else {
+        request.signal.addEventListener("abort", cleanupProvider, { once: true })
+      }
 
       const startedAt = Date.now()
       const usageMetadataResolver = createCodexUsageMetadataResolver({
@@ -162,10 +178,13 @@ export function createCodexAcpTemporaryCompatAdapter({
         }
       }
 
+      const permission = getCodexPermissionMapping(request.permissionPolicy)
+      const handledPermissionToolUseIds = new Set<string>()
+      let dynamicToolDeniedMessage: string | null = null
       const runtimeModel = await createCodexAcpRuntimeModel({
         provider,
         modelId,
-        permission: getCodexPermissionMapping(request.permissionPolicy),
+        permission,
         mode: request.context.mode,
         guardedContract: guardedRun?.contract ?? null,
         subChatId: request.context.subChatId,
@@ -173,8 +192,14 @@ export function createCodexAcpTemporaryCompatAdapter({
         registerPendingQuestion,
         unregisterPendingQuestion,
         onGuardEvent: (event) => {
+          const toolUseId = guardEventToolUseId(event)
+          if (toolUseId) handledPermissionToolUseIds.add(toolUseId)
           guardedRun?.events.push(event)
           emit({ type: "guard-event", event })
+        },
+        onObservedToolDecision: (event) => {
+          const toolUseId = event.risk.toolUseId
+          if (toolUseId) handledPermissionToolUseIds.add(toolUseId)
         },
       })
       if (!runtimeModel.ok) {
@@ -247,7 +272,50 @@ export function createCodexAcpTemporaryCompatAdapter({
         normalizeError: extractCodexError,
         isAuthError: isCodexAuthError,
         resolveUsageOnce: usageMetadataResolver.resolveOnce,
+        abortSignal: request.signal,
+        onDynamicToolPermission: (tool) => {
+          if (handledPermissionToolUseIds.has(tool.toolUseId)) {
+            return { decision: "allow" as const }
+          }
+
+          const decision = decideCodexAcpToolPermission({
+            tool,
+            mode: request.context.mode,
+            controlLevel: permission.controlLevel,
+            observedToolPolicy: permission.observedToolPolicy,
+            contract: guardedRun?.contract ?? null,
+          })
+
+          if (decision.observed) {
+            handledPermissionToolUseIds.add(tool.toolUseId)
+            emit({
+              type: "observed-tool-decision",
+              ...decision.observed,
+            })
+          }
+
+          if (decision.guardEvent) {
+            handledPermissionToolUseIds.add(tool.toolUseId)
+            guardedRun?.events.push(decision.guardEvent)
+            emit({ type: "guard-event", event: decision.guardEvent })
+          }
+
+          return decision
+        },
+        onDynamicToolDenied: (_tool, decision) => {
+          dynamicToolDeniedMessage =
+            decision.message || "Codex ACP dynamic tool was denied."
+          cleanupProvider()
+        },
       })
+
+      if (dynamicToolDeniedMessage) {
+        return {
+          status: "failed" as const,
+          sessionId: provider.getSessionId() ?? null,
+          error: { message: dynamicToolDeniedMessage },
+        }
+      }
 
       return {
         status: request.signal.aborted ? "canceled" as const : "succeeded" as const,

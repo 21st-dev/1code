@@ -1,4 +1,10 @@
-import type { Options as ClaudeAgentSdkOptions } from "@anthropic-ai/claude-agent-sdk"
+import type {
+  HookCallback,
+  HookJSONOutput,
+  Options as ClaudeAgentSdkOptions,
+  PermissionResult,
+  PreToolUseHookInput,
+} from "@anthropic-ai/claude-agent-sdk"
 import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import {
   classifyObservedToolRisk,
@@ -12,6 +18,13 @@ import type { UIMessageChunk } from "./types"
 export type ClaudeAgentSdkCanUseTool = NonNullable<
   ClaudeAgentSdkOptions["canUseTool"]
 >
+
+export type ClaudeAgentSdkPreToolUseHook = HookCallback
+
+export type ClaudeAgentSdkPermissionControls = {
+  canUseTool: ClaudeAgentSdkCanUseTool
+  preToolUseHook: ClaudeAgentSdkPreToolUseHook
+}
 
 export type ClaudeAskUserQuestionDecision = {
   approved: boolean
@@ -89,7 +102,44 @@ function fixOllamaToolInputAliases(
   }
 }
 
-export function createClaudeAgentSdkToolPermissionHandler({
+function isPreToolUseHookInput(
+  input: Parameters<HookCallback>[0],
+): input is PreToolUseHookInput {
+  return input.hook_event_name === "PreToolUse"
+}
+
+function normalizeToolInput(input: unknown): Record<string, unknown> {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    return { ...(input as Record<string, unknown>) }
+  }
+  return {}
+}
+
+function toClaudePreToolUseHookOutput(
+  decision: PermissionResult,
+): HookJSONOutput {
+  if (decision.behavior === "deny") {
+    return {
+      continue: true,
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: decision.message,
+      },
+    }
+  }
+
+  return {
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "allow",
+      ...(decision.updatedInput ? { updatedInput: decision.updatedInput } : {}),
+    },
+  }
+}
+
+export function createClaudeAgentSdkPermissionControls({
   isUsingOllama,
   permissionPolicy,
   guardedContract,
@@ -99,8 +149,20 @@ export function createClaudeAgentSdkToolPermissionHandler({
   subChatId,
   pendingToolApprovals,
   parts,
-}: CreateClaudeAgentSdkToolPermissionHandlerInput): ClaudeAgentSdkCanUseTool {
-  return async (toolName, toolInput, options) => {
+}: CreateClaudeAgentSdkToolPermissionHandlerInput): ClaudeAgentSdkPermissionControls {
+  const preToolUseDecisions = new Map<string, PermissionResult>()
+
+  const decideToolPermission = async ({
+    toolName,
+    toolInput,
+    toolUseID,
+    handleAskUserQuestion,
+  }: {
+    toolName: string
+    toolInput: Record<string, unknown>
+    toolUseID: string
+    handleAskUserQuestion: boolean
+  }): Promise<PermissionResult> => {
     if (isUsingOllama) {
       fixOllamaToolInputAliases(toolName, toolInput)
     }
@@ -138,7 +200,7 @@ export function createClaudeAgentSdkToolPermissionHandler({
         contract: currentGuardedContract,
         toolName,
         toolInput,
-        toolUseId: options.toolUseID,
+        toolUseId: toolUseID,
       })
       recordGuardEvent(decision.event)
       emit({
@@ -149,7 +211,13 @@ export function createClaudeAgentSdkToolPermissionHandler({
     }
 
     if (toolName === "AskUserQuestion") {
-      const { toolUseID } = options
+      if (!handleAskUserQuestion) {
+        return {
+          behavior: "allow",
+          updatedInput: toolInput,
+        }
+      }
+
       emit({
         type: "ask-user-question",
         toolUseId: toolUseID,
@@ -224,7 +292,7 @@ export function createClaudeAgentSdkToolPermissionHandler({
       const risk = classifyObservedToolRisk({
         toolName,
         toolInput,
-        toolUseId: options.toolUseID,
+        toolUseId: toolUseID,
       })
       const shouldDeny =
         risk.catastrophic &&
@@ -250,4 +318,57 @@ export function createClaudeAgentSdkToolPermissionHandler({
       updatedInput: toolInput,
     }
   }
+
+  const canUseTool: ClaudeAgentSdkCanUseTool = async (
+    toolName,
+    toolInput,
+    options,
+  ) => {
+    const cachedDecision = preToolUseDecisions.get(options.toolUseID)
+    if (cachedDecision && toolName !== "AskUserQuestion") {
+      return cachedDecision
+    }
+
+    return decideToolPermission({
+      toolName,
+      toolInput,
+      toolUseID: options.toolUseID,
+      handleAskUserQuestion: true,
+    })
+  }
+
+  const preToolUseHook: ClaudeAgentSdkPreToolUseHook = async (
+    hookInput,
+    toolUseID,
+  ) => {
+    if (!isPreToolUseHookInput(hookInput)) {
+      return { continue: true }
+    }
+
+    const resolvedToolUseID =
+      hookInput.tool_use_id || toolUseID || "unknown-tool-use"
+    if (hookInput.tool_name === "AskUserQuestion") {
+      return { continue: true }
+    }
+
+    const decision = await decideToolPermission({
+      toolName: hookInput.tool_name,
+      toolInput: normalizeToolInput(hookInput.tool_input),
+      toolUseID: resolvedToolUseID,
+      handleAskUserQuestion: false,
+    })
+    preToolUseDecisions.set(resolvedToolUseID, decision)
+    return toClaudePreToolUseHookOutput(decision)
+  }
+
+  return {
+    canUseTool,
+    preToolUseHook,
+  }
+}
+
+export function createClaudeAgentSdkToolPermissionHandler(
+  input: CreateClaudeAgentSdkToolPermissionHandlerInput,
+): ClaudeAgentSdkCanUseTool {
+  return createClaudeAgentSdkPermissionControls(input).canUseTool
 }

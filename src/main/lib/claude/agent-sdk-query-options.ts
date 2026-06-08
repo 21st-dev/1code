@@ -7,7 +7,7 @@ import type { DesktopRunRequest } from "../agent-runtime/desktop-run-request"
 import type { ClaudePermissionMapping } from "../agent-runtime/permission-policy"
 import { getBundledClaudeBinaryPath } from "./env"
 import {
-  createClaudeAgentSdkToolPermissionHandler,
+  createClaudeAgentSdkPermissionControls,
   type CreateClaudeAgentSdkToolPermissionHandlerInput,
 } from "./agent-sdk-tool-permission"
 
@@ -27,6 +27,7 @@ export type CreateClaudeAgentSdkQueryOptionsInput = {
   mcpServers?: ClaudeAgentSdkOptions["mcpServers"]
   isUsingOllama: boolean
   canUseTool: NonNullable<ClaudeAgentSdkOptions["canUseTool"]>
+  hooks?: ClaudeAgentSdkOptions["hooks"]
   stderr: NonNullable<ClaudeAgentSdkOptions["stderr"]>
   pathToClaudeCodeExecutable: string
   resumeSessionAt?: string | null
@@ -154,12 +155,21 @@ export function createClaudeAgentSdkRuntimeQueryOptions({
   getClaudeBinaryPath = getBundledClaudeBinaryPath,
   ...input
 }: CreateClaudeAgentSdkRuntimeQueryOptionsInput): ClaudeAgentSdkQueryParams {
+  const permissionControls = createClaudeAgentSdkPermissionControls({
+    isUsingOllama: input.isUsingOllama,
+    ...permissionHandler,
+  })
+
   return createClaudeAgentSdkQueryOptions({
     ...input,
-    canUseTool: createClaudeAgentSdkToolPermissionHandler({
-      isUsingOllama: input.isUsingOllama,
-      ...permissionHandler,
-    }),
+    canUseTool: permissionControls.canUseTool,
+    hooks: {
+      PreToolUse: [
+        {
+          hooks: [permissionControls.preToolUseHook],
+        },
+      ],
+    },
     stderr: createClaudeAgentSdkStderrHandler({
       stderrLines,
       isUsingOllama: input.isUsingOllama,
@@ -231,6 +241,7 @@ export function createClaudeAgentSdkQueryOptions({
   mcpServers,
   isUsingOllama,
   canUseTool,
+  hooks,
   stderr,
   pathToClaudeCodeExecutable,
   resumeSessionAt,
@@ -258,6 +269,7 @@ export function createClaudeAgentSdkQueryOptions({
         settingSources: ["project" as const, "user" as const],
       }),
       canUseTool,
+      ...(hooks && { hooks }),
       stderr,
       pathToClaudeCodeExecutable,
       ...(resumeSessionId && {

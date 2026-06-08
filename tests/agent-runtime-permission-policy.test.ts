@@ -72,7 +72,7 @@ describe("desktop runtime permission policy", () => {
     expect(guardedPolicy.runtimeMapping).toMatchObject({
       runtime: "codex",
       adapterSource: "acp-temporary-compat",
-      acpMode: "auto",
+      acpMode: "read-only",
       requiresPermissionHandler: true,
       permissionHandlerFailure: "fail-closed",
     })
@@ -120,6 +120,7 @@ describe("desktop runtime permission policy", () => {
     })
     expect(codexPolicy.runtimeMapping).toMatchObject({
       runtime: "codex",
+      acpMode: "read-only",
       requiresPermissionHandler: true,
       permissionHandlerFailure: "degrade-to-stream-only",
     })
@@ -159,14 +160,16 @@ describe("desktop runtime permission policy", () => {
     expect(claude).not.toContain("getClaudePermissionMapping")
     expect(claude).not.toContain("permissionHandler: {")
     expect(claude).not.toContain("createClaudeAgentSdkToolPermissionHandler")
+    expect(claude).not.toContain("createClaudeAgentSdkPermissionControls")
     expect(claudeRuntimeQuery).toContain("getClaudePermissionMapping")
     expect(claudeQueryOptions).toContain(
       "createClaudeAgentSdkDesktopRuntimeQueryOptions",
     )
     expect(claudeQueryOptions).toContain("permissionHandler: {")
     expect(claudeQueryOptions).toContain(
-      "createClaudeAgentSdkToolPermissionHandler",
+      "createClaudeAgentSdkPermissionControls",
     )
+    expect(claudeQueryOptions).toContain("PreToolUse")
     expect(claudeToolPermission).toContain(
       "permissionPolicy.planWorkspaceSideEffects",
     )
@@ -175,7 +178,11 @@ describe("desktop runtime permission policy", () => {
     expect(codex).toContain("resolveDesktopPermissionPolicy")
     expect(codexAcpTemporaryCompatAdapter).toContain("getCodexPermissionMapping")
     expect(codexAcpTemporaryCompatAdapter).toContain(
-      "permission: getCodexPermissionMapping(request.permissionPolicy)",
+      "const permission = getCodexPermissionMapping(request.permissionPolicy)",
+    )
+    expect(codexAcpTemporaryCompatAdapter).toContain("permission,")
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "decideCodexAcpToolPermission",
     )
     expect(codexAcpRuntime).toContain("permission.acpMode")
     expect(codexAcpRuntime).toContain("permission.requiresPermissionHandler")

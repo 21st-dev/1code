@@ -1,4 +1,5 @@
 import { createACPProvider, type ACPProvider } from "@mcpc-tech/acp-ai-provider"
+import { spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
 import { getRuntimeExecutableStatus } from "../runtime-executable"
@@ -49,9 +50,120 @@ export type GetOrCreateCodexAcpProviderInput = {
 
 const providerSessions = new Map<string, CodexAcpProviderSession>()
 
+type ProcessNode = {
+  pid: number
+  ppid: number
+}
+
+type CodexAcpProviderWithProcess = {
+  model?: {
+    agentProcess?: {
+      pid?: unknown
+    }
+  }
+}
+
 function getAuthFingerprint(appManagedApiKey?: string | null): string | null {
   if (!appManagedApiKey) return null
   return createHash("sha256").update(appManagedApiKey).digest("hex")
+}
+
+function parseProcessTable(processTable: string): ProcessNode[] {
+  const nodes: ProcessNode[] = []
+  for (const line of processTable.split(/\r?\n/)) {
+    const [pidText, ppidText] = line.trim().split(/\s+/, 2)
+    const pid = Number(pidText)
+    const ppid = Number(ppidText)
+    if (!Number.isInteger(pid) || !Number.isInteger(ppid) || pid <= 0) {
+      continue
+    }
+    nodes.push({ pid, ppid })
+  }
+  return nodes
+}
+
+export function collectDescendantProcessIds(
+  processTable: string,
+  rootPid: number,
+): number[] {
+  if (!Number.isInteger(rootPid) || rootPid <= 0) return []
+
+  const childrenByParent = new Map<number, number[]>()
+  for (const node of parseProcessTable(processTable)) {
+    const children = childrenByParent.get(node.ppid) ?? []
+    children.push(node.pid)
+    childrenByParent.set(node.ppid, children)
+  }
+
+  const descendants: number[] = []
+  const visited = new Set<number>()
+  const visit = (pid: number) => {
+    for (const childPid of childrenByParent.get(pid) ?? []) {
+      if (visited.has(childPid)) continue
+      visited.add(childPid)
+      visit(childPid)
+      descendants.push(childPid)
+    }
+  }
+  visit(rootPid)
+  return descendants
+}
+
+function getCodexAcpProviderProcessId(provider: ACPProvider): number | null {
+  const candidate = provider as unknown as CodexAcpProviderWithProcess
+  const pid = candidate.model?.agentProcess?.pid
+  return typeof pid === "number" && Number.isInteger(pid) && pid > 0
+    ? pid
+    : null
+}
+
+function currentProcessTable(): string | null {
+  const result = spawnSync("ps", ["-axo", "pid=,ppid="], {
+    encoding: "utf8",
+  })
+  if (result.status !== 0 || typeof result.stdout !== "string") {
+    return null
+  }
+  return result.stdout
+}
+
+function signalProcess(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(pid, signal)
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ESRCH"
+    ) {
+      return
+    }
+    console.warn("[codex-acp] failed to signal process", {
+      pid,
+      signal,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+function cleanupProviderSession(session: CodexAcpProviderSession): void {
+  const rootPid = getCodexAcpProviderProcessId(session.provider)
+  const processTable = rootPid ? currentProcessTable() : null
+  const descendantPids =
+    rootPid && processTable
+      ? collectDescendantProcessIds(processTable, rootPid)
+      : []
+
+  for (const pid of descendantPids) {
+    signalProcess(pid, "SIGTERM")
+  }
+
+  session.provider.cleanup()
+
+  if (rootPid) {
+    signalProcess(rootPid, "SIGTERM")
+  }
 }
 
 export function getOrCreateCodexAcpProvider(
@@ -72,7 +184,7 @@ export function getOrCreateCodexAcpProvider(
   }
 
   if (existing) {
-    existing.provider.cleanup()
+    cleanupProviderSession(existing)
     providerSessions.delete(context.subChatId)
   }
 
@@ -153,13 +265,13 @@ export function cleanupCodexAcpProvider(subChatId: string): void {
   const existing = providerSessions.get(subChatId)
   if (!existing) return
 
-  existing.provider.cleanup()
+  cleanupProviderSession(existing)
   providerSessions.delete(subChatId)
 }
 
 export function cleanupAllCodexAcpProviders(): void {
   for (const existing of providerSessions.values()) {
-    existing.provider.cleanup()
+    cleanupProviderSession(existing)
   }
   providerSessions.clear()
 }

@@ -262,6 +262,46 @@ describe("Claude Agent SDK query options", () => {
       }),
     ])
     expect(guardEvents).toEqual([])
+
+    const preToolUseHook =
+      queryParams.options.hooks?.PreToolUse?.[0]?.hooks[0]
+    expect(typeof preToolUseHook).toBe("function")
+    await expect(
+      preToolUseHook?.(
+        {
+          hook_event_name: "PreToolUse",
+          tool_name: "Write",
+          tool_input: {
+            file_path: "/repo/.env",
+            content: "LOCUS_SMOKE_SHOULD_NOT_EXIST=1",
+          },
+          tool_use_id: "tool-2",
+        } as any,
+        "tool-2",
+        { signal: new AbortController().signal },
+      ),
+    ).resolves.toMatchObject({
+      continue: true,
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: expect.stringContaining(
+          "Observed mode blocked Write",
+        ),
+      },
+    })
+    expect(emitted[1]).toMatchObject({
+      type: "observed-tool-decision",
+      controlLevel: "observe",
+      decision: "deny",
+      risk: {
+        toolName: "Write",
+        toolUseId: "tool-2",
+        category: "write",
+        riskLevel: "catastrophic",
+        catastrophic: true,
+      },
+    })
   })
 
   test("builds desktop runtime query options with owned guard event recording", async () => {
@@ -337,6 +377,34 @@ describe("Claude Agent SDK query options", () => {
         event: guardEvents[0],
       },
     ])
+
+    const preToolUseHook =
+      queryParams.options.hooks?.PreToolUse?.[0]?.hooks[0]
+    expect(typeof preToolUseHook).toBe("function")
+    await expect(
+      preToolUseHook?.(
+        {
+          hook_event_name: "PreToolUse",
+          tool_name: "Edit",
+          tool_input: { file_path: "tests/app.test.ts" },
+          tool_use_id: "tool-2",
+        } as any,
+        "tool-2",
+        { signal: new AbortController().signal },
+      ),
+    ).resolves.toMatchObject({
+      continue: true,
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+      },
+    })
+    expect(guardEvents).toHaveLength(2)
+    expect(guardEvents[1]).toMatchObject({
+      type: "scope-expansion-request",
+      toolName: "Edit",
+      toolUseId: "tool-2",
+    })
   })
 
   test("maps run request and runtime controls into SDK query params", () => {
@@ -347,6 +415,9 @@ describe("Claude Agent SDK query options", () => {
     })
     const permission = getClaudePermissionMapping(request.permissionPolicy)
     const canUseTool = async () => ({ behavior: "allow" as const })
+    const hooks = {
+      PreToolUse: [{ hooks: [async () => ({ continue: true })] }],
+    } as any
     const stderr = () => {}
     const mcpServers = {
       filesystem: {
@@ -368,6 +439,7 @@ describe("Claude Agent SDK query options", () => {
       mcpServers,
       isUsingOllama: false,
       canUseTool,
+      hooks,
       stderr,
       pathToClaudeCodeExecutable: "/bin/claude",
       resumeSessionAt: "uuid-1",
@@ -389,6 +461,7 @@ describe("Claude Agent SDK query options", () => {
     expect(queryParams.options.includePartialMessages).toBe(true)
     expect(queryParams.options.settingSources).toEqual(["project", "user"])
     expect(queryParams.options.canUseTool).toBe(canUseTool)
+    expect(queryParams.options.hooks).toBe(hooks)
     expect(queryParams.options.stderr).toBe(stderr)
     expect(queryParams.options.pathToClaudeCodeExecutable).toBe("/bin/claude")
     expect(queryParams.options.resume).toBe("session-1")

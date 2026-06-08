@@ -56,6 +56,19 @@ export type CodexObservedToolDecision = {
   message?: string
 }
 
+export type CodexAcpToolPermissionDecision = {
+  decision: "allow" | "deny"
+  message?: string
+  observed?: CodexObservedToolDecision
+  guardEvent?: AgentGuardEvent
+}
+
+export type CodexAcpDynamicToolInput = {
+  toolCallId?: unknown
+  toolName?: unknown
+  input?: unknown
+}
+
 const CODEX_TITLE_VERB_TO_TOOL_NAME: Record<string, string> = {
   Read: "Read",
   Run: "Bash",
@@ -114,12 +127,58 @@ function commandFromRawInput(rawInput: Record<string, unknown>): string | null {
   return null
 }
 
+function parseJsonRecord(value: unknown): Record<string, unknown> | null {
+  if (isRecord(value)) return value
+  if (typeof value !== "string" || value.trim().length === 0) return null
+  try {
+    const parsed = JSON.parse(value)
+    return isRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function firstRecordKey(value: unknown): string | null {
+  if (!isRecord(value)) return null
+  return Object.keys(value).find((key) => key.trim().length > 0) ?? null
+}
+
+function firstStringPathFromArray(value: unknown): string | null {
+  if (!Array.isArray(value)) return null
+  for (const item of value) {
+    if (!isRecord(item)) continue
+    const candidate =
+      (typeof item.file_path === "string" && item.file_path) ||
+      (typeof item.path === "string" && item.path)
+    if (candidate) return candidate
+  }
+  return null
+}
+
 function firstDiffPath(content: ToolCallUpdate["content"]): string | null {
   if (!Array.isArray(content)) return null
   const diff = content.find((item) => item?.type === "diff")
   return diff && "path" in diff && typeof diff.path === "string"
     ? diff.path
     : null
+}
+
+function getToolNameFromTitle(title: string): string | null {
+  if (title.includes("AskUserQuestion")) return "AskUserQuestion"
+  const titleVerb = getTitleVerb(title)
+  if (CODEX_TITLE_VERB_TO_TOOL_NAME[titleVerb]) {
+    return CODEX_TITLE_VERB_TO_TOOL_NAME[titleVerb]
+  }
+  if (titleVerb.startsWith("mcp__")) return titleVerb
+  return null
+}
+
+function getTitleDetail(title: string): string | null {
+  const trimmed = title.trim()
+  const firstSpace = trimmed.search(/\s/)
+  if (firstSpace < 0) return null
+  const detail = trimmed.slice(firstSpace + 1).trim()
+  return detail.length > 0 ? detail : null
 }
 
 function getToolNameFromKind(kind: ToolKind | null | undefined): string | null {
@@ -142,6 +201,21 @@ function getToolNameFromKind(kind: ToolKind | null | undefined): string | null {
     default:
       return null
   }
+}
+
+function getPathFromDynamicArgs(
+  rawInput: Record<string, unknown>,
+  title: string,
+): string | null {
+  const directPath =
+    (typeof rawInput.file_path === "string" && rawInput.file_path) ||
+    (typeof rawInput.path === "string" && rawInput.path) ||
+    (typeof rawInput.notebook_path === "string" && rawInput.notebook_path) ||
+    firstRecordKey(rawInput.changes) ||
+    firstStringPathFromArray(rawInput.edits)
+  if (directPath) return directPath
+
+  return getTitleDetail(title)
 }
 
 function normalizeCodexPermissionToolInput(
@@ -178,15 +252,53 @@ function normalizeCodexPermissionToolInput(
   return rawInput
 }
 
+function normalizeCodexDynamicPermissionToolInput(
+  rawInput: Record<string, unknown>,
+  toolName: string,
+  title: string,
+): Record<string, unknown> {
+  if (toolName === "Bash") {
+    const command = commandFromRawInput(rawInput) || getTitleDetail(title)
+    return command ? { ...rawInput, command } : rawInput
+  }
+
+  if (
+    toolName === "Read" ||
+    toolName === "Edit" ||
+    toolName === "MultiEdit" ||
+    toolName === "Write" ||
+    toolName === "NotebookEdit"
+  ) {
+    const path = getPathFromDynamicArgs(rawInput, title)
+    return path ? { ...rawInput, file_path: path, path } : rawInput
+  }
+
+  if (toolName === "Grep" || toolName === "Glob" || toolName === "LS") {
+    const path =
+      (typeof rawInput.path === "string" && rawInput.path) ||
+      getTitleDetail(title)
+    return path ? { ...rawInput, path } : rawInput
+  }
+
+  if (toolName === "WebFetch") {
+    const detail = getTitleDetail(title)
+    const url =
+      (typeof rawInput.url === "string" && rawInput.url) ||
+      (detail?.startsWith("http") ? detail : null)
+    return url ? { ...rawInput, url } : rawInput
+  }
+
+  return rawInput
+}
+
 export function normalizeCodexPermissionTool(
   toolCall: ToolCallUpdate,
 ): CodexAcpPermissionTool {
   const title = typeof toolCall.title === "string" ? toolCall.title : ""
-  const titleVerb = getTitleVerb(title)
   const toolName =
-    CODEX_TITLE_VERB_TO_TOOL_NAME[titleVerb] ||
+    getToolNameFromTitle(title) ||
     getToolNameFromKind(toolCall.kind) ||
-    titleVerb ||
+    getTitleVerb(title) ||
     "Unknown"
 
   return {
@@ -194,6 +306,42 @@ export function normalizeCodexPermissionTool(
     toolName,
     toolInput: normalizeCodexPermissionToolInput(toolCall, toolName),
     kind: toolCall.kind ?? null,
+    title,
+  }
+}
+
+export function normalizeCodexDynamicPermissionTool(
+  input: CodexAcpDynamicToolInput,
+): CodexAcpPermissionTool | null {
+  const parsedInput = parseJsonRecord(input.input)
+  const rawToolCallId =
+    parsedInput?.toolCallId ?? input.toolCallId ?? parsedInput?.id
+  const toolUseId =
+    typeof rawToolCallId === "string" && rawToolCallId.trim().length > 0
+      ? rawToolCallId
+      : null
+  if (!toolUseId) return null
+
+  const rawTitle =
+    (typeof parsedInput?.toolName === "string" && parsedInput.toolName) ||
+    (typeof input.toolName === "string" && input.toolName) ||
+    ""
+  const title = rawTitle.trim()
+  if (!title) return null
+
+  const toolName = getToolNameFromTitle(title) || "Unknown"
+  const rawArgs = parsedInput?.args
+  const toolInput = normalizeCodexDynamicPermissionToolInput(
+    isRecord(rawArgs) ? rawArgs : parsedInput ?? {},
+    toolName,
+    title,
+  )
+
+  return {
+    toolUseId,
+    toolName,
+    toolInput,
+    kind: null,
     title,
   }
 }
@@ -237,6 +385,64 @@ export function isCodexPlanModeBlockedTool(
   )
 }
 
+export function decideCodexAcpToolPermission({
+  tool,
+  mode,
+  controlLevel,
+  observedToolPolicy,
+  contract,
+}: CodexAcpPermissionPolicyInput & {
+  tool: CodexAcpPermissionTool
+}): CodexAcpToolPermissionDecision {
+  if (mode === "plan" && isCodexPlanModeBlockedTool(tool)) {
+    return {
+      decision: "deny",
+      message: `Plan mode blocked ${tool.toolName} before execution.`,
+    }
+  }
+
+  if (!contract) {
+    if (controlLevel === "observe" && observedToolPolicy?.enabled) {
+      const risk = classifyObservedToolRisk({
+        toolName: tool.toolName,
+        toolInput: tool.toolInput,
+        toolUseId: tool.toolUseId,
+      })
+      const shouldDeny =
+        risk.catastrophic && observedToolPolicy.blocksCatastrophicActions
+      const message = shouldDeny
+        ? `Observed mode blocked ${tool.toolName}: ${risk.reason}`
+        : undefined
+      return {
+        decision: shouldDeny ? "deny" : "allow",
+        ...(message ? { message } : {}),
+        observed: {
+          controlLevel: "observe",
+          decision: shouldDeny ? "deny" : "allow",
+          risk,
+          ...(message ? { message } : {}),
+        },
+      }
+    }
+
+    return { decision: "allow" }
+  }
+
+  const guardDecision = decideClaudeToolUse({
+    contract,
+    toolName: tool.toolName,
+    toolInput: tool.toolInput,
+    toolUseId: tool.toolUseId,
+  })
+
+  return {
+    decision: guardDecision.decision === "allow" ? "allow" : "deny",
+    message:
+      guardDecision.decision === "allow" ? undefined : guardDecision.reason,
+    guardEvent: guardDecision.event,
+  }
+}
+
 export function createCodexAcpPermissionHandler({
   mode,
   controlLevel,
@@ -247,47 +453,19 @@ export function createCodexAcpPermissionHandler({
 }: CodexAcpPermissionPolicyInput): AcpPermissionHandler {
   return async (params) => {
     const tool = normalizeCodexPermissionTool(params.toolCall)
-
-    if (mode === "plan" && isCodexPlanModeBlockedTool(tool)) {
-      return buildCodexAcpPermissionResponse(params.options, "deny")
-    }
-
-    if (!contract) {
-      if (controlLevel === "observe" && observedToolPolicy?.enabled) {
-        const risk = classifyObservedToolRisk({
-          toolName: tool.toolName,
-          toolInput: tool.toolInput,
-          toolUseId: tool.toolUseId,
-        })
-        const shouldDeny =
-          risk.catastrophic && observedToolPolicy.blocksCatastrophicActions
-        const message = shouldDeny
-          ? `Observed mode blocked ${tool.toolName}: ${risk.reason}`
-          : undefined
-        onObservedToolDecision?.({
-          controlLevel: "observe",
-          decision: shouldDeny ? "deny" : "allow",
-          risk,
-          ...(message ? { message } : {}),
-        })
-        if (shouldDeny) {
-          return buildCodexAcpPermissionResponse(params.options, "deny")
-        }
-      }
-      return buildCodexAcpPermissionResponse(params.options, "allow")
-    }
-
-    const decision = decideClaudeToolUse({
+    const decision = decideCodexAcpToolPermission({
+      tool,
+      mode,
+      controlLevel,
+      observedToolPolicy,
       contract,
-      toolName: tool.toolName,
-      toolInput: tool.toolInput,
-      toolUseId: tool.toolUseId,
     })
-    onGuardEvent?.(decision.event)
+    if (decision.observed) onObservedToolDecision?.(decision.observed)
+    if (decision.guardEvent) onGuardEvent?.(decision.guardEvent)
 
     return buildCodexAcpPermissionResponse(
       params.options,
-      decision.decision === "allow" ? "allow" : "deny",
+      decision.decision,
     )
   }
 }

@@ -26,8 +26,10 @@ mock.module("electron", () => ({
 const {
   buildCodexAcpPermissionResponse,
   createCodexAcpPermissionHandler,
+  decideCodexAcpToolPermission,
   installCodexAcpPermissionHandler,
   isCodexPlanModeBlockedTool,
+  normalizeCodexDynamicPermissionTool,
   normalizeCodexPermissionTool,
 } = await import("../src/main/lib/codex/acp-permission")
 const { validateAgentScopeContract } = await import("../src/main/lib/agent-guard")
@@ -218,6 +220,61 @@ describe("Codex ACP permission enforcement", () => {
       },
     })
     expect(observed[1].risk.riskCategories).toContain("sensitive-path")
+  })
+
+  test("normalizes dynamic ACP edit tool input and denies observed .env writes", () => {
+    const policy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "agent",
+    })
+    const permission = getCodexPermissionMapping(policy)
+    const tool = normalizeCodexDynamicPermissionTool({
+      toolCallId: "dynamic-1",
+      toolName: "acp.acp_provider_agent_dynamic_tool",
+      input: {
+        toolCallId: "codex-tool-1",
+        toolName: `Edit ${join(process.cwd(), ".env")}`,
+        args: {
+          changes: {
+            [join(process.cwd(), ".env")]: {
+              type: "add",
+              content: "SECRET_TOKEN=should-not-land",
+            },
+          },
+          auto_approved: true,
+        },
+      },
+    })
+
+    expect(tool).toMatchObject({
+      toolUseId: "codex-tool-1",
+      toolName: "Edit",
+      toolInput: {
+        file_path: join(process.cwd(), ".env"),
+        path: join(process.cwd(), ".env"),
+      },
+    })
+
+    const decision = decideCodexAcpToolPermission({
+      tool: tool!,
+      mode: "agent",
+      controlLevel: permission.controlLevel,
+      observedToolPolicy: permission.observedToolPolicy,
+    })
+
+    expect(decision).toMatchObject({
+      decision: "deny",
+      observed: {
+        controlLevel: "observe",
+        decision: "deny",
+        risk: {
+          toolName: "Edit",
+          riskLevel: "catastrophic",
+          catastrophic: true,
+        },
+      },
+    })
+    expect(decision.observed?.risk.riskCategories).toContain("sensitive-path")
   })
 
   test("installs the handler through the current ACP model client seam", async () => {

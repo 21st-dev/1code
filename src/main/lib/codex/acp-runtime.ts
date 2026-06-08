@@ -6,6 +6,7 @@ import type { ValidatedAgentScopeContract } from "../agent-guard"
 import {
   createCodexAcpPermissionHandler,
   installCodexAcpPermissionHandler,
+  type CodexObservedToolDecision,
 } from "./acp-permission"
 import {
   createCodexAskUserQuestionTools,
@@ -29,6 +30,7 @@ export type CreateCodexAcpRuntimeModelInput = {
   ) => void
   unregisterPendingQuestion: (toolUseId: string) => void
   onGuardEvent: (event: AgentGuardEvent) => void
+  onObservedToolDecision?: (event: CodexObservedToolDecision) => void
 }
 
 export type CreateCodexAcpRuntimeModelResult =
@@ -50,6 +52,7 @@ export async function createCodexAcpRuntimeModel({
   registerPendingQuestion,
   unregisterPendingQuestion,
   onGuardEvent,
+  onObservedToolDecision,
 }: CreateCodexAcpRuntimeModelInput): Promise<CreateCodexAcpRuntimeModelResult> {
   const model = provider.languageModel(modelId, permission.acpMode)
   installCodexAskUserQuestionAcpResultNormalizer(model)
@@ -76,6 +79,7 @@ export async function createCodexAcpRuntimeModel({
       contract: guardedContract,
       onGuardEvent,
       onObservedToolDecision: (event) => {
+        onObservedToolDecision?.(event)
         emit({
           type: "observed-tool-decision",
           ...event,

@@ -912,6 +912,7 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain(
       "canUseTool: createClaudeAgentSdkToolPermissionHandler({",
     )
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkPermissionControls")
     expect(claudeRouter).not.toContain(
       "shouldForkResume && forkResumeAtUuid && !isUsingOllama",
     )
@@ -936,8 +937,9 @@ describe("desktop runtime adapter factory", () => {
       "createClaudeAgentSdkRuntimeQueryOptions",
     )
     expect(claudeQueryOptions).toContain(
-      "createClaudeAgentSdkToolPermissionHandler",
+      "createClaudeAgentSdkPermissionControls",
     )
+    expect(claudeQueryOptions).toContain("PreToolUse")
     expect(claudeQueryOptions).toContain("createClaudeAgentSdkStderrHandler")
     expect(claudeQueryOptions).toContain("getBundledClaudeBinaryPath")
     expect(claudeQueryOptions).toContain("pathToClaudeCodeExecutable")
@@ -1935,10 +1937,17 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeRouter).not.toContain(
       "canUseTool: createClaudeAgentSdkToolPermissionHandler({",
     )
+    expect(claudeRouter).not.toContain("createClaudeAgentSdkPermissionControls")
     expect(claudeRouter).not.toContain("PLAN_MODE_BLOCKED_TOOLS")
     expect(claudeRouter).not.toContain("toClaudePermissionResult(decision)")
     expect(claudeQueryOptions).toContain(
-      "canUseTool: createClaudeAgentSdkToolPermissionHandler({",
+      "const permissionControls = createClaudeAgentSdkPermissionControls({",
+    )
+    expect(claudeQueryOptions).toContain(
+      "canUseTool: permissionControls.canUseTool",
+    )
+    expect(claudeQueryOptions).toContain(
+      "hooks: [permissionControls.preToolUseHook]",
     )
     expect(claudeToolPermission).toContain("PLAN_MODE_BLOCKED_TOOLS")
     expect(claudeToolPermission).toContain("fixOllamaToolInputAliases")

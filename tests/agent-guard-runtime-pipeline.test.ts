@@ -68,9 +68,11 @@ describe("agent guard runtime pipeline", () => {
     expect(claude).not.toContain("permissionHandler: {")
     expect(claudeQueryOptions).toContain("permissionHandler: {")
     expect(claude).not.toContain("createClaudeAgentSdkToolPermissionHandler")
+    expect(claude).not.toContain("createClaudeAgentSdkPermissionControls")
     expect(claudeQueryOptions).toContain(
-      "createClaudeAgentSdkToolPermissionHandler",
+      "createClaudeAgentSdkPermissionControls",
     )
+    expect(claudeQueryOptions).toContain("PreToolUse")
     expect(claudeToolPermission).toContain("decideClaudeToolUse")
     expect(claudeToolPermission).toContain("toClaudePermissionResult(decision)")
     expect(claude).toContain("respondScopeExpansion")

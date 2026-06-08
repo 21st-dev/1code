@@ -942,6 +942,7 @@ export const codexRouter = router({
         let desktopJobId: string | null = null
         let desktopJobSawError = false
         let desktopJobReachedNaturalFinish = false
+        let desktopJobAdapterFailed = false
         let desktopJobDb: ReturnType<typeof getDatabase> | null = null
         let desktopStreamEventMapper: ReturnType<
           typeof createDesktopStreamEventMapper
@@ -1454,6 +1455,10 @@ export const codexRouter = router({
 
             const adapterResult = await codexAdapter.run(desktopRunRequest)
 
+            desktopJobAdapterFailed = adapterResult.status === "failed"
+            if (desktopJobAdapterFailed) {
+              desktopJobSawError = true
+            }
             desktopJobReachedNaturalFinish =
               adapterResult.status === "succeeded" && !desktopJobSawError
             safeComplete()
@@ -1478,9 +1483,10 @@ export const codexRouter = router({
               completeDesktopChatAgentJobSafely(jobDb, {
                 jobId: desktopJobId,
                 runtime: "codex",
-                aborted: abortController.signal.aborted,
+                aborted:
+                  abortController.signal.aborted && !desktopJobAdapterFailed,
                 reachedNaturalFinish: desktopJobReachedNaturalFinish,
-                sawError: desktopJobSawError,
+                sawError: desktopJobSawError || desktopJobAdapterFailed,
                 result: {
                   runtime: "codex",
                   subChatId: input.subChatId,

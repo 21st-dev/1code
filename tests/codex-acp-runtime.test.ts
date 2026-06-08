@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { join } from "node:path"
 import { emitCodexAcpUiStream } from "../src/main/lib/codex/acp-ui-stream"
 
 function streamFrom(chunks: any[]): ReadableStream<any> {
@@ -49,5 +50,98 @@ describe("Codex ACP runtime", () => {
       { type: "auth-error", errorText: "login required" },
       { type: "finish" },
     ])
+  })
+
+  test("stops dynamic ACP tool streams when permission hook denies", async () => {
+    const emitted: any[] = []
+    const denied: any[] = []
+    const dynamicToolChunk = {
+      type: "tool-input-available",
+      toolCallId: "ui-tool-1",
+      toolName: "acp.acp_provider_agent_dynamic_tool",
+      input: {
+        toolCallId: "codex-tool-1",
+        toolName: `Edit ${join(process.cwd(), ".env")}`,
+        args: {
+          changes: {
+            [join(process.cwd(), ".env")]: {
+              type: "add",
+              content: "SECRET_TOKEN=should-not-land",
+            },
+          },
+        },
+      },
+    }
+
+    await emitCodexAcpUiStream({
+      uiStream: streamFrom([
+        dynamicToolChunk,
+        {
+          type: "tool-output-available",
+          toolCallId: "codex-tool-1",
+          output: "should not emit",
+        },
+        { type: "finish", finishReason: "stop" },
+      ]),
+      emit: (chunk) => emitted.push(chunk),
+      normalizeError: () => ({ message: "unused" }),
+      isAuthError: () => false,
+      resolveUsageOnce: async () => null,
+      onDynamicToolPermission: (tool) => {
+        expect(tool).toMatchObject({
+          toolUseId: "codex-tool-1",
+          toolName: "Edit",
+        })
+        return {
+          decision: "deny",
+          message: "Observed mode blocked Edit: sensitive path",
+        }
+      },
+      onDynamicToolDenied: (tool, decision) => {
+        denied.push({ tool, decision })
+      },
+    })
+
+    expect(denied).toHaveLength(1)
+    expect(emitted).toEqual([
+      dynamicToolChunk,
+      {
+        type: "tool-output-error",
+        toolCallId: "codex-tool-1",
+        errorText: "Observed mode blocked Edit: sensitive path",
+      },
+      {
+        type: "error",
+        errorText: "Observed mode blocked Edit: sensitive path",
+      },
+      { type: "finish", finishReason: "error" },
+    ])
+  })
+
+  test("returns when the abort signal fires while waiting for ACP chunks", async () => {
+    const emitted: any[] = []
+    let cancelReason: unknown = null
+    const abortController = new AbortController()
+    const stalledStream = new ReadableStream({
+      cancel(reason) {
+        cancelReason = reason
+      },
+    })
+
+    const streamPromise = emitCodexAcpUiStream({
+      uiStream: stalledStream,
+      emit: (chunk) => emitted.push(chunk),
+      normalizeError: () => ({ message: "unused" }),
+      isAuthError: () => false,
+      resolveUsageOnce: async () => null,
+      abortSignal: abortController.signal,
+    })
+
+    abortController.abort()
+    await streamPromise
+    await Promise.resolve()
+
+    expect(cancelReason).toBe("Session cancelled.")
+    expect(emitted).toEqual([{ type: "finish", finishReason: "stop" }])
   })
 })
