@@ -39,4 +39,4 @@
 - [x] 6.3 Run focused preflight, permission policy, adapter boundary, redaction, and desktop job event tests.
 - [x] 6.4 Run `bun run ts:check`.
 - [x] 6.5 Run `bun run build`.
-- [ ] 6.6 Record desktop smoke evidence for Claude plan/guard and Codex temporary-compat plan/guard using verified preflight and semantic trace.
+- [x] 6.6 Record desktop smoke evidence for Claude plan/guard and Codex temporary-compat plan/guard using verified preflight and semantic trace.

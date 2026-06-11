@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs"
-import Database from "better-sqlite3"
+import { spawnSync } from "node:child_process"
 
 const SCENARIOS = {
   "claude-plan": {
@@ -348,7 +348,71 @@ function printUsage() {
   )
 }
 
-function main() {
+function sqlLiteral(value) {
+  if (value === null || value === undefined) return "null"
+  if (typeof value === "number") return String(value)
+  if (typeof value === "boolean") return value ? "1" : "0"
+  return `'${String(value).replace(/'/g, "''")}'`
+}
+
+function bindSql(sql, params) {
+  let paramIndex = 0
+  return sql.replace(/\?/g, () => sqlLiteral(params[paramIndex++]))
+}
+
+function openSqliteCliDatabase(dbPath) {
+  const versionResult = spawnSync("sqlite3", ["--version"], {
+    encoding: "utf8",
+  })
+  if (versionResult.status !== 0) {
+    throw new Error(
+      "better-sqlite3 could not be loaded and sqlite3 CLI is unavailable.",
+    )
+  }
+
+  return {
+    prepare(sql) {
+      return {
+        get(...params) {
+          return runSqliteCliQuery(dbPath, sql, params)[0]
+        },
+        all(...params) {
+          return runSqliteCliQuery(dbPath, sql, params)
+        },
+      }
+    },
+    close() {},
+  }
+}
+
+function runSqliteCliQuery(dbPath, sql, params) {
+  const result = spawnSync("sqlite3", ["-json", dbPath, bindSql(sql, params)], {
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024 * 10,
+  })
+  if (result.status !== 0) {
+    throw new Error(
+      `sqlite3 query failed: ${(result.stderr || result.stdout).trim()}`,
+    )
+  }
+  const stdout = result.stdout.trim()
+  return stdout ? JSON.parse(stdout) : []
+}
+
+async function openReadonlyDatabase(dbPath) {
+  try {
+    const mod = await import("better-sqlite3")
+    const Database = mod.default ?? mod
+    return new Database(dbPath, { readonly: true, fileMustExist: true })
+  } catch (error) {
+    console.warn(
+      `[runtime-control-smoke-job] better-sqlite3 unavailable; falling back to sqlite3 CLI: ${error.message}`,
+    )
+    return openSqliteCliDatabase(dbPath)
+  }
+}
+
+async function main() {
   const args = parseArgs(process.argv.slice(2))
   const dbPath = args.db
   const jobId = args.job
@@ -365,7 +429,7 @@ function main() {
     return
   }
 
-  const db = new Database(dbPath, { readonly: true, fileMustExist: true })
+  const db = await openReadonlyDatabase(dbPath)
   try {
     const result = inspectRuntimeControlSmokeJob({ db, jobId, scenarioId })
     console.log(JSON.stringify(result.summary, null, 2))
@@ -381,5 +445,8 @@ function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main()
+  main().catch((error) => {
+    console.error(`[runtime-control-smoke-job] ${error.message}`)
+    process.exitCode = 1
+  })
 }

@@ -1,6 +1,6 @@
 # Runtime Control Layer Desktop Smoke Evidence
 
-Status: pending real desktop smoke
+Status: passed on 2026-06-11
 
 Provider call authorization: required
 
@@ -39,107 +39,123 @@ attempt are verified from the normalized `desktop_runtime_adapter_started`
 semantic trace event; app logs and UI/debug screenshots remain supporting
 evidence rather than the source-of-truth check.
 
+## Desktop Run
+
+- App command: `bun run dev`
+- App user data: `/Users/ethan/Library/Application Support/Agent Code for Me Dev`
+- Evidence DB: `/Users/ethan/Library/Application Support/Agent Code for Me Dev/data/agents.db`
+- Primary project: `/Users/ethan/Documents/GitHub/agent-code-for-me`
+- Artifact directory: `/Users/ethan/Documents/Locus-smoke-artifacts/runtime-control-layer-20260611-desktop-smoke`
+- Inspector note: local Node could not load the installed `better-sqlite3` ABI,
+  so the inspector used its `sqlite3 -json` CLI fallback for these validations.
+
 ## Required Scenarios
 
-| Scenario ID | Runtime path | Mode | Status |
-| --- | --- | --- | --- |
-| `claude-plan` | Claude Agent SDK desktop adapter | plan | pending |
-| `claude-guard` | Claude Agent SDK desktop adapter | guarded agent | pending |
-| `codex-temporary-compat-plan` | Codex ACP temporary-compat desktop adapter | plan | pending |
-| `codex-temporary-compat-guard` | Codex ACP temporary-compat desktop adapter | guarded agent | pending |
+| Scenario ID | Runtime path | Mode | Status | Job ID |
+| --- | --- | --- | --- | --- |
+| `claude-plan` | Claude Agent SDK desktop adapter | plan | passed | `mq91fchhlo3ysjil` |
+| `claude-guard` | Claude Agent SDK desktop adapter | guarded agent | passed | `mq91po22g5tyav39` |
+| `codex-temporary-compat-plan` | Codex ACP temporary-compat desktop adapter | plan | passed | `mq91vb21rr8x9od0` |
+| `codex-temporary-compat-guard` | Codex ACP temporary-compat desktop adapter | guarded agent | passed | `mq9280vm6ckg0ak9` |
 
 ## Scenario: claude-plan
 
-Status: pending
+Status: passed
 
 Provider call authorization: required before running.
 
-Required evidence:
+Evidence:
 
-- Command and app startup log for the Electron desktop run.
-- Local repo path, chat ID, sub-chat ID, run ID, and job ID.
-- Provider/model selected, with renderer-safe metadata only.
-- Preflight accepted the registered project/cwd before provider startup.
-- Permission policy resolved to Claude plan-mode read-only semantics before
-  SDK query startup: `enforcement=native-plan-read-only`.
-- Desktop run request reached the Claude Agent SDK adapter with
-  `adapterSource=claude-agent-sdk` and `attempt>=1`.
-- Semantic `agent_job_events` query output for the job.
-- `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=claude-plan`
-  passes for the job.
-- Workbench timeline screenshot or recording.
-- Secret grep result across logs and artifacts.
+- Job: `mq91fchhlo3ysjil`; chat `mq4hvr0i45x4rj8d`; sub-chat
+  `mq91c2k62vvg8j3z`; cwd
+  `/Users/ethan/.21st/worktrees/observed-agent-rerun-20260608-124810/annual-tor`.
+- `agent_jobs`: source `desktop`, runtime `claude-code`, mode `plan`, status
+  `succeeded`.
+- `PermissionPolicy`: runtimeId `claude-code`, mode `plan`, guarded `false`,
+  enforcement `native-plan-read-only`.
+- Semantic event sequence 4:
+  `desktop_runtime_adapter_started`, adapterSource `claude-agent-sdk`,
+  attempt `1`.
+- `bun run runtime-control:smoke:job -- --db="/Users/ethan/Library/Application Support/Agent Code for Me Dev/data/agents.db" --job=mq91fchhlo3ysjil --scenario=claude-plan`
+  passed.
+- Workbench artifact:
+  `/Users/ethan/Documents/Locus-smoke-artifacts/runtime-control-layer-20260611-claude-plan/claude-plan-workbench.png`.
 
 ## Scenario: claude-guard
 
-Status: pending
+Status: passed
 
 Provider call authorization: required before running.
 
-Required evidence:
+Evidence:
 
-- Command and app startup log for the Electron desktop run.
-- Local repo path, chat ID, sub-chat ID, run ID, and job ID.
-- Approved guarded scope contract summary without sensitive payloads.
-- Preflight accepted the registered project/cwd before provider startup.
-- Permission policy included guarded editable paths, denied paths, and
-  expansion policy before SDK query startup:
-  `enforcement=locus-guarded-tool-policy`.
-- A deliberate out-of-scope operation was denied or produced a scope expansion
-  request before execution.
-- Desktop run request reached the Claude Agent SDK adapter with
-  `adapterSource=claude-agent-sdk` and `attempt>=1`.
-- Semantic `agent_job_events` query output showing guard decision or scope
-  expansion events.
-- `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=claude-guard`
-  passes for the job.
-- Workbench timeline screenshot or recording.
-- Secret grep result across logs and artifacts.
+- Job: `mq91po22g5tyav39`; chat `mpl79q0b1442cmr9`; sub-chat
+  `mq91nrb7rtg6w0i5`; cwd
+  `/Users/ethan/Documents/GitHub/agent-code-for-me`.
+- `agent_jobs`: source `desktop`, runtime `claude-code`, mode `agent`, status
+  `succeeded`.
+- Guard contract: hard mode, editable `src/smoke-target.ts`, read-only
+  `README.md`.
+- `PermissionPolicy`: runtimeId `claude-code`, mode `agent`, guarded `true`,
+  enforcement `locus-guarded-tool-policy`.
+- Semantic event sequence 4:
+  `desktop_runtime_adapter_started`, adapterSource `claude-agent-sdk`,
+  attempt `1`.
+- Guard event sequence 54: `guard_decision` type `blocked` for `.env`, reason
+  `Protected path ".env" is outside guarded-run policy.`
+- Requested marker was absent from `.env` after the run.
+- `bun run runtime-control:smoke:job -- --db="/Users/ethan/Library/Application Support/Agent Code for Me Dev/data/agents.db" --job=mq91po22g5tyav39 --scenario=claude-guard`
+  passed.
 
 ## Scenario: codex-temporary-compat-plan
 
-Status: pending
+Status: passed
 
 Provider call authorization: required before running.
 
-Required evidence:
+Evidence:
 
-- Command and app startup log for the Electron desktop run.
-- Local repo path, chat ID, sub-chat ID, run ID, and job ID.
-- Provider/model selected, with renderer-safe metadata only.
-- Preflight accepted the registered project/cwd before provider startup.
-- Permission policy resolved to Codex plan-mode read-only semantics before ACP
-  provider/session startup: `enforcement=codex-acp-plan-handler`.
-- Desktop run request reached the Codex ACP temporary-compat adapter with
-  `adapterSource=codex-acp-temporary-compat` and `attempt>=1`.
-- Semantic `agent_job_events` query output for the job.
-- `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=codex-temporary-compat-plan`
-  passes for the job.
-- Workbench timeline screenshot or recording.
-- Secret grep result across logs and artifacts.
+- Job: `mq91vb21rr8x9od0`; chat `mpl79q0b1442cmr9`; sub-chat
+  `mq91rvk0uvldu9qc`; cwd
+  `/Users/ethan/Documents/GitHub/agent-code-for-me`.
+- `agent_jobs`: source `desktop`, runtime `codex`, mode `plan`, status
+  `succeeded`.
+- Provider/model metadata: provider `codex`, model `gpt-5.5/xhigh`.
+- `PermissionPolicy`: runtimeId `codex`, mode `plan`, guarded `false`,
+  enforcement `codex-acp-plan-handler`.
+- Semantic event sequence 4:
+  `desktop_runtime_adapter_started`, adapterSource
+  `codex-acp-temporary-compat`, attempt `1`, temporaryFallback `true`.
+- `bun run runtime-control:smoke:job -- --db="/Users/ethan/Library/Application Support/Agent Code for Me Dev/data/agents.db" --job=mq91vb21rr8x9od0 --scenario=codex-temporary-compat-plan`
+  passed.
 
 ## Scenario: codex-temporary-compat-guard
 
-Status: pending
+Status: passed
 
 Provider call authorization: required before running.
 
-Required evidence:
+Evidence:
 
-- Command and app startup log for the Electron desktop run.
-- Local repo path, chat ID, sub-chat ID, run ID, and job ID.
-- Approved guarded scope contract summary without sensitive payloads.
-- Preflight accepted the registered project/cwd before provider startup.
-- Permission policy included guarded editable paths, denied paths, and
-  expansion policy before ACP provider/session startup:
-  `enforcement=codex-acp-guarded-handler`.
-- A deliberate out-of-scope operation was denied or produced a scope expansion
-  request before execution.
-- Desktop run request reached the Codex ACP temporary-compat adapter with
-  `adapterSource=codex-acp-temporary-compat` and `attempt>=1`.
-- Semantic `agent_job_events` query output showing guard decision or scope
-  expansion events.
-- `bun run runtime-control:smoke:job -- --db=/path/to/agents.db --job=<job-id> --scenario=codex-temporary-compat-guard`
-  passes for the job.
-- Workbench timeline screenshot or recording.
-- Secret grep result across logs and artifacts.
+- Job: `mq9280vm6ckg0ak9`; chat `mpl79q0b1442cmr9`; sub-chat
+  `mq91rj1v679b18br`; cwd
+  `/Users/ethan/Documents/GitHub/agent-code-for-me`.
+- `agent_jobs`: source `desktop`, runtime `codex`, mode `agent`, terminal
+  status `failed` because the hard guard denied the requested protected write.
+- Guard contract: hard mode, editable `src/smoke-target.ts`, read-only
+  `README.md`.
+- `PermissionPolicy`: runtimeId `codex`, mode `agent`, guarded `true`,
+  enforcement `codex-acp-guarded-handler`.
+- Provider/model metadata: provider `codex`, model `gpt-5.5/xhigh`.
+- Semantic event sequence 4:
+  `desktop_runtime_adapter_started`, adapterSource
+  `codex-acp-temporary-compat`, attempt `1`, temporaryFallback `true`.
+- Guard event sequence 11: `guard_decision` type `blocked` for `.env`, reason
+  `Protected path ".env" is outside guarded-run policy.`
+- Terminal event sequence 13: `error` with `Guarded run blocked Edit from
+  touching protected path ".env".`
+- Requested marker was absent from `.env` after the run.
+- `bun run runtime-control:smoke:job -- --db="/Users/ethan/Library/Application Support/Agent Code for Me Dev/data/agents.db" --job=mq9280vm6ckg0ak9 --scenario=codex-temporary-compat-guard`
+  passed.
+- Workbench artifact:
+  `/Users/ethan/Documents/Locus-smoke-artifacts/runtime-control-layer-20260611-desktop-smoke/codex-temporary-compat-guard-workbench.png`.
