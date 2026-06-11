@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { join } from "node:path"
 
-const evidencePath = "openspec/changes/add-runtime-control-layer/smoke-evidence.md"
-const tasksPath = "openspec/changes/add-runtime-control-layer/tasks.md"
+const changeId = "add-runtime-control-layer"
 const requiredScenarios = [
   "claude-plan",
   "claude-guard",
@@ -21,6 +21,26 @@ function read(path) {
   return readFileSync(path, "utf8")
 }
 
+function findChangeDir() {
+  const activeDir = join("openspec", "changes", changeId)
+  if (existsSync(activeDir)) return activeDir
+
+  const archiveRoot = join("openspec", "changes", "archive")
+  const archivedDirs = existsSync(archiveRoot)
+    ? readdirSync(archiveRoot)
+        .filter((name) => name.endsWith(`-${changeId}`))
+        .sort()
+    : []
+  const latestArchive = archivedDirs.at(-1)
+  if (latestArchive) return join(archiveRoot, latestArchive)
+
+  fail(`could not find active or archived OpenSpec change ${changeId}.`)
+  process.exit()
+}
+
+const changeDir = findChangeDir()
+const evidencePath = join(changeDir, "smoke-evidence.md")
+const tasksPath = join(changeDir, "tasks.md")
 const evidence = read(evidencePath)
 const tasks = read(tasksPath)
 const task66Checked = /- \[x\] 6\.6 Record desktop smoke evidence/.test(tasks)
