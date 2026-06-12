@@ -1,5 +1,8 @@
 import { describe, expect, mock, test } from "bun:test"
 import { createServer, type IncomingMessage } from "node:http"
+import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 async function readRequestBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
@@ -35,6 +38,55 @@ async function createUpstreamErrorServer() {
 
   return {
     baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  }
+}
+
+async function createUpstreamCaptureServer() {
+  const requests: Array<{
+    url: string | undefined
+    body: any
+  }> = []
+  const server = createServer((req, res) => {
+    void readRequestBody(req).then((text) => {
+      requests.push({
+        url: req.url,
+        body: text ? JSON.parse(text) : {},
+      })
+      res.writeHead(200, { "content-type": "application/json" })
+      res.end(
+        JSON.stringify({
+          id: "chatcmpl_gateway_trace",
+          model: "upstream-model",
+          choices: [
+            {
+              message: { role: "assistant", content: "ok" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }),
+      )
+    })
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject)
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject)
+      resolve()
+    })
+  })
+
+  const address = server.address()
+  if (!address || typeof address === "string") {
+    server.close()
+    throw new Error("failed to start upstream capture server")
+  }
+
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    requests,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   }
 }
@@ -286,6 +338,135 @@ describe("provider profile gateway token scope", () => {
       for (const profileId of profileIds) {
         runtimeProfiles.delete(profileId)
       }
+      await upstream.close()
+    }
+  })
+
+  test("traces incoming and forwarded tool payload summaries without prompt or secrets", async () => {
+    const upstream = await createUpstreamCaptureServer()
+    const traceDir = mkdtempSync(join(tmpdir(), "locus-provider-gateway-trace-"))
+    const tracePath = join(traceDir, "trace.jsonl")
+    const profileId = "profile_gateway_tool_trace"
+    try {
+      process.env.LOCUS_PROVIDER_GATEWAY_TOOL_TRACE_PATH = tracePath
+      runtimeProfiles.set(profileId, {
+        id: profileId,
+        name: "Gateway Tool Trace",
+        presetId: "test",
+        protocol: "openai-chat",
+        baseUrl: upstream.baseUrl,
+        defaultModel: "model-tools",
+        authMode: "none",
+        token: null,
+        headers: {},
+        targetRuntimes: ["codex"],
+        capabilities: { codex: true, tools: true },
+      })
+
+      const endpoint = await gatewayModule.getProviderGatewayEndpoint(
+        profileId,
+        "responses",
+      )
+      const response = await fetch(`${endpoint.baseUrl}/responses`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${endpoint.token}` },
+        body: JSON.stringify({
+          model: "gpt-5.5",
+          input: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: "secret prompt text must not be traced",
+                },
+              ],
+            },
+          ],
+          tools: [
+            {
+              type: "function",
+              name: "propose_file_edit",
+              description: "Propose a file edit.",
+              parameters: {
+                type: "object",
+                properties: { path: { type: "string" } },
+              },
+            },
+            {
+              type: "namespace",
+              name: "mcp__locus_edit__",
+              description: "Tools in the mcp__locus_edit__ namespace.",
+              tools: [
+                {
+                  type: "function",
+                  name: "propose_file_edit",
+                  description: "Propose a Locus-controlled file edit.",
+                  parameters: {
+                    type: "object",
+                    properties: { path: { type: "string" } },
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      })
+
+      expect(response.status).toBe(200)
+      expect(upstream.requests).toHaveLength(1)
+      expect(upstream.requests[0]?.url).toBe("/v1/chat/completions")
+      expect(upstream.requests[0]?.body.tools?.[0]?.function?.name).toBe(
+        "propose_file_edit",
+      )
+      expect(upstream.requests[0]?.body.tools?.[1]?.function?.name).toBe(
+        "mcp__locus_edit__propose_file_edit",
+      )
+
+      const traceText = readFileSync(tracePath, "utf8")
+      const trace = traceText
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
+      expect(trace.map((entry) => entry.phase)).toEqual([
+        "incoming",
+        "forwarded",
+      ])
+      expect(trace[0]).toMatchObject({
+        phase: "incoming",
+        endpointKind: "responses",
+        profileId,
+        payload: {
+          toolCount: 2,
+          tools: [
+            { type: "function", name: "propose_file_edit" },
+            {
+              type: "namespace",
+              name: "mcp__locus_edit__",
+              nestedTools: [{ type: "function", name: "propose_file_edit" }],
+            },
+          ],
+          inputKinds: [{ role: "user" }],
+        },
+      })
+      expect(trace[1]).toMatchObject({
+        phase: "forwarded",
+        upstreamProtocol: "openai-chat",
+        payload: {
+          toolCount: 2,
+          tools: [
+            { type: "function", name: "propose_file_edit" },
+            { type: "function", name: "mcp__locus_edit__propose_file_edit" },
+          ],
+          messageRoles: [{ role: "user" }],
+        },
+      })
+      expect(traceText).not.toContain("secret prompt text")
+      expect(traceText).not.toContain(endpoint.token)
+    } finally {
+      delete process.env.LOCUS_PROVIDER_GATEWAY_TOOL_TRACE_PATH
+      runtimeProfiles.delete(profileId)
+      rmSync(traceDir, { recursive: true, force: true })
       await upstream.close()
     }
   })

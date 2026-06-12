@@ -24,6 +24,9 @@ const {
 const { validateAgentScopeContract } = await import(
   "../src/main/lib/agent-guard/contract"
 )
+const { respondDesktopScopeExpansion } = await import(
+  "../src/main/lib/agent-runtime/scope-expansion"
+)
 
 const cwd = join(process.cwd(), "example-project")
 
@@ -199,6 +202,29 @@ describe("active guarded contract owner", () => {
     })
     expect(result.contract.expansions[0].approvedAt).toBeTruthy()
     expect(getActiveGuardedContract("contract-1")).toBe(result.contract)
+  })
+
+  test("routes runtime-neutral scope expansion responses through the active contract owner", async () => {
+    await activate()
+
+    const result = await respondDesktopScopeExpansion({
+      contractId: "contract-1",
+      toolUseId: "tool-runtime-neutral",
+      approved: true,
+      path: "src/runtime-neutral.ts",
+      reason: "Runtime-neutral scope expansion response.",
+      validateOptions: { requireRegisteredWorktree: false },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.error)
+    expect(result.contract.editableScope.map((scope) => scope.path)).toContain(
+      "src/runtime-neutral.ts",
+    )
+    expect(result.contract.expansions[0]).toMatchObject({
+      requestedByToolUseId: "tool-runtime-neutral",
+      reason: "Runtime-neutral scope expansion response.",
+    })
   })
 
   test("records rejected expansion without changing editable scope", async () => {

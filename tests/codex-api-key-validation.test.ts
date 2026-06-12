@@ -84,7 +84,7 @@ describe("Codex API key validation", () => {
     ).rejects.toThrow("OpenAI rejected the saved Codex API key (401).")
   })
 
-  test("keeps Codex key validation ahead of save, job creation, and ACP startup", () => {
+  test("keeps Codex key validation ahead of save, job creation, and adapter startup", () => {
     const codexRouterSource = readFileSync(
       join(process.cwd(), "src/main/lib/trpc/routers/codex.ts"),
       "utf-8",
@@ -105,7 +105,7 @@ describe("Codex API key validation", () => {
       "const desktopJob = createAndRegisterDesktopChatAgentJob",
     )
     const adapterCreationIndex = codexRouterSource.indexOf(
-      "const codexAdapter = createCodexAcpTemporaryCompatAdapter",
+      "const codexAdapter = useCodexAppServerAdapter",
     )
 
     expect(validationIndex).toBeGreaterThan(0)

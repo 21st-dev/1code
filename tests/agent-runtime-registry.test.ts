@@ -69,7 +69,7 @@ describe("agent runtime registry", () => {
     })
   })
 
-  test("is exposed through a read-only tRPC router", () => {
+  test("is exposed through a runtime-neutral tRPC router", () => {
     const appRouter = readFileSync(
       "src/main/lib/trpc/routers/index.ts",
       "utf8",
@@ -83,5 +83,32 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain("listManifests")
     expect(runtimeRouter).toContain("getManifest")
     expect(runtimeRouter).toContain("checkCapability")
+    expect(runtimeRouter).toContain("respondScopeExpansion")
+  })
+
+  test("renderer consumes runtime manifests through a store instead of static capability truth", () => {
+    const runtimeManifestStore = readFileSync(
+      "src/renderer/features/agents/lib/runtime-manifest-store.ts",
+      "utf8",
+    )
+    const activeChat = readFileSync(
+      "src/renderer/features/agents/main/active-chat.tsx",
+      "utf8",
+    )
+    const guardedRunCard = readFileSync(
+      "src/renderer/features/agents/ui/agent-guarded-run-card.tsx",
+      "utf8",
+    )
+
+    expect(runtimeManifestStore).toContain(
+      "trpc.agentRuntime.listManifests.useQuery",
+    )
+    expect(runtimeManifestStore).toContain("runtimeCapabilityManifestsAtom")
+    expect(activeChat).toContain("useRuntimeCapabilitySupported")
+    expect(activeChat).toContain('"rollback"')
+    expect(activeChat).not.toContain(
+      "isRuntimeCapabilitySupported } from \"../../../../shared/agent-runtime-capabilities\"",
+    )
+    expect(guardedRunCard).not.toContain("isRuntimeCapabilitySupported")
   })
 })

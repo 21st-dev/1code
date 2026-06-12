@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import {
+  getCodexAppServerPermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
 import {
@@ -78,6 +79,64 @@ describe("desktop runtime permission policy", () => {
     })
   })
 
+  test("maps Codex app-server plan and guarded runs to fail-closed approval gate", () => {
+    const planPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "plan",
+      codexAdapterSource: "codex-app-server",
+    })
+    const guardedPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "agent",
+      hasScopeContract: true,
+      codexAdapterSource: "codex-app-server",
+    })
+
+    expect(planPolicy.enforcement).toBe("codex-app-server-plan-approval-gate")
+    expect(planPolicy.controlLevel).toBe("plan")
+    expect(planPolicy.requiresPreExecutionEnforcement).toBe(true)
+    expect(getCodexAppServerPermissionMapping(planPolicy)).toMatchObject({
+      runtime: "codex",
+      adapterSource: "codex-app-server",
+      controlLevel: "plan",
+      appServerApprovalPolicy: "on-request",
+      requiresApprovalGate: true,
+      approvalGateFailure: "fail-closed",
+      approvalHook: {
+        required: true,
+        missing: "fail-closed",
+        delayed: "fail-closed",
+      },
+      permissionHandlerFailure: "fail-closed",
+    })
+    expect(planPolicy.diagnostics.join(" ")).toContain(
+      "must install its approval gate before provider or tool work starts",
+    )
+
+    expect(guardedPolicy.enforcement).toBe(
+      "codex-app-server-guarded-approval-gate",
+    )
+    expect(guardedPolicy.controlLevel).toBe("guarded")
+    expect(guardedPolicy.requiresPreExecutionEnforcement).toBe(true)
+    expect(getCodexAppServerPermissionMapping(guardedPolicy)).toMatchObject({
+      runtime: "codex",
+      adapterSource: "codex-app-server",
+      controlLevel: "guarded",
+      appServerApprovalPolicy: "untrusted",
+      requiresApprovalGate: true,
+      approvalGateFailure: "fail-closed",
+      approvalHook: {
+        required: true,
+        missing: "fail-closed",
+        delayed: "fail-closed",
+      },
+      permissionHandlerFailure: "fail-closed",
+    })
+    expect(guardedPolicy.diagnostics.join(" ")).toContain(
+      "requires Codex app-server approval gate enforcement before side effects",
+    )
+  })
+
   test("maps normal Agent mode to observed control by default", () => {
     const claudePolicy = resolveDesktopPermissionPolicy({
       runtimeId: "claude-code",
@@ -126,6 +185,35 @@ describe("desktop runtime permission policy", () => {
     })
   })
 
+  test("maps Codex app-server observed mode to fail-closed approval gate", () => {
+    const policy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "agent",
+      codexAdapterSource: "codex-app-server",
+    })
+
+    expect(policy.controlLevel).toBe("observe")
+    expect(policy.enforcement).toBe("codex-app-server-agent-approval-gate")
+    expect(policy.requiresPreExecutionEnforcement).toBe(true)
+    expect(policy.observedToolPolicy).toMatchObject({
+      enabled: true,
+      blocksCatastrophicActions: true,
+      degradation: "fail-closed-when-hook-unavailable",
+    })
+    expect(getCodexAppServerPermissionMapping(policy)).toMatchObject({
+      runtime: "codex",
+      adapterSource: "codex-app-server",
+      controlLevel: "observe",
+      appServerApprovalPolicy: "on-request",
+      requiresApprovalGate: true,
+      approvalHook: {
+        required: true,
+        missing: "fail-closed",
+        delayed: "fail-closed",
+      },
+    })
+  })
+
   test("desktop routes consume the shared permission policy owner", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
     const claudeControls = readFileSync(
@@ -147,6 +235,10 @@ describe("desktop runtime permission policy", () => {
     )
     const codexAcpTemporaryCompatAdapter = readFileSync(
       "src/main/lib/codex/acp-temporary-compat-adapter.ts",
+      "utf8",
+    )
+    const codexAppServerAdapter = readFileSync(
+      "src/main/lib/codex/app-server-adapter.ts",
       "utf8",
     )
     const codexAcpRuntime = readFileSync(
@@ -187,6 +279,11 @@ describe("desktop runtime permission policy", () => {
     expect(codexAcpRuntime).toContain("permission.acpMode")
     expect(codexAcpRuntime).toContain("permission.requiresPermissionHandler")
     expect(codexAcpRuntime).toContain("permission.permissionHandlerFailure")
+    expect(codexAppServerAdapter).toContain(
+      "getCodexAppServerPermissionMapping",
+    )
+    expect(codexAppServerAdapter).not.toContain("adapterSource?: unknown")
+    expect(codexAppServerAdapter).not.toContain("mapping as")
     expect(codex).not.toContain("function getCodexAcpModeId")
   })
 })

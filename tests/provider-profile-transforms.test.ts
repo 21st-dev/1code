@@ -16,6 +16,7 @@ import {
   chatCompletionToAnthropicMessage,
   chatCompletionToResponse,
   responsesToChatCompletions,
+  responsesToChatCompletionsWithToolMappings,
 } from "../src/shared/provider-profile-transforms"
 
 describe("provider profile source ids", () => {
@@ -159,6 +160,53 @@ describe("provider profile request transforms", () => {
       ],
     })
     expect(body.tools[0].function.name).toBe("read_file")
+  })
+
+  test("bridges Responses namespace tools to OpenAI chat function tools", () => {
+    const bridge = responsesToChatCompletionsWithToolMappings({
+      model: "deepseek-v4-flash",
+      input: "Create a file.",
+      tools: [
+        {
+          type: "namespace",
+          name: "mcp__locus_edit__",
+          description: "Tools in the mcp__locus_edit__ namespace.",
+          tools: [
+            {
+              type: "function",
+              name: "propose_file_edit",
+              description: "Propose a Locus-controlled file edit.",
+              parameters: {
+                type: "object",
+                properties: {
+                  path: { type: "string" },
+                  content: { type: "string" },
+                },
+                required: ["path", "content"],
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(bridge.body.tools).toHaveLength(1)
+    expect(bridge.body.tools[0].function).toMatchObject({
+      name: "mcp__locus_edit__propose_file_edit",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          content: { type: "string" },
+        },
+      },
+    })
+    expect(bridge.namespaceToolNameMap).toEqual({
+      mcp__locus_edit__propose_file_edit: {
+        namespace: "mcp__locus_edit__",
+        name: "propose_file_edit",
+      },
+    })
   })
 
   test("bridges Responses function call output to OpenAI tool messages", () => {
@@ -343,6 +391,68 @@ describe("provider profile request transforms", () => {
         call_id: "call_1",
         name: "read_file",
         arguments: "{\"path\":\"package.json\"}",
+      },
+    ])
+  })
+
+  test("bridges flattened namespace chat tool calls back to Responses namespace calls", () => {
+    const bridge = responsesToChatCompletionsWithToolMappings({
+      model: "deepseek-v4-flash",
+      input: "Create a file.",
+      tools: [
+        {
+          type: "namespace",
+          name: "mcp__locus_edit__",
+          tools: [
+            {
+              type: "function",
+              name: "propose_file_edit",
+              parameters: {
+                type: "object",
+                properties: { path: { type: "string" } },
+              },
+            },
+          ],
+        },
+      ],
+    })
+    const response = chatCompletionToResponse(
+      {
+        id: "chatcmpl_namespace_tool",
+        model: "deepseek-v4-flash",
+        choices: [
+          {
+            message: {
+              content: "",
+              tool_calls: [
+                {
+                  id: "call_namespace",
+                  type: "function",
+                  function: {
+                    name: "mcp__locus_edit__propose_file_edit",
+                    arguments: "{\"path\":\"src/generated.txt\"}",
+                  },
+                },
+              ],
+            },
+            finish_reason: "tool_calls",
+          },
+        ],
+        usage: { prompt_tokens: 8, completion_tokens: 4, total_tokens: 12 },
+      },
+      "fallback",
+      { namespaceToolNameMap: bridge.namespaceToolNameMap },
+    )
+
+    expect(response.output).toEqual([
+      {
+        id: "fc_call_namespace",
+        type: "function_call",
+        status: "completed",
+        call_id: "call_namespace",
+        name: "propose_file_edit",
+        namespace: "mcp__locus_edit__",
+        arguments: "{\"path\":\"src/generated.txt\"}",
       },
     ])
   })

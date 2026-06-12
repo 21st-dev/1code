@@ -157,10 +157,10 @@ describe("desktop runtime preflight", () => {
       "const desktopRunRequest = createCodexDesktopRunRequest({",
     )
     const adapterIndex = codex.indexOf(
-      "const codexAdapter = createCodexAcpTemporaryCompatAdapter({",
+      "const codexAdapter = useCodexAppServerAdapter",
     )
     const adapterRunIndex = codex.indexOf(
-      "await codexAdapter.run(desktopRunRequest)",
+      "const adapterResult = await codexAdapter.run(desktopRunRequest)",
     )
 
     expect(blockerIndex).toBeGreaterThan(0)

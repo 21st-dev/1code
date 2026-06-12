@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   buildCodexRuntimeCapabilityErrorChunk,
+  getCodexRuntimeCapabilitiesForAdapter,
   getCodexRunRequiredCapability,
   getCodexRuntimeCapabilities,
   getCodexRuntimeCapability,
@@ -88,6 +89,121 @@ describe("Codex runtime capabilities", () => {
     })
     expect(getCodexRuntimeCapability("appAgents")).toMatchObject({
       status: "degraded",
+    })
+  })
+
+  test("reports app-server capability support only where isolated proofs exist", () => {
+    const appServerCapabilities = getCodexRuntimeCapabilitiesForAdapter(
+      "codex-app-server",
+    )
+    const byId = new Map(
+      appServerCapabilities.map((capability) => [capability.id, capability]),
+    )
+
+    expect(appServerCapabilities.map((capability) => capability.id)).toEqual(
+      expectedCapabilityIds,
+    )
+    expect(
+      appServerCapabilities
+        .filter((capability) => capability.status === "supported")
+        .map((capability) => capability.id),
+    ).toEqual([
+      "planMode",
+      "askUserQuestion",
+      "providerProfiles",
+      "attachments",
+      "usageMetadata",
+    ])
+    expect(byId.get("hardToolGuard")).toMatchObject({
+      status: "degraded",
+      reason: expect.stringContaining("depends on an explicit provider auth context"),
+      hint: expect.stringContaining("provider auth context"),
+    })
+    expect(byId.get("scopeExpansion")).toMatchObject({
+      status: "degraded",
+      reason: expect.stringContaining("not proven on a live transport"),
+    })
+    expect(byId.get("mcpAuth")).toMatchObject({
+      status: "degraded",
+      reason: expect.stringContaining("not proven on the app-server transport"),
+    })
+    expect(byId.get("rollback")).toMatchObject({
+      status: "unsupported",
+      scope: "unavailable",
+    })
+    expect(JSON.stringify(appServerCapabilities)).not.toMatch(
+      /(^|[^A-Za-z0-9_])sk-[A-Za-z0-9_-]{20,}|access_token|authorization|bearer\s+[A-Za-z0-9._-]+|refresh_token/i,
+    )
+  })
+
+  test("keeps ACP temporary-compat rollback capability truth adapter-specific", () => {
+    const acpCapabilities = getCodexRuntimeCapabilitiesForAdapter(
+      "codex-acp-temporary-compat",
+    )
+    expect(
+      acpCapabilities.find((capability) => capability.id === "hardToolGuard"),
+    ).toMatchObject({
+      status: "supported",
+      reason: expect.stringContaining("ACP temporary-compat rollback path"),
+      support: {
+        references: expect.arrayContaining([
+          "src/main/lib/codex/acp-permission.ts",
+        ]),
+      },
+    })
+    expect(getCodexRuntimeCapability("hardToolGuard").reason).toContain(
+      "app-server",
+    )
+    expect(
+      getCodexRuntimeCapabilitiesForAdapter("codex-app-server").find(
+        (capability) => capability.id === "mcpAuth",
+      ),
+    ).toMatchObject({
+      status: "degraded",
+    })
+  })
+
+  test("reports app-server guarded edits supported only for proven app-server auth paths", () => {
+    expect(
+      getCodexRuntimeCapabilitiesForAdapter({
+        adapterSource: "codex-app-server",
+        providerAuthMode: "runtime-managed",
+      }).find((capability) => capability.id === "hardToolGuard"),
+    ).toMatchObject({
+      status: "supported",
+      reason: expect.stringContaining("controlled-edit executor gate"),
+      support: {
+        kind: "runtime-code",
+      },
+    })
+
+    expect(
+      getCodexRuntimeCapabilitiesForAdapter({
+        adapterSource: "codex-app-server",
+        providerAuthMode: "app-managed",
+      }).find((capability) => capability.id === "hardToolGuard"),
+    ).toMatchObject({
+      status: "supported",
+    })
+
+    expect(
+      getCodexRuntimeCapabilitiesForAdapter({
+        adapterSource: "codex-app-server",
+        providerAuthMode: "provider-profile",
+      }).find((capability) => capability.id === "hardToolGuard"),
+    ).toMatchObject({
+      status: "supported",
+      reason: expect.stringContaining("provider-profile gateway smoke evidence"),
+    })
+
+    expect(
+      getCodexRuntimeCapabilitiesForAdapter({
+        adapterSource: "codex-app-server",
+        providerAuthMode: null,
+      }).find((capability) => capability.id === "hardToolGuard"),
+    ).toMatchObject({
+      status: "degraded",
+      hint: expect.stringContaining("unknown app-server auth context"),
     })
   })
 

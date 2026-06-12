@@ -9,6 +9,7 @@ import {
 import {
   CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA,
   CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA,
+  CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA,
 } from "../src/main/lib/agent-runtime/desktop-adapter-metadata"
 
 function fakeAdapter(
@@ -38,11 +39,24 @@ describe("desktop runtime adapter factory", () => {
     expect(CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA).toMatchObject({
       runtimeId: "codex",
       source: "codex-acp-temporary-compat",
+      label: "Codex ACP temporary-compat adapter",
       temporaryFallback: true,
     })
     expect(
       CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.fallbackReason,
-    ).toContain("app-server")
+    ).toContain("temporary-compat")
+    expect(
+      CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.defaultDisableCondition,
+    ).toContain("app-server passes schema/client pinning")
+    expect(
+      CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.removalCondition,
+    ).toContain("Remove ACP route/dependency paths")
+    expect(CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA).toMatchObject({
+      runtimeId: "codex",
+      source: "codex-app-server",
+      temporaryFallback: false,
+      fallbackReason: null,
+    })
   })
 
   test("emits desktop adapter source as a normalized runtime trace event", () => {
@@ -73,9 +87,15 @@ describe("desktop runtime adapter factory", () => {
       payload: {
         status: "desktop_runtime_adapter_started",
         adapterSource: "codex-acp-temporary-compat",
-        adapterLabel: "Codex ACP temporary compatibility adapter",
+        adapterLabel: "Codex ACP temporary-compat adapter",
         attempt: 1,
         temporaryFallback: true,
+        fallbackReason:
+          CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.fallbackReason,
+        defaultDisableCondition:
+          CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.defaultDisableCondition,
+        removalCondition:
+          CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.removalCondition,
       },
       redaction: {
         status: "not-required",
@@ -235,12 +255,26 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/codex/desktop-run-request.ts",
       "utf8",
     )
+    const codexAdapterTypes = readFileSync(
+      "src/main/lib/codex/adapter-types.ts",
+      "utf8",
+    )
+    const codexAppServerAdapter = readFileSync(
+      "src/main/lib/codex/app-server-adapter.ts",
+      "utf8",
+    )
+    const codexAppServerProviderBinding = readFileSync(
+      "src/main/lib/codex/app-server-provider-binding.ts",
+      "utf8",
+    )
 
     expect(codexRouter).toContain("../../codex/acp-adapter")
     expect(codexRouter).toContain("../../codex/acp-temporary-compat-adapter")
+    expect(codexRouter).toContain("../../codex/app-server-adapter")
     expect(codexRouter).toContain("../../codex/desktop-run-request")
     expect(codexRouter).toContain("../../codex/chat-history")
     expect(codexRouter).toContain("../../codex/cli-runner")
+    expect(codexRouter).toContain("../../codex/desktop-adapter-selection")
     expect(codexRouter).toContain("../../codex/errors")
     expect(codexRouter).toContain("../../codex/integration-status")
     expect(codexRouter).toContain("../../codex/login-output")
@@ -249,7 +283,25 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain("../../codex/runtime-status")
     expect(codexRouter).toContain("const desktopRunRequest = createCodexDesktopRunRequest")
     expect(codexRouter).toContain("createCodexAcpTemporaryCompatAdapter")
+    expect(codexRouter).toContain("createCodexAppServerAdapter")
+    expect(codexRouter).toContain("resolveCodexDesktopAdapterSelection")
+    expect(codexRouter).toContain("codexAdapterSelection.useAppServer")
+    expect(codexRouter).toContain(
+      'codexAdapterSource: useCodexAppServerAdapter',
+    )
     expect(codexRouter).toContain("await codexAdapter.run(desktopRunRequest)")
+    expect(codexAdapterTypes).toContain("DesktopRuntimeAdapter")
+    expect(codexAdapterTypes).toContain("CodexDesktopAdapterSource")
+    expect(codexAdapterTypes).toContain('"codex-acp-temporary-compat" | "codex-app-server"')
+    expect(codexAppServerAdapter).toContain("enabled = false")
+    expect(codexAppServerAdapter).toContain("CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA")
+    expect(codexAppServerAdapter).toContain("CodexAppServerPermissionPolicyError")
+    expect(codexAppServerProviderBinding).toContain(
+      "buildCodexOfficialRuntimeEnv",
+    )
+    expect(codexAppServerProviderBinding).toContain(
+      "assertNoCodexAppServerRendererSecrets",
+    )
     expect(codexRouter).not.toContain("readLatestTokenCountInfo")
     expect(codexRouter).not.toContain("findSessionFileById")
     expect(codexRouter).not.toContain("createACPProvider")
@@ -306,6 +358,9 @@ describe("desktop runtime adapter factory", () => {
     expect(codexAcpTemporaryCompatAdapter).toContain(
       "async run(request: DesktopRunRequest)",
     )
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "): CodexDesktopAdapter",
+    )
     expect(codexAcpTemporaryCompatAdapter).toContain("getOrCreateCodexAcpProvider")
     expect(codexAcpTemporaryCompatAdapter).toContain(
       "emitDesktopRuntimeAdapterStarted(",
@@ -342,6 +397,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRuntimeStatus).toContain(
       "CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA",
     )
+    expect(codexRuntimeStatus).toContain("Default-disable condition:")
+    expect(codexRuntimeStatus).toContain("Removal condition:")
     expect(codexAcpRuntime).toContain("createCodexAcpRuntimeModel")
     expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
     expect(codexAcpTextStream).toContain("createCodexAcpUiMessageStream")

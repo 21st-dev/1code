@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { redactRuntimePayload } from "../src/main/lib/agent-runtime/redaction"
+import { redactRendererRuntimeChunk } from "../src/main/lib/agent-runtime/stream-event-mapper"
 
 describe("runtime trace redaction", () => {
   test("redacts secret-bearing keys recursively", () => {
@@ -46,5 +47,22 @@ describe("runtime trace redaction", () => {
       status: "blocked",
     })
     expect(result.appliedRules).toEqual(["secret-text"])
+  })
+
+  test("redacts renderer runtime chunks beyond diagnostic chunk types", () => {
+    const chunk = redactRendererRuntimeChunk({
+      runtimeId: "codex",
+      runId: "run-1",
+      source: "runtime-diagnostic",
+      chunk: {
+        type: "ask-user-answer",
+        delta: "provider returned Bearer abc.def.ghi with api_key=xyz123",
+      },
+    })
+
+    expect(chunk).toEqual({
+      type: "ask-user-answer",
+      delta: "provider returned <redacted> with api_key=<redacted>",
+    })
   })
 })

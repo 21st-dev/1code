@@ -163,5 +163,18 @@ describe("provider credential storage hardening", () => {
         authConfig: { apiKey: "sk-secret" },
       }).success,
     ).toBe(false)
+    for (const forbidden of [
+      { env: { OPENAI_API_KEY: "sk-secret" } },
+      { headers: { Authorization: "Bearer raw" } },
+      { providerConfig: { apiKey: "sk-secret" } },
+      { mcpServers: { docs: { env: { TOKEN: "raw" } } } },
+    ]) {
+      expect(
+        codexChatInputSchemaModule.codexChatInputSchema.safeParse({
+          ...validInput,
+          ...forbidden,
+        }).success,
+      ).toBe(false)
+    }
   })
 })

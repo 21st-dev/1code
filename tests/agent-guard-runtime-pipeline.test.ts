@@ -14,6 +14,10 @@ function readChatsRouterSource(): string {
 describe("agent guard runtime pipeline", () => {
   test("Claude transport, router, and stream chunks are wired for hard enforcement", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const agentRuntimeRouter = readFileSync(
+      "src/main/lib/trpc/routers/agent-runtime.ts",
+      "utf8",
+    )
     const claudeControls = readFileSync(
       "src/main/lib/claude/agent-sdk-desktop-run-controls.ts",
       "utf8",
@@ -85,8 +89,11 @@ describe("agent guard runtime pipeline", () => {
     expect(claudeQueryOptions).toContain("PreToolUse")
     expect(claudeToolPermission).toContain("decideClaudeToolUse")
     expect(claudeToolPermission).toContain("toClaudePermissionResult(decision)")
+    expect(agentRuntimeRouter).toContain("respondScopeExpansion")
+    expect(agentRuntimeRouter).toContain("respondDesktopScopeExpansion")
     expect(claude).toContain("respondScopeExpansion")
-    expect(claude).toContain("applyActiveGuardedScopeExpansion")
+    expect(claude).toContain("respondDesktopScopeExpansion")
+    expect(claude).not.toContain("applyActiveGuardedScopeExpansion")
     expect(claude).not.toContain("const activeGuardedContracts")
     expect(claudeRunFinalization).toContain(
       "finalizeClaudeAgentSdkGuardMetadata",
@@ -96,6 +103,8 @@ describe("agent guard runtime pipeline", () => {
     expect(input).toContain("AgentGuardedRunCard")
     expect(input).toContain("approveGuardedRunDraft")
     expect(input).toContain("ensureGuardedRunReady")
+    expect(input).toContain("trpc.agentRuntime.respondScopeExpansion.useMutation()")
+    expect(input).not.toContain("trpc.claude.respondScopeExpansion")
     expect(chunks).toContain('| { type: "guard-event"; event: AgentGuardEvent }')
     expect(chunks).toContain('| { type: "guard-audit"; audit: GuardedRunAudit }')
   })
@@ -280,8 +289,9 @@ describe("agent guard runtime pipeline", () => {
     expect(chats).toContain("getCodexRollbackUnsupportedMessage()")
     expect(chats).toContain('capabilityId: "rollback"')
     expect(activeChat).toContain(
-      'const canRollbackOrFork = isRuntimeCapabilitySupported(provider, "rollback")',
+      "const canRollbackOrFork = useRuntimeCapabilitySupported(provider,",
     )
+    expect(activeChat).toContain('"rollback"')
     expect(activeChat).toContain(
       "onRollback={canRollbackOrFork ? handleRollback : undefined}",
     )

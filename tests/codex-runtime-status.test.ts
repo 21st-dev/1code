@@ -9,6 +9,8 @@ import {
   type CodexAcpRuntimeLike,
   type RuntimeExecutableLike,
 } from "../src/shared/codex-runtime-status"
+import { buildCodexAdapterRuntimeStatusMetadata } from "../src/main/lib/codex/runtime-status"
+import { LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT_ENV } from "../src/main/lib/codex/desktop-adapter-selection"
 
 const readyExecutable = (path: string): RuntimeExecutableLike => ({
   ok: true,
@@ -48,6 +50,57 @@ const acpRuntime = (
 })
 
 describe("Codex runtime status", () => {
+  test("reports renderer-safe adapter source, target, version, and ACP exit status", () => {
+    const adapters = buildCodexAdapterRuntimeStatusMetadata({ env: {} })
+
+    expect(adapters.bundledCodexVersion).toBe("0.134.0")
+    expect(adapters.current).toMatchObject({
+      runtimeId: "codex",
+      source: "codex-app-server",
+      temporaryFallback: false,
+    })
+    expect(adapters.target).toMatchObject({
+      runtimeId: "codex",
+      source: "codex-app-server",
+      temporaryFallback: false,
+    })
+    expect(adapters.acpTemporaryCompat).toMatchObject({
+      source: "codex-acp-temporary-compat",
+    })
+    expect(adapters.acpTemporaryCompat.fallbackReason).toContain(
+      "ACP remains a labeled temporary-compat rollback path",
+    )
+    expect(adapters.acpTemporaryCompat.defaultDisableCondition).toContain(
+      "app-server passes schema/client pinning",
+    )
+    expect(adapters.acpTemporaryCompat.removalCondition).toContain(
+      "Remove ACP route/dependency paths",
+    )
+    expect(adapters.selection).toMatchObject({
+      source: "codex-app-server",
+      useAppServer: true,
+      reason: expect.stringContaining("selected by default"),
+    })
+    expect(JSON.stringify(adapters)).not.toMatch(/token|api[_-]?key|secret/i)
+  })
+
+  test("reports ACP temporary-compat only when the rollback env is set", () => {
+    const adapters = buildCodexAdapterRuntimeStatusMetadata({
+      env: { [LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT_ENV]: "1" },
+    })
+
+    expect(adapters.current).toMatchObject({
+      runtimeId: "codex",
+      source: "codex-acp-temporary-compat",
+      temporaryFallback: true,
+    })
+    expect(adapters.selection).toMatchObject({
+      source: "codex-acp-temporary-compat",
+      useAppServer: false,
+      reason: expect.stringContaining("ACP temporary-compat fallback"),
+    })
+  })
+
   test("reports ready only when CLI, ACP runtime, and ACP spawn probe all pass", () => {
     const availability = buildCodexRuntimeAvailability({
       loginCli: readyExecutable("/bin/codex"),

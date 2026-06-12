@@ -83,6 +83,87 @@ describe("desktop stream event mapper", () => {
     })
   })
 
+  test("maps ready MCP runtime status as status instead of auth blocker", () => {
+    const events = mapDesktopStreamChunkToRunEvents({
+      runtimeId: "codex",
+      runId: "run-mcp-ready",
+      jobId: "job-mcp-ready",
+      sequence: 1,
+      chunk: {
+        type: "runtime-status",
+        ok: true,
+        blocker: {
+          component: "mcp",
+          status: "ready",
+          message: "Codex app-server MCP status list resolved.",
+        },
+        mcp: {
+          serverCount: 1,
+          readyServerCount: 1,
+          serverNames: ["locus_smoke_mcp"],
+        },
+      },
+    })
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      type: "status",
+      payload: {
+        ok: true,
+        blocker: {
+          component: "mcp",
+          status: "ready",
+        },
+      },
+    })
+  })
+
+  test("maps app-server file-change patch notifications as durable status evidence", () => {
+    const events = [
+      ...mapDesktopStreamChunkToRunEvents({
+        runtimeId: "codex",
+        runId: "run-file-change",
+        jobId: "job-file-change",
+        sequence: 1,
+        chunk: {
+          type: "file-change-patch",
+          id: "patch-1",
+          threadId: "thread-1",
+          turnId: "turn-1",
+          changes: [{ path: "canary.txt", unifiedDiff: "@@" }],
+        },
+      }),
+      ...mapDesktopStreamChunkToRunEvents({
+        runtimeId: "codex",
+        runId: "run-file-change",
+        jobId: "job-file-change",
+        sequence: 2,
+        chunk: {
+          type: "file-change-diff",
+          threadId: "thread-1",
+          turnId: "turn-1",
+          diff: "diff --git a/canary.txt b/canary.txt",
+        },
+      }),
+    ]
+
+    expect(events).toHaveLength(2)
+    expect(events.map((event) => event.type)).toEqual(["status", "status"])
+    expect(events[0].payload).toMatchObject({
+      chunkType: "file-change-patch",
+      data: {
+        id: "patch-1",
+        changes: [{ path: "canary.txt", unifiedDiff: "@@" }],
+      },
+    })
+    expect(events[1].payload).toMatchObject({
+      chunkType: "file-change-diff",
+      data: {
+        diff: "diff --git a/canary.txt b/canary.txt",
+      },
+    })
+  })
+
   test("redacts secret-looking stream payloads before persistence", () => {
     const events = mapDesktopStreamChunkToRunEvents({
       runtimeId: "claude-code",
@@ -210,6 +291,80 @@ describe("desktop stream event mapper", () => {
         chunk: textChunk,
       }),
     ).toBe(textChunk)
+  })
+
+  test("redacts app-server provider and MCP diagnostics before renderer and job persistence", () => {
+    const appServerDiagnostic = {
+      type: "runtime-status",
+      ok: false,
+      blocker: {
+        component: "provider-profile",
+        message:
+          "app-server failed Authorization: Bearer app-server-secret-token access_token=oauth-token-value",
+        providerGatewayToken: "gateway-token-value",
+        appServer: {
+          headers: {
+            Authorization: "Bearer raw-header-secret",
+          },
+          mcp: {
+            env: {
+              OPENAI_API_KEY: "raw-env-secret",
+              SAFE_FLAG: "ok",
+            },
+            oauth: {
+              code: "oauth-code",
+              state: "oauth-state",
+            },
+          },
+        },
+      },
+    }
+
+    const rendererChunk = redactRendererDiagnosticChunk({
+      runtimeId: "codex",
+      runId: "run-app-server-redaction",
+      chunk: appServerDiagnostic,
+    })
+    expect(rendererChunk).toMatchObject({
+      blocker: {
+        message:
+          "app-server failed Authorization: <redacted> access_token=<redacted>",
+        providerGatewayToken: "<redacted>",
+        appServer: {
+          headers: {
+            Authorization: "<redacted>",
+          },
+          mcp: {
+            env: {
+              OPENAI_API_KEY: "<redacted>",
+              SAFE_FLAG: "ok",
+            },
+            oauth: "<redacted>",
+          },
+        },
+      },
+    })
+    expect(JSON.stringify(rendererChunk)).not.toContain("gateway-token-value")
+    expect(JSON.stringify(rendererChunk)).not.toContain("raw-header-secret")
+    expect(JSON.stringify(rendererChunk)).not.toContain("raw-env-secret")
+    expect(JSON.stringify(rendererChunk)).not.toContain("oauth-code")
+
+    const [event] = mapDesktopStreamChunkToRunEvents({
+      runtimeId: "codex",
+      runId: "run-app-server-redaction",
+      jobId: "job-app-server-redaction",
+      sequence: 1,
+      chunk: appServerDiagnostic,
+    })
+
+    expect(event.redaction).toEqual({
+      status: "redacted",
+      appliedRules: ["secret-key", "secret-text"],
+    })
+    expect(JSON.stringify(event.payload)).not.toContain("gateway-token-value")
+    expect(JSON.stringify(event.payload)).not.toContain("raw-header-secret")
+    expect(JSON.stringify(event.payload)).not.toContain("raw-env-secret")
+    expect(JSON.stringify(event.payload)).not.toContain("oauth-code")
   })
 
   test("runtime renderer chunk emitter redacts, persists, and marks failures", () => {

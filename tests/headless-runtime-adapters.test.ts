@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test"
+import { readFileSync } from "node:fs"
 
 mock.module("electron", () => ({
   app: {
@@ -101,6 +102,22 @@ describe("headless runtime adapters", () => {
     expect(agentArgs[agentArgs.indexOf("--sandbox") + 1]).toBe(
       "workspace-write",
     )
+  })
+
+  test("Codex adapter remains a codex exec headless/batch fallback only", () => {
+    const args = __testCodexHeadless.buildCodexArgs({
+      ...baseRequest,
+      runtime: "codex",
+    })
+    const source = readFileSync(
+      "src/main/lib/headless/adapters/codex.ts",
+      "utf8",
+    )
+
+    expect(args[0]).toBe("exec")
+    expect(source).toContain('label: "Codex headless/batch"')
+    expect(source).not.toContain("app-server")
+    expect(source).not.toContain("desktop chat")
   })
 
   test("Codex adapter drops the non-TTY stdin notice but keeps real stderr", () => {
