@@ -1,29 +1,29 @@
 # Locus runtime workbench 路线图
 
-状态日期：2026-06-12
+状态日期：2026-06-13
 
-状态基线：`main` / `origin/main` at `95e5de62` (`spec(runtime): archive runtime control layer`)
+状态基线：当前 `codex/codex-app-server-migration` 工作区。注意：本文记录当前实现和验证事实，不代表已完成归档或已退役 ACP fallback。
 
 本文取代 2026-06-07 口径。旧口径里 “runtime control layer 还差真实 desktop smoke” 已经过时；现在的剩余主线是 Codex official/app-server adapter 迁移。
 
 ## 0. 一句话结论
 
-Locus 的跨 runtime 控制层已经完成并归档。它已经通过真实 Electron desktop smoke，覆盖 Claude Agent SDK 和 Codex ACP temporary-compat 两条当前 desktop 路径。
+Locus 的跨 runtime 控制层已经完成并归档。Codex official/app-server adapter 迁移已经完成 P0 proof、P1 real transport、P2 truth/diagnostics/smoke 的主体，并额外交付了 roadmap 当初没有预见的 Locus-controlled edit executor 和 provider-profile gateway namespace-tool translation。
 
-当前主线不是继续补 control layer，也不是扩大 UI 功能，而是把 Codex desktop/chat 从 ACP temporary compatibility adapter 迁到官方 `codex app-server` 路径，同时保持现有的 preflight、permission policy、provider binding、MCP readiness、attachments、AskUserQuestion、usage、trace 和 redaction 安全边界。
+当前剩余主线已经从“造 app-server adapter”切换为 P3 上线：app-server 已成为默认 Codex desktop/chat 路径，ACP temporary-compat 只保留为显式回滚伞。下一步是 dogfood 周期、回滚演练和 ACP 删除条件，而不是继续保留双主路径。
 
 ## 1. 当前事实
 
 | 领域 | 当前状态 | 证据 | 接下来 |
 |---|---|---|---|
 | Runtime control layer | 已完成并归档 | `openspec/changes/archive/2026-06-11-add-runtime-control-layer/` | 不再作为主线缺口重复追踪 |
-| Desktop smoke | 已通过 Claude plan/guard、Codex ACP plan/guard | `openspec/changes/archive/2026-06-11-add-runtime-control-layer/smoke-evidence.md` | app-server 迁移后需要新增 app-server smoke |
+| Desktop smoke | 已通过 Claude plan/guard、Codex ACP plan/guard；app-server transport、provider-profile、MCP readiness、cancel、fallback diagnostics、controlled edit 已有真实 smoke/dogfood evidence | `openspec/changes/archive/2026-06-11-add-runtime-control-layer/smoke-evidence.md`, `openspec/changes/refactor-codex-official-runtime-adapter/desktop-smoke-evidence.md`, `openspec/changes/add-locus-controlled-edit-executor-for-codex-app-server/adoption-probe-evidence.md` | 默认启用后继续 dogfood，并保留显式 ACP 回滚 |
 | Claude desktop/chat | 目标路径是 `@anthropic-ai/claude-agent-sdk` | `src/main/lib/claude/agent-sdk-*` | 只做必要边界维护，不迁移到别的主路径 |
-| Codex desktop/chat | 当前仍是 `codex-acp-temporary-compat` | `src/main/lib/codex/acp-temporary-compat-adapter.ts` | 迁移到 `codex app-server` |
-| Codex app-server | OpenSpec 已开，产品实现未完成 | `openspec/changes/refactor-codex-official-runtime-adapter/tasks.md` | 先 proof/test，再 adapter MVP |
-| Capability truth | runtime-level manifest 已存在 | `src/shared/agent-runtime-capabilities.ts` | 升级为 adapter-source-aware truth |
-| Scope expansion | renderer 响应仍偏 Claude route | `trpc.claude.respondScopeExpansion` | 做 runtime-neutral route 或 Codex retry-only degraded |
-| Local Job API | v1 可用，但 rich desktop trace 口径未定 | `src/shared/local-job-api.ts` | app-server 主线后再决定 v2/内部-only |
+| Codex desktop/chat | app-server 默认启用；ACP temporary-compat 仍存在，但只通过 `LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT=1` 或 legacy `LOCUS_CODEX_APP_SERVER_ADAPTER=0` 显式回滚 | `src/main/lib/codex/desktop-adapter-selection.ts`, `src/main/lib/codex/acp-temporary-compat-adapter.ts`, `src/main/lib/codex/app-server-adapter.ts` | dogfood 后再把 ACP 删除作为独立 slice |
+| Codex app-server | Real transport、provider binding、MCP readiness、AskUserQuestion、attachments、usage、cancel、redaction、controlled edit 都已实现并验证 | `openspec/changes/refactor-codex-official-runtime-adapter/`, `openspec/changes/add-locus-controlled-edit-executor-for-codex-app-server/` | 进入 dogfood/default gate |
+| Capability truth | runtime-level manifest 已存在；renderer 现在通过 `agentRuntime.listManifests` manifest store 消费，不再只靠 shared static helper | `src/shared/agent-runtime-capabilities.ts`, `src/shared/codex-runtime-capabilities.ts`, `src/renderer/features/agents/lib/runtime-manifest-store.ts` | unknown auth/app-server context 仍保持 degraded |
+| Scope expansion | 已改为 runtime-neutral response route | `trpc.agentRuntime.respondScopeExpansion`, `src/main/lib/agent-runtime/scope-expansion.ts` | Codex 仍需以 dogfood 验完整 retry loop |
+| Local Job API | v1 可用；rich desktop trace 口径仍是 backlog，不再阻塞 app-server P3 | `src/shared/local-job-api.ts` | 单独决策 v2/内部-only |
 
 ## 2. 已完成的控制层
 
@@ -53,26 +53,20 @@ Locus 的跨 runtime 控制层已经完成并归档。它已经通过真实 Elec
 
 `openspec/changes/refactor-codex-official-runtime-adapter/`
 
-当前任务状态：13/45 完成。已完成的是 proposal、approval、部分 schema evidence、ACP fallback 定义、Claude boundary cleanup、OpenSpec validate。还没有产品级 app-server adapter。
+当前任务状态：`refactor-codex-official-runtime-adapter` 和 `add-locus-controlled-edit-executor-for-codex-app-server` 都已完成实现和验证，仍未归档。已完成的是 proposal、approval、SDK/app-server/ACP matrix、P0 safety proof、runtime-control layer 消费确认、real app-server transport、permission/interaction/attachment/stream/session/long-text/scope proof、provider-profile gateway namespace-tool translation、controlled edit executor、desktop smoke 和 secret-at-rest shell snapshot scrub。
 
 不要把下面这些当作已完成：
 
-- `src/main/lib/codex/app-server-adapter.ts`
-- app-server protocol client/schema committed path
-- fake app-server missing/delayed approval hook fail-closed tests
-- app-server explicit env allowlist tests
-- renderer raw secret rejection for app-server payloads
-- provider gateway -> app-server binding proof
-- app-server MCP readiness/auth mapping
-- app-server AskUserQuestion/MCP elicitation round trip
-- app-server attachment/usage/session/cancel mapping
-- app-server desktop smoke evidence
+- ACP temporary-compat fallback 删除
+- structured `apply_patch` app-server tool support
+- broad rollback/fork parity
+- Local Job API rich desktop trace v2
 
 ## 4. 推荐顺序
 
-### P0：先完成 app-server proof，不写 happy path adapter
+### P0：app-server proof 和 truth gate
 
-先完成这些任务：
+这些任务已经完成，并应继续作为 ACP 退役前的硬约束：
 
 1. `2.1` Inspect `@openai/codex-sdk` types，只作为 internal automation/tooling 候选。
 2. `2.3` 完整比较 ACP / SDK / app-server：provider binding、MCP、approval、AskUserQuestion、attachments、streaming、usage/session、resume/fork/rollback、cancel、diagnostics、local-only。
@@ -88,9 +82,9 @@ Locus 的跨 runtime 控制层已经完成并归档。它已经通过真实 Elec
 - provider/env/redaction tests 存在并通过。
 - 未证明能力仍标为 `degraded` 或 `unsupported`。
 
-### P1：实现 app-server MVP behind explicit gate
+### P1：实现 app-server real transport
 
-MVP 只做 desktop/chat 必需路径：
+状态：已完成。MVP 覆盖 desktop/chat 必需路径：
 
 - start / stream / cancel / session / status
 - plan-mode 和 guarded-run fail-closed
@@ -101,7 +95,7 @@ MVP 只做 desktop/chat 必需路径：
 - usage/session metadata where available
 - semantic RunEvent mapping and redaction
 
-不要在 MVP 同时做：
+仍不应混入 MVP 的内容：
 
 - rollback/fork parity
 - broad workflow parity
@@ -112,17 +106,27 @@ MVP 只做 desktop/chat 必需路径：
 
 ### P2：UI truth、diagnostics、smoke
 
-app-server MVP 后再做：
+状态：已完成到可进入 P3 的程度。已补齐：
 
 - adapter-source-aware capability manifest。
 - renderer manifest store，停止只靠 shared static helper。
 - runtime diagnostic state：runtime status / capability / auth / MCP / guard / question。
-- runtime-neutral scope expansion route，或 Codex 明确 retry-only degraded。
+- runtime-neutral scope expansion route。
 - app-server desktop smoke：chat、guard denial、plan denial、provider-profile binding、MCP readiness、cancel、fallback diagnostics。
+- controlled guarded edit：direct/app-managed 和 provider-profile gateway 两条路径都有 productive edit evidence。
+- app-server secret-at-rest scrub：生产 `CODEX_HOME/shell_snapshots` 不保留 Locus-injected Codex secrets。
+
+仍需在 P3 dogfood 中继续观察：
+
+- scope expansion 的完整 Codex retry loop 是否在真实节奏下顺畅。
+- provider-profile 用户对 third-party provider 能看到工具 schema/编辑内容的透明度提示。
+- long-running/resume/cancel 在日常使用中的稳定性。
 
 ### P3：disable/remove ACP fallback
 
-只有 app-server 完成 proof、MVP、diagnostics、desktop smoke 后，才能默认禁用 ACP fallback。删除 ACP dependency 是后续单独 slice，不要和首次 app-server MVP 混在一起。
+状态：已进入 gate，但尚未执行。
+
+只有 app-server 完成 proof、MVP、diagnostics、desktop smoke 后，才能默认禁用 ACP fallback；这个前提已经满足，且 app-server 现在是默认路径。下一步不是继续补 adapter，而是在 dogfood 窗口内验证回滚开关、记录 go/no-go 条件，并把 ACP dependency 删除作为后续独立 slice。删除 ACP dependency 不要和首次默认启用混在一起。
 
 ## 5. Backlog 和停车场
 
@@ -130,17 +134,12 @@ app-server MVP 后再做：
 
 | 项目 | 处理 |
 |---|---|
-| `add-embedded-utility-model` | 可以作为 backlog proposal 保留；它是 utility text local model，不是 main agent runtime |
+| `add-embedded-utility-model` | 已决定不做（2026-06-13 删除 proposal）：本地 utility 小模型与 controllability 主命题无关，且带来 llama.cpp sidecar 打包成本 |
 | Local Job API rich trace / v2 | 等 app-server RunEvent mapping 稳定后再决策 |
 | broader renderer UI polish | 等 capability truth 和 diagnostics state 后再做 |
 | workflow/plugin/marketplace follow-ups | 不混入 app-server migration |
 
-`add-embedded-utility-model` 的口径：
-
-- 仅用于 sub-chat title、commit message、branch/workspace/file rename suggestion 等 bounded helper text。
-- 不替代 Claude/Codex/custom provider/Ollama 的 main agent chat。
-- 不自动下载模型，不把大模型打进默认 installer。
-- 若保留，应作为 backlog OpenSpec 单独提交，不和 app-server implementation 混提交。
+`add-embedded-utility-model` 已于 2026-06-13 决定不做并删除 proposal。理由：它服务的是 bounded helper text（起名/commit message），与"可控执行层"的产品主命题正交，且 llama.cpp sidecar 会显著增加打包/维护成本。现有 helper 流程继续用 API/Ollama/确定性 fallback。
 
 ## 6. 不再使用的旧口径
 
@@ -154,11 +153,10 @@ app-server MVP 后再做：
 
 以下判断仍然成立：
 
-- Codex app-server 还未实现。
-- app-server safety proof 还没有完成。
-- adapter-aware capability truth 还未完成。
-- runtime-neutral scope expansion 还未完成。
+- ACP temporary-compat fallback 仍未退役。
+- structured `apply_patch` app-server tool support 仍 deferred。
 - Local Job API rich trace 口径还未决定。
+- `add-locus-controlled-edit-executor-for-codex-app-server` 和 `refactor-codex-official-runtime-adapter` 仍需归档/入库后才算 lifecycle 收尾。
 
 ## 7. 每次回看 roadmap 的判断规则
 

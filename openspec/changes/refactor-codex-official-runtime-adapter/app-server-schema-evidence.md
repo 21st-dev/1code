@@ -87,9 +87,9 @@ matrix records a required behavior and a separate safety decision.
 ## SDK Status
 
 `@openai/codex-sdk` and `@openai/codex` are not present in `package.json` or
-`bun.lock`. Task 2.1 remains open until the SDK package is added for an approved
-internal automation use case or its official package types are inspected in a
-separate evidence pass.
+`bun.lock`. Task 2.1 inspected the current npm SDK package separately in
+`sdk-type-inspection-evidence.md`; that SDK evidence is not app-server bundle
+truth because it uses a newer npm SDK/runtime version than this 0.134.0 schema.
 
 ## Follow-Ups
 

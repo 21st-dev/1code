@@ -21,6 +21,12 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Local smoke artifacts
+.tmp-app-server-smoke/
+.tmp-app-server-p3/
+.tmp-app-server-dogfood/
+smoke-codex-app-server-desktop.cjs
+
 # Environment
 .env
 .env.local
