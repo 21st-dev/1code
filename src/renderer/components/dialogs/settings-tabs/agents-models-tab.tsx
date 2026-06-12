@@ -376,6 +376,8 @@ const DIAGNOSTIC_CHECK_LABEL_KEYS: Record<ProviderDiagnosticCheckId, Translation
   vision: "settings.models.providerProfiles.diagnostic.vision",
   gateway: "settings.models.providerProfiles.diagnostic.gateway",
   runtime: "settings.models.providerProfiles.diagnostic.runtime",
+  codex_app_server:
+    "settings.models.providerProfiles.diagnostic.codexAppServer",
 }
 
 const DIAGNOSTIC_STATUS_LABEL_KEYS: Record<ProviderDiagnosticStatus, TranslationKey> = {

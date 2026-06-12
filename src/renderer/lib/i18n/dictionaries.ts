@@ -435,6 +435,8 @@ export const en = {
   "settings.models.providerProfiles.diagnostic.vision": "Vision",
   "settings.models.providerProfiles.diagnostic.gateway": "Gateway",
   "settings.models.providerProfiles.diagnostic.runtime": "Runtime target",
+  "settings.models.providerProfiles.diagnostic.codexAppServer":
+    "Codex app-server",
   "settings.models.subChatTitle.title": "Sub-chat Title API",
   "settings.models.subChatTitle.description":
     "Optional OpenAI-compatible API for naming sub-chats. Ollama is tried first.",
@@ -3478,6 +3480,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.providerProfiles.diagnostic.vision": "视觉",
   "settings.models.providerProfiles.diagnostic.gateway": "网关",
   "settings.models.providerProfiles.diagnostic.runtime": "运行时目标",
+  "settings.models.providerProfiles.diagnostic.codexAppServer":
+    "Codex app-server",
   "settings.models.subChatTitle.title": "子对话标题 API",
   "settings.models.subChatTitle.description":
     "可选的兼容 OpenAI 的 API，用于给子对话命名。会优先尝试 Ollama。",

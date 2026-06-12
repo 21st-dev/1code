@@ -1,6 +1,5 @@
 import { AlertTriangle, Check, ShieldCheck, ShieldOff, X } from "lucide-react"
 
-import { isRuntimeCapabilitySupported } from "../../../../shared/agent-runtime-capabilities"
 import { Badge } from "../../../components/ui/badge"
 import { Button } from "../../../components/ui/button"
 import { Textarea } from "../../../components/ui/textarea"
@@ -16,7 +15,7 @@ export type AgentGuardedRunCardProps = {
   suggestedLabels: string[]
   hasDirtyBaseline: boolean
   pendingExpansion?: PendingScopeExpansionRequest
-  provider: "claude-code" | "codex"
+  hardToolGuardSupported: boolean
   onEnable: () => void
   onApprove: () => void
   onRunWithoutGuard: () => void
@@ -37,7 +36,7 @@ export function AgentGuardedRunCard({
   suggestedLabels,
   hasDirtyBaseline,
   pendingExpansion,
-  provider,
+  hardToolGuardSupported,
   onEnable,
   onApprove,
   onRunWithoutGuard,
@@ -78,9 +77,7 @@ export function AgentGuardedRunCard({
     )
   }
 
-  const guardModeLabel = isRuntimeCapabilitySupported(provider, "hardToolGuard")
-    ? "hard"
-    : "audit"
+  const guardModeLabel = hardToolGuardSupported ? "hard" : "audit"
 
   return (
     <div

@@ -119,6 +119,7 @@ import {
   parseScopePathLines,
   serializeScopePaths,
 } from "../lib/agent-guard-draft"
+import { useRuntimeCapabilitySupported } from "../lib/runtime-manifest-store"
 import type { PastedTextFile } from "../hooks/use-pasted-text-files"
 import {
   useVoiceInput,
@@ -461,7 +462,11 @@ export const ChatInputArea = memo(function ChatInputArea({
     pendingScopeExpansionRequestsAtom,
   )
   const respondScopeExpansionMutation =
-    trpc.claude.respondScopeExpansion.useMutation()
+    trpc.agentRuntime.respondScopeExpansion.useMutation()
+  const hardToolGuardSupported = useRuntimeCapabilitySupported(
+    provider,
+    "hardToolGuard",
+  )
 
   // Mention dropdown state
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
@@ -1695,7 +1700,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                 suggestedLabels={guardedRunSuggestedLabels}
                 hasDirtyBaseline={changedFiles.length > 0}
                 pendingExpansion={pendingScopeExpansion}
-                provider={provider}
+                hardToolGuardSupported={hardToolGuardSupported}
                 onEnable={enableGuardedRun}
                 onApprove={approveGuardedRunDraft}
                 onRunWithoutGuard={runWithoutGuard}

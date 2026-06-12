@@ -56,7 +56,6 @@ import {
 import { flushSync } from "react-dom"
 import { toast } from "sonner"
 import { useShallow } from "zustand/react/shallow"
-import { isRuntimeCapabilitySupported } from "../../../../shared/agent-runtime-capabilities"
 import {
   inferAgentChatProviderFromMessages,
   type AgentChatProvider,
@@ -178,6 +177,7 @@ import {
 } from "../lib/drafts"
 import { IPCChatTransport } from "../lib/ipc-chat-transport"
 import { buildAgentMessageParts } from "../lib/message-parts"
+import { useRuntimeCapabilitySupported } from "../lib/runtime-manifest-store"
 import {
   createQueueItem, createTextPreview, generateQueueId,
   toQueuedFile,
@@ -4093,7 +4093,7 @@ const ChatViewInner = memo(function ChatViewInner({
     [isStreaming, messages, subChatId, parentChatId, subChatMode, onProviderChange, t],
   )
   const stableHandleContinueWithProvider = useStableCallback(handleContinueWithProvider)
-  const canRollbackOrFork = isRuntimeCapabilitySupported(provider, "rollback")
+  const canRollbackOrFork = useRuntimeCapabilitySupported(provider, "rollback")
 
   return (
     <SearchHighlightProvider>
