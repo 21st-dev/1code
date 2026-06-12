@@ -1,6 +1,6 @@
 {
   "name": "locus",
-  "version": "0.0.79",
+  "version": "0.0.80",
   "private": true,
   "description": "Local-first AI workbench and agent runtime hub",
   "homepage": "https://github.com/lupanpan1030/agent-code-for-me",
