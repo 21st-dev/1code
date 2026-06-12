@@ -1,7 +1,7 @@
 import type { ACPProvider } from "@mcpc-tech/acp-ai-provider"
 import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import type { AgentJobMode } from "../../../shared/agent-jobs"
-import type { CodexPermissionMapping } from "../agent-runtime/permission-policy"
+import type { CodexAcpPermissionMapping } from "../agent-runtime/permission-policy"
 import type { ValidatedAgentScopeContract } from "../agent-guard"
 import {
   createCodexAcpPermissionHandler,
@@ -19,7 +19,7 @@ export type CodexAcpRuntimeChunk = Record<string, unknown>
 export type CreateCodexAcpRuntimeModelInput = {
   provider: ACPProvider
   modelId: string
-  permission: CodexPermissionMapping
+  permission: CodexAcpPermissionMapping
   mode: AgentJobMode
   guardedContract?: ValidatedAgentScopeContract | null
   subChatId: string

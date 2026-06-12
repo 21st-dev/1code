@@ -2,7 +2,6 @@ import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import { buildCodexRuntimeCapabilityErrorChunk } from "../../../shared/codex-runtime-capabilities"
 import {
   emitDesktopRuntimeAdapterStarted,
-  type DesktopRuntimeAdapter,
 } from "../agent-runtime/desktop-runner"
 import type { DesktopRunRequest } from "../agent-runtime/desktop-run-request"
 import { CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA } from "../agent-runtime/desktop-adapter-metadata"
@@ -37,6 +36,7 @@ import {
   prepareCodexAcpPrompt,
   type CodexPromptLongTextAttachment,
 } from "./prompt"
+import type { CodexDesktopAdapter } from "./adapter-types"
 import type { CodexProviderProfileBinding } from "./provider-runtime-binding"
 import { createCodexUsageMetadataResolver } from "./usage-metadata"
 
@@ -119,7 +119,7 @@ export function createCodexAcpTemporaryCompatAdapter({
   registerPendingQuestion,
   unregisterPendingQuestion,
   generateMessageId,
-}: CreateCodexAcpTemporaryCompatAdapterInput): DesktopRuntimeAdapter {
+}: CreateCodexAcpTemporaryCompatAdapterInput): CodexDesktopAdapter {
   return {
     metadata: CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA,
 

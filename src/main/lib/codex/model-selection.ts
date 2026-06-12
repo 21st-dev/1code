@@ -25,6 +25,10 @@ export function preprocessCodexModelName(params: {
   return params.modelId
 }
 
+export function normalizeCodexAppServerModelId(modelId: string): string {
+  return modelId.replace(/\/(?:low|medium|high|xhigh)$/, "")
+}
+
 export function resolveCodexSelectedModelId(params: {
   requestedModel: unknown
   hasAppManagedApiKey?: boolean

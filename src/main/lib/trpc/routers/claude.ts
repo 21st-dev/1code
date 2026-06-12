@@ -74,10 +74,13 @@ import { discoverPluginMcpServers, type PluginMcpConfig } from "../../plugins"
 import { publicProcedure, router } from "../index"
 import {
   agentScopeContractInputSchema,
-  applyActiveGuardedScopeExpansion,
   type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
 } from "../../agent-guard"
+import {
+  desktopScopeExpansionResponseInputSchema,
+  respondDesktopScopeExpansion,
+} from "../../agent-runtime/scope-expansion"
 import { sanitizeMcpConfigForRenderer } from "../../../../shared/mcp-import-preview"
 import {
   getApprovedPluginMcpServers,
@@ -1158,18 +1161,9 @@ export const claudeRouter = router({
       }
     }),
   respondScopeExpansion: publicProcedure
-    .input(
-      z.object({
-        contractId: z.string(),
-        toolUseId: z.string(),
-        approved: z.boolean(),
-        path: z.string().optional(),
-        paths: z.array(z.string()).optional(),
-        reason: z.string().optional(),
-      }),
-    )
+    .input(desktopScopeExpansionResponseInputSchema)
     .mutation(async ({ input }) => {
-      return applyActiveGuardedScopeExpansion(input)
+      return respondDesktopScopeExpansion(input)
     }),
 
   /**

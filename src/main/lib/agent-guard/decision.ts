@@ -43,6 +43,11 @@ export type DecideClaudeToolUseInput = {
   toolUseId: string
 }
 
+export type GuardedScopedShellWriteApproval = AgentGuardDecision & {
+  decision: "allow"
+  requiresUserApproval: true
+}
+
 export type ClassifyObservedToolRiskInput = {
   toolName: string
   toolInput: Record<string, unknown>
@@ -415,6 +420,114 @@ function isReadOnlyInspectionCommand(command: string): boolean {
     return false
   }
   return READ_ONLY_COMMAND_PATTERNS.some((pattern) => pattern.test(command))
+}
+
+function stripShellQuotes(value: string): string {
+  const trimmed = value.trim()
+  if (
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+      (trimmed.startsWith('"') && trimmed.endsWith('"')))
+  ) {
+    return trimmed.slice(1, -1)
+  }
+  return trimmed
+}
+
+function unwrapBoundedShellCommand(command: string): string {
+  const trimmed = command.trim()
+  const shellMatch = trimmed.match(
+    /^(?:\/(?:usr\/)?bin\/)?(?:bash|zsh|sh)\s+-(?:l?c|c)\s+(['"])([\s\S]*)\1$/,
+  )
+  return shellMatch ? shellMatch[2].trim() : trimmed
+}
+
+function splitBoundedShellWriteSequence(command: string): string[] | null {
+  const normalized = command.trim()
+  if (!normalized || /[$;|`&\n\r]/.test(normalized.replace(/\s+&&\s+/g, " "))) {
+    return null
+  }
+
+  const parts = normalized
+    .split(/\s+&&\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (parts.length === 0 || parts.length > 3) return null
+  return parts
+}
+
+function safeBoundedShellPath(rawPath: string): string | null {
+  const pathValue = stripShellQuotes(rawPath)
+  if (
+    !pathValue ||
+    /\s/.test(pathValue) ||
+    /[$`~*?[\]{}<>]/.test(pathValue)
+  ) {
+    return null
+  }
+  return pathValue
+}
+
+function pathFromBoundedShellWritePart(part: string): string | null {
+  const executablePrefix = "(?:(?:/bin|/usr/bin)/)?"
+  const mkdirMatch = part.match(
+    new RegExp(`^${executablePrefix}mkdir\\s+-p\\s+(.+)$`),
+  )
+  if (mkdirMatch) return safeBoundedShellPath(mkdirMatch[1])
+
+  const redirectMatch = part.match(
+    new RegExp(
+      `^${executablePrefix}(?:echo(?:\\s+-n)?|printf)\\s+(['"])[\\s\\S]*\\1\\s*>\\s*(?!>)(.+)$`,
+    ),
+  )
+  if (redirectMatch) return safeBoundedShellPath(redirectMatch[2])
+
+  return null
+}
+
+export function resolveGuardedScopedShellWriteApproval(input: {
+  contract: ValidatedAgentScopeContract
+  toolName: string
+  toolInput: Record<string, unknown>
+  toolUseId: string
+}): GuardedScopedShellWriteApproval | null {
+  if (classifyClaudeTool(input.toolName) !== "shell") return null
+
+  const rawCommand = getShellCommand(input.toolInput)
+  if (!rawCommand) return null
+
+  const command = unwrapBoundedShellCommand(rawCommand)
+  if (isHighRiskCommand(command)) return null
+
+  const parts = splitBoundedShellWriteSequence(command)
+  if (!parts) return null
+
+  const paths: string[] = []
+  for (const part of parts) {
+    const rawPath = pathFromBoundedShellWritePart(part)
+    if (!rawPath) return null
+    const normalized = normalizeToolPathInsideCwd(input.contract.cwd, rawPath)
+    if (!normalized || !isPathInEditableScope(input.contract, normalized)) {
+      return null
+    }
+    paths.push(normalized)
+  }
+
+  return {
+    decision: "allow",
+    requiresUserApproval: true,
+    reason:
+      "Scoped shell file operation targets approved editable scope and requires user approval.",
+    event: createGuardEvent(input.contract, "allowed", {
+      toolName: input.toolName,
+      toolUseId: input.toolUseId,
+      command: rawCommand,
+      paths,
+      reason:
+        "Scoped shell file operation targets approved editable scope and requires user approval.",
+    }),
+    updatedInput: input.toolInput,
+  }
 }
 
 export function decideClaudeToolUse({

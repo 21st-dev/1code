@@ -2,6 +2,8 @@ import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { getElectronApp, type ElectronAppLike } from "../electron-app"
 
+export const BUNDLED_CODEX_CLI_VERSION = "0.134.0"
+
 export function getBundledCodexCliPath(
   appContext: Pick<ElectronAppLike, "isPackaged" | "getAppPath"> =
     getElectronApp(),

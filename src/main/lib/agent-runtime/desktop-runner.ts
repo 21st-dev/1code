@@ -17,6 +17,8 @@ export type DesktopRuntimeAdapterMetadata = {
   label: string
   temporaryFallback: boolean
   fallbackReason?: string | null
+  defaultDisableCondition?: string | null
+  removalCondition?: string | null
 }
 
 export type DesktopRuntimeAdapter = {
@@ -60,6 +62,8 @@ export function emitDesktopRuntimeAdapterStarted(
         attempt: request.identity.attempt ?? 1,
         temporaryFallback: metadata.temporaryFallback,
         fallbackReason: metadata.fallbackReason ?? null,
+        defaultDisableCondition: metadata.defaultDisableCondition ?? null,
+        removalCondition: metadata.removalCondition ?? null,
       },
     }),
   )

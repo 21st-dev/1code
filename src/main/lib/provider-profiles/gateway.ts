@@ -1,12 +1,15 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { randomBytes } from "node:crypto"
+import { appendFileSync } from "node:fs"
 import {
   anthropicMessagesToChatCompletions,
   anthropicMessagesToResponses,
   buildProviderChatCompletionBody,
   chatCompletionToAnthropicMessage,
   chatCompletionToResponse,
-  responsesToChatCompletions,
+  resolveProviderChatToolCallForResponses,
+  responsesToChatCompletionsWithToolMappings,
+  type ProviderProfileNamespaceToolNameMap,
 } from "../../../shared/provider-profile-transforms"
 import {
   redactProviderSecrets,
@@ -25,6 +28,9 @@ import {
   saveProviderProfile,
   type ProviderProfileRuntimeConfig,
 } from "./storage"
+import {
+  resolveCodexDesktopAdapterSelection,
+} from "../codex/desktop-adapter-selection"
 
 type GatewayEndpointKind = "anthropic" | "responses"
 
@@ -38,6 +44,8 @@ type GatewayTokenScope = {
   providerId: string
   kind: GatewayEndpointKind
 }
+
+type GatewayToolTracePhase = "incoming" | "forwarded"
 
 const CODEX_REASONING_SUFFIXES = new Set([
   "none",
@@ -162,6 +170,93 @@ function sendModelsList(res: ServerResponse, profile: ProviderProfileRuntimeConf
       },
     ],
   })
+}
+
+function summarizeGatewayTools(tools: unknown): Array<{
+  type: string | null
+  name: string | null
+  hasParameters: boolean
+  nestedTools?: Array<{
+    type: string | null
+    name: string | null
+    hasParameters: boolean
+  }>
+}> {
+  if (!Array.isArray(tools)) return []
+  return tools.map((tool) => {
+    const record = tool && typeof tool === "object" ? (tool as Record<string, any>) : {}
+    const fn = record.function && typeof record.function === "object"
+      ? (record.function as Record<string, any>)
+      : null
+    const nestedTools = Array.isArray(record.tools)
+      ? summarizeGatewayTools(record.tools)
+      : undefined
+    return {
+      type: typeof record.type === "string" ? record.type : null,
+      name:
+        typeof record.name === "string"
+          ? record.name
+          : typeof fn?.name === "string"
+            ? fn.name
+            : null,
+      hasParameters: Boolean(record.parameters || fn?.parameters || record.input_schema || record.inputSchema),
+      ...(nestedTools ? { nestedTools } : {}),
+    }
+  })
+}
+
+function summarizeGatewayPayload(body: any): Record<string, unknown> {
+  const input = Array.isArray(body?.input) ? body.input : []
+  const messages = Array.isArray(body?.messages) ? body.messages : []
+  return {
+    keys: Object.keys(body || {}).sort(),
+    model: typeof body?.model === "string" ? body.model : null,
+    stream: Boolean(body?.stream),
+    toolChoiceType:
+      typeof body?.tool_choice === "string"
+        ? body.tool_choice
+        : typeof body?.tool_choice?.type === "string"
+          ? body.tool_choice.type
+          : null,
+    toolCount: Array.isArray(body?.tools) ? body.tools.length : 0,
+    tools: summarizeGatewayTools(body?.tools),
+    inputKinds: input.map((item: any) => ({
+      type: typeof item?.type === "string" ? item.type : null,
+      role: typeof item?.role === "string" ? item.role : null,
+    })),
+    messageRoles: messages.map((message: any) => ({
+      role: typeof message?.role === "string" ? message.role : null,
+      hasToolCalls: Array.isArray(message?.tool_calls) && message.tool_calls.length > 0,
+    })),
+  }
+}
+
+function recordGatewayToolTrace(input: {
+  phase: GatewayToolTracePhase
+  endpointKind: GatewayEndpointKind
+  upstreamProtocol?: string
+  profile: ProviderProfileRuntimeConfig
+  body: any
+}): void {
+  const tracePath = process.env.LOCUS_PROVIDER_GATEWAY_TOOL_TRACE_PATH
+  if (!tracePath) return
+  try {
+    appendFileSync(
+      tracePath,
+      `${JSON.stringify({
+        at: new Date().toISOString(),
+        phase: input.phase,
+        endpointKind: input.endpointKind,
+        upstreamProtocol: input.upstreamProtocol ?? input.profile.protocol,
+        profileId: input.profile.id,
+        profileProtocol: input.profile.protocol,
+        payload: summarizeGatewayPayload(input.body),
+      })}\n`,
+      "utf8",
+    )
+  } catch {
+    // Diagnostics must never affect provider gateway behavior.
+  }
 }
 
 function resolveProviderModel(
@@ -485,6 +580,8 @@ function failureCheckId(category: ProviderDiagnosticCategory): ProviderDiagnosti
       return "vision"
     case "runtime_unavailable":
       return "runtime"
+    case "codex_app_server_unavailable":
+      return "codex_app_server"
     case "gateway_failed":
     default:
       return "gateway"
@@ -506,6 +603,7 @@ function buildFailureChecks(
     "vision",
     "gateway",
     "runtime",
+    "codex_app_server",
   ] as const
   const failedIndex = ids.indexOf(failedId)
   const checks: ProviderDiagnosticCheck[] = []
@@ -792,6 +890,7 @@ async function streamChatAsResponses(params: {
   profile: ProviderProfileRuntimeConfig
   url: string
   body: any
+  namespaceToolNameMap?: ProviderProfileNamespaceToolNameMap
   res: ServerResponse
 }) {
   const redactionValues = getProviderRedactionValues(params.profile)
@@ -836,6 +935,7 @@ async function streamChatAsResponses(params: {
       outputIndex: number
       callId: string
       name: string
+      namespace?: string
       arguments: string
       started: boolean
     }
@@ -902,7 +1002,8 @@ async function streamChatAsResponses(params: {
         id: `fc_${callId}`,
         outputIndex: nextOutputIndex++,
         callId,
-        name: toolDelta?.function?.name || "",
+        name: "",
+        namespace: undefined,
         arguments: "",
         started: false,
       }
@@ -913,7 +1014,14 @@ async function streamChatAsResponses(params: {
       item.callId = toolDelta.id
       item.id = `fc_${toolDelta.id}`
     }
-    if (toolDelta?.function?.name) item.name = toolDelta.function.name
+    if (toolDelta?.function?.name) {
+      const resolved = resolveProviderChatToolCallForResponses(
+        toolDelta.function.name,
+        params.namespaceToolNameMap,
+      )
+      item.name = resolved.name
+      item.namespace = resolved.namespace
+    }
 
     if (!item.started && item.name) {
       item.started = true
@@ -926,6 +1034,7 @@ async function streamChatAsResponses(params: {
           status: "in_progress",
           call_id: item.callId,
           name: item.name,
+          ...(item.namespace ? { namespace: item.namespace } : {}),
           arguments: "",
         },
       })
@@ -1031,6 +1140,7 @@ async function streamChatAsResponses(params: {
           status: "in_progress",
           call_id: item.callId,
           name: item.name || "tool",
+          ...(item.namespace ? { namespace: item.namespace } : {}),
           arguments: "",
         },
       })
@@ -1047,6 +1157,7 @@ async function streamChatAsResponses(params: {
       status: "completed",
       call_id: item.callId,
       name: item.name || "tool",
+      ...(item.namespace ? { namespace: item.namespace } : {}),
       arguments: item.arguments || "{}",
     }
     output.push(outputItem)
@@ -1087,11 +1198,25 @@ async function handleAnthropicRequest(
 ) {
   const redactionValues = getProviderRedactionValues(profile)
   const model = resolveProviderModel(profile, body.model)
+  recordGatewayToolTrace({
+    phase: "incoming",
+    endpointKind: "anthropic",
+    profile,
+    body,
+  })
   if (profile.protocol === "anthropic") {
+    const requestBody = { ...body, model }
+    recordGatewayToolTrace({
+      phase: "forwarded",
+      endpointKind: "anthropic",
+      upstreamProtocol: "anthropic",
+      profile,
+      body: requestBody,
+    })
     const upstream = await fetch(appendPath(profile.baseUrl, "/messages"), {
       method: "POST",
       headers: upstreamHeaders(profile),
-      body: JSON.stringify({ ...body, model }),
+      body: JSON.stringify(requestBody),
     })
     await pipeDirectUpstreamResponse({ profile, upstream, res })
     return
@@ -1099,6 +1224,13 @@ async function handleAnthropicRequest(
 
   if (profile.protocol === "openai-responses") {
     const requestBody = anthropicMessagesToResponses({ ...body, model })
+    recordGatewayToolTrace({
+      phase: "forwarded",
+      endpointKind: "anthropic",
+      upstreamProtocol: "openai-responses",
+      profile,
+      body: requestBody,
+    })
     const { response, json } = await forwardJson({
       profile,
       url: appendPath(profile.baseUrl, "/responses"),
@@ -1137,6 +1269,13 @@ async function handleAnthropicRequest(
     profile,
     anthropicMessagesToChatCompletions({ ...body, model }),
   )
+  recordGatewayToolTrace({
+    phase: "forwarded",
+    endpointKind: "anthropic",
+    upstreamProtocol: "openai-chat",
+    profile,
+    body: chatBody,
+  })
   if (body.stream) {
     await streamChatAsAnthropic({
       profile,
@@ -1171,25 +1310,48 @@ async function handleResponsesRequest(
 ) {
   const redactionValues = getProviderRedactionValues(profile)
   const model = resolveProviderModel(profile, body.model)
+  recordGatewayToolTrace({
+    phase: "incoming",
+    endpointKind: "responses",
+    profile,
+    body,
+  })
   if (profile.protocol === "openai-responses") {
+    const requestBody = { ...body, model }
+    recordGatewayToolTrace({
+      phase: "forwarded",
+      endpointKind: "responses",
+      upstreamProtocol: "openai-responses",
+      profile,
+      body: requestBody,
+    })
     const upstream = await fetch(appendPath(profile.baseUrl, "/responses"), {
       method: "POST",
       headers: upstreamHeaders(profile),
-      body: JSON.stringify({ ...body, model }),
+      body: JSON.stringify(requestBody),
     })
     await pipeDirectUpstreamResponse({ profile, upstream, res })
     return
   }
 
+  const chatBridge = responsesToChatCompletionsWithToolMappings({ ...body, model })
   const chatBody = buildProviderChatCompletionBody(
     profile,
-    responsesToChatCompletions({ ...body, model }),
+    chatBridge.body,
   )
+  recordGatewayToolTrace({
+    phase: "forwarded",
+    endpointKind: "responses",
+    upstreamProtocol: "openai-chat",
+    profile,
+    body: chatBody,
+  })
   if (body.stream) {
     await streamChatAsResponses({
       profile,
       url: appendPath(profile.baseUrl, "/chat/completions"),
       body: chatBody,
+      namespaceToolNameMap: chatBridge.namespaceToolNameMap,
       res,
     })
     return
@@ -1209,7 +1371,13 @@ async function handleResponsesRequest(
     })
     return
   }
-  sendJson(res, 200, chatCompletionToResponse(json, model))
+  sendJson(
+    res,
+    200,
+    chatCompletionToResponse(json, model, {
+      namespaceToolNameMap: chatBridge.namespaceToolNameMap,
+    }),
+  )
 }
 
 async function handleGatewayRequest(req: IncomingMessage, res: ServerResponse) {
@@ -1407,6 +1575,33 @@ export async function runProviderProfileDiagnostics(
         `Runtime targets: ${profile.targetRuntimes.join(", ")}.`,
       ),
     )
+
+    if (profile.targetRuntimes.includes("codex")) {
+      const codexAdapterSelection =
+        resolveCodexDesktopAdapterSelection(process.env)
+      checks.push(
+        codexAdapterSelection.useAppServer
+          ? providerDiagnosticCheck(
+              "codex_app_server",
+              "ok",
+              "Codex app-server adapter is selected for this process; readiness is validated by app-server runtime smoke evidence.",
+            )
+          : providerDiagnosticCheck(
+              "codex_app_server",
+              "skipped",
+              `Codex app-server readiness check skipped because ${codexAdapterSelection.reason}`,
+              "codex_app_server_unavailable",
+            ),
+      )
+    } else {
+      checks.push(
+        providerDiagnosticCheck(
+          "codex_app_server",
+          "skipped",
+          "Codex app-server readiness check skipped because Codex is not a target runtime.",
+        ),
+      )
+    }
 
     const failedCheck = checks.find((check) => check.status === "failed")
     const category = failedCheck?.category

@@ -47,6 +47,7 @@ export const providerDiagnosticCheckIds = [
   "vision",
   "gateway",
   "runtime",
+  "codex_app_server",
 ] as const
 export type ProviderDiagnosticCheckId =
   (typeof providerDiagnosticCheckIds)[number]
@@ -70,6 +71,7 @@ export const providerDiagnosticCategories = [
   "vision_unsupported",
   "gateway_failed",
   "runtime_unavailable",
+  "codex_app_server_unavailable",
 ] as const
 export type ProviderDiagnosticCategory =
   (typeof providerDiagnosticCategories)[number]

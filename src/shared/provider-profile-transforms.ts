@@ -3,6 +3,19 @@ type ChatCompletionProfile = {
   baseUrl: string
   protocol: string
 }
+export type ProviderProfileNamespaceToolNameMap = Record<
+  string,
+  { namespace: string; name: string }
+>
+
+type ProviderProfileToolMappingOptions = {
+  namespaceToolNameMap?: ProviderProfileNamespaceToolNameMap
+}
+
+type ProviderProfileResponsesChatBridgeResult = {
+  body: AnyRecord
+  namespaceToolNameMap: ProviderProfileNamespaceToolNameMap
+}
 
 function asArray(value: unknown): any[] {
   return Array.isArray(value) ? value : []
@@ -113,19 +126,43 @@ function chatToolCallToAnthropicContent(part: AnyRecord): AnyRecord | null {
   }
 }
 
-function chatToolCallToResponsesOutput(part: AnyRecord): AnyRecord | null {
+function chatToolNameToResponsesName(
+  name: string,
+  namespaceToolNameMap?: ProviderProfileNamespaceToolNameMap,
+): { name: string; namespace?: string } {
+  const mapped = namespaceToolNameMap?.[name]
+  if (!mapped) return { name }
+  return { name: mapped.name, namespace: mapped.namespace }
+}
+
+export function resolveProviderChatToolCallForResponses(
+  name: string,
+  namespaceToolNameMap?: ProviderProfileNamespaceToolNameMap,
+): { name: string; namespace?: string } {
+  return chatToolNameToResponsesName(name, namespaceToolNameMap)
+}
+
+function chatToolCallToResponsesOutput(
+  part: AnyRecord,
+  options: ProviderProfileToolMappingOptions = {},
+): AnyRecord | null {
   const fn = part.function || {}
   const name = typeof fn.name === "string" ? fn.name : undefined
   if (!name) return null
   const callId =
     typeof part.id === "string" && part.id ? part.id : `call_${crypto.randomUUID()}`
+  const responsesName = chatToolNameToResponsesName(
+    name,
+    options.namespaceToolNameMap,
+  )
 
   return {
     id: `fc_${callId}`,
     type: "function_call",
     status: "completed",
     call_id: callId,
-    name,
+    name: responsesName.name,
+    ...(responsesName.namespace ? { namespace: responsesName.namespace } : {}),
     arguments: typeof fn.arguments === "string" ? fn.arguments : "{}",
   }
 }
@@ -178,22 +215,87 @@ function normalizeChatMessages(input: unknown): AnyRecord[] {
   return result
 }
 
-function responsesToolToChatTool(tool: AnyRecord): AnyRecord | null {
-  if (tool?.type !== "function") return null
-  if (tool.function?.name) return tool
-  if (!tool.name) return null
+function emptyJsonSchema(): AnyRecord {
+  return {
+    type: "object",
+    properties: {},
+  }
+}
+
+function namespaceChatToolName(namespace: string, toolName: string): string {
+  return namespace.endsWith("__")
+    ? `${namespace}${toolName}`
+    : `${namespace}__${toolName}`
+}
+
+function functionToolParameters(tool: AnyRecord): AnyRecord {
+  return tool.parameters || tool.input_schema || tool.inputSchema || emptyJsonSchema()
+}
+
+function responsesFunctionToolToChatTool(
+  tool: AnyRecord,
+  nameOverride?: string,
+  descriptionPrefix?: string,
+): AnyRecord | null {
+  const fn = tool.function && typeof tool.function === "object"
+    ? (tool.function as AnyRecord)
+    : null
+  const name =
+    nameOverride ||
+    (typeof fn?.name === "string" ? fn.name : undefined) ||
+    (typeof tool.name === "string" ? tool.name : undefined)
+  if (!name) return null
+  if (fn?.name && !nameOverride) return tool
+  const description = [descriptionPrefix, tool.description || fn?.description || ""]
+    .filter((part) => typeof part === "string" && part.trim())
+    .join("\n\n")
 
   return {
     type: "function",
     function: {
-      name: tool.name,
-      description: tool.description || "",
-      parameters: tool.parameters || {
-        type: "object",
-        properties: {},
-      },
+      name,
+      description,
+      parameters: fn?.parameters || functionToolParameters(tool),
     },
   }
+}
+
+function responsesToolToChatTools(
+  tool: AnyRecord,
+  namespaceToolNameMap: ProviderProfileNamespaceToolNameMap,
+): AnyRecord[] {
+  if (tool?.type === "function") {
+    const chatTool = responsesFunctionToolToChatTool(tool)
+    return chatTool ? [chatTool] : []
+  }
+
+  if (tool?.type !== "namespace") return []
+  const namespace = typeof tool.name === "string" ? tool.name : ""
+  if (!namespace) return []
+
+  return asArray(tool.tools)
+    .map((nestedTool) => {
+      const nested = nestedTool as AnyRecord
+      if (nested?.type !== "function") return null
+      const nestedName =
+        typeof nested.name === "string"
+          ? nested.name
+          : typeof nested.function?.name === "string"
+            ? nested.function.name
+            : ""
+      if (!nestedName) return null
+      const chatName = namespaceChatToolName(namespace, nestedName)
+      namespaceToolNameMap[chatName] = {
+        namespace,
+        name: nestedName,
+      }
+      return responsesFunctionToolToChatTool(
+        nested,
+        chatName,
+        typeof tool.description === "string" ? tool.description : undefined,
+      )
+    })
+    .filter((item): item is AnyRecord => Boolean(item))
 }
 
 function chatToolToResponsesTool(tool: AnyRecord): AnyRecord | null {
@@ -279,7 +381,9 @@ export function anthropicMessagesToResponses(body: AnyRecord): AnyRecord {
   }
 }
 
-export function responsesToChatCompletions(body: AnyRecord): AnyRecord {
+export function responsesToChatCompletionsWithToolMappings(
+  body: AnyRecord,
+): ProviderProfileResponsesChatBridgeResult {
   const messages: AnyRecord[] = []
   if (typeof body.instructions === "string" && body.instructions.trim()) {
     messages.push({ role: "system", content: body.instructions.trim() })
@@ -341,19 +445,28 @@ export function responsesToChatCompletions(body: AnyRecord): AnyRecord {
   }
   flushPendingToolCalls()
 
+  const namespaceToolNameMap: ProviderProfileNamespaceToolNameMap = {}
   const tools = asArray(body.tools)
-    .map((tool) => responsesToolToChatTool(tool as AnyRecord))
-    .filter(Boolean)
+    .flatMap((tool) =>
+      responsesToolToChatTools(tool as AnyRecord, namespaceToolNameMap),
+    )
 
   return {
-    model: body.model,
-    messages,
-    ...(body.max_output_tokens ? { max_tokens: body.max_output_tokens } : {}),
-    ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
-    ...(body.top_p !== undefined ? { top_p: body.top_p } : {}),
-    ...(body.stream !== undefined ? { stream: body.stream } : {}),
-    ...(tools.length > 0 ? { tools } : {}),
+    body: {
+      model: body.model,
+      messages,
+      ...(body.max_output_tokens ? { max_tokens: body.max_output_tokens } : {}),
+      ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
+      ...(body.top_p !== undefined ? { top_p: body.top_p } : {}),
+      ...(body.stream !== undefined ? { stream: body.stream } : {}),
+      ...(tools.length > 0 ? { tools } : {}),
+    },
+    namespaceToolNameMap,
   }
+}
+
+export function responsesToChatCompletions(body: AnyRecord): AnyRecord {
+  return responsesToChatCompletionsWithToolMappings(body).body
 }
 
 export function chatCompletionToAnthropicMessage(
@@ -393,6 +506,7 @@ export function chatCompletionToAnthropicMessage(
 export function chatCompletionToResponse(
   response: AnyRecord,
   fallbackModel: string,
+  options: ProviderProfileToolMappingOptions = {},
 ): AnyRecord {
   const choice = response.choices?.[0]
   const message = choice?.message || {}
@@ -409,7 +523,9 @@ export function chatCompletionToResponse(
   }
   output.push(
     ...asArray(message.tool_calls)
-      .map((toolCall) => chatToolCallToResponsesOutput(toolCall as AnyRecord))
+      .map((toolCall) =>
+        chatToolCallToResponsesOutput(toolCall as AnyRecord, options),
+      )
       .filter((item): item is AnyRecord => Boolean(item)),
   )
   if (output.length === 0) {

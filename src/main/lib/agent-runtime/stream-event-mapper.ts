@@ -104,6 +104,16 @@ function getString(chunk: Record<string, unknown>, key: string): string | undefi
   return typeof value === "string" ? value : undefined
 }
 
+function getTerminalStatus(chunk: Record<string, unknown>): string {
+  const status = getString(chunk, "status")
+  return status === "failed" ||
+    status === "canceled" ||
+    status === "interrupted" ||
+    status === "succeeded"
+    ? status
+    : "succeeded"
+}
+
 function eventPayloadForChunk(chunk: Record<string, unknown>): {
   type:
     | "assistant_delta"
@@ -215,8 +225,9 @@ function eventPayloadForChunk(chunk: Record<string, unknown>): {
     case "runtime-status": {
       const blocker = isObject(chunk.blocker) ? chunk.blocker : null
       const component = blocker ? getString(blocker, "component") : undefined
+      const mcpNeedsAuth = component === "mcp" && chunk.ok === false
       return {
-        type: component === "mcp" ? "mcp_needs_auth" : "status",
+        type: mcpNeedsAuth ? "mcp_needs_auth" : "status",
         payload: {
           status: "runtime-status",
           ok: chunk.ok === true,
@@ -246,7 +257,8 @@ function eventPayloadForChunk(chunk: Record<string, unknown>): {
       return {
         type: "completed",
         payload: {
-          status: "succeeded",
+          status: getTerminalStatus(chunk),
+          message: getString(chunk, "message") ?? null,
           messageMetadata: toJsonValue(chunk.messageMetadata),
         },
       }
@@ -255,6 +267,9 @@ function eventPayloadForChunk(chunk: Record<string, unknown>): {
     case "start":
     case "start-step":
     case "finish-step":
+    case "file-change-diff":
+    case "file-change-patch":
+    case "file-change-delta":
       return {
         type: "status",
         payload: {
@@ -331,6 +346,26 @@ export function redactRendererDiagnosticChunk(
     source: input.source ?? "runtime-diagnostic",
     secretHints: input.secretHints,
   })
+  return redacted.payload
+}
+
+export function redactRendererRuntimeChunk(
+  input: RedactRendererDiagnosticChunkInput,
+): unknown {
+  const redacted = redactRuntimePayload(toJsonValue(input.chunk), {
+    runtimeId: input.runtimeId,
+    runId: input.runId,
+    jobId: input.jobId,
+    source: input.source ?? "runtime-diagnostic",
+    secretHints: input.secretHints,
+  })
+  if (
+    isObject(input.chunk) &&
+    isObject(redacted.payload) &&
+    typeof input.chunk.type === "string"
+  ) {
+    redacted.payload.type = input.chunk.type
+  }
   return redacted.payload
 }
 

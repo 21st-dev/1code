@@ -48,7 +48,7 @@ export async function runCodexHeadlessTask(
     args: buildCodexArgs(request),
     env: buildCodexEnv(request),
     stderrFilter: filterCodexStderr,
-    label: "Codex",
+    label: "Codex headless/batch",
   })
 }
 

@@ -451,19 +451,20 @@ const CODEX_RUNTIME_MANIFEST = manifest({
   runtimeId: "codex",
   label: "Codex",
   description:
-    "Codex runtime support through Locus's ACP adapter and shared local safety layers.",
+    "Codex runtime support through Locus's app-server desktop adapter by default, headless/batch Codex CLI path, shared local safety layers, and an explicit ACP temporary-compat rollback path.",
   capabilities: [
     capability({
       id: "hardToolGuard",
       status: "supported",
       scope: "runtime-neutral",
       reason:
-        "Locus installs an ACP permission handler before Codex prompts and maps permission requests to guarded-run decisions.",
-      hint: "Guarded Codex runs fail closed if the ACP permission handler cannot be attached.",
+        "Locus routes Codex app-server tool and controlled-edit requests through shared guarded-run decisions before mutating operations; the ACP temporary-compat path remains an explicit rollback only.",
+      hint: "Guarded Codex runs fail closed if app-server approval handling or the explicit ACP rollback handler cannot be attached.",
       support: {
         kind: "runtime-code",
         references: [
-          "src/main/lib/codex/acp-permission.ts",
+          "src/main/lib/codex/app-server-approval.ts",
+          "src/main/lib/codex/app-server-controlled-edit.ts",
           "src/main/lib/trpc/routers/codex.ts",
         ],
       },
@@ -473,12 +474,12 @@ const CODEX_RUNTIME_MANIFEST = manifest({
       status: "supported",
       scope: "runtime-neutral",
       reason:
-        "Locus maps Codex plan runs to ACP read-only mode and denies edit, move, delete, and execute permission requests before execution.",
-      hint: "Plan-mode writes and shell commands are rejected through ACP permission handling.",
+        "Locus maps Codex app-server plan runs to read-only permission semantics and denies edit, move, delete, and execute requests before execution.",
+      hint: "Plan-mode writes and shell commands are rejected through app-server approval handling.",
       support: {
         kind: "runtime-code",
         references: [
-          "src/main/lib/codex/acp-permission.ts",
+          "src/main/lib/codex/app-server-approval.ts",
           "src/main/lib/trpc/routers/codex.ts",
         ],
       },
@@ -494,7 +495,7 @@ const CODEX_RUNTIME_MANIFEST = manifest({
         kind: "locus-shared-layer",
         references: [
           "src/main/lib/agent-guard",
-          "src/main/lib/codex/acp-permission.ts",
+          "src/main/lib/codex/app-server-guarded-scope.ts",
         ],
       },
     }),
@@ -503,12 +504,13 @@ const CODEX_RUNTIME_MANIFEST = manifest({
       status: "supported",
       scope: "runtime-neutral",
       reason:
-        "Locus registers a Codex ACP host-side AskUserQuestion tool and bridges pending, answer, timeout, and denial events through the shared desktop question UI contract.",
-      hint: "Codex question requests remain a blocking host tool call until the user answers, skips, or the request times out.",
+        "Locus maps Codex app-server user-input and MCP elicitation requests to the shared desktop question UI contract, including pending, answer, timeout, and denial events.",
+      hint: "Codex question requests remain blocking until the user answers, skips, or the request times out.",
       support: {
         kind: "runtime-code",
         references: [
           "src/main/lib/codex/ask-user-question.ts",
+          "src/main/lib/codex/app-server-user-interaction.ts",
           "src/main/lib/trpc/routers/codex.ts",
         ],
       },

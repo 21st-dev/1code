@@ -38,7 +38,10 @@ import {
   getCodexErrorDiagnostics,
   isCodexAuthError,
 } from "../../codex/errors"
-import { resolveCodexSelectedModelId } from "../../codex/model-selection"
+import {
+  normalizeCodexAppServerModelId,
+  resolveCodexSelectedModelId,
+} from "../../codex/model-selection"
 import {
   appendCodexLoginOutput,
   redactCodexLoginOutput,
@@ -64,6 +67,9 @@ import {
   resolveBundledCodexCliPath,
 } from "../../codex/cli-path"
 import {
+  resolveCodexDesktopAdapterSelection,
+} from "../../codex/desktop-adapter-selection"
+import {
   runCodexCli,
   runCodexCliChecked,
 } from "../../codex/cli-runner"
@@ -80,6 +86,7 @@ import {
 } from "../../codex/acp-adapter"
 import { createCodexDesktopRunRequest } from "../../codex/desktop-run-request"
 import { createCodexAcpTemporaryCompatAdapter } from "../../codex/acp-temporary-compat-adapter"
+import { createCodexAppServerAdapter } from "../../codex/app-server-adapter"
 import {
   type CodexAskUserQuestionApproval,
   type CodexAskUserQuestionPending,
@@ -102,6 +109,7 @@ import {
   appendRunEventsToAgentJob,
   createDesktopStreamEventMapper,
   redactRendererDiagnosticChunk,
+  redactRendererRuntimeChunk,
 } from "../../agent-runtime/stream-event-mapper"
 import {
   fetchMcpTools,
@@ -154,6 +162,49 @@ type CodexMcpSnapshot = {
   fingerprint: string
   fetchedAt: number
   toolsResolved: boolean
+}
+
+function buildCodexAppServerAssistantMessage(input: {
+  chunks: any[]
+  model: string
+  generateMessageId: () => string
+}): any | null {
+  const text = input.chunks
+    .filter((chunk) => chunk?.type === "text-delta")
+    .map((chunk) => (typeof chunk.delta === "string" ? chunk.delta : ""))
+    .join("")
+  const metadataChunks = input.chunks
+    .filter(
+      (chunk) =>
+        chunk?.type === "message-metadata" &&
+        chunk.messageMetadata &&
+        typeof chunk.messageMetadata === "object",
+    )
+    .map((chunk) => chunk.messageMetadata)
+  const finishMetadata = [...input.chunks]
+    .reverse()
+    .find(
+      (chunk) =>
+        chunk?.type === "finish" &&
+        chunk.messageMetadata &&
+        typeof chunk.messageMetadata === "object",
+    )?.messageMetadata
+  const metadata = {
+    ...metadataChunks.at(-1),
+    ...(finishMetadata || {}),
+    model: input.model,
+    provider: "codex",
+  }
+
+  if (!text.trim()) return null
+
+  return normalizeCodexStreamChunk({
+    id: input.generateMessageId(),
+    role: "assistant",
+    createdAt: new Date().toISOString(),
+    parts: [{ type: "text", text }],
+    metadata,
+  })
 }
 
 type ActiveCodexStream = {
@@ -972,8 +1023,13 @@ export const codexRouter = router({
         let desktopStreamEventMapper: ReturnType<
           typeof createDesktopStreamEventMapper
         > | null = null
+        let useCodexAppServerAdapter = false
+        const appServerPersistenceChunks: any[] = []
 
         const safeEmit = (chunk: any) => {
+          if (useCodexAppServerAdapter) {
+            appServerPersistenceChunks.push(chunk)
+          }
           if (
             chunk?.type === "error" ||
             chunk?.type === "auth-error" ||
@@ -982,7 +1038,12 @@ export const codexRouter = router({
           ) {
             desktopJobSawError = true
           }
-          if (desktopJobDb && desktopStreamEventMapper && chunk?.type !== "finish") {
+          if (
+            !useCodexAppServerAdapter &&
+            desktopJobDb &&
+            desktopStreamEventMapper &&
+            chunk?.type !== "finish"
+          ) {
             try {
               const events = desktopStreamEventMapper.map(chunk)
               appendRunEventsToAgentJob(desktopJobDb, events)
@@ -992,12 +1053,19 @@ export const codexRouter = router({
           }
           if (!isActive) return
           try {
-            const rendererChunk = redactRendererDiagnosticChunk({
-              runtimeId: "codex",
-              runId: input.runId,
-              jobId: desktopJobId,
-              chunk,
-            })
+            const rendererChunk = useCodexAppServerAdapter
+              ? redactRendererRuntimeChunk({
+                  runtimeId: "codex",
+                  runId: input.runId,
+                  jobId: desktopJobId,
+                  chunk,
+                })
+              : redactRendererDiagnosticChunk({
+                  runtimeId: "codex",
+                  runId: input.runId,
+                  jobId: desktopJobId,
+                  chunk,
+                })
             emit.next(rendererChunk)
           } catch {
             isActive = false
@@ -1053,11 +1121,31 @@ export const codexRouter = router({
                 return
               }
             }
+            const codexAdapterSelection =
+              resolveCodexDesktopAdapterSelection(process.env)
+            useCodexAppServerAdapter = codexAdapterSelection.useAppServer
             const permissionPolicy = resolveDesktopPermissionPolicy({
               runtimeId: "codex",
               mode: input.mode,
               hasScopeContract: Boolean(guardedContract),
+              codexAdapterSource: useCodexAppServerAdapter
+                ? "codex-app-server"
+                : "acp-temporary-compat",
             })
+            if (!useCodexAppServerAdapter) {
+              safeEmit({
+                type: "runtime-status",
+                runtime: "codex",
+                ok: true,
+                message: codexAdapterSelection.reason,
+                hint: `Unset ${codexAdapterSelection.fallbackEnvVar} and remove ${codexAdapterSelection.legacyAppServerEnvVar}=0 to return to the default app-server adapter.`,
+                adapter: {
+                  source: "codex-acp-temporary-compat",
+                  temporaryFallback: true,
+                  appServerDefault: true,
+                },
+              })
+            }
 
             const emitPreflightBlocker = (
               blocker: DesktopRunPreflightBlocker,
@@ -1305,8 +1393,12 @@ export const codexRouter = router({
               requestedModel: input.model,
               hasAppManagedApiKey: Boolean(appManagedCodexApiKey),
             })
+            const appServerSelectedModelId =
+              useCodexAppServerAdapter && !codexProviderProfile
+                ? normalizeCodexAppServerModelId(selectedModelId)
+                : selectedModelId
             const metadataModel =
-              codexProviderProfile?.defaultModel ?? selectedModelId
+              codexProviderProfile?.defaultModel ?? appServerSelectedModelId
 
             const lastMessage = existingMessages[existingMessages.length - 1]
             const isDuplicatePrompt =
@@ -1490,46 +1582,117 @@ export const codexRouter = router({
               },
             })
 
-            const codexAdapter = createCodexAcpTemporaryCompatAdapter({
-              mcpServers: mcpSnapshot.mcpServersForSession,
-              mcpFingerprint: mcpSnapshot.fingerprint,
-              appManagedApiKey: codexProviderProfile
-                ? null
-                : appManagedCodexApiKey,
-              providerProfile: codexProviderProfile,
-              modelId: selectedModelId,
-              metadataModelId: metadataModel,
-              images: resolvedImages,
-              longTextAttachments: input.longTextAttachments,
-              messagesForStream,
-              guardedRun:
-                guardedContract && guardedPreRunStatus
-                  ? {
-                      contract: guardedContract,
-                      preRunStatus: guardedPreRunStatus,
-                      startedAt: guardedRunStartedAt,
-                      events: [],
-                    }
-                  : null,
-              emit: safeEmit,
-              persistMessages: persistSubChatMessages,
-              registerPendingQuestion: (toolUseId, pending) => {
-                pendingCodexToolApprovals.set(toolUseId, pending)
-              },
-              unregisterPendingQuestion: (toolUseId) => {
-                pendingCodexToolApprovals.delete(toolUseId)
-              },
-              generateMessageId: () => crypto.randomUUID(),
-            })
+            const codexAdapter = useCodexAppServerAdapter
+              ? createCodexAppServerAdapter({
+                  enabled: true,
+                  experimentalApi:
+                    process.env.LOCUS_CODEX_APP_SERVER_EXPERIMENTAL_API ===
+                      "1" ||
+                    process.env.LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR ===
+                      "1",
+                  // Smoke-only diagnostic hook for the 6.8 apply_patch
+                  // enablement probe. Product app-server runs leave this
+                  // unset unless a developer explicitly opts into the env gate.
+                  configOverrides:
+                    process.env.LOCUS_CODEX_APP_SERVER_APPLY_PATCH_EXPERIMENT === "1"
+                      ? {
+                          "features.apply_patch_freeform": true,
+                          "features.apply_patch_streaming_events": true,
+                          "include_apply_patch_tool": true,
+                          "tools.apply_patch.enabled": true,
+                          "tools.apply_patch.approval_mode": "prompt",
+                          "model_providers.locus_profile.apply_patch_tool_type":
+                            "freeform",
+                          "model_providers.locus_profile.experimental_supported_tools":
+                            ["apply_patch"],
+                        }
+                      : undefined,
+                  providerGatewayToken: codexProviderProfile?.token ?? null,
+                  appManagedApiKey: codexProviderProfile
+                    ? null
+                    : appManagedCodexApiKey,
+                  controlledEditEnabled:
+                    process.env.LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR ===
+                    "1",
+                  resolvedImages,
+                  guardedContract,
+                  emit: safeEmit,
+                  registerPendingQuestion: (toolUseId, pending) => {
+                    pendingCodexToolApprovals.set(toolUseId, pending)
+                  },
+                  unregisterPendingQuestion: (toolUseId) => {
+                    pendingCodexToolApprovals.delete(toolUseId)
+                  },
+                })
+              : createCodexAcpTemporaryCompatAdapter({
+                  mcpServers: mcpSnapshot.mcpServersForSession,
+                  mcpFingerprint: mcpSnapshot.fingerprint,
+                  appManagedApiKey: codexProviderProfile
+                    ? null
+                    : appManagedCodexApiKey,
+                  providerProfile: codexProviderProfile,
+                  modelId: selectedModelId,
+                  metadataModelId: metadataModel,
+                  images: resolvedImages,
+                  longTextAttachments: input.longTextAttachments,
+                  messagesForStream,
+                  guardedRun:
+                    guardedContract && guardedPreRunStatus
+                      ? {
+                          contract: guardedContract,
+                          preRunStatus: guardedPreRunStatus,
+                          startedAt: guardedRunStartedAt,
+                          events: [],
+                        }
+                      : null,
+                  emit: safeEmit,
+                  persistMessages: persistSubChatMessages,
+                  registerPendingQuestion: (toolUseId, pending) => {
+                    pendingCodexToolApprovals.set(toolUseId, pending)
+                  },
+                  unregisterPendingQuestion: (toolUseId) => {
+                    pendingCodexToolApprovals.delete(toolUseId)
+                  },
+                  generateMessageId: () => crypto.randomUUID(),
+                })
 
             const adapterResult = await codexAdapter.run(desktopRunRequest)
 
             desktopJobAdapterFailed = adapterResult.status === "failed"
             if (desktopJobAdapterFailed) {
               desktopJobSawError = true
+              const adapterAlreadyEmittedError =
+                appServerPersistenceChunks.some((chunk) => chunk?.type === "error")
+              const adapterAlreadyEmittedFinish =
+                appServerPersistenceChunks.some((chunk) => chunk?.type === "finish")
+              if (!adapterAlreadyEmittedError) {
+                safeEmit({
+                  type: "error",
+                  errorText:
+                    adapterResult.error?.message ??
+                    "Codex desktop adapter failed.",
+                })
+              }
+              if (!adapterAlreadyEmittedFinish) {
+                safeEmit({ type: "finish" })
+              }
             }
             desktopJobReachedNaturalFinish =
               adapterResult.status === "succeeded" && !desktopJobSawError
+            if (useCodexAppServerAdapter && desktopJobReachedNaturalFinish) {
+              const appServerAssistantMessage =
+                buildCodexAppServerAssistantMessage({
+                  chunks: appServerPersistenceChunks,
+                  model: metadataModel,
+                  generateMessageId: () => crypto.randomUUID(),
+                })
+              if (appServerAssistantMessage) {
+                persistSubChatMessages([
+                  ...messagesForStream,
+                  appServerAssistantMessage,
+                ])
+              }
+            }
             safeComplete()
           } catch (error) {
             const normalized = extractCodexError(error)

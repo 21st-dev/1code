@@ -11,6 +11,20 @@ import {
 export type CodexRuntimeCapabilityStatus = AgentRuntimeCapabilityStatus
 export type CodexRuntimeCapabilityId = AgentRuntimeCapabilityId
 export type CodexRuntimeCapability = AgentRuntimeCapability
+export type CodexRuntimeCapabilityAdapterSource =
+  | "codex-acp-temporary-compat"
+  | "codex-app-server"
+export type CodexRuntimeCapabilityProviderAuthMode =
+  | "app-managed"
+  | "provider-profile"
+  | "runtime-managed"
+
+export type CodexRuntimeCapabilityAdapterContext =
+  | CodexRuntimeCapabilityAdapterSource
+  | {
+      adapterSource: CodexRuntimeCapabilityAdapterSource
+      providerAuthMode?: CodexRuntimeCapabilityProviderAuthMode | null
+    }
 
 export type CodexRuntimeCapabilityBlocker = {
   capability: CodexRuntimeCapabilityId
@@ -30,6 +44,295 @@ export type CodexCapabilityErrorChunk = {
 
 export function getCodexRuntimeCapabilities(): CodexRuntimeCapability[] {
   return getAgentRuntimeCapabilityManifest("codex").capabilities
+}
+
+type CodexAdapterCapabilityOverride = Omit<
+  CodexRuntimeCapability,
+  "id" | "label"
+>
+
+const CODEX_APP_SERVER_HARD_TOOL_GUARD_DEGRADED: CodexAdapterCapabilityOverride =
+  {
+    status: "degraded",
+    scope: "runtime-specific",
+    reason:
+      "Codex app-server guarded runs fail closed and use the shared permission policy, but full controlled-edit support depends on an explicit provider auth context with matching smoke evidence.",
+    hint: "Pass provider auth context before presenting app-server hard-tool-guard as supported; unknown app-server auth context stays degraded.",
+    support: null,
+  }
+
+const CODEX_APP_SERVER_HARD_TOOL_GUARD_PROVEN: CodexAdapterCapabilityOverride = {
+  status: "supported",
+  scope: "runtime-neutral",
+  reason:
+    "Codex app-server guarded runs fail closed, use the shared permission policy, and now have direct/app-managed plus provider-profile gateway smoke evidence for Locus-controlled guarded edits through the explicit controlled-edit executor gate.",
+  hint: "App-server controlled edits remain behind LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR and require a known provider auth mode.",
+  support: {
+    kind: "runtime-code",
+    references: [
+      "src/main/lib/codex/app-server-controlled-edit.ts",
+      "src/main/lib/codex/app-server-approval.ts",
+      "tests/codex-app-server-adapter.test.ts",
+      "openspec/changes/add-locus-controlled-edit-executor-for-codex-app-server/adoption-probe-evidence.md",
+    ],
+  },
+}
+
+const CODEX_ACP_CAPABILITY_OVERRIDES: Partial<
+  Record<CodexRuntimeCapabilityId, CodexAdapterCapabilityOverride>
+> = {
+  hardToolGuard: {
+    status: "supported",
+    scope: "runtime-neutral",
+    reason:
+      "The explicit ACP temporary-compat rollback path installs an ACP permission handler before Codex prompts and maps permission requests to guarded-run decisions.",
+    hint: "ACP rollback guarded runs fail closed if the ACP permission handler cannot be attached.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/codex/acp-permission.ts",
+        "src/main/lib/trpc/routers/codex.ts",
+      ],
+    },
+  },
+  planMode: {
+    status: "supported",
+    scope: "runtime-neutral",
+    reason:
+      "The explicit ACP temporary-compat rollback path maps Codex plan runs to ACP read-only mode and denies edit, move, delete, and execute permission requests before execution.",
+    hint: "Plan-mode writes and shell commands are rejected through ACP permission handling on the rollback path.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/codex/acp-permission.ts",
+        "src/main/lib/trpc/routers/codex.ts",
+      ],
+    },
+  },
+  scopeExpansion: {
+    status: "supported",
+    scope: "runtime-neutral",
+    reason:
+      "The explicit ACP temporary-compat rollback path denies out-of-scope guarded operations before permission approval and emits scope-expansion events through the shared guard layer.",
+    hint: "Approve the requested scope expansion, then retry the guarded run.",
+    support: {
+      kind: "locus-shared-layer",
+      references: [
+        "src/main/lib/agent-guard",
+        "src/main/lib/codex/acp-permission.ts",
+      ],
+    },
+  },
+  askUserQuestion: {
+    status: "supported",
+    scope: "runtime-neutral",
+    reason:
+      "The explicit ACP temporary-compat rollback path registers the Codex ACP host-side AskUserQuestion tool and bridges pending, answer, timeout, and denial events through the shared desktop question UI contract.",
+    hint: "Codex question requests remain a blocking host tool call until the user answers, skips, or the request times out.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/codex/ask-user-question.ts",
+        "src/main/lib/trpc/routers/codex.ts",
+      ],
+    },
+  },
+  usageMetadata: {
+    status: "supported",
+    scope: "runtime-specific",
+    reason:
+      "The explicit ACP temporary-compat rollback path polls session token_count events and emits normalized token and context metadata when available without inventing missing values.",
+    hint: "Missing Codex usage fields are omitted rather than reported as zero.",
+    support: {
+      kind: "runtime-code",
+      references: ["src/main/lib/trpc/routers/codex.ts"],
+    },
+  },
+}
+
+const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
+  Record<CodexRuntimeCapabilityId, CodexAdapterCapabilityOverride>
+> = {
+  hardToolGuard: CODEX_APP_SERVER_HARD_TOOL_GUARD_DEGRADED,
+  planMode: {
+    status: "supported",
+    scope: "runtime-neutral",
+    reason:
+      "The shared permission-policy owner maps Codex app-server plan mode to a fail-closed approval gate.",
+    hint: "Plan-mode app-server runs remain blocked if approval enforcement is missing or delayed.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/agent-runtime/permission-policy.ts",
+        "tests/agent-runtime-permission-policy.test.ts",
+      ],
+    },
+  },
+  scopeExpansion: {
+    status: "degraded",
+    scope: "runtime-specific",
+    reason:
+      "Codex app-server guarded-scope startup fails closed without a validated scope contract, but runtime scope-expansion retry events are not proven on a live transport yet.",
+    hint: "Keep app-server scope expansion degraded until a transport test proves the full request, denial, expansion, and retry loop.",
+    support: null,
+  },
+  askUserQuestion: {
+    status: "supported",
+    scope: "runtime-neutral",
+    reason:
+      "Codex app-server user-input and MCP elicitation requests map to the existing AskUserQuestion pending, result, and timeout event contract.",
+    hint: "Question answers are redacted from renderer-visible result chunks when marked secret.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/codex/app-server-user-interaction.ts",
+        "tests/codex-app-server-user-interaction.test.ts",
+      ],
+    },
+  },
+  rollback: {
+    status: "unsupported",
+    scope: "unavailable",
+    reason:
+      "Codex app-server rollback and fork remain unsupported until Locus has durable shared-session references and a local file rollback policy.",
+    hint: "Schema presence alone must not enable rollback or fork.",
+    support: null,
+  },
+  mcpAuth: {
+    status: "degraded",
+    scope: "runtime-specific",
+    reason:
+      "Shared MCP preflight still owns auth blocking, but app-server MCP readiness and auth handoff are not proven on the app-server transport yet.",
+    hint: "Do not report app-server MCP auth as fully supported until readiness and auth handoff tests pass.",
+    support: null,
+  },
+  mcpConfiguration: {
+    status: "degraded",
+    scope: "runtime-specific",
+    reason:
+      "Codex app-server MCP elicitation is mapped, but app-server configuration import/write behavior is not implemented.",
+    hint: "Keep MCP configuration operations tied to existing shared owners until app-server config writes are proven.",
+    support: null,
+  },
+  providerProfiles: {
+    status: "supported",
+    scope: "runtime-neutral",
+    reason:
+      "Codex app-server provider-profile binding uses main-process gateway tokens in allowlisted runtime env and exposes only client env-key references.",
+    hint: "Renderer callers must continue to pass only provider profile IDs.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/codex/app-server-provider-binding.ts",
+        "tests/codex-app-server-provider-binding.test.ts",
+      ],
+    },
+  },
+  attachments: {
+    status: "supported",
+    scope: "runtime-neutral",
+    reason:
+      "Codex app-server input mapping accepts main-process resolved image data and prepared long-text prompt blocks while rejecting unresolved local refs.",
+    hint: "Unsupported or unresolved attachments fail before app-server startup.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/codex/app-server-attachments.ts",
+        "tests/codex-app-server-attachments.test.ts",
+      ],
+    },
+  },
+  usageMetadata: {
+    status: "supported",
+    scope: "runtime-specific",
+    reason:
+      "Codex app-server token usage notifications map to normalized usage and context metadata events without fabricating missing values.",
+    hint: "Missing app-server usage fields are omitted rather than reported as zero.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/codex/app-server-stream-events.ts",
+        "tests/codex-app-server-stream-events.test.ts",
+      ],
+    },
+  },
+  runtimePlugins: {
+    status: "unsupported",
+    scope: "unavailable",
+    reason:
+      "Codex app-server plugin execution is not implemented through a runtime-native or shared Locus plugin layer.",
+    hint: "Do not expose plugin execute controls for Codex app-server until an execution path exists.",
+    support: null,
+  },
+  runtimeCommands: {
+    status: "unsupported",
+    scope: "unavailable",
+    reason:
+      "Codex app-server runtime command invocation is not implemented for command-guide or chat command surfaces.",
+    hint: "Disable app-server command execution controls until command parity is implemented.",
+    support: null,
+  },
+  runtimeWorkflows: {
+    status: "unsupported",
+    scope: "unavailable",
+    reason: "Codex app-server has no implemented shared workflow adapter.",
+    hint: "Keep workflow parity out of Codex app-server until implemented or explicitly rescoped.",
+    support: null,
+  },
+  appAgents: {
+    status: "degraded",
+    scope: "runtime-specific",
+    reason:
+      "Codex App Agent mentions can be prompt-prepared, but runtime-neutral app-server execution and limitation reporting are incomplete.",
+    hint: "Do not count prompt preparation alone as app-server App Agent support.",
+    support: null,
+  },
+}
+
+function normalizeAdapterContext(
+  input: CodexRuntimeCapabilityAdapterContext,
+): {
+  adapterSource: CodexRuntimeCapabilityAdapterSource
+  providerAuthMode?: CodexRuntimeCapabilityProviderAuthMode | null
+} {
+  return typeof input === "string" ? { adapterSource: input } : input
+}
+
+function getAppServerCapabilityOverrides(input: {
+  providerAuthMode?: CodexRuntimeCapabilityProviderAuthMode | null
+}): Partial<Record<CodexRuntimeCapabilityId, CodexAdapterCapabilityOverride>> {
+  const hardToolGuard =
+    input.providerAuthMode === "app-managed" ||
+    input.providerAuthMode === "runtime-managed" ||
+    input.providerAuthMode === "provider-profile"
+      ? CODEX_APP_SERVER_HARD_TOOL_GUARD_PROVEN
+      : CODEX_APP_SERVER_HARD_TOOL_GUARD_DEGRADED
+  return {
+    ...CODEX_APP_SERVER_CAPABILITY_OVERRIDES,
+    hardToolGuard,
+  }
+}
+
+export function getCodexRuntimeCapabilitiesForAdapter(
+  adapterContext: CodexRuntimeCapabilityAdapterContext,
+): CodexRuntimeCapability[] {
+  const context = normalizeAdapterContext(adapterContext)
+  if (context.adapterSource === "codex-acp-temporary-compat") {
+    return getCodexRuntimeCapabilities().map((capability) => ({
+      ...capability,
+      ...CODEX_ACP_CAPABILITY_OVERRIDES[capability.id],
+      id: capability.id,
+      label: capability.label,
+    }))
+  }
+
+  const overrides = getAppServerCapabilityOverrides(context)
+  return getCodexRuntimeCapabilities().map((capability) => ({
+    ...capability,
+    ...overrides[capability.id],
+    id: capability.id,
+    label: capability.label,
+  }))
 }
 
 export function getCodexRuntimeCapability(

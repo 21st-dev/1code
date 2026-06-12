@@ -21,10 +21,7 @@ export class LocalOnlyBlockedError extends Error {
 }
 
 export function isLocalOnlyMode(): boolean {
-  return shouldEnableLocalOnly(
-    process.env,
-    import.meta.env as Record<string, string | undefined>,
-  )
+  return shouldEnableLocalOnly(process.env)
 }
 
 export function assertOfficialCloudAllowed(
