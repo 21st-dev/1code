@@ -470,11 +470,17 @@ describe("desktop stream event mapper", () => {
 
   test("Codex route redacts renderer diagnostics through the mapper", () => {
     const source = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const rendererEmitIndex = source.indexOf("const emitRendererChunk")
     const safeEmitIndex = source.indexOf("const safeEmit")
-    const redactIndex = source.indexOf("redactRendererDiagnosticChunk", safeEmitIndex)
-    const emitIndex = source.indexOf("emit.next(rendererChunk", safeEmitIndex)
+    const redactIndex = source.indexOf(
+      "redactRendererDiagnosticChunk",
+      rendererEmitIndex,
+    )
+    const emitIndex = source.indexOf("emit.next(rendererChunk", rendererEmitIndex)
 
-    expect(redactIndex, "Codex renderer redaction").toBeGreaterThan(safeEmitIndex)
+    expect(rendererEmitIndex, "Codex renderer emit helper").toBeGreaterThan(0)
+    expect(safeEmitIndex, "Codex safe emit").toBeGreaterThan(rendererEmitIndex)
+    expect(redactIndex, "Codex renderer redaction").toBeGreaterThan(rendererEmitIndex)
     expect(emitIndex, "Codex renderer emission").toBeGreaterThan(redactIndex)
   })
 

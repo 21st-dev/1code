@@ -87,6 +87,7 @@ import {
 import { createCodexDesktopRunRequest } from "../../codex/desktop-run-request"
 import { createCodexAcpTemporaryCompatAdapter } from "../../codex/acp-temporary-compat-adapter"
 import { createCodexAppServerAdapter } from "../../codex/app-server-adapter"
+import { createCodexAppServerFinishGate } from "../../codex/app-server-finish-gate"
 import {
   type CodexAskUserQuestionApproval,
   type CodexAskUserQuestionPending,
@@ -164,31 +165,33 @@ type CodexMcpSnapshot = {
   toolsResolved: boolean
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
 function buildCodexAppServerAssistantMessage(input: {
-  chunks: any[]
+  chunks: Record<string, unknown>[]
   model: string
   generateMessageId: () => string
-}): any | null {
+}): unknown | null {
   const text = input.chunks
     .filter((chunk) => chunk?.type === "text-delta")
     .map((chunk) => (typeof chunk.delta === "string" ? chunk.delta : ""))
     .join("")
   const metadataChunks = input.chunks
-    .filter(
-      (chunk) =>
-        chunk?.type === "message-metadata" &&
-        chunk.messageMetadata &&
-        typeof chunk.messageMetadata === "object",
+    .flatMap((chunk) =>
+      chunk.type === "message-metadata" && isRecord(chunk.messageMetadata)
+        ? [chunk.messageMetadata]
+        : [],
     )
-    .map((chunk) => chunk.messageMetadata)
   const finishMetadata = [...input.chunks]
     .reverse()
-    .find(
-      (chunk) =>
-        chunk?.type === "finish" &&
-        chunk.messageMetadata &&
-        typeof chunk.messageMetadata === "object",
-    )?.messageMetadata
+    .flatMap((chunk) =>
+      chunk.type === "finish" && isRecord(chunk.messageMetadata)
+        ? [chunk.messageMetadata]
+        : [],
+    )
+    .at(0)
   const metadata = {
     ...metadataChunks.at(-1),
     ...(finishMetadata || {}),
@@ -1024,9 +1027,36 @@ export const codexRouter = router({
           typeof createDesktopStreamEventMapper
         > | null = null
         let useCodexAppServerAdapter = false
-        const appServerPersistenceChunks: any[] = []
+        const appServerPersistenceChunks: Record<string, unknown>[] = []
 
-        const safeEmit = (chunk: any) => {
+        const emitRendererChunk = (chunk: Record<string, unknown>) => {
+          if (!isActive) return
+          try {
+            const rendererChunk = useCodexAppServerAdapter
+              ? redactRendererRuntimeChunk({
+                  runtimeId: "codex",
+                  runId: input.runId,
+                  jobId: desktopJobId,
+                  chunk,
+                })
+              : redactRendererDiagnosticChunk({
+                  runtimeId: "codex",
+                  runId: input.runId,
+                  jobId: desktopJobId,
+                  chunk,
+                })
+            emit.next(rendererChunk)
+          } catch {
+            isActive = false
+          }
+        }
+
+        const appServerFinishGate = createCodexAppServerFinishGate({
+          enabled: () => useCodexAppServerAdapter,
+          emit: emitRendererChunk,
+        })
+
+        const safeEmit = (chunk: Record<string, unknown>) => {
           if (useCodexAppServerAdapter) {
             appServerPersistenceChunks.push(chunk)
           }
@@ -1051,25 +1081,7 @@ export const codexRouter = router({
               console.warn("[codex] Failed to persist desktop run events:", eventError)
             }
           }
-          if (!isActive) return
-          try {
-            const rendererChunk = useCodexAppServerAdapter
-              ? redactRendererRuntimeChunk({
-                  runtimeId: "codex",
-                  runId: input.runId,
-                  jobId: desktopJobId,
-                  chunk,
-                })
-              : redactRendererDiagnosticChunk({
-                  runtimeId: "codex",
-                  runId: input.runId,
-                  jobId: desktopJobId,
-                  chunk,
-                })
-            emit.next(rendererChunk)
-          } catch {
-            isActive = false
-          }
+          appServerFinishGate.emit(chunk)
         }
 
         const safeComplete = () => {
@@ -1149,7 +1161,7 @@ export const codexRouter = router({
 
             const emitPreflightBlocker = (
               blocker: DesktopRunPreflightBlocker,
-              chunks: any[] = [],
+              chunks: Record<string, unknown>[] = [],
             ) => {
               for (const chunk of chunks) safeEmit(chunk)
               const error = new DesktopRunPreflightError(blocker)
@@ -1415,7 +1427,7 @@ export const codexRouter = router({
               return !currentStream || currentStream.runId === input.runId
             }
 
-            const persistSubChatMessages = (messages: any[]) => {
+            const persistSubChatMessages = (messages: unknown[]) => {
               if (!isAuthoritativeRun()) {
                 return false
               }
@@ -1656,43 +1668,46 @@ export const codexRouter = router({
                   generateMessageId: () => crypto.randomUUID(),
                 })
 
-            const adapterResult = await codexAdapter.run(desktopRunRequest)
-
-            desktopJobAdapterFailed = adapterResult.status === "failed"
-            if (desktopJobAdapterFailed) {
-              desktopJobSawError = true
-              const adapterAlreadyEmittedError =
-                appServerPersistenceChunks.some((chunk) => chunk?.type === "error")
-              const adapterAlreadyEmittedFinish =
-                appServerPersistenceChunks.some((chunk) => chunk?.type === "finish")
-              if (!adapterAlreadyEmittedError) {
-                safeEmit({
-                  type: "error",
-                  errorText:
-                    adapterResult.error?.message ??
-                    "Codex desktop adapter failed.",
-                })
-              }
-              if (!adapterAlreadyEmittedFinish) {
-                safeEmit({ type: "finish" })
-              }
-            }
-            desktopJobReachedNaturalFinish =
-              adapterResult.status === "succeeded" && !desktopJobSawError
-            if (useCodexAppServerAdapter && desktopJobReachedNaturalFinish) {
-              const appServerAssistantMessage =
-                buildCodexAppServerAssistantMessage({
-                  chunks: appServerPersistenceChunks,
-                  model: metadataModel,
-                  generateMessageId: () => crypto.randomUUID(),
-                })
-              if (appServerAssistantMessage) {
-                persistSubChatMessages([
-                  ...messagesForStream,
-                  appServerAssistantMessage,
-                ])
-              }
-            }
+            await appServerFinishGate.runWithDeferredFinish(
+              () => codexAdapter.run(desktopRunRequest),
+              (adapterResult) => {
+                desktopJobAdapterFailed = adapterResult.status === "failed"
+                if (desktopJobAdapterFailed) {
+                  desktopJobSawError = true
+                  const adapterAlreadyEmittedError =
+                    appServerPersistenceChunks.some((chunk) => chunk?.type === "error")
+                  const adapterAlreadyEmittedFinish =
+                    appServerPersistenceChunks.some((chunk) => chunk?.type === "finish")
+                  if (!adapterAlreadyEmittedError) {
+                    safeEmit({
+                      type: "error",
+                      errorText:
+                        adapterResult.error?.message ??
+                        "Codex desktop adapter failed.",
+                    })
+                  }
+                  if (!adapterAlreadyEmittedFinish) {
+                    safeEmit({ type: "finish" })
+                  }
+                }
+                desktopJobReachedNaturalFinish =
+                  adapterResult.status === "succeeded" && !desktopJobSawError
+                if (useCodexAppServerAdapter && desktopJobReachedNaturalFinish) {
+                  const appServerAssistantMessage =
+                    buildCodexAppServerAssistantMessage({
+                      chunks: appServerPersistenceChunks,
+                      model: metadataModel,
+                      generateMessageId: () => crypto.randomUUID(),
+                    })
+                  if (appServerAssistantMessage) {
+                    persistSubChatMessages([
+                      ...messagesForStream,
+                      appServerAssistantMessage,
+                    ])
+                  }
+                }
+              },
+            )
             safeComplete()
           } catch (error) {
             const normalized = extractCodexError(error)

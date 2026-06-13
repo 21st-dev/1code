@@ -160,7 +160,8 @@ describe("desktop runtime preflight", () => {
       "const codexAdapter = useCodexAppServerAdapter",
     )
     const adapterRunIndex = codex.indexOf(
-      "const adapterResult = await codexAdapter.run(desktopRunRequest)",
+      "codexAdapter.run(desktopRunRequest)",
+      adapterIndex,
     )
 
     expect(blockerIndex).toBeGreaterThan(0)
@@ -174,7 +175,7 @@ describe("desktop runtime preflight", () => {
     expect(adapterIndex).toBeGreaterThan(runRequestIndex)
     expect(adapterRunIndex).toBeGreaterThan(adapterIndex)
     expect(codex).toContain("cwd: runtimeCwd")
-    expect(codex).toContain("await codexAdapter.run(desktopRunRequest)")
+    expect(codex).toContain("codexAdapter.run(desktopRunRequest)")
     expect(codex).toContain('id: "local-only"')
     expect(codex).not.toContain("cwd: input.cwd,\n              mcpServers")
   })

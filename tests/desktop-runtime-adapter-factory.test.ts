@@ -289,7 +289,8 @@ describe("desktop runtime adapter factory", () => {
     expect(codexRouter).toContain(
       'codexAdapterSource: useCodexAppServerAdapter',
     )
-    expect(codexRouter).toContain("await codexAdapter.run(desktopRunRequest)")
+    expect(codexRouter).toContain("createCodexAppServerFinishGate")
+    expect(codexRouter).toContain("codexAdapter.run(desktopRunRequest)")
     expect(codexAdapterTypes).toContain("DesktopRuntimeAdapter")
     expect(codexAdapterTypes).toContain("CodexDesktopAdapterSource")
     expect(codexAdapterTypes).toContain('"codex-acp-temporary-compat" | "codex-app-server"')

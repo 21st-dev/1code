@@ -367,11 +367,6 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
                   nextContracts.delete(this.config.subChatId)
                   appStore.set(approvedGuardedRunContractsAtom, nextContracts)
                 }
-                try {
-                  controller.close()
-                } catch {
-                  // Stream already closed
-                }
               }
             },
             onError: (error: Error) => {
