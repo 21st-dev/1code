@@ -11,6 +11,20 @@ export type ClaudeModelInfo = {
 
 export const CLAUDE_MODELS = [
   {
+    id: "fable",
+    name: "Fable",
+    version: "5",
+    info: {
+      summaryKey: "agent.model.info.summary.claudeFable5",
+      bestForKey: "agent.model.info.bestFor.claudeFable5",
+      tokenNoteKey: "agent.model.info.note.claudeCodeBilling",
+      contextWindow: "1M",
+      maxOutput: "128K",
+      pricing: "$10 in / $50 out per 1M",
+      latencyKey: "agent.model.info.latency.moderate",
+    },
+  },
+  {
     id: "opus",
     name: "Opus",
     version: "4.8",

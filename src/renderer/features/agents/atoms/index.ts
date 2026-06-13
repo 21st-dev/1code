@@ -117,7 +117,7 @@ export const lastSelectedAgentIdAtom = atomWithStorage<string>(
 
 export const lastSelectedModelIdAtom = atomWithStorage<string>(
   "agents:lastSelectedModelId",
-  "opus",
+  "fable",
   undefined,
   { getOnInit: true },
 )
@@ -341,6 +341,7 @@ export const subChatModeAtomFamily = atomFamily((subChatId: string) =>
 
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
+  fable: "fable",
   opus: "opus",
   sonnet: "sonnet",
   haiku: "haiku",

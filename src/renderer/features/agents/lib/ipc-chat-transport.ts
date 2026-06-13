@@ -193,7 +193,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
     // Read model selection dynamically per sub-chat (so split panes stay independent)
     const selectedModelId = appStore.get(subChatModelIdAtomFamily(this.config.subChatId))
-    const modelString = MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["opus"]
+    const modelString =
+      MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["fable"] || MODEL_ID_MAP["opus"]
     const selectedModelSource = appStore.get(
       subChatClaudeModelSourceAtomFamily(this.config.subChatId),
     )

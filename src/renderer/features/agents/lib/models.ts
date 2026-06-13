@@ -70,25 +70,9 @@ export const CODEX_MODELS = [
       latencyKey: "agent.model.info.latency.nearInstant",
     } satisfies ModelInfo,
   },
-  {
-    id: "gpt-5.3-codex",
-    name: "GPT-5.3-Codex",
-    thinkings: ["low", "medium", "high", "xhigh"] as CodexThinkingLevel[],
-    info: {
-      summaryKey: "agent.model.info.summary.gpt53Codex",
-      bestForKey: "agent.model.info.bestFor.gpt53Codex",
-      tokenNoteKey: "agent.model.info.note.codexThinking",
-      contextWindow: "400K",
-      maxOutput: "128K",
-      pricing: "$1.75 in / $14 out per 1M",
-      cachedInput: "$0.175 / 1M",
-      latencyKey: "agent.model.info.latency.medium",
-    } satisfies ModelInfo,
-  },
 ]
 
 const CODEX_CHATGPT_AUTH_ONLY_MODEL_IDS = new Set([
-  "gpt-5.3-codex",
   "gpt-5.3-codex-spark",
 ])
 

@@ -2683,6 +2683,8 @@ export const en = {
   "agent.model.info.latency.fastest": "Fastest",
   "agent.model.info.latency.medium": "Medium",
   "agent.model.info.latency.nearInstant": "Near-instant",
+  "agent.model.info.summary.claudeFable5":
+    "Most capable widely released Claude model for demanding long-horizon agent work.",
   "agent.model.info.summary.claudeOpus48":
     "Most capable Claude model for complex reasoning and agentic coding.",
   "agent.model.info.summary.claudeSonnet46":
@@ -2697,8 +2699,8 @@ export const en = {
     "Efficient mini model for responsive coding tasks and subagents.",
   "agent.model.info.summary.gpt53CodexSpark":
     "Text-only research preview optimized for near-instant coding iteration.",
-  "agent.model.info.summary.gpt53Codex":
-    "Specialized Codex model for complex software engineering.",
+  "agent.model.info.bestFor.claudeFable5":
+    "Most demanding reasoning, high-autonomy coding, and long-running agent tasks.",
   "agent.model.info.bestFor.claudeOpus48":
     "Hard refactors, deep debugging, architecture review, and long agent runs.",
   "agent.model.info.bestFor.claudeSonnet46":
@@ -2713,8 +2715,6 @@ export const en = {
     "High-volume lighter coding tasks, subagents, and lower-latency interactions.",
   "agent.model.info.bestFor.gpt53CodexSpark":
     "Realtime coding iteration for ChatGPT Pro users.",
-  "agent.model.info.bestFor.gpt53Codex":
-    "Large coding tasks that benefit from a dedicated Codex model.",
   "agent.model.info.note.claudeCodeBilling":
     "Shown prices are Claude API reference rates; Claude Code subscriptions may apply separate usage limits.",
   "agent.model.info.note.openaiLongContext":
@@ -5714,6 +5714,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.model.info.latency.fastest": "最快",
   "agent.model.info.latency.medium": "中等",
   "agent.model.info.latency.nearInstant": "接近实时",
+  "agent.model.info.summary.claudeFable5":
+    "Claude 已广泛发布的最强模型，适合高要求长程智能体任务。",
   "agent.model.info.summary.claudeOpus48":
     "Claude 里最强的复杂推理和智能体编码模型。",
   "agent.model.info.summary.claudeSonnet46":
@@ -5728,8 +5730,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "更高效的 mini 模型，适合响应快的编码任务和子智能体。",
   "agent.model.info.summary.gpt53CodexSpark":
     "纯文本研究预览版，优化接近实时的编码迭代。",
-  "agent.model.info.summary.gpt53Codex":
-    "专门面向复杂软件工程的 Codex 模型。",
+  "agent.model.info.bestFor.claudeFable5":
+    "最高要求的推理、高自主编码和长时间智能体任务。",
   "agent.model.info.bestFor.claudeOpus48":
     "困难重构、深度调试、架构审查、长时间智能体任务。",
   "agent.model.info.bestFor.claudeSonnet46":
@@ -5744,8 +5746,6 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "高频轻量编码、子智能体和低延迟交互。",
   "agent.model.info.bestFor.gpt53CodexSpark":
     "ChatGPT Pro 用户的实时编码迭代。",
-  "agent.model.info.bestFor.gpt53Codex":
-    "需要专用 Codex 模型的大型编码任务。",
   "agent.model.info.note.claudeCodeBilling":
     "这里显示的是 Claude API 参考价格；Claude Code 订阅可能有单独用量限制。",
   "agent.model.info.note.openaiLongContext":

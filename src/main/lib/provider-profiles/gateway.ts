@@ -56,12 +56,15 @@ const CODEX_REASONING_SUFFIXES = new Set([
   "xhigh",
 ])
 
-const CODEX_GATEWAY_MODEL_IDS = new Set([
+const CODEX_CURRENT_GATEWAY_MODEL_IDS = new Set([
   "gpt-5.5",
   "gpt-5.4",
   "gpt-5.4-mini",
-  "gpt-5.3-codex",
   "gpt-5.3-codex-spark",
+])
+
+const CODEX_LEGACY_GATEWAY_MODEL_IDS = new Set([
+  "gpt-5.3-codex",
   "gpt-5.2",
 ])
 
@@ -271,7 +274,10 @@ function resolveProviderModel(
   const [baseModel, reasoningSuffix] = normalized.split("/")
   if (
     baseModel &&
-    CODEX_GATEWAY_MODEL_IDS.has(baseModel) &&
+    (
+      CODEX_CURRENT_GATEWAY_MODEL_IDS.has(baseModel) ||
+      CODEX_LEGACY_GATEWAY_MODEL_IDS.has(baseModel)
+    ) &&
     (!reasoningSuffix || CODEX_REASONING_SUFFIXES.has(reasoningSuffix))
   ) {
     return profile.defaultModel

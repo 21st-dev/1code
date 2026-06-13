@@ -245,9 +245,10 @@ Features:
 
 Codex examples:
 
-- `gpt-5` -> upstream primary coding model.
-- `gpt-5-mini` -> upstream lightweight model.
-- `gpt-5.3-codex` -> upstream coding model.
+- `gpt-5.5` -> upstream primary coding model.
+- `gpt-5.4-mini` -> upstream lightweight model.
+- `gpt-5.3-codex-spark` -> upstream realtime coding preview, when the
+  target profile explicitly supports it.
 - `mini` -> upstream lightweight model when prefix/fallback mapping is
   acceptable.
 
