@@ -12,6 +12,7 @@ import { extname } from "node:path"
 import { getGitRemoteInfo } from "../../git"
 import { trackProjectOpened } from "../../analytics"
 import { getLaunchDirectory } from "../../cli"
+import { registerProjectForPath } from "../../projects/registry"
 
 const execAsync = promisify(exec)
 
@@ -72,65 +73,21 @@ export const projectsRouter = router({
     }
 
     const folderPath = result.filePaths[0]!
-    const folderName = basename(folderPath)
-
-    // Get git remote info
-    const gitInfo = await getGitRemoteInfo(folderPath)
-
     const db = getDatabase()
-
-    // Check if project already exists
-    const existing = db
-      .select()
-      .from(projects)
-      .where(eq(projects.path, folderPath))
-      .get()
-
-    if (existing) {
-      // Update the updatedAt timestamp and git info (in case remote changed)
-      const updatedProject = db
-        .update(projects)
-        .set({
-          updatedAt: new Date(),
-          gitRemoteUrl: gitInfo.remoteUrl,
-          gitProvider: gitInfo.provider,
-          gitOwner: gitInfo.owner,
-          gitRepo: gitInfo.repo,
-        })
-        .where(eq(projects.id, existing.id))
-        .returning()
-        .get()
-
-      // Track project opened
-      trackProjectOpened({
-        id: updatedProject!.id,
-        hasGitRemote: !!gitInfo.remoteUrl,
-      })
-
-      return updatedProject
-    }
-
-    // Create new project with git info
-    const newProject = db
-      .insert(projects)
-      .values({
-        name: folderName,
-        path: folderPath,
-        gitRemoteUrl: gitInfo.remoteUrl,
-        gitProvider: gitInfo.provider,
-        gitOwner: gitInfo.owner,
-        gitRepo: gitInfo.repo,
-      })
-      .returning()
-      .get()
+    const { project } = await registerProjectForPath({
+      db,
+      path: folderPath,
+      name: basename(folderPath),
+      refreshExistingGitInfo: true,
+    })
 
     // Track project opened
     trackProjectOpened({
-      id: newProject!.id,
-      hasGitRemote: !!gitInfo.remoteUrl,
+      id: project.id,
+      hasGitRemote: !!project.gitRemoteUrl,
     })
 
-    return newProject
+    return project
   }),
 
   /**
@@ -140,34 +97,13 @@ export const projectsRouter = router({
     .input(z.object({ path: z.string(), name: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
-      const name = input.name || basename(input.path)
-
-      // Check if project already exists
-      const existing = db
-        .select()
-        .from(projects)
-        .where(eq(projects.path, input.path))
-        .get()
-
-      if (existing) {
-        return existing
-      }
-
-      // Get git remote info
-      const gitInfo = await getGitRemoteInfo(input.path)
-
-      return db
-        .insert(projects)
-        .values({
-          name,
+      return (
+        await registerProjectForPath({
+          db,
           path: input.path,
-          gitRemoteUrl: gitInfo.remoteUrl,
-          gitProvider: gitInfo.provider,
-          gitOwner: gitInfo.owner,
-          gitRepo: gitInfo.repo,
+          name: input.name || basename(input.path),
         })
-        .returning()
-        .get()
+      ).project
     }),
 
   /**
@@ -282,42 +218,18 @@ export const projectsRouter = router({
 
       // Check if already cloned
       if (existsSync(clonePath)) {
-        // Project might already exist in DB
         const db = getDatabase()
-        const existing = db
-          .select()
-          .from(projects)
-          .where(eq(projects.path, clonePath))
-          .get()
-
-        if (existing) {
-          trackProjectOpened({
-            id: existing.id,
-            hasGitRemote: !!existing.gitRemoteUrl,
-          })
-          return existing
-        }
-
-        // Create project for existing clone
-        const gitInfo = await getGitRemoteInfo(clonePath)
-        const newProject = db
-          .insert(projects)
-          .values({
-            name: repo,
-            path: clonePath,
-            gitRemoteUrl: gitInfo.remoteUrl,
-            gitProvider: gitInfo.provider,
-            gitOwner: gitInfo.owner,
-            gitRepo: gitInfo.repo,
-          })
-          .returning()
-          .get()
+        const { project } = await registerProjectForPath({
+          db,
+          path: clonePath,
+          name: repo,
+        })
 
         trackProjectOpened({
-          id: newProject!.id,
-          hasGitRemote: !!gitInfo.remoteUrl,
+          id: project.id,
+          hasGitRemote: !!project.gitRemoteUrl,
         })
-        return newProject
+        return project
       }
 
       // Create repos directory
@@ -329,27 +241,18 @@ export const projectsRouter = router({
 
       // Get git info and create project
       const db = getDatabase()
-      const gitInfo = await getGitRemoteInfo(clonePath)
-
-      const newProject = db
-        .insert(projects)
-        .values({
-          name: repo,
-          path: clonePath,
-          gitRemoteUrl: gitInfo.remoteUrl,
-          gitProvider: gitInfo.provider,
-          gitOwner: gitInfo.owner,
-          gitRepo: gitInfo.repo,
-        })
-        .returning()
-        .get()
-
-      trackProjectOpened({
-        id: newProject!.id,
-        hasGitRemote: !!gitInfo.remoteUrl,
+      const { project } = await registerProjectForPath({
+        db,
+        path: clonePath,
+        name: repo,
       })
 
-      return newProject
+      trackProjectOpened({
+        id: project.id,
+        hasGitRemote: !!project.gitRemoteUrl,
+      })
+
+      return project
     }),
 
   /**
@@ -404,44 +307,14 @@ export const projectsRouter = router({
         }
       }
 
-      // Create or update project
       const db = getDatabase()
-      const existing = db
-        .select()
-        .from(projects)
-        .where(eq(projects.path, folderPath))
-        .get()
-
-      if (existing) {
-        // Update git info in case it changed
-        const updated = db
-          .update(projects)
-          .set({
-            updatedAt: new Date(),
-            gitRemoteUrl: gitInfo.remoteUrl,
-            gitProvider: gitInfo.provider,
-            gitOwner: gitInfo.owner,
-            gitRepo: gitInfo.repo,
-          })
-          .where(eq(projects.id, existing.id))
-          .returning()
-          .get()
-
-        return { success: true as const, project: updated }
-      }
-
-      const project = db
-        .insert(projects)
-        .values({
-          name: basename(folderPath),
-          path: folderPath,
-          gitRemoteUrl: gitInfo.remoteUrl,
-          gitProvider: gitInfo.provider,
-          gitOwner: gitInfo.owner,
-          gitRepo: gitInfo.repo,
-        })
-        .returning()
-        .get()
+      const { project } = await registerProjectForPath({
+        db,
+        path: folderPath,
+        name: basename(folderPath),
+        gitInfo,
+        refreshExistingGitInfo: true,
+      })
 
       return { success: true as const, project }
     }),

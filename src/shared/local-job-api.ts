@@ -12,6 +12,8 @@ import {
 
 export const LOCAL_JOB_API_VERSION = "locus.local-job.v1" as const
 
+export const LOCAL_JOB_API_PROJECT_NOT_REGISTERED = "project_not_registered" as const
+
 export const LOCAL_JOB_API_WRITE_POLICIES = [
   "metadata-only",
   "proposal-only",

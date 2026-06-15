@@ -3,14 +3,14 @@
 - [x] 1.2 Validate this proposal with `bunx openspec validate add-local-job-api-project-onboarding --strict --no-interactive`.
 
 ## 2. Shared Registration Owner
-- [ ] 2.1 Add a shared main-process registration owner (e.g. `src/main/lib/projects/registry.ts`) with `registerProjectForPath`, `getProjectRegistrationForCwd`, and `unregisterProjectForPath` over an injected database handle.
-- [ ] 2.2 Route the desktop tRPC `projects.create` (and the `openFolder` insert path) through the shared owner without changing existing desktop behavior.
-- [ ] 2.3 Keep git remote info best-effort so registration does not require a git repo.
-- [ ] 2.4 Add tests proving desktop registration still dedupes by canonical path and preserves git metadata.
+- [x] 2.1 Add a shared main-process registration owner (e.g. `src/main/lib/projects/registry.ts`) with `registerProjectForPath`, `getProjectRegistrationForCwd`, and `unregisterProjectForPath` over an injected database handle.
+- [x] 2.2 Route the desktop tRPC `projects.create` (and the `openFolder` insert path) through the shared owner without changing existing desktop behavior.
+- [x] 2.3 Keep git remote info best-effort so registration does not require a git repo.
+- [x] 2.4 Add tests proving desktop registration still dedupes by canonical path and preserves git metadata.
 
 ## 3. Structured Registration Errors
-- [ ] 3.1 Define a `project_not_registered` error code constant in `src/shared/local-job-api.ts`.
-- [ ] 3.2 Raise a typed registration error from `findRegisteredProjectForCwd*` in `src/main/lib/headless/schedules.ts` instead of a plain message.
+- [x] 3.1 Define a `project_not_registered` error code constant in `src/shared/local-job-api.ts`.
+- [x] 3.2 Raise a typed registration error from `findRegisteredProjectForCwd*` in `src/main/lib/headless/schedules.ts` instead of a plain message.
 - [ ] 3.3 Map the typed error to a stable error envelope and deterministic exit code in `locus api runs create`, replacing the regex match in `localJobApiCreateErrorCode`.
 - [ ] 3.4 Add tests proving `locus api runs create` against an unregistered cwd returns `project_not_registered` in JSON without requiring stderr string matching, and keeps the current exit-code value.
 

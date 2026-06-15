@@ -1,12 +1,9 @@
-import { existsSync, realpathSync } from "node:fs"
-import { isAbsolute, relative, resolve } from "node:path"
 import { and, asc, desc, eq, lte, ne } from "drizzle-orm"
 import {
   agentJobEvents,
   agentJobs,
   agentScheduleRuns,
   agentSchedules,
-  projects,
   type AgentJob,
   type AgentSchedule,
   type AgentScheduleRun,
@@ -30,6 +27,7 @@ import {
 import {
   type AgentJobDatabase,
 } from "./job-store"
+import { getRegisteredProjectForCwdOrThrow } from "../projects/registry"
 
 export type CreateAgentScheduleInput = {
   name: string
@@ -177,21 +175,6 @@ function normalizeName(name: string): string {
   return trimmed
 }
 
-function canonicalExistingPath(path: string, label: string): string {
-  const resolved = resolve(path)
-  if (!existsSync(resolved)) throw new Error(`${label} does not exist: ${path}`)
-  return realpathSync(resolved)
-}
-
-function isPathInside(parentPath: string, childPath: string): boolean {
-  const rel = relative(parentPath, childPath)
-  return rel === "" || (!!rel && !rel.startsWith("..") && !isAbsolute(rel))
-}
-
-function getProject(db: AgentJobDatabase, projectId: string): Project | null {
-  return db.select().from(projects).where(eq(projects.id, projectId)).get() ?? null
-}
-
 export function findRegisteredProjectForCwd(
   db: AgentJobDatabase,
   cwd: string,
@@ -212,31 +195,13 @@ export function findRegisteredProjectForCwdWithCanonicalPath(
   projectId?: string | null,
   label = "Schedule cwd",
 ): { project: Project; cwd: string } {
-  const cwdReal = canonicalExistingPath(cwd, label)
-
-  if (projectId) {
-    const project = getProject(db, projectId)
-    if (!project) throw new Error(`Unknown project: ${projectId}`)
-    const projectReal = canonicalExistingPath(project.path, "Registered project path")
-    if (!isPathInside(projectReal, cwdReal)) {
-      throw new Error(`${label} must be inside the registered project path`)
-    }
-    return { project, cwd: cwdReal }
-  }
-
-  const registeredProjects = db.select().from(projects).all()
-  for (const project of registeredProjects) {
-    if (!project.path) continue
-    let projectReal: string
-    try {
-      projectReal = canonicalExistingPath(project.path, "Registered project path")
-    } catch {
-      continue
-    }
-    if (isPathInside(projectReal, cwdReal)) return { project, cwd: cwdReal }
-  }
-
-  throw new Error(`${label} must be inside a registered project`)
+  const registration = getRegisteredProjectForCwdOrThrow({
+    db,
+    cwd,
+    projectId,
+    label,
+  })
+  return { project: registration.project, cwd: registration.cwd }
 }
 
 function addSeconds(date: Date, seconds: number): Date {
