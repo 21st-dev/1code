@@ -110,6 +110,15 @@ gates.
 - Shared request types can become bloated. Mitigation: keep a small base and
   use surface-specific extensions.
 
+## Deferred Follow-ups
+- Optimize headless event persistence after correctness lands. The initial
+  RunEvent bridge may look up job runtime/source while appending each event;
+  high-frequency `assistant_delta` streams can later pass that metadata through
+  the caller or cache it per job without changing Local Job API v1 envelopes.
+- Persisting redaction metadata is a Local Job API v2 or diagnostics follow-up.
+  The bridge computes redaction status/rules internally, but v1 payloads do not
+  expose a stable field for "this event was redacted" metadata.
+
 ## Migration Plan
 1. Add shared request/result/observer types and keep adapters on existing call
    paths.
