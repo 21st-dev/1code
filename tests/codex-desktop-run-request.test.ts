@@ -59,11 +59,13 @@ describe("Codex desktop run request", () => {
     expect(request.context).toMatchObject({
       runtimeId: "codex",
       mode: "plan",
+      source: "desktop",
       projectId: "project-1",
       chatId: "chat-1",
       subChatId: "sub-1",
       cwd: "/repo",
     })
+    expect(request.requestedCapabilities).toEqual(["planMode"])
     expect(request.providerBinding).toMatchObject({
       model: "gpt-5/high",
       modelSource: "request",

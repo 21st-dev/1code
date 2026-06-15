@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   createDesktopRunMcpReadiness,
   createDesktopRunContextFromPreflight,
+  getDesktopRunRequestedCapabilities,
   withDesktopRunAttempt,
   withDesktopRunMcpReadiness,
   type DesktopRunRequest,
@@ -25,6 +26,7 @@ describe("desktop run request contract", () => {
     expect(context).toEqual({
       runtimeId: "claude-code",
       mode: "agent",
+      source: "desktop",
       projectId: "project-1",
       chatId: "chat-1",
       subChatId: "sub-chat-1",
@@ -41,21 +43,24 @@ describe("desktop run request contract", () => {
       payload: { status: "ready" },
     })
     const emitted: unknown[] = []
+    const permissionPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "plan",
+    })
     const request = {
       identity: { runId: "run-1", jobId: "job-1" },
       context: {
         runtimeId: "codex",
         mode: "plan",
+        source: "desktop",
         projectId: "project-1",
         chatId: "chat-1",
         subChatId: "sub-chat-1",
         cwd: "/tmp/project",
       },
       prompt: "Plan the change",
-      permissionPolicy: resolveDesktopPermissionPolicy({
-        runtimeId: "codex",
-        mode: "plan",
-      }),
+      requestedCapabilities: getDesktopRunRequestedCapabilities(permissionPolicy),
+      permissionPolicy,
       providerBinding: {
         model: "gpt-codex",
         providerProfileId: "profile-1",
@@ -72,25 +77,29 @@ describe("desktop run request contract", () => {
 
     expect(request.providerBinding).not.toHaveProperty("apiKey")
     expect(request.providerBinding).not.toHaveProperty("headers")
+    expect(request.requestedCapabilities).toEqual(["planMode"])
     expect(emitted).toEqual([event])
   })
 
   test("adds sorted MCP readiness to a desktop request without mutating it", () => {
+    const permissionPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "claude-code",
+      mode: "agent",
+    })
     const request = {
       identity: { runId: "run-1", jobId: "job-1" },
       context: {
         runtimeId: "claude-code",
         mode: "agent",
+        source: "desktop",
         projectId: "project-1",
         chatId: "chat-1",
         subChatId: "sub-chat-1",
         cwd: "/tmp/project",
       },
       prompt: "Inspect MCP",
-      permissionPolicy: resolveDesktopPermissionPolicy({
-        runtimeId: "claude-code",
-        mode: "agent",
-      }),
+      requestedCapabilities: getDesktopRunRequestedCapabilities(permissionPolicy),
+      permissionPolicy,
       providerBinding: {},
       mcp: { status: "skipped", serverNames: [], blockers: [] },
       attachments: [],
@@ -120,21 +129,24 @@ describe("desktop run request contract", () => {
   })
 
   test("adds adapter attempt identity without mutating the base request", () => {
+    const permissionPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "claude-code",
+      mode: "agent",
+    })
     const request = {
       identity: { runId: "run-1", jobId: "job-1" },
       context: {
         runtimeId: "claude-code",
         mode: "agent",
+        source: "desktop",
         projectId: "project-1",
         chatId: "chat-1",
         subChatId: "sub-chat-1",
         cwd: "/tmp/project",
       },
       prompt: "Retry safely",
-      permissionPolicy: resolveDesktopPermissionPolicy({
-        runtimeId: "claude-code",
-        mode: "agent",
-      }),
+      requestedCapabilities: getDesktopRunRequestedCapabilities(permissionPolicy),
+      permissionPolicy,
       providerBinding: {},
       mcp: { status: "skipped", serverNames: [], blockers: [] },
       attachments: [],

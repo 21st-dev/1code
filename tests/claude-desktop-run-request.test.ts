@@ -117,11 +117,13 @@ describe("Claude desktop run request", () => {
     expect(request.context).toMatchObject({
       runtimeId: "claude-code",
       mode: "agent",
+      source: "desktop",
       projectId: "project-1",
       chatId: "chat-1",
       subChatId: "sub-1",
       cwd: "/repo",
     })
+    expect(request.requestedCapabilities).toEqual([])
     expect(request.providerBinding).toMatchObject({
       model: "claude-sonnet-4",
       modelSource: "request",

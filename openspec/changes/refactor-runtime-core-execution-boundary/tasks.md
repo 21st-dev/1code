@@ -3,9 +3,9 @@
 - [x] 1.2 Validate this proposal with `bunx openspec validate refactor-runtime-core-execution-boundary --strict --no-interactive`.
 
 ## 2. Shared Execution Contract
-- [ ] 2.1 Add shared runtime request/result/observer types under `src/main/lib/agent-runtime/`.
-- [ ] 2.2 Refactor desktop and headless request types to extend the shared base without forcing desktop-only fields into headless.
-- [ ] 2.3 Add tests proving desktop request shape and headless request shape keep their required fields.
+- [x] 2.1 Add shared runtime request/result/observer types under `src/main/lib/agent-runtime/`.
+- [x] 2.2 Refactor desktop and headless request types to extend the shared base without forcing desktop-only fields into headless.
+- [x] 2.3 Add tests proving desktop request shape and headless request shape keep their required fields.
 
 ## 3. Adapter Selection
 - [ ] 3.1 Replace headless `Record<runtimeId, adapter>` selection with selector-owned adapter choice.

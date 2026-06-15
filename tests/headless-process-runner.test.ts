@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { runProcessAgentTask } from "../src/main/lib/headless/process-runner"
+import { createAgentRuntimeRunRequest } from "../src/main/lib/headless/agent-runtime-contract"
 import type {
   AgentRuntimeObserver,
   AgentRuntimeRunRequest,
@@ -61,14 +62,15 @@ function createObserver(options: { cancelAfterHeartbeat?: boolean } = {}) {
 }
 
 function request(signal: AbortSignal): AgentRuntimeRunRequest {
-  return {
+  return createAgentRuntimeRunRequest({
     jobId: "job_123",
     runtime: "codex",
     cwd: process.cwd(),
     mode: "agent",
+    source: "cli",
     prompt: "test",
     signal,
-  }
+  })
 }
 
 describe("headless process runner", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test"
 import { readFileSync } from "node:fs"
+import type { CreateAgentRuntimeRunRequestInput } from "../src/main/lib/headless/agent-runtime-contract"
 
 mock.module("electron", () => ({
   app: {
@@ -19,31 +20,40 @@ const { __testCodexHeadless } = await import(
 const { buildClaudeEnv, clearClaudeEnvCache } = await import(
   "../src/main/lib/claude/env"
 )
+const { createAgentRuntimeRunRequest } = await import(
+  "../src/main/lib/headless/agent-runtime-contract"
+)
 
-const baseRequest = {
+const baseInput = {
   jobId: "job_123",
   runtime: "claude-code" as const,
   cwd: "/tmp/project",
   mode: "agent" as const,
+  source: "cli" as const,
   prompt: "Do the smallest useful thing",
   signal: new AbortController().signal,
+} satisfies CreateAgentRuntimeRunRequestInput
+
+function request(overrides: Partial<CreateAgentRuntimeRunRequestInput> = {}) {
+  return createAgentRuntimeRunRequest({
+    ...baseInput,
+    ...overrides,
+  })
 }
 
 describe("headless runtime adapters", () => {
   test("Claude adapter uses non-interactive print mode and plan permissions", () => {
-    const args = __testClaudeCodeHeadless.buildClaudeArgs({
-      ...baseRequest,
-      mode: "plan",
-    })
+    const planRequest = request({ mode: "plan" })
+    const args = __testClaudeCodeHeadless.buildClaudeArgs(planRequest)
     expect(args).toContain("-p")
     expect(args).toContain("--no-session-persistence")
     expect(args).toContain("--permission-mode")
     expect(args[args.indexOf("--permission-mode") + 1]).toBe("plan")
-    expect(args.at(-1)).toBe(baseRequest.prompt)
+    expect(args.at(-1)).toBe(planRequest.prompt)
   })
 
   test("Claude adapter uses acceptEdits for basic agent runs", () => {
-    const args = __testClaudeCodeHeadless.buildClaudeArgs(baseRequest)
+    const args = __testClaudeCodeHeadless.buildClaudeArgs(request())
     expect(args[args.indexOf("--permission-mode") + 1]).toBe("acceptEdits")
   })
 
@@ -85,30 +95,23 @@ describe("headless runtime adapters", () => {
   })
 
   test("Codex adapter maps plan to read-only and agent to workspace-write", () => {
-    const planArgs = __testCodexHeadless.buildCodexArgs({
-      ...baseRequest,
-      runtime: "codex",
-      mode: "plan",
-    })
+    const planArgs = __testCodexHeadless.buildCodexArgs(
+      request({ runtime: "codex", mode: "plan" }),
+    )
     expect(planArgs.slice(0, 2)).toEqual(["exec", "--cd"])
     expect(planArgs[planArgs.indexOf("--sandbox") + 1]).toBe("read-only")
     expect(planArgs).not.toContain("--ask-for-approval")
 
-    const agentArgs = __testCodexHeadless.buildCodexArgs({
-      ...baseRequest,
-      runtime: "codex",
-      mode: "agent",
-    })
+    const agentArgs = __testCodexHeadless.buildCodexArgs(
+      request({ runtime: "codex", mode: "agent" }),
+    )
     expect(agentArgs[agentArgs.indexOf("--sandbox") + 1]).toBe(
       "workspace-write",
     )
   })
 
   test("Codex adapter remains a codex exec headless/batch fallback only", () => {
-    const args = __testCodexHeadless.buildCodexArgs({
-      ...baseRequest,
-      runtime: "codex",
-    })
+    const args = __testCodexHeadless.buildCodexArgs(request({ runtime: "codex" }))
     const source = readFileSync(
       "src/main/lib/headless/adapters/codex.ts",
       "utf8",
@@ -133,7 +136,7 @@ describe("headless runtime adapters", () => {
 
   test("Codex adapter only forwards non-secret environment variables", () => {
     const env = __testCodexHeadless.buildCodexEnv(
-      { ...baseRequest, runtime: "codex" },
+      request({ runtime: "codex" }),
       {
         PATH: "/usr/bin",
         SAFE_FLAG: "1",
