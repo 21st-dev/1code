@@ -10,7 +10,7 @@
 ## 3. Adapter Selection
 - [x] 3.1 Replace headless `Record<runtimeId, adapter>` selection with selector-owned adapter choice.
 - [x] 3.2 Preserve current batch defaults for existing CLI, daemon, schedule, protocol, and Local Job API v1 jobs.
-- [ ] 3.3 Emit sanitized adapter-source and fallback diagnostics for selected, refused, and fallback paths.
+- [x] 3.3 Emit sanitized adapter-source and fallback diagnostics for selected, refused, and fallback paths.
 - [x] 3.4 Add selector tests for Codex batch, Claude batch, unsupported capability, and refused interactive-without-user cases.
 
 ## 4. RunEvent Bridge
