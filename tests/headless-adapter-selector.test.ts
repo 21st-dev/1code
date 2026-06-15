@@ -188,7 +188,7 @@ describe("headless adapter selector", () => {
     expect(result).toMatchObject({
       status: "failed",
       exitCode: 1,
-      errorCode: "interactive_channel_required",
+      errorCode: "permission_policy_fail_closed",
     })
     expect(events).toEqual([
       {
@@ -199,10 +199,48 @@ describe("headless adapter selector", () => {
           source: "api",
           adapterSource: "codex-batch",
           executionProfile: "interactive",
-          reason: "interactive_channel_required",
+          reason: "no_interaction_channel",
           message:
-            "Interactive runtime execution requires a visible user interaction channel.",
-          errorCode: "interactive_channel_required",
+            "api agent job refused before provider work: interactive approval, AskUserQuestion, MCP elicitation, and unknown side-effect approval require a visible user channel or bounded policy grant.",
+          errorCode: "permission_policy_fail_closed",
+        },
+      },
+    ])
+  })
+
+  test("fails closed when non-desktop requests require interaction-only callbacks", async () => {
+    const { observer: runtimeObserver, events } = observer()
+    const result = await runAgentTask(
+      request({
+        runtime: "codex",
+        interactiveRequirements: [
+          "interactive-approval",
+          "ask-user-question",
+          "mcp-elicitation",
+          "unknown-side-effect-approval",
+        ],
+      }),
+      runtimeObserver,
+    )
+
+    expect(result).toMatchObject({
+      status: "failed",
+      exitCode: 1,
+      errorCode: "permission_policy_fail_closed",
+    })
+    expect(events).toEqual([
+      {
+        type: "status",
+        payload: {
+          status: "runtime_selection_refused",
+          runtime: "codex",
+          source: "api",
+          adapterSource: "codex-batch",
+          executionProfile: "batch",
+          reason: "no_interaction_channel",
+          message:
+            "api agent job refused before provider work: interactive approval, AskUserQuestion, MCP elicitation, and unknown side-effect approval require a visible user channel or bounded policy grant.",
+          errorCode: "permission_policy_fail_closed",
         },
       },
     ])

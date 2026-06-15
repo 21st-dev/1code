@@ -169,6 +169,25 @@ function refusedSelectionResult(input: {
   }
 }
 
+function failClosedPermissionPolicyResult(input: {
+  request: AgentRuntimeRunRequest
+  adapter: AgentRuntimeAdapter
+}): AgentRuntimeAdapterSelection {
+  const reason =
+    input.request.permissionPolicy.failClosedReasons?.[0] ??
+    "permission_policy_fail_closed"
+  const message =
+    input.request.permissionPolicy.diagnostics[0] ??
+    "Non-desktop permission policy failed closed before provider work."
+  return refusedSelectionResult({
+    request: input.request,
+    adapter: input.adapter,
+    reason,
+    errorCode: "permission_policy_fail_closed",
+    message,
+  })
+}
+
 export function getAgentRuntimeAdapter(
   runtime: AgentRuntimeId,
 ): AgentRuntimeAdapter {
@@ -194,6 +213,10 @@ export function selectAgentRuntimeAdapter(
 ): AgentRuntimeAdapterSelection {
   const executionProfile = requestedExecutionProfile(request)
   const adapter = getAgentRuntimeAdapter(request.runtime)
+
+  if (request.permissionPolicy.kind === "fail-closed") {
+    return failClosedPermissionPolicyResult({ request, adapter })
+  }
 
   if (executionProfile === "interactive") {
     return refusedSelectionResult({
