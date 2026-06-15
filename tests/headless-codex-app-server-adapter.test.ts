@@ -1,11 +1,21 @@
 import { describe, expect, test } from "bun:test"
 import type { DesktopRunRequest } from "../src/main/lib/agent-runtime/desktop-run-request"
 import { createRunEvent } from "../src/main/lib/agent-runtime/runtime-events"
-import { createCodexAppServerHeadlessTaskRunner } from "../src/main/lib/headless/adapters/codex-app-server"
+import type {
+  CodexAppServerClientNotificationMethod,
+  CodexAppServerClientRequestMethod,
+  CodexAppServerTransport,
+  CodexAppServerTransportNotification,
+  CodexAppServerTransportServerRequest,
+} from "../src/main/lib/codex/app-server-transport"
 import {
-  createAgentRuntimeRunRequest,
+  createCodexAppServerHeadlessTaskRunner,
+  createHeadlessCodexAppServerDesktopAdapter,
+} from "../src/main/lib/headless/adapters/codex-app-server"
+import {
   type AgentRuntimeObserver,
   type CreateAgentRuntimeRunRequestInput,
+  createAgentRuntimeRunRequest,
 } from "../src/main/lib/headless/agent-runtime-contract"
 
 const baseInput = {
@@ -56,6 +66,110 @@ function observer() {
     },
   }
   return { observer: runtimeObserver, events }
+}
+
+function sleep(ms: number): Promise<"timed-out"> {
+  return new Promise((resolve) => setTimeout(() => resolve("timed-out"), ms))
+}
+
+class FakeCodexAppServerTransport implements CodexAppServerTransport {
+  closed = false
+  notificationHandler:
+    | ((notification: CodexAppServerTransportNotification) => void)
+    | null = null
+  serverRequestHandler:
+    | ((
+        request: CodexAppServerTransportServerRequest,
+      ) => unknown | Promise<unknown>)
+    | null = null
+  onTurnStart?: () => void | Promise<void>
+
+  async request(
+    method: CodexAppServerClientRequestMethod,
+    params: unknown,
+  ): Promise<unknown> {
+    if (method === "initialize") {
+      return {
+        userAgent: "codex-test",
+        codexHome: "/tmp/codex-home",
+        platformFamily: "unix",
+        platformOs: "macos",
+      }
+    }
+    if (method === "thread/start") {
+      this.emitNotification({
+        method: "thread/started",
+        params: {
+          thread: {
+            id: "thread-1",
+            sessionId: "session-1",
+            modelProvider: "locus_profile",
+          },
+        },
+      })
+      return { thread: { id: "thread-1", sessionId: "session-1" } }
+    }
+    if (method === "mcpServerStatus/list") {
+      return { data: [], nextCursor: null }
+    }
+    if (method === "turn/start") {
+      this.emitNotification({
+        method: "turn/started",
+        params: {
+          threadId: "thread-1",
+          turn: { id: "turn-1", status: "inProgress", error: null },
+        },
+      })
+      await this.onTurnStart?.()
+      this.emitNotification({
+        method: "turn/completed",
+        params: {
+          threadId: "thread-1",
+          turn: { id: "turn-1", status: "completed", error: null },
+        },
+      })
+      return { turn: { id: "turn-1" } }
+    }
+    if (method === "turn/interrupt") {
+      return { params }
+    }
+    throw new Error(`unexpected method ${method}`)
+  }
+
+  notify(method: CodexAppServerClientNotificationMethod): void {
+    if (method !== "initialized") {
+      throw new Error(`unexpected notification ${method}`)
+    }
+  }
+
+  onNotification(
+    handler: (notification: CodexAppServerTransportNotification) => void,
+  ): () => void {
+    this.notificationHandler = handler
+    return () => {
+      this.notificationHandler = null
+    }
+  }
+
+  onServerRequest(
+    handler: (
+      request: CodexAppServerTransportServerRequest,
+    ) => unknown | Promise<unknown>,
+  ): () => void {
+    this.serverRequestHandler = handler
+    return () => {
+      this.serverRequestHandler = null
+    }
+  }
+
+  emitNotification(notification: CodexAppServerTransportNotification): void {
+    this.notificationHandler?.(notification)
+  }
+
+  close(): Promise<void> {
+    this.closed = true
+    return Promise.resolve()
+  }
 }
 
 describe("headless Codex app-server adapter", () => {
@@ -146,6 +260,78 @@ describe("headless Codex app-server adapter", () => {
       adapterSource: "codex-app-server",
       approvalGateFailure: "fail-closed",
     })
+  })
+
+  test("fails app-server interaction requests closed without waiting for a headless UI bridge", async () => {
+    const transport = new FakeCodexAppServerTransport()
+    const { observer: runtimeObserver } = observer()
+    let permissionResponse: unknown = null
+    let userInputResponse: unknown = null
+
+    transport.onTurnStart = async () => {
+      const permissionPromise = Promise.resolve(
+        transport.serverRequestHandler?.({
+          id: "permission-1",
+          method: "item/permissions/requestApproval",
+          params: {
+            threadId: "thread-1",
+            turnId: "turn-1",
+            itemId: "item-permission",
+            permissions: {
+              fileSystem: { write: ["/tmp/project/src/generated.txt"] },
+            },
+            cwd: "/tmp/project",
+            reason: "write generated file",
+          },
+        }),
+      )
+      permissionResponse = await Promise.race([permissionPromise, sleep(25)])
+
+      const userInputPromise = Promise.resolve(
+        transport.serverRequestHandler?.({
+          id: "question-1",
+          method: "item/tool/requestUserInput",
+          params: {
+            threadId: "thread-1",
+            turnId: "turn-1",
+            itemId: "item-question",
+            questions: [
+              {
+                id: "q-confirm",
+                header: "Confirm",
+                question: "Proceed?",
+                isOther: false,
+                isSecret: false,
+                options: [{ label: "Yes", description: "" }],
+              },
+            ],
+          },
+        }),
+      )
+      userInputResponse = await Promise.race([userInputPromise, sleep(25)])
+    }
+
+    const runner = createCodexAppServerHeadlessTaskRunner({
+      createDesktopAdapter: () =>
+        createHeadlessCodexAppServerDesktopAdapter({
+          createTransport: () => transport,
+        }),
+    })
+
+    const result = await runner(policyGrantRequest(), runtimeObserver)
+
+    expect(permissionResponse).toEqual({
+      permissions: {},
+      scope: "turn",
+      strictAutoReview: true,
+    })
+    expect(userInputResponse).toEqual({ answers: {} })
+    expect(result).toMatchObject({
+      status: "succeeded",
+      exitCode: 0,
+      sessionId: "session-1",
+    })
+    expect(transport.closed).toBe(true)
   })
 
   test("refuses non-policy-grant requests before creating the desktop adapter", async () => {

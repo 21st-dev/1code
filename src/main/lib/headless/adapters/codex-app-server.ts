@@ -4,8 +4,11 @@ import type {
 } from "../../agent-runtime/desktop-run-request"
 import { resolveDesktopPermissionPolicy } from "../../agent-runtime/permission-policy"
 import type { RunEvent } from "../../agent-runtime/runtime-events"
-import { createCodexAppServerAdapter } from "../../codex/app-server-adapter"
 import type { CodexDesktopAdapter } from "../../codex/adapter-types"
+import {
+  type CreateCodexAppServerAdapterInput,
+  createCodexAppServerAdapter,
+} from "../../codex/app-server-adapter"
 import type {
   AgentRuntimeObserver,
   AgentRuntimeRunRequest,
@@ -20,6 +23,11 @@ export type CodexAppServerHeadlessAdapterFactory = () => Pick<
 export type CreateCodexAppServerHeadlessTaskRunnerOptions = {
   createDesktopAdapter?: CodexAppServerHeadlessAdapterFactory
 }
+
+export type CreateHeadlessCodexAppServerDesktopAdapterOptions = Pick<
+  CreateCodexAppServerAdapterInput,
+  "createTransport"
+>
 
 function syntheticId(prefix: string, request: AgentRuntimeRunRequest): string {
   return `${prefix}:${request.identity.jobId}`
@@ -46,7 +54,8 @@ function assertAppServerPolicyGrantRequest(
   if (request.context.runtimeId !== "codex") {
     return createFailClosedResult({
       errorCode: "unsupported_runtime",
-      errorMessage: "Codex app-server headless adapter can only run Codex jobs.",
+      errorMessage:
+        "Codex app-server headless adapter can only run Codex jobs.",
     })
   }
   if (request.context.executionProfile !== "policy-grant") {
@@ -96,6 +105,9 @@ function createDesktopRequestFromHeadless(
     context: {
       runtimeId: "codex",
       mode: request.context.mode,
+      // The app-server integration is currently implemented as a desktop
+      // adapter. This shim reuses it while the durable job source remains on
+      // the outer headless request.
       source: "desktop",
       executionProfile: "interactive",
       projectId:
@@ -140,16 +152,25 @@ function createDesktopRequestFromHeadless(
   }
 }
 
-function mapDesktopRunResult(
-  result: DesktopRunResult,
-): AgentRuntimeRunResult {
+export function createHeadlessCodexAppServerDesktopAdapter(
+  options: CreateHeadlessCodexAppServerDesktopAdapterOptions = {},
+): Pick<CodexDesktopAdapter, "metadata" | "run"> {
+  return createCodexAppServerAdapter({
+    enabled: true,
+    createTransport: options.createTransport,
+    // Headless runs have no visible UI bridge. Keep the interaction callbacks
+    // unset so approval, user-input, and MCP elicitation requests fail closed
+    // immediately instead of waiting on the desktop approval timeout.
+  })
+}
+
+function mapDesktopRunResult(result: DesktopRunResult): AgentRuntimeRunResult {
   const exitCode =
     result.status === "succeeded" ? 0 : result.status === "canceled" ? 5 : 1
   return {
     status: result.status,
     exitCode,
-    errorCode:
-      result.status === "succeeded" ? null : "codex_app_server_failed",
+    errorCode: result.status === "succeeded" ? null : "codex_app_server_failed",
     errorMessage: result.error?.message ?? null,
     result: {
       adapterSource: "codex-app-server",
@@ -164,10 +185,7 @@ function mapDesktopRunResult(
 }
 
 export function createCodexAppServerHeadlessTaskRunner({
-  createDesktopAdapter = () =>
-    createCodexAppServerAdapter({
-      enabled: true,
-    }),
+  createDesktopAdapter = createHeadlessCodexAppServerDesktopAdapter,
 }: CreateCodexAppServerHeadlessTaskRunnerOptions = {}) {
   return async function runCodexAppServerHeadlessTaskWithAdapter(
     request: AgentRuntimeRunRequest,

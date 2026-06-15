@@ -184,6 +184,8 @@ export function resolveNonDesktopPermissionPolicy({
     ...new Set(interactiveRequirements ?? []),
   ]
   const grantedScopes = uniqueStrings(policyGrant?.scopes)
+  // Local Job API v1 treats omitted canDecideAutomatically as allowed when
+  // bounded scopes are present; explicit false is the fail-closed opt-out.
   const grantCanDecide =
     policyGrant?.canDecideAutomatically ?? grantedScopes.length > 0
 
