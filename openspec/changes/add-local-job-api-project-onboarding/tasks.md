@@ -15,11 +15,11 @@
 - [x] 3.4 Add tests proving `locus api runs create` against an unregistered cwd returns `project_not_registered` in JSON without requiring stderr string matching, and keeps the current exit-code value.
 
 ## 4. Project Onboarding Commands
-- [ ] 4.1 Parse `api projects register|status|unregister` (with `--cwd`, `--name`, `--force`, `--json`) in `src/main/lib/headless/cli-args.ts`.
-- [ ] 4.2 Implement the three handlers in `src/main/lib/headless/cli-dispatcher.ts` emitting versioned JSON envelopes and `HEADLESS_EXIT_CODES` statuses.
-- [ ] 4.3 Make `register` idempotent by canonical path and `unregister` refuse active-job projects unless `--force`.
-- [ ] 4.4 Update `locus` CLI help text to list the new `api projects` commands.
-- [ ] 4.5 Add command tests for register success, idempotent re-register, status membership/non-membership, unregister cleanup, and unregister-refused-with-active-jobs.
+- [x] 4.1 Parse `api projects register|status|unregister` (with `--cwd`, `--name`, `--force`, `--json`) in `src/main/lib/headless/cli-args.ts`.
+- [x] 4.2 Implement the three handlers in `src/main/lib/headless/cli-dispatcher.ts` emitting versioned JSON envelopes and `HEADLESS_EXIT_CODES` statuses.
+- [x] 4.3 Make `register` idempotent by canonical path and `unregister` refuse active-job projects unless `--force`.
+- [x] 4.4 Update `locus` CLI help text to list the new `api projects` commands.
+- [x] 4.5 Add command tests for register success, idempotent re-register, status membership/non-membership, unregister cleanup, and unregister-refused-with-active-jobs.
 
 ## 5. Automation Lifecycle Proof
 - [ ] 5.1 Add a test that registers a temporary directory, creates and runs a Local Job API job in it, and unregisters it, proving the headless connected canary path works end to end.

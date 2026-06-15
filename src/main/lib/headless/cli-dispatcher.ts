@@ -1,6 +1,6 @@
 import type { Readable } from "stream"
 import { readFileSync } from "node:fs"
-import type { AgentJob, AgentJobEvent } from "../db/schema"
+import type { AgentJob, AgentJobEvent, Project } from "../db/schema"
 import { isTerminalAgentJobStatus, type AgentJobStatus } from "../../../shared/agent-jobs"
 import {
   completeAgentJob,
@@ -39,8 +39,11 @@ import {
 import { runLocalAgentDaemon } from "./daemon"
 import { runAcpStdioServer } from "./acp-stdio"
 import {
+  getProjectRegistrationForCwd,
   isProjectRegistrationError,
+  registerProjectForPath,
   type ProjectRegistrationError,
+  unregisterProjectForPath,
 } from "../projects/registry"
 import {
   createAgentSchedule,
@@ -474,6 +477,164 @@ function apiRuntimesListCommand(options: RunHeadlessCliCommandOptions): number {
   return HEADLESS_EXIT_CODES.success
 }
 
+function isoDate(value: Date | string | number | null | undefined): string | null {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+function serializeLocalJobApiProject(project: Project) {
+  return {
+    id: project.id,
+    name: project.name,
+    path: project.path,
+    createdAt: isoDate(project.createdAt),
+    updatedAt: isoDate(project.updatedAt),
+  }
+}
+
+function serializeLocalJobApiActiveJob(
+  job: ReturnType<typeof unregisterProjectForPath>["activeJobs"][number],
+) {
+  return {
+    id: job.id,
+    source: job.source,
+    runtime: job.runtime,
+    status: job.status,
+    createdAt: isoDate(job.createdAt),
+  }
+}
+
+function apiProjectCommandErrorCode(error: unknown): number {
+  if (isProjectRegistrationError(error)) return HEADLESS_EXIT_CODES.invalidCwd
+  return HEADLESS_EXIT_CODES.invalidArguments
+}
+
+async function apiProjectsRegisterCommand(
+  command: Extract<HeadlessCliCommand, { kind: "api-projects-register" }>,
+  options: RunHeadlessCliCommandOptions,
+): Promise<number> {
+  try {
+    const registration = await registerProjectForPath({
+      db: options.db,
+      path: command.cwd,
+      name: command.name,
+    })
+    writeJson(options.stdout, {
+      apiVersion: LOCAL_JOB_API_VERSION,
+      registered: true,
+      created: registration.created,
+      cwd: registration.canonicalPath,
+      project: serializeLocalJobApiProject(registration.project),
+    })
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      apiProjectCommandErrorCode(error),
+    )
+  }
+}
+
+function apiProjectsStatusCommand(
+  command: Extract<HeadlessCliCommand, { kind: "api-projects-status" }>,
+  options: RunHeadlessCliCommandOptions,
+): number {
+  try {
+    const registration = getProjectRegistrationForCwd({
+      db: options.db,
+      cwd: command.cwd,
+      label: "Project cwd",
+    })
+    if (registration.registered) {
+      writeJson(options.stdout, {
+        apiVersion: LOCAL_JOB_API_VERSION,
+        registered: true,
+        cwd: registration.cwd,
+        project: serializeLocalJobApiProject(registration.project),
+      })
+      return HEADLESS_EXIT_CODES.success
+    }
+
+    writeJson(options.stdout, {
+      apiVersion: LOCAL_JOB_API_VERSION,
+      registered: false,
+      cwd: registration.cwd,
+      error: {
+        code: LOCAL_JOB_API_PROJECT_NOT_REGISTERED,
+        message: "Project cwd must be inside a registered project",
+      },
+    })
+    return HEADLESS_EXIT_CODES.success
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      apiProjectCommandErrorCode(error),
+    )
+  }
+}
+
+function apiProjectsUnregisterCommand(
+  command: Extract<HeadlessCliCommand, { kind: "api-projects-unregister" }>,
+  options: RunHeadlessCliCommandOptions,
+): number {
+  try {
+    const result = unregisterProjectForPath({
+      db: options.db,
+      path: command.cwd,
+      force: command.force,
+    })
+    if (result.removed) {
+      writeJson(options.stdout, {
+        apiVersion: LOCAL_JOB_API_VERSION,
+        removed: true,
+        cwd: result.canonicalPath,
+        project: serializeLocalJobApiProject(result.project),
+        activeJobs: result.activeJobs.map(serializeLocalJobApiActiveJob),
+      })
+      return HEADLESS_EXIT_CODES.success
+    }
+
+    if (result.reason === "active_jobs") {
+      writeJson(options.stdout, {
+        apiVersion: LOCAL_JOB_API_VERSION,
+        removed: false,
+        cwd: result.canonicalPath,
+        project: result.project
+          ? serializeLocalJobApiProject(result.project)
+          : null,
+        activeJobs: result.activeJobs.map(serializeLocalJobApiActiveJob),
+        error: {
+          code: "project_has_active_jobs",
+          message: "Project has active jobs; rerun with --force to unregister.",
+        },
+      })
+      return HEADLESS_EXIT_CODES.invalidArguments
+    }
+
+    writeJson(options.stdout, {
+      apiVersion: LOCAL_JOB_API_VERSION,
+      removed: false,
+      cwd: result.canonicalPath,
+      project: null,
+      activeJobs: [],
+      error: {
+        code: LOCAL_JOB_API_PROJECT_NOT_REGISTERED,
+        message: "Project path is not registered",
+      },
+    })
+    return HEADLESS_EXIT_CODES.invalidCwd
+  } catch (error) {
+    return commandError(
+      options.stderr,
+      error instanceof Error ? error.message : String(error),
+      apiProjectCommandErrorCode(error),
+    )
+  }
+}
+
 function isLocalJobApiProjectNotRegisteredError(
   error: unknown,
 ): error is ProjectRegistrationError {
@@ -771,6 +932,9 @@ function helpCommand(options: RunHeadlessCliCommandOptions): number {
       "  locus schedules create --name <name> --prompt <text> --interval-seconds <n> [--cwd <path>] [--runtime claude-code|codex] [--mode plan|agent]",
       "  locus schedules pause|resume|delete|run <id>",
       "  locus api runtimes list --json",
+      "  locus api projects register --cwd <path> [--name <name>] --json",
+      "  locus api projects status --cwd <path> --json",
+      "  locus api projects unregister --cwd <path> [--force] --json",
       "  locus api runs create --request <path|-> --json",
       "  locus api runs status|result|cancel|retry <id> --json",
       "  locus api runs events <id> [--after <sequence>] [--follow] --jsonl",
@@ -814,6 +978,12 @@ export async function runHeadlessCliCommand(
       return retryCommand(parsed.command, options)
     case "api-runtimes-list":
       return apiRuntimesListCommand(options)
+    case "api-projects-register":
+      return apiProjectsRegisterCommand(parsed.command, options)
+    case "api-projects-status":
+      return apiProjectsStatusCommand(parsed.command, options)
+    case "api-projects-unregister":
+      return apiProjectsUnregisterCommand(parsed.command, options)
     case "api-runs-create":
       return apiRunsCreateCommand(parsed.command, options)
     case "api-runs-status":

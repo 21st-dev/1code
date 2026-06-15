@@ -346,6 +346,68 @@ describe("headless CLI args", () => {
         "Locus",
         HEADLESS_CLI_MARKER,
         "api",
+        "projects",
+        "register",
+        "--cwd",
+        process.cwd(),
+        "--name",
+        "Current Project",
+        "--json",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "api-projects-register",
+        cwd: process.cwd(),
+        name: "Current Project",
+      },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "status",
+        "--cwd",
+        process.cwd(),
+        "--json",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "api-projects-status",
+        cwd: process.cwd(),
+      },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "unregister",
+        "--cwd",
+        process.cwd(),
+        "--force",
+        "--json",
+      ]),
+    ).toMatchObject({
+      ok: true,
+      command: {
+        kind: "api-projects-unregister",
+        cwd: process.cwd(),
+        force: true,
+      },
+    })
+
+    expect(
+      parseHeadlessCliArgv([
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
         "runs",
         "create",
         "--request",

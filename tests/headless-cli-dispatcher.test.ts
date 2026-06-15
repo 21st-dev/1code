@@ -302,6 +302,254 @@ describe("headless CLI dispatcher", () => {
     )
   })
 
+  test("registers, checks, and unregisters Local Job API projects", async () => {
+    const db = createAgentJobTestDb()
+    const projectRoot = realpathSync(
+      mkdtempSync(join(tmpdir(), "locus-api-project-onboarding-")),
+    )
+    const packageDir = join(projectRoot, "package")
+    mkdirSync(packageDir)
+
+    const registerStdout = writer()
+    const registerStderr = writer()
+    const registerCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "register",
+        "--cwd",
+        projectRoot,
+        "--name",
+        "API Project",
+        "--json",
+      ],
+      stdout: registerStdout.stream,
+      stderr: registerStderr.stream,
+    })
+
+    expect(registerCode).toBe(0)
+    expect(registerStderr.value()).toBe("")
+    const registered = JSON.parse(registerStdout.value())
+    expect(registered).toMatchObject({
+      apiVersion: "locus.local-job.v1",
+      registered: true,
+      created: true,
+      cwd: projectRoot,
+      project: {
+        name: "API Project",
+        path: projectRoot,
+      },
+    })
+
+    const secondRegisterStdout = writer()
+    const secondRegisterCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "register",
+        "--cwd",
+        projectRoot,
+        "--json",
+      ],
+      stdout: secondRegisterStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(secondRegisterCode).toBe(0)
+    expect(JSON.parse(secondRegisterStdout.value())).toMatchObject({
+      registered: true,
+      created: false,
+      project: {
+        id: registered.project.id,
+        name: "API Project",
+      },
+    })
+    expect(db.select().from(projects).all()).toHaveLength(1)
+
+    const statusStdout = writer()
+    const statusCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "status",
+        "--cwd",
+        packageDir,
+        "--json",
+      ],
+      stdout: statusStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(statusCode).toBe(0)
+    expect(JSON.parse(statusStdout.value())).toMatchObject({
+      registered: true,
+      cwd: realpathSync(packageDir),
+      project: {
+        id: registered.project.id,
+      },
+    })
+
+    const outside = realpathSync(
+      mkdtempSync(join(tmpdir(), "locus-api-project-outside-")),
+    )
+    const missingStatusStdout = writer()
+    const missingStatusCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "status",
+        "--cwd",
+        outside,
+        "--json",
+      ],
+      stdout: missingStatusStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(missingStatusCode).toBe(0)
+    expect(JSON.parse(missingStatusStdout.value())).toMatchObject({
+      registered: false,
+      cwd: outside,
+      error: {
+        code: LOCAL_JOB_API_PROJECT_NOT_REGISTERED,
+      },
+    })
+
+    const unregisterStdout = writer()
+    const unregisterCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "unregister",
+        "--cwd",
+        projectRoot,
+        "--json",
+      ],
+      stdout: unregisterStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(unregisterCode).toBe(0)
+    expect(JSON.parse(unregisterStdout.value())).toMatchObject({
+      removed: true,
+      project: {
+        id: registered.project.id,
+      },
+    })
+    expect(db.select().from(projects).all()).toHaveLength(0)
+  })
+
+  test("refuses Local Job API project unregister with active jobs unless forced", async () => {
+    const db = createAgentJobTestDb()
+    const projectRoot = realpathSync(
+      mkdtempSync(join(tmpdir(), "locus-api-active-project-")),
+    )
+    const registerStdout = writer()
+    await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "register",
+        "--cwd",
+        projectRoot,
+        "--json",
+      ],
+      stdout: registerStdout.stream,
+      stderr: writer().stream,
+    })
+    const project = JSON.parse(registerStdout.value()).project
+    const job = createAgentJob(db, {
+      source: "api",
+      runtime: "codex",
+      mode: "plan",
+      cwd: projectRoot,
+      prompt: "Queued API work",
+      projectId: project.id,
+    })
+
+    const refusedStdout = writer()
+    const refusedStderr = writer()
+    const refusedCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "unregister",
+        "--cwd",
+        projectRoot,
+        "--json",
+      ],
+      stdout: refusedStdout.stream,
+      stderr: refusedStderr.stream,
+    })
+
+    expect(refusedCode).toBe(2)
+    expect(refusedStderr.value()).toBe("")
+    expect(JSON.parse(refusedStdout.value())).toMatchObject({
+      removed: false,
+      project: {
+        id: project.id,
+      },
+      activeJobs: [
+        {
+          id: job.id,
+          status: "queued",
+        },
+      ],
+      error: {
+        code: "project_has_active_jobs",
+      },
+    })
+    expect(db.select().from(projects).all()).toHaveLength(1)
+
+    const forcedStdout = writer()
+    const forcedCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "unregister",
+        "--cwd",
+        projectRoot,
+        "--force",
+        "--json",
+      ],
+      stdout: forcedStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(forcedCode).toBe(0)
+    expect(JSON.parse(forcedStdout.value())).toMatchObject({
+      removed: true,
+      project: {
+        id: project.id,
+      },
+      activeJobs: [
+        {
+          id: job.id,
+        },
+      ],
+    })
+    expect(db.select().from(projects).all()).toHaveLength(0)
+  })
+
   test("rejects Local Job API secrets before job creation", async () => {
     const db = createAgentJobTestDb()
     seedCurrentProject(db)

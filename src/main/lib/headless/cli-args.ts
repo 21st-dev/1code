@@ -67,6 +67,20 @@ export type HeadlessCliCommand =
       kind: "api-runtimes-list"
     }
   | {
+      kind: "api-projects-register"
+      cwd: string
+      name: string | null
+    }
+  | {
+      kind: "api-projects-status"
+      cwd: string
+    }
+  | {
+      kind: "api-projects-unregister"
+      cwd: string
+      force: boolean
+    }
+  | {
       kind: "api-runs-create"
       requestPath: string
     }
@@ -390,6 +404,49 @@ export function parseHeadlessCliArgv(argv = process.argv): ParsedHeadlessCli {
           throw new Error(unexpectedArgumentsMessage(args))
         }
         return { ok: true, command: { kind: "api-runtimes-list" } }
+      }
+
+      if (group === "projects") {
+        const subcommand = args.shift()
+        takeFlag(args, "--json")
+        const cwdOption = takeOption(args, "--cwd")
+        if (!cwdOption) {
+          throw new Error(
+            `locus api projects ${subcommand ?? ""} requires --cwd <path>`,
+          )
+        }
+        const cwd = parseCwd(cwdOption)
+
+        if (subcommand === "register") {
+          const name = takeOption(args, "--name")
+          if (args.length > 0) {
+            throw new Error(unexpectedArgumentsMessage(args))
+          }
+          return {
+            ok: true,
+            command: { kind: "api-projects-register", cwd, name },
+          }
+        }
+
+        if (subcommand === "status") {
+          if (args.length > 0) {
+            throw new Error(unexpectedArgumentsMessage(args))
+          }
+          return { ok: true, command: { kind: "api-projects-status", cwd } }
+        }
+
+        if (subcommand === "unregister") {
+          const force = takeFlag(args, "--force")
+          if (args.length > 0) {
+            throw new Error(unexpectedArgumentsMessage(args))
+          }
+          return {
+            ok: true,
+            command: { kind: "api-projects-unregister", cwd, force },
+          }
+        }
+
+        throw new Error(`Unknown api projects subcommand: ${subcommand ?? ""}`)
       }
 
       if (group === "runs") {
