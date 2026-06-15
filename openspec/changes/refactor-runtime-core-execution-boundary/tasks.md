@@ -37,3 +37,6 @@
 - [ ] 7.5 Run `bun run build`.
 - [ ] 7.6 Run `bunx openspec validate --all --strict --no-interactive`.
 - [ ] 7.7 Confirm implementation preserves existing `agent-scope-contracts` and `runtime-security-baseline` behavior unless a follow-up proposal changes them.
+
+## 8. Transitional Cleanup
+- [ ] 8.1 Migrate headless adapter and process-runner reads from transitional flat request fields (`jobId`, `runtime`, `cwd`, `mode`, `source`) to `request.identity.*` and `request.context.*`, then remove the flat aliases before archiving this change.
