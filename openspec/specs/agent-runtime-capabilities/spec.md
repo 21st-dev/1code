@@ -25,9 +25,10 @@ The system SHALL model runtime capabilities with explicit `supported`, `degraded
 - **THEN** the runtime adapter or a Locus-owned shared layer provides the behavior through code
 - **AND** tests or smoke evidence cover the behavior before the implementation checklist is completed
 - **AND** prompt-only instructions, UI labels, indexed documentation, and post-run audit alone do not satisfy the support claim
+- **AND** a forced smoke prompt that only succeeds for one narrow command shape does not satisfy support for productive real UI guarded editing
 
 #### Scenario: Capability is degraded
-- **WHEN** a runtime can provide only partial, read-only, prompt-assisted, discovery-only, or post-run-audited behavior
+- **WHEN** a runtime can provide only partial, read-only, prompt-assisted, discovery-only, fail-closed-only, forced-smoke-only, or post-run-audited behavior
 - **THEN** the capability state is `degraded`
 - **AND** callers can display the partial behavior with a clear limitation reason
 - **AND** callers do not treat the capability as fully supported for safety, mutation, execution, or automation decisions
@@ -96,4 +97,18 @@ The system SHALL NOT require Claude Code and Codex to reach feature-for-feature 
 - **WHEN** Locus implements a shared layer that safely provides the same capability semantics across multiple runtimes
 - **THEN** those runtimes may report the capability as `supported`
 - **AND** tests cover the shared layer and each runtime adapter path that depends on it
+
+### Requirement: Adapter-Specific Capability Evidence
+The system SHALL record Codex capability support evidence per adapter source rather than assuming every Codex transport has identical behavior.
+
+#### Scenario: Codex capability support is evaluated
+- **WHEN** Codex desktop/chat, headless `codex exec`, SDK, app-server, or ACP compatibility paths report a capability as `supported`
+- **THEN** the capability evidence identifies the adapter source or Locus-owned shared layer that provides the behavior
+- **AND** tests or smoke evidence cover that adapter source before the capability is shown as supported for that path
+- **AND** support on one Codex path does not imply support on another Codex path
+
+#### Scenario: App-server replaces ACP
+- **WHEN** app-server becomes the default Codex desktop/chat adapter
+- **THEN** capability reasons and remediation hints no longer cite ACP-specific primitives as the evidence for supported behavior
+- **AND** any remaining ACP-only behavior is either moved to app-server, kept behind an explicit temporary fallback, or downgraded for app-server
 
