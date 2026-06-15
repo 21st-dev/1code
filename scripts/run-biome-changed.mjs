@@ -18,6 +18,7 @@ const BIOME_SUPPORTED_EXTENSIONS = new Set([
   ".ts",
   ".tsx",
 ])
+export const BIOME_JSON_MAX_BUFFER_BYTES = 64 * 1024 * 1024
 
 function git(args) {
   const result = spawnSync("git", args, {
@@ -201,6 +202,7 @@ function getChangedFilesFromMap(changeMap) {
 function runBiome(command, shell, files) {
   return spawnSync(command, ["check", "--reporter=json", ...files], {
     encoding: "utf8",
+    maxBuffer: BIOME_JSON_MAX_BUFFER_BYTES,
     stdio: ["ignore", "pipe", "pipe"],
     shell,
   })

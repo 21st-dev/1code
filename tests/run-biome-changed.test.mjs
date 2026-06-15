@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  BIOME_JSON_MAX_BUFFER_BYTES,
   collectChangedLinesFromUnifiedDiff,
   diagnosticTouchesChangedLines,
   filterDiagnosticsForChangedLines,
@@ -8,6 +9,10 @@ import {
 } from "../scripts/run-biome-changed.mjs"
 
 describe("run-biome-changed helpers", () => {
+  test("uses a large buffer for Biome JSON output", () => {
+    expect(BIOME_JSON_MAX_BUFFER_BYTES).toBe(64 * 1024 * 1024)
+  })
+
   test("collects added line numbers from unified diff hunks", () => {
     const changes =
       collectChangedLinesFromUnifiedDiff(`diff --git a/src/a.ts b/src/a.ts
