@@ -39,6 +39,7 @@ queue 里，Locus 就有意义。
 | 本地 daemon 队列 | 已实现，并已在 macOS 本地 smoke |
 | 本地 schedule | 已实现，并已在 macOS 本地 smoke |
 | `locus api` Local Job API v1 | 已实现，并已在 macOS 本地 smoke |
+| runtime execution core 收敛 | OpenSpec 下进行中；durable job/API core 已共享，selector/event/policy 收敛仍是跟踪中的工作 |
 | 最小 `locus acp` stdio job 入口 | 实验性 |
 | Windows packaged 实机 smoke | 已明确延期；不阻塞当前本地平台工作 |
 | 完整 ACP parity | 未实现 |
@@ -151,6 +152,7 @@ worktree-aware controls，不是完整文件系统隔离。
 - [工作台和集成边界](docs/locus-local-agent-platform.zh-CN.md)
 - [Local Job API v1 下游接入手册](docs/local-job-api-v1-consumer-guide.zh-CN.md)
 - [Runtime environment center plan](docs/runtime-environment-center-plan.md)
+- [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [License](LICENSE)
 
@@ -192,9 +194,9 @@ bug、集成问题和变更建议可以通过本 repository 的 issues 或 pull 
 
 ## 已知边界
 
-- Voice transcription 只使用用户提供的 OpenAI API key；默认版本已经移除上游 hosted
-  subscription fallback。Voice key storage 仍是已知 hardening gap；迁移到 main-process
-  secure storage 前，不要把它纳入“所有 API key 都已加密”的广泛声明。
+- Voice transcription 使用用户配置的 Helper API provider；默认版本已经移除上游 hosted
+  subscription fallback 和旧的 renderer/env API-key 路径。凭据通过 main-process
+  provider configuration 和 secure storage 路径保存。
 - 新 worktree setup config 保存到 `.locus/worktree.json`。旧的 `.1code/worktree.json`
   仍可读取，保证已有项目继续可用。
 - 为避免破坏已有本地项目数据，legacy `1code` CLI、

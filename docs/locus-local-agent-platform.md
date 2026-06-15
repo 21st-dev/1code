@@ -68,8 +68,10 @@ as complete filesystem isolation.
 Provider credentials should be resolved in the main process and renderer APIs
 should receive only IDs, status, and redacted metadata. Job payloads, event
 logs, ACP requests, and downstream integration payloads must not carry provider
-secrets. Current exception: voice OpenAI key storage still needs hardening before
-Locus can claim all API keys are encrypted in main-process secure storage.
+secrets. Voice transcription now uses the Helper API provider configuration
+path; do not reintroduce a renderer/env API-key fallback. New credential writes
+use main-process secure storage, while legacy base64 reads remain compatibility
+only and should not be described as retroactive encryption of historical data.
 
 ## Recommended Integration Model
 
@@ -157,8 +159,7 @@ Do not claim these as implemented:
 - Windows packaged acceptance claims before Windows real-machine smoke
 - offline-only or fully private execution
 - complete filesystem isolation
-- all API keys encrypted in main-process secure storage while the voice-key
-  hardening gap remains
+- all historical credential data retroactively migrated to encrypted storage
 
 ## Protocol Strategy
 
@@ -241,7 +242,7 @@ fully cross-platform accepted
 secure sandbox for arbitrary extensions
 offline-only
 fully private
-all API keys encrypted
+all historical credentials retroactively encrypted
 complete filesystem isolation
 Claude and Codex parity
 cloud agent platform

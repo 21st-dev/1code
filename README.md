@@ -41,6 +41,7 @@ It provides:
 | Local daemon queue | Implemented and smoked locally on macOS |
 | Local schedules | Implemented and smoked locally on macOS |
 | `locus api` Local Job API v1 | Implemented and smoked locally on macOS |
+| Runtime execution core convergence | In progress under OpenSpec; the durable job/API core is shared, while selector/event/policy convergence remains tracked work |
 | Minimal `locus acp` stdio job surface | Experimental |
 | Windows packaged real-machine smoke | Deferred; non-blocking for current local platform work |
 | Full ACP parity | Not implemented |
@@ -158,6 +159,7 @@ filesystem isolation.
 - [Workbench and integration boundaries](docs/locus-local-agent-platform.md)
 - [Local Job API v1 Consumer Guide](docs/local-job-api-v1-consumer-guide.md)
 - [Runtime environment center plan](docs/runtime-environment-center-plan.md)
+- [Security policy](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 - [License](LICENSE)
 
@@ -202,11 +204,10 @@ goes to [21st-dev/1code](https://github.com/21st-dev/1code).
 
 ## Known Boundaries
 
-- Voice transcription uses a user-provided OpenAI API key only; the upstream
-  hosted subscription fallback has been removed from the default build. Voice
-  key storage is still a known hardening gap and should not be included in broad
-  "all API keys are encrypted" claims until migrated to main-process secure
-  storage.
+- Voice transcription uses a user-configured Helper API provider. The upstream
+  hosted subscription fallback and legacy renderer/env API-key paths are removed
+  from the default build; credentials are stored through the main-process
+  provider configuration and secure storage path.
 - New worktree setup config is saved to `.locus/worktree.json`. Legacy
   `.1code/worktree.json` remains readable so existing projects keep working.
 - Some compatibility names and paths such as the legacy `1code` CLI,
