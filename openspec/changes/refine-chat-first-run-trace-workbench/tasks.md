@@ -16,16 +16,16 @@
   event payloads.
 
 ## 3. DetailsSidebar inspector widgets
-- [ ] 3.1 Extend the DetailsSidebar widget registry with `trace`, `usage`, and
+- [x] 3.1 Extend the DetailsSidebar widget registry with `trace`, `usage`, and
   `error` widgets.
-- [ ] 3.2 Implement the trace widget as a compact current-run summary and jump
+- [x] 3.2 Implement the trace widget as a compact current-run summary and jump
   index, not a duplicate full log beside chat.
-- [ ] 3.3 Implement the usage widget as a run/chat aggregate with honest
+- [x] 3.3 Implement the usage widget as a run/chat aggregate with honest
   unavailable states when provider usage, cost, cache, or context metadata is
   missing.
-- [ ] 3.4 Implement the error widget using the product codes and field names from
+- [x] 3.4 Implement the error widget using the product codes and field names from
   `docs/error-semantics.md`.
-- [ ] 3.5 Keep the capability widget out of the default registry until canonical
+- [x] 3.5 Keep the capability widget out of the default registry until canonical
   provider binding and capability evidence are available.
 
 ## 4. Runs/History trace surface

@@ -1,16 +1,34 @@
 import { atom } from "jotai"
 import { atomFamily, atomWithStorage } from "jotai/utils"
-import { atomWithWindowStorage } from "../../../lib/window-storage"
 import type { LucideIcon } from "lucide-react"
-import { Box, FileText, Terminal, FileDiff, ListTodo } from "lucide-react"
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  Box,
+  FileDiff,
+  FileText,
+  ListTodo,
+  Terminal,
+} from "lucide-react"
 import { OriginalMCPIcon } from "../../../components/ui/icons"
 import type { TranslationKey } from "../../../lib/i18n"
+import { atomWithWindowStorage } from "../../../lib/window-storage"
 
 // ============================================================================
 // Widget System Types & Registry
 // ============================================================================
 
-export type WidgetId = "info" | "todo" | "plan" | "terminal" | "diff" | "mcp"
+export type WidgetId =
+  | "info"
+  | "todo"
+  | "plan"
+  | "terminal"
+  | "diff"
+  | "mcp"
+  | "trace"
+  | "usage"
+  | "error"
 
 export interface WidgetConfig {
   id: WidgetId
@@ -22,18 +40,84 @@ export interface WidgetConfig {
 }
 
 export const WIDGET_REGISTRY: WidgetConfig[] = [
-  { id: "info", label: "Workspace", labelKey: "details.workspace", icon: Box, canExpand: false, defaultVisible: true },
-  { id: "todo", label: "To-dos", labelKey: "details.todoList", icon: ListTodo, canExpand: false, defaultVisible: true },
-  { id: "plan", label: "Plan", labelKey: "details.plan", icon: FileText, canExpand: true, defaultVisible: true },
-  { id: "terminal", label: "Terminal", labelKey: "details.terminal", icon: Terminal, canExpand: true, defaultVisible: false },
-  { id: "diff", label: "Changes", labelKey: "changes.title", icon: FileDiff, canExpand: true, defaultVisible: true },
-  { id: "mcp", label: "MCP Servers", labelKey: "details.mcpServers", icon: OriginalMCPIcon as unknown as LucideIcon, canExpand: false, defaultVisible: true },
+  {
+    id: "info",
+    label: "Workspace",
+    labelKey: "details.workspace",
+    icon: Box,
+    canExpand: false,
+    defaultVisible: true,
+  },
+  {
+    id: "todo",
+    label: "To-dos",
+    labelKey: "details.todoList",
+    icon: ListTodo,
+    canExpand: false,
+    defaultVisible: true,
+  },
+  {
+    id: "trace",
+    label: "Trace",
+    labelKey: "details.trace",
+    icon: Activity,
+    canExpand: false,
+    defaultVisible: true,
+  },
+  {
+    id: "usage",
+    label: "Usage",
+    labelKey: "details.usage",
+    icon: BarChart3,
+    canExpand: false,
+    defaultVisible: true,
+  },
+  {
+    id: "error",
+    label: "Errors",
+    labelKey: "details.error",
+    icon: AlertCircle,
+    canExpand: false,
+    defaultVisible: true,
+  },
+  {
+    id: "plan",
+    label: "Plan",
+    labelKey: "details.plan",
+    icon: FileText,
+    canExpand: true,
+    defaultVisible: true,
+  },
+  {
+    id: "terminal",
+    label: "Terminal",
+    labelKey: "details.terminal",
+    icon: Terminal,
+    canExpand: true,
+    defaultVisible: false,
+  },
+  {
+    id: "diff",
+    label: "Changes",
+    labelKey: "changes.title",
+    icon: FileDiff,
+    canExpand: true,
+    defaultVisible: true,
+  },
+  {
+    id: "mcp",
+    label: "MCP Servers",
+    labelKey: "details.mcpServers",
+    icon: OriginalMCPIcon as unknown as LucideIcon,
+    canExpand: false,
+    defaultVisible: true,
+  },
 ]
 
 // Helper to get default visible widgets
-const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = WIDGET_REGISTRY
-  .filter((w) => w.defaultVisible)
-  .map((w) => w.id)
+const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = WIDGET_REGISTRY.filter(
+  (w) => w.defaultVisible,
+).map((w) => w.id)
 
 // Default widget order (all widgets)
 const DEFAULT_WIDGET_ORDER: WidgetId[] = WIDGET_REGISTRY.map((w) => w.id)
@@ -76,8 +160,7 @@ const widgetOrderStorageAtom = atomWithStorage<Record<string, WidgetId[]>>(
 
 export const widgetOrderAtomFamily = atomFamily((workspaceId: string) =>
   atom(
-    (get) =>
-      get(widgetOrderStorageAtom)[workspaceId] ?? DEFAULT_WIDGET_ORDER,
+    (get) => get(widgetOrderStorageAtom)[workspaceId] ?? DEFAULT_WIDGET_ORDER,
     (get, set, widgetOrder: WidgetId[]) => {
       const current = get(widgetOrderStorageAtom)
       set(widgetOrderStorageAtom, {
@@ -149,7 +232,11 @@ export const detailsSidebarTabAtom = atomWithWindowStorage<DetailsSidebarTab>(
 export type OverviewSection = "info" | "plan" | "terminal" | "diff"
 
 // Default expanded sections
-const DEFAULT_EXPANDED_SECTIONS: OverviewSection[] = ["info", "plan", "terminal"]
+const DEFAULT_EXPANDED_SECTIONS: OverviewSection[] = [
+  "info",
+  "plan",
+  "terminal",
+]
 
 // Section expand states (per workspace) - stores array of expanded section IDs
 const sectionExpandStorageAtom = atomWithStorage<
@@ -194,7 +281,9 @@ export interface PlanContentCache {
 }
 
 // Runtime cache for plan content per workspace (not persisted)
-const planContentCacheStorageAtom = atom<Record<string, PlanContentCache | null>>({})
+const planContentCacheStorageAtom = atom<
+  Record<string, PlanContentCache | null>
+>({})
 
 export const planContentCacheAtomFamily = atomFamily((chatId: string) =>
   atom(
@@ -213,9 +302,12 @@ export const planContentCacheAtomFamily = atomFamily((chatId: string) =>
 // File Tree Expanded Paths (per worktree, persisted across reloads)
 // ============================================================================
 
-const fileTreeExpandedStorageAtom = atomWithStorage<
-  Record<string, string[]>
->("overview:fileTreeExpanded", {}, undefined, { getOnInit: true })
+const fileTreeExpandedStorageAtom = atomWithStorage<Record<string, string[]>>(
+  "overview:fileTreeExpanded",
+  {},
+  undefined,
+  { getOnInit: true },
+)
 
 /** null sentinel: first mount for this worktree (no user action yet → auto-expand roots) */
 export const fileTreeExpandedAtomFamily = atomFamily((worktreePath: string) =>

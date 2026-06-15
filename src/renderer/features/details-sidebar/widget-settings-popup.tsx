@@ -1,23 +1,31 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
 import { useAtom } from "jotai"
-import { GripVertical, Box, TerminalSquare, ListTodo } from "lucide-react"
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  Box,
+  GripVertical,
+  ListTodo,
+  TerminalSquare,
+} from "lucide-react"
+import { useCallback, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { DiffIcon, OriginalMCPIcon, PlanIcon } from "@/components/ui/icons"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Checkbox } from "@/components/ui/checkbox"
-import { PlanIcon, DiffIcon, OriginalMCPIcon } from "@/components/ui/icons"
-import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
 import {
   WIDGET_REGISTRY,
-  widgetVisibilityAtomFamily,
-  widgetOrderAtomFamily,
   type WidgetId,
+  widgetOrderAtomFamily,
+  widgetVisibilityAtomFamily,
 } from "./atoms"
 
 interface WidgetSettingsPopupProps {
@@ -39,6 +47,12 @@ function getWidgetIcon(widgetId: WidgetId) {
       return DiffIcon
     case "mcp":
       return OriginalMCPIcon
+    case "trace":
+      return Activity
+    case "usage":
+      return BarChart3
+    case "error":
+      return AlertCircle
     default:
       return Box
   }
@@ -126,22 +140,37 @@ export function WidgetSettingsPopup({ workspaceId }: WidgetSettingsPopupProps) {
         setWidgetOrder(newOrder)
 
         // Also update visible widgets order
-        const newVisibleWidgets = visibleWidgets.slice().sort(
-          (a, b) => newOrder.indexOf(a) - newOrder.indexOf(b),
-        )
+        const newVisibleWidgets = visibleWidgets
+          .slice()
+          .sort((a, b) => newOrder.indexOf(a) - newOrder.indexOf(b))
         setVisibleWidgets(newVisibleWidgets)
       }
 
       setDraggedWidget(null)
       setDragOverWidget(null)
     },
-    [draggedWidget, widgetOrder, visibleWidgets, setWidgetOrder, setVisibleWidgets],
+    [
+      draggedWidget,
+      widgetOrder,
+      visibleWidgets,
+      setWidgetOrder,
+      setVisibleWidgets,
+    ],
   )
 
   const handleDragEnd = useCallback(() => {
     setDraggedWidget(null)
     setDragOverWidget(null)
   }, [])
+
+  const handleWidgetKeyDown = useCallback(
+    (event: React.KeyboardEvent, widgetId: WidgetId) => {
+      if (event.key !== "Enter" && event.key !== " ") return
+      event.preventDefault()
+      toggleWidget(widgetId)
+    },
+    [toggleWidget],
+  )
 
   // Get widgets in current order
   const orderedWidgets = useMemo(() => {
@@ -161,12 +190,12 @@ export function WidgetSettingsPopup({ workspaceId }: WidgetSettingsPopupProps) {
           {t("details.editWidgets")}
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-56 p-2"
-        sideOffset={8}
-      >
-        <div className="space-y-1">
+      <PopoverContent align="end" className="w-56 p-2" sideOffset={8}>
+        <div
+          className="space-y-1"
+          role="listbox"
+          aria-label={t("details.widgets")}
+        >
           <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
             {t("details.widgets")}
           </div>
@@ -179,15 +208,21 @@ export function WidgetSettingsPopup({ workspaceId }: WidgetSettingsPopupProps) {
             return (
               <div
                 key={widget.id}
+                aria-selected={isVisible}
                 draggable={draggableWidget === widget.id}
                 onDragStart={(e) => handleDragStart(e, widget.id)}
                 onDragOver={(e) => handleDragOver(e, widget.id)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, widget.id)}
-                onDragEnd={() => { handleDragEnd(); setDraggableWidget(null) }}
-                onClick={() => toggleWidget(widget.id)}
+                onDragEnd={() => {
+                  handleDragEnd()
+                  setDraggableWidget(null)
+                }}
+                onKeyDown={(event) => handleWidgetKeyDown(event, widget.id)}
+                role="option"
+                tabIndex={0}
                 className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted transition-colors cursor-pointer",
+                  "flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted transition-colors",
                   isDragging && "opacity-50",
                   isDragOver && "bg-muted/80 ring-1 ring-primary/50",
                 )}
@@ -201,8 +236,7 @@ export function WidgetSettingsPopup({ workspaceId }: WidgetSettingsPopupProps) {
                 <Checkbox
                   checked={isVisible}
                   onCheckedChange={() => toggleWidget(widget.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-4 w-4 pointer-events-none"
+                  className="h-4 w-4"
                 />
                 <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 <span className="text-sm flex-1">{t(widget.labelKey)}</span>
