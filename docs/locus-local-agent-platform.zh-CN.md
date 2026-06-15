@@ -60,8 +60,9 @@ computer-control flows，在用户授权或调用后都可能影响本机。文�
 
 provider credentials 应该在 main process 解析，renderer API 只应该拿到 ID、状态和脱敏
 metadata。job payload、event logs、ACP requests 和下游集成 payload 都不应该携带
-provider secrets。当前例外：voice OpenAI key storage 仍需要硬化；在完成前，不能宣称
-所有 API key 都已进入 main-process secure storage。
+provider secrets。Voice transcription 现在使用 Helper API provider configuration 路径；
+不要重新引入 renderer/env API-key fallback。新的 credential 写入使用 main-process
+secure storage；legacy base64 读取只用于兼容，不应该被描述成历史数据已经被追溯加密。
 
 ## 推荐集成方式
 
@@ -143,7 +144,7 @@ plan/review 模式，修改日历数据前必须显式确认。
 - Windows 实机 smoke 前的 Windows packaged 验收完成声明
 - offline-only 或完全隐私执行
 - 完整文件系统隔离
-- voice-key hardening gap 完成前的“所有 API key 都已加密并进入 main-process secure storage”
+- 历史 credential 数据已经全部追溯迁移到加密存储
 
 ## 协议策略
 
@@ -220,7 +221,7 @@ fully cross-platform accepted
 secure sandbox for arbitrary extensions
 offline-only
 fully private
-all API keys encrypted
+all historical credentials retroactively encrypted
 complete filesystem isolation
 Claude and Codex parity
 cloud agent platform

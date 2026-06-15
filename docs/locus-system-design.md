@@ -16,9 +16,9 @@
 | Goal | Consequence in the design |
 | --- | --- |
 | **Local-first & auditable** | All state lives in a local SQLite DB; every agent run emits an append-only event log. No hosted backend in the default build (`LOCUS_LOCAL_ONLY=true`). |
-| **Runtime-neutral** | A `RuntimeRegistry` abstracts Claude Code / Codex / ACP behind one adapter contract, so adding a runtime never touches the UI or job store. |
+| **Runtime-neutral target** | A `RuntimeRegistry` abstracts Claude Code / Codex / ACP behind one adapter contract. Desktop uses this boundary today; full headless selector/event/policy convergence is still tracked under OpenSpec. |
 | **Durable & recoverable** | Jobs are rows, not in-memory promises. A worker writes heartbeats; a recovery pass re-reconciles orphaned jobs on startup. |
-| **One core, many surfaces** | Desktop UI, headless CLI, daemon queue, schedules, and the Local Job API are all thin clients over the **same** job store + runtime registry. |
+| **One durable job core, many surfaces** | Desktop UI, headless CLI, daemon queue, schedules, and the Local Job API share the durable job store and capability truth. Runtime execution convergence remains in progress. |
 | **Type-safe boundaries** | tRPC gives end-to-end types from main → renderer; the Local Job API is an explicit, versioned JSON contract for *other* local tools. |
 
 ### 1.2 Process planes
@@ -43,7 +43,7 @@ headless plane that can run with no window at all:
 │   • RuntimeRegistry + adapters (Claude Code, Codex, ACP)                │
 │   • Job store (Drizzle/SQLite)   • git / worktree / terminal services   │
 └───────────────▲───────────────────────────┬────────────────────────────┘
-                │ shared core (imports)      │ same core
+                │ shared job modules         │ durable store
 ┌───────────────┴───────────────┐  ┌─────────▼──────────────────────────┐
 │ HEADLESS (no window)          │  │ PERSISTENCE                         │
 │  locus run / jobs / api /     │  │  SQLite @ {userData}/data/agents.db │
@@ -51,12 +51,18 @@ headless plane that can run with no window at all:
 └───────────────────────────────┘  └─────────────────────────────────────┘
 ```
 
-The key architectural decision: **the headless plane and the desktop main process
-share the same `job-store`, `runtime-registry`, and `db` modules.** A run started
-from the UI and a run started by `locus run` are the same kind of row, observed the
-same way. This is what makes the system "a platform" rather than "a chat UI".
+The current platform foundation is the shared `job-store`, runtime capability
+truth, and `db` modules. A run started from the UI and a run started by
+`locus run` are durable local jobs observed through the same store. The deeper
+execution boundary - adapter selector, canonical event bridge, and non-desktop
+permission policy - is still being converged under
+`openspec/changes/refactor-runtime-core-execution-boundary/tasks.md`.
 
-### 1.3 The agent-run pipeline (the core loop)
+### 1.3 Target agent-run pipeline (runtime-core convergence)
+
+This diagram describes the intended converged runtime-core shape. Current
+desktop paths cover more of this pipeline than headless batch jobs; remaining
+headless convergence is tracked in the OpenSpec change above.
 
 ```
 request ──► permission-policy ──► preflight ──► runtime adapter ──► process-runner
@@ -98,7 +104,7 @@ src/
 ├── main/                              # Electron main process
 │   ├── index.ts                       # App entry, window + headless dispatch
 │   ├── auth-manager.ts                # OAuth flow + token refresh
-│   ├── auth-store.ts / secure-storage.ts   # Encrypted creds (safeStorage)
+│   ├── auth-store.ts / secure-storage.ts   # Secure credential helpers
 │   ├── constants.ts · local-only.ts · user-data-path.ts
 │   ├── windows/main.ts                # Window creation, IPC handler wiring
 │   └── lib/
@@ -170,14 +176,15 @@ sub_chats(id, name, chatId→chats, sessionId, streamId,
 worktree (isolation per task); a **sub-chat** is one resumable agent conversation
 (`sessionId` resumes the provider session; `messages` is a JSON transcript).
 
-### 3.2 Credentials & providers (all tokens encrypted via `safeStorage`)
+### 3.2 Credentials & providers (new writes use `safeStorage`)
 
 ```
 claude_code_credentials      (default row; legacy OAuth — DEPRECATED)
 anthropic_accounts           (multi-account OAuth: email, displayName, oauthToken, lastUsedAt)
 anthropic_settings           (singleton: activeAccountId)
 claude_provider_config       (default: model, baseUrl, authMode, encryptedToken)
-local_api_provider_configs   (per-purpose OpenAI-compatible: sub_chat_title, commit_message)
+local_api_provider_configs   (per-purpose OpenAI-compatible: sub_chat_title,
+                              commit_message, voice_transcription)
 agent_provider_profiles      (runtime-neutral: protocol, baseUrl, defaultModel, authMode,
                               headersJson, targetRuntimesJson, capabilitiesJson, lastTestStatusJson)
 agent_provider_defaults      (purpose PK → profileId, modelOverride)   // claude-main, codex-main, …
@@ -187,6 +194,10 @@ app_agents                   (name UNIQUE, description, prompt, tools, disallowe
 `agent_provider_profiles` is the extensible heart of provider handling: any
 Anthropic / `openai-chat` / `openai-responses` endpoint becomes a row, routed to
 runtimes via `targetRuntimesJson` and selected per-purpose by `agent_provider_defaults`.
+New provider/token writes fail closed if OS secure storage is unavailable.
+`secure-storage` still reads legacy `locus:v1:base64:` values for compatibility;
+that read-only path must not be described as new encrypted storage or as proof
+that historical local credential data has been retroactively encrypted.
 
 ### 3.3 Durable jobs, events, schedules
 
@@ -217,8 +228,9 @@ deterministic and replayable.
 
 ## 4. API surface
 
-Three layers, one core. **In-app** uses tRPC; **other local tools** use the
-versioned Local Job API; **humans/automation** use the CLI.
+Three layers share one durable job core while runtime execution convergence
+continues. **In-app** uses tRPC; **other local tools** use the versioned Local
+Job API; **humans/automation** use the CLI.
 
 ### 4.1 tRPC routers (main ↔ renderer, type-safe)
 
@@ -424,6 +436,7 @@ export function toLocalJobApiResultEnvelope(job: AgentJob, artifacts: FileArtifa
 | **More surfaces** | New CLI verb / schedule / API endpoint over the same job store. |
 | **Optional hosted** | Reintroduce only behind an OpenSpec proposal with `LOCUS_LOCAL_ONLY=false`; the boundary already exists. |
 
-The system is an MVP you can ship today and a platform you can extend tomorrow —
-because every surface is a thin client over one durable, runtime-neutral job core.
+The system is an MVP you can ship today and a platform you can extend tomorrow -
+because every surface can build on the same durable job foundation while runtime
+execution semantics converge through the active OpenSpec change.
 ```
