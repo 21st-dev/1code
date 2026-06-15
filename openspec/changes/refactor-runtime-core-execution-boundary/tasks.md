@@ -25,9 +25,9 @@
 - [x] 5.4 Add capability-honesty tests proving batch adapters without pre-execution hooks do not claim per-scope policy-grant enforcement.
 
 ## 6. Gated Codex App-Server Job Adapter
-- [ ] 6.1 Add a Codex app-server job adapter path only after shared request, selector, event, and permission tests pass.
-- [ ] 6.2 Keep `codex exec` as default batch behavior for current Local Job API v1 callers.
-- [ ] 6.3 Add a smoke or equivalent DB/filesystem-backed replay proving app-server job events, permission handling, cancellation, and result persistence.
+- [x] 6.1 Add a Codex app-server job adapter path only after shared request, selector, event, and permission tests pass.
+- [x] 6.2 Keep `codex exec` as default batch behavior for current Local Job API v1 callers.
+- [x] 6.3 Add a smoke or equivalent DB/filesystem-backed replay proving app-server job events, permission handling, cancellation, and result persistence.
 
 ## 7. Documentation And Ownership
 - [ ] 7.1 Update `docs/OWNERSHIP_MAP.md` to reflect shared execution selector and RunEvent ownership across desktop and headless.
