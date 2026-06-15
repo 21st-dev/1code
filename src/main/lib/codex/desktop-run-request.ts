@@ -1,6 +1,7 @@
 import type { AgentJobMode } from "../../../shared/agent-jobs"
 import {
   createDesktopRunContextFromPreflight,
+  getDesktopRunRequestedCapabilities,
   type DesktopRunProviderBinding,
   type DesktopRunRequest,
 } from "../agent-runtime/desktop-run-request"
@@ -71,6 +72,7 @@ export function createCodexDesktopRunRequest({
       preflight,
     ),
     prompt,
+    requestedCapabilities: getDesktopRunRequestedCapabilities(permissionPolicy),
     permissionPolicy,
     providerBinding: {
       ...providerBinding,

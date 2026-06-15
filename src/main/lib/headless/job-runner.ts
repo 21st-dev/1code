@@ -2,6 +2,7 @@ import type { AgentJob, AgentJobEvent } from "../db/schema"
 import type {
   AgentJobMode,
   AgentJobRuntime,
+  AgentJobSource,
   AgentJobStatus,
 } from "../../../shared/agent-jobs"
 import {
@@ -20,6 +21,7 @@ import type {
   AgentRuntimeRunResult,
   AgentTaskRunner,
 } from "./agent-runtime-contract"
+import { createAgentRuntimeRunRequest } from "./agent-runtime-contract"
 
 export const HEADLESS_EXIT_CODES = {
   success: 0,
@@ -198,14 +200,23 @@ export async function runPersistedAgentJob(
       ? canceledRunResult()
       : await (() => {
           const runnerPromise = runner(
-            {
+            createAgentRuntimeRunRequest({
               jobId: job.id,
               runtime: job.runtime as AgentJobRuntime,
               cwd: job.cwd,
               mode: job.mode as AgentJobMode,
+              source: job.source as AgentJobSource,
               prompt,
               signal: abortController.signal,
-            },
+              attempt: job.attempt,
+              projectId: job.projectId,
+              chatId: job.chatId,
+              subChatId: job.subChatId,
+              apiConsumerId: job.apiConsumerId,
+              apiConsumerRunId: job.apiConsumerRunId,
+              artifactBaseDir: job.artifactBaseDir,
+              artifactManifestPath: job.artifactManifestPath,
+            }),
             observer,
           )
           void runnerPromise.catch(() => {})

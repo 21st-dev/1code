@@ -1,36 +1,50 @@
-import type { AgentRuntimeId } from "../../../shared/agent-runtime-capabilities"
+import {
+  getAgentRunRequiredCapabilityIds,
+  type AgentRuntimeCapabilityId,
+  type AgentRuntimeId,
+} from "../../../shared/agent-runtime-capabilities"
 import type { AgentJobMode } from "../../../shared/agent-jobs"
 import type { DesktopPermissionPolicy } from "./permission-policy"
 import type { DesktopRunPreflightResult } from "./preflight"
 import type { RunEvent } from "./runtime-events"
+import type {
+  AgentRuntimeProviderAuthMode,
+  AgentRuntimeProviderDiagnostic,
+  AgentRuntimeProviderReference,
+  AgentRuntimeRunContextBase,
+  AgentRuntimeRunIdentityBase,
+  AgentRuntimeRunRequestBase,
+  AgentRuntimeRunResultBase,
+  AgentRuntimeTraceObserver,
+} from "./run-contract"
 
-export type DesktopRunIdentity = {
+export type DesktopRunIdentity = AgentRuntimeRunIdentityBase & {
   runId: string
   streamId?: string | null
   jobId?: string | null
   attempt?: number | null
 }
 
-export type DesktopRunContext = {
+export type DesktopRunContext = AgentRuntimeRunContextBase & {
   runtimeId: AgentRuntimeId
   mode: AgentJobMode
+  source: "desktop"
   projectId: string
   chatId: string
   subChatId: string
   cwd: string
 }
 
-export type DesktopRunProviderBinding = {
+export type DesktopRunProviderBinding = Omit<
+  AgentRuntimeProviderReference,
+  "authMode" | "diagnostics"
+> & {
   model?: string | null
   modelSource?: string | null
   providerProfileId?: string | null
   gatewayEndpoint?: string | null
-  authMode?: "app-managed" | "provider-profile" | "runtime-managed" | null
-  diagnostics?: Array<{
-    id: string
-    status: "ready" | "blocked" | "skipped"
-    message?: string
-  }>
+  authMode?: Exclude<AgentRuntimeProviderAuthMode, "none"> | null
+  diagnostics?: AgentRuntimeProviderDiagnostic[]
 }
 
 export type DesktopRunMcpReadiness = {
@@ -51,27 +65,26 @@ export type DesktopRunAttachmentRef = {
   byteLength?: number
 }
 
-export type DesktopTraceObserver = {
-  emit(event: RunEvent): void
-}
+export type DesktopTraceObserver = AgentRuntimeTraceObserver<RunEvent>
 
-export type DesktopRunRequest = {
-  identity: DesktopRunIdentity
-  context: DesktopRunContext
-  prompt: string
-  permissionPolicy: DesktopPermissionPolicy
-  providerBinding: DesktopRunProviderBinding
+export type DesktopRunRequest = AgentRuntimeRunRequestBase<
+  DesktopRunIdentity,
+  DesktopRunContext,
+  DesktopPermissionPolicy,
+  DesktopRunProviderBinding
+> & {
   mcp: DesktopRunMcpReadiness
   attachments: DesktopRunAttachmentRef[]
   trace: DesktopTraceObserver
-  signal: AbortSignal
   session: {
     resumeSessionId?: string | null
     parentSessionId?: string | null
   }
 }
 
-export type DesktopRunResult = {
+export type DesktopRunResult = AgentRuntimeRunResultBase<
+  "succeeded" | "failed" | "canceled" | "interrupted"
+> & {
   status: "succeeded" | "failed" | "canceled" | "interrupted"
   sessionId?: string | null
   usage?: {
@@ -83,6 +96,15 @@ export type DesktopRunResult = {
     message: string
     code?: string
   }
+}
+
+export function getDesktopRunRequestedCapabilities(
+  permissionPolicy: DesktopPermissionPolicy,
+): AgentRuntimeCapabilityId[] {
+  return getAgentRunRequiredCapabilityIds({
+    mode: permissionPolicy.mode,
+    hasScopeContract: permissionPolicy.guarded,
+  })
 }
 
 export function createDesktopRunMcpReadiness(input: {
@@ -128,6 +150,7 @@ export function createDesktopRunContextFromPreflight(
   return {
     runtimeId,
     mode,
+    source: "desktop",
     projectId: preflight.project.id,
     chatId: preflight.chat.id,
     subChatId: preflight.subChat.id,
