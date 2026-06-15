@@ -23,6 +23,7 @@ import {
   runHeadlessCliCommand,
 } from "../src/main/lib/headless/cli-dispatcher"
 import { HEADLESS_CLI_MARKER } from "../src/main/lib/headless/cli-args"
+import { LOCAL_JOB_API_PROJECT_NOT_REGISTERED } from "../src/shared/local-job-api"
 import { projects } from "../src/main/lib/db/schema"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
@@ -337,6 +338,52 @@ describe("headless CLI dispatcher", () => {
     expect(code).toBe(2)
     expect(stdout.value()).toBe("")
     expect(stderr.value()).toContain("input.env is not accepted")
+    expect(listAgentJobs(db, { source: "api" })).toHaveLength(0)
+  })
+
+  test("returns structured project_not_registered for unregistered API cwd", async () => {
+    const db = createAgentJobTestDb()
+    const unregisteredCwd = realpathSync(
+      mkdtempSync(join(tmpdir(), "locus-api-unregistered-")),
+    )
+    const stdout = writer()
+    const stderr = writer()
+    const code = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "create",
+        "--request",
+        "-",
+        "--json",
+      ],
+      stdin: Readable.from([
+        JSON.stringify({
+          apiVersion: "locus.local-job.v1",
+          consumer: { id: "docs-workbench" },
+          project: { cwd: unregisteredCwd },
+          runtime: { id: "codex" },
+          mode: "plan",
+          prompt: { text: "Do not start" },
+        }),
+      ]),
+      stdout: stdout.stream,
+      stderr: stderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(code).toBe(7)
+    expect(stderr.value()).toBe("")
+    expect(JSON.parse(stdout.value())).toMatchObject({
+      apiVersion: "locus.local-job.v1",
+      error: {
+        code: LOCAL_JOB_API_PROJECT_NOT_REGISTERED,
+        cwd: unregisteredCwd,
+      },
+    })
     expect(listAgentJobs(db, { source: "api" })).toHaveLength(0)
   })
 

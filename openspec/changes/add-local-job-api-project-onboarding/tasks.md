@@ -11,8 +11,8 @@
 ## 3. Structured Registration Errors
 - [x] 3.1 Define a `project_not_registered` error code constant in `src/shared/local-job-api.ts`.
 - [x] 3.2 Raise a typed registration error from `findRegisteredProjectForCwd*` in `src/main/lib/headless/schedules.ts` instead of a plain message.
-- [ ] 3.3 Map the typed error to a stable error envelope and deterministic exit code in `locus api runs create`, replacing the regex match in `localJobApiCreateErrorCode`.
-- [ ] 3.4 Add tests proving `locus api runs create` against an unregistered cwd returns `project_not_registered` in JSON without requiring stderr string matching, and keeps the current exit-code value.
+- [x] 3.3 Map the typed error to a stable error envelope and deterministic exit code in `locus api runs create`, replacing the regex match in `localJobApiCreateErrorCode`.
+- [x] 3.4 Add tests proving `locus api runs create` against an unregistered cwd returns `project_not_registered` in JSON without requiring stderr string matching, and keeps the current exit-code value.
 
 ## 4. Project Onboarding Commands
 - [ ] 4.1 Parse `api projects register|status|unregister` (with `--cwd`, `--name`, `--force`, `--json`) in `src/main/lib/headless/cli-args.ts`.

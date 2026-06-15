@@ -39,6 +39,10 @@ import {
 import { runLocalAgentDaemon } from "./daemon"
 import { runAcpStdioServer } from "./acp-stdio"
 import {
+  isProjectRegistrationError,
+  type ProjectRegistrationError,
+} from "../projects/registry"
+import {
   createAgentSchedule,
   deleteAgentSchedule,
   findRegisteredProjectForCwd,
@@ -59,7 +63,10 @@ import {
   writeLocalJobApiFinalArtifacts,
   writeLocalJobApiInitialArtifacts,
 } from "./local-job-api"
-import { LOCAL_JOB_API_VERSION } from "../../../shared/local-job-api"
+import {
+  LOCAL_JOB_API_PROJECT_NOT_REGISTERED,
+  LOCAL_JOB_API_VERSION,
+} from "../../../shared/local-job-api"
 
 type Writer = {
   write(chunk: string): unknown
@@ -449,11 +456,15 @@ async function apiRunsCreateCommand(
     const result = await runPreparedLocalJobApiJob(prepared, options)
     return result.exitCode
   } catch (error) {
+    if (isLocalJobApiProjectNotRegisteredError(error)) {
+      writeJson(options.stdout, toLocalJobApiProjectErrorEnvelope(error))
+      return HEADLESS_EXIT_CODES.invalidCwd
+    }
     const message = error instanceof Error ? error.message : String(error)
     return commandError(
       options.stderr,
       message,
-      localJobApiCreateErrorCode(message),
+      localJobApiCreateErrorCode(error),
     )
   }
 }
@@ -463,10 +474,30 @@ function apiRuntimesListCommand(options: RunHeadlessCliCommandOptions): number {
   return HEADLESS_EXIT_CODES.success
 }
 
-function localJobApiCreateErrorCode(message: string): number {
-  if (/registered project|project path|API run cwd/i.test(message)) {
-    return HEADLESS_EXIT_CODES.invalidCwd
+function isLocalJobApiProjectNotRegisteredError(
+  error: unknown,
+): error is ProjectRegistrationError {
+  return (
+    isProjectRegistrationError(error) &&
+    error.code === LOCAL_JOB_API_PROJECT_NOT_REGISTERED
+  )
+}
+
+function toLocalJobApiProjectErrorEnvelope(error: ProjectRegistrationError) {
+  return {
+    apiVersion: LOCAL_JOB_API_VERSION,
+    error: {
+      code: error.code,
+      message: error.message,
+      cwd: error.cwd,
+      projectId: error.projectId,
+    },
   }
+}
+
+function localJobApiCreateErrorCode(error: unknown): number {
+  if (isProjectRegistrationError(error)) return HEADLESS_EXIT_CODES.invalidCwd
+  const message = error instanceof Error ? error.message : String(error)
   if (/unsupported/i.test(message)) {
     return HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode
   }
