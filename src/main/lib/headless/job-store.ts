@@ -21,6 +21,7 @@ import {
   type AgentJobStatus,
 } from "../../../shared/agent-jobs"
 import { AGENT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
+import { createAgentJobRunEvent } from "../agent-runtime/job-event-bridge"
 
 export type AgentJobDatabase = ReturnType<typeof drizzle<typeof schema>>
 
@@ -219,6 +220,17 @@ function insertAgentJobEventRecord(
   const db = executor as AgentJobDatabase
   const eventId = createId()
   const sequence = nextEventSequence(executor, input.jobId)
+  const job = getJobFromExecutor(executor, input.jobId)
+  if (!job) throw new Error(`Unknown job: ${input.jobId}`)
+  const bridged = createAgentJobRunEvent({
+    jobId: input.jobId,
+    runtimeId: job.runtime as AgentJobRuntime,
+    source: job.source as AgentJobSource,
+    sequence,
+    type: input.type,
+    payload: input.payload,
+    createdAt: now,
+  })
 
   db.insert(agentJobEvents)
     .values({
@@ -226,7 +238,7 @@ function insertAgentJobEventRecord(
       jobId: input.jobId,
       sequence,
       type: input.type,
-      payloadJson: toJson(input.payload),
+      payloadJson: toJson(bridged.persistedPayload),
       createdAt: now,
     })
     .run()
