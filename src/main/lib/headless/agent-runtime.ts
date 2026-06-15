@@ -37,6 +37,9 @@ export async function runAgentTask(
     adapterSource: diagnostic.adapterSource,
     executionProfile: diagnostic.executionProfile,
     fallbackReason: diagnostic.fallbackReason ?? null,
+    ...(diagnostic.policyGrantScopeBinding
+      ? { policyGrantScopeBinding: diagnostic.policyGrantScopeBinding }
+      : {}),
   })
   return adapter.run(request, observer)
 }

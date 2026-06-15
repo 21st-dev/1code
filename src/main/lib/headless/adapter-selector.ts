@@ -35,13 +35,21 @@ export type AgentRuntimeAdapter = {
   executionProfile: AgentRuntimeExecutionProfile
   label: string
   requiresInteraction: false
-  policyGrantEnforcement: "none" | "sandbox-level" | "pre-execution"
+  policyGrantEnforcement:
+    | "none"
+    | "sandbox-level"
+    | "admission-audit"
+    | "pre-execution"
   manifest: AgentRuntimeCapabilityManifest
   run(
     request: AgentRuntimeRunRequest,
     observer: AgentRuntimeObserver,
   ): Promise<AgentRuntimeRunResult>
 }
+
+export type AgentRuntimePolicyGrantScopeBinding =
+  | "admission-audit-only"
+  | "declared-scopes-bound"
 
 export type AgentRuntimeSelectionDiagnostic = {
   type: "adapter-selected" | "adapter-refused" | "unsupported-capability"
@@ -56,6 +64,7 @@ export type AgentRuntimeSelectionDiagnostic = {
   reason?: string
   message: string
   capability?: AgentRuntimeCapabilityDiagnostic
+  policyGrantScopeBinding?: AgentRuntimePolicyGrantScopeBinding | null
 }
 
 export type AgentRuntimeAdapterSelection =
@@ -99,7 +108,7 @@ const codexAppServerAdapter: AgentRuntimeAdapter = {
   executionProfile: "policy-grant",
   label: "Codex app-server",
   requiresInteraction: false,
-  policyGrantEnforcement: "pre-execution",
+  policyGrantEnforcement: "admission-audit",
   manifest: getAgentRuntimeCapabilityManifest("codex"),
   run: runCodexAppServerHeadlessTask,
 }
@@ -124,13 +133,21 @@ function requestedCapabilities(
   ]
 }
 
-function requiresPerScopePolicyEnforcement(
+function requiresPolicyGrantGate(request: AgentRuntimeRunRequest): boolean {
+  return request.permissionPolicy.kind === "policy-grant"
+}
+
+function supportsPolicyGrantGate(adapter: AgentRuntimeAdapter): boolean {
+  return (
+    adapter.policyGrantEnforcement === "admission-audit" ||
+    adapter.policyGrantEnforcement === "pre-execution"
+  )
+}
+
+function requiresPreExecutionPolicyEnforcement(
   request: AgentRuntimeRunRequest,
 ): boolean {
-  return (
-    request.permissionPolicy.kind === "policy-grant" ||
-    requestedCapabilities(request).includes("hardToolGuard")
-  )
+  return requestedCapabilities(request).includes("hardToolGuard")
 }
 
 function unsupportedCapabilityResult(
@@ -213,16 +230,29 @@ function failClosedPermissionPolicyResult(input: {
   })
 }
 
-function unsupportedPolicyGrantEnforcementResult(input: {
+function unsupportedPolicyGrantGateResult(input: {
   request: AgentRuntimeRunRequest
   adapter: AgentRuntimeAdapter
 }): AgentRuntimeAdapterSelection {
   return refusedSelectionResult({
     request: input.request,
     adapter: input.adapter,
-    reason: "policy_grant_requires_pre_execution_hook",
-    errorCode: "policy_grant_requires_pre_execution_hook",
-    message: `${input.adapter.label} exposes only ${input.adapter.policyGrantEnforcement} enforcement for this headless adapter; per-scope policy grants and guarded scope contracts require a pre-execution hook or must fail closed before provider work.`,
+    reason: "policy_grant_adapter_unavailable",
+    errorCode: "policy_grant_adapter_unavailable",
+    message: `${input.adapter.label} exposes only ${input.adapter.policyGrantEnforcement} enforcement for this headless adapter; policy-grant execution requires an app-server admission gate or true pre-execution scope binding before provider work.`,
+  })
+}
+
+function unsupportedPreExecutionPolicyEnforcementResult(input: {
+  request: AgentRuntimeRunRequest
+  adapter: AgentRuntimeAdapter
+}): AgentRuntimeAdapterSelection {
+  return refusedSelectionResult({
+    request: input.request,
+    adapter: input.adapter,
+    reason: "guarded_scope_requires_pre_execution_hook",
+    errorCode: "guarded_scope_requires_pre_execution_hook",
+    message: `${input.adapter.label} exposes only ${input.adapter.policyGrantEnforcement} enforcement for this headless adapter; guarded scope contracts require a pre-execution hook or must fail closed before provider work.`,
   })
 }
 
@@ -269,11 +299,15 @@ export function selectAgentRuntimeAdapter(
     return failClosedPermissionPolicyResult({ request, adapter })
   }
 
+  if (requiresPolicyGrantGate(request) && !supportsPolicyGrantGate(adapter)) {
+    return unsupportedPolicyGrantGateResult({ request, adapter })
+  }
+
   if (
-    requiresPerScopePolicyEnforcement(request) &&
+    requiresPreExecutionPolicyEnforcement(request) &&
     adapter.policyGrantEnforcement !== "pre-execution"
   ) {
-    return unsupportedPolicyGrantEnforcementResult({ request, adapter })
+    return unsupportedPreExecutionPolicyEnforcementResult({ request, adapter })
   }
 
   if (executionProfile === "interactive") {
@@ -323,7 +357,17 @@ export function selectAgentRuntimeAdapter(
         adapter,
         preferredAdapterSource: options.preferredAdapterSource,
       }),
-      message: `Selected ${adapter.label} for ${request.source} ${executionProfile} execution.`,
+      policyGrantScopeBinding:
+        request.permissionPolicy.kind === "policy-grant"
+          ? adapter.policyGrantEnforcement === "pre-execution"
+            ? "declared-scopes-bound"
+            : "admission-audit-only"
+          : null,
+      message:
+        request.permissionPolicy.kind === "policy-grant" &&
+        adapter.policyGrantEnforcement === "admission-audit"
+          ? `Selected ${adapter.label} for ${request.source} ${executionProfile} execution; declared policy grant scopes are admission/audit metadata and are not bound to app-server permission enforcement in this change.`
+          : `Selected ${adapter.label} for ${request.source} ${executionProfile} execution.`,
     },
   }
 }

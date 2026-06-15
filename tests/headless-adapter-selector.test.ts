@@ -149,7 +149,7 @@ describe("headless adapter selector", () => {
         sourceId: "codex-app-server",
         executionProfile: "policy-grant",
         requiresInteraction: false,
-        policyGrantEnforcement: "pre-execution",
+        policyGrantEnforcement: "admission-audit",
       },
       diagnostic: {
         status: "selected",
@@ -158,8 +158,14 @@ describe("headless adapter selector", () => {
         adapterSource: "codex-app-server",
         executionProfile: "policy-grant",
         fallbackReason: null,
+        policyGrantScopeBinding: "admission-audit-only",
       },
     })
+    if (selection.ok) {
+      expect(selection.diagnostic.message).toContain(
+        "declared policy grant scopes are admission/audit metadata",
+      )
+    }
   })
 
   test("runs selected Codex app-server adapter for policy-grant jobs", async () => {
@@ -195,6 +201,7 @@ describe("headless adapter selector", () => {
           adapterSource: "codex-app-server",
           executionProfile: "policy-grant",
           fallbackReason: null,
+          policyGrantScopeBinding: "admission-audit-only",
         },
       },
     ])
@@ -370,7 +377,7 @@ describe("headless adapter selector", () => {
     expect(result).toMatchObject({
       status: "failed",
       exitCode: 1,
-      errorCode: "policy_grant_requires_pre_execution_hook",
+      errorCode: "guarded_scope_requires_pre_execution_hook",
     })
     expect(events).toEqual([
       {
@@ -381,10 +388,10 @@ describe("headless adapter selector", () => {
           source: "api",
           adapterSource: "codex-batch",
           executionProfile: "batch",
-          reason: "policy_grant_requires_pre_execution_hook",
+          reason: "guarded_scope_requires_pre_execution_hook",
           message:
-            "Codex headless/batch exposes only sandbox-level enforcement for this headless adapter; per-scope policy grants and guarded scope contracts require a pre-execution hook or must fail closed before provider work.",
-          errorCode: "policy_grant_requires_pre_execution_hook",
+            "Codex headless/batch exposes only sandbox-level enforcement for this headless adapter; guarded scope contracts require a pre-execution hook or must fail closed before provider work.",
+          errorCode: "guarded_scope_requires_pre_execution_hook",
         },
       },
     ])
@@ -408,7 +415,7 @@ describe("headless adapter selector", () => {
     expect(result).toMatchObject({
       status: "failed",
       exitCode: 1,
-      errorCode: "policy_grant_requires_pre_execution_hook",
+      errorCode: "policy_grant_adapter_unavailable",
     })
     expect(events).toEqual([
       {
@@ -419,10 +426,10 @@ describe("headless adapter selector", () => {
           source: "api",
           adapterSource: "claude-code-batch",
           executionProfile: "policy-grant",
-          reason: "policy_grant_requires_pre_execution_hook",
+          reason: "policy_grant_adapter_unavailable",
           message:
-            "Claude Code batch exposes only sandbox-level enforcement for this headless adapter; per-scope policy grants and guarded scope contracts require a pre-execution hook or must fail closed before provider work.",
-          errorCode: "policy_grant_requires_pre_execution_hook",
+            "Claude Code batch exposes only sandbox-level enforcement for this headless adapter; policy-grant execution requires an app-server admission gate or true pre-execution scope binding before provider work.",
+          errorCode: "policy_grant_adapter_unavailable",
         },
       },
     ])
