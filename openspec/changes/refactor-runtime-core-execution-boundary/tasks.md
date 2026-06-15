@@ -14,9 +14,9 @@
 - [x] 3.4 Add selector tests for Codex batch, Claude batch, unsupported capability, and refused interactive-without-user cases.
 
 ## 4. RunEvent Bridge
-- [ ] 4.1 Route headless process events through canonical `RunEvent` creation and redaction before persistence.
-- [ ] 4.2 Preserve Local Job API v1 event envelopes by mapping canonical events to v1 event types.
-- [ ] 4.3 Add tests proving existing `assistant_delta`, command, status, error, and completed events remain readable through `locus api runs events`.
+- [x] 4.1 Route headless process events through canonical `RunEvent` creation and redaction before persistence.
+- [x] 4.2 Preserve Local Job API v1 event envelopes by mapping canonical events to v1 event types.
+- [x] 4.3 Add tests proving existing `assistant_delta`, command, status, error, and completed events remain readable through `locus api runs events`.
 
 ## 5. Permission Policy
 - [ ] 5.1 Extend runtime permission policy with `interactive-user`, `policy-grant`, and `fail-closed` semantics.
