@@ -8,10 +8,10 @@
 - [x] 2.3 Add tests proving desktop request shape and headless request shape keep their required fields.
 
 ## 3. Adapter Selection
-- [ ] 3.1 Replace headless `Record<runtimeId, adapter>` selection with selector-owned adapter choice.
-- [ ] 3.2 Preserve current batch defaults for existing CLI, daemon, schedule, protocol, and Local Job API v1 jobs.
+- [x] 3.1 Replace headless `Record<runtimeId, adapter>` selection with selector-owned adapter choice.
+- [x] 3.2 Preserve current batch defaults for existing CLI, daemon, schedule, protocol, and Local Job API v1 jobs.
 - [ ] 3.3 Emit sanitized adapter-source and fallback diagnostics for selected, refused, and fallback paths.
-- [ ] 3.4 Add selector tests for Codex batch, Claude batch, unsupported capability, and refused interactive-without-user cases.
+- [x] 3.4 Add selector tests for Codex batch, Claude batch, unsupported capability, and refused interactive-without-user cases.
 
 ## 4. RunEvent Bridge
 - [ ] 4.1 Route headless process events through canonical `RunEvent` creation and redaction before persistence.
