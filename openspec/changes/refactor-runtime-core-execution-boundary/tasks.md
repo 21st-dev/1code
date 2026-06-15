@@ -19,10 +19,10 @@
 - [x] 4.3 Add tests proving existing `assistant_delta`, command, status, error, and completed events remain readable through `locus api runs events`.
 
 ## 5. Permission Policy
-- [ ] 5.1 Extend runtime permission policy with `interactive-user`, `policy-grant`, and `fail-closed` semantics.
-- [ ] 5.2 Ensure headless/API jobs fail closed when a selected adapter needs interactive approval, AskUserQuestion, MCP elicitation, or unknown side-effect approval.
-- [ ] 5.3 Add tests for plan mode, agent mode, guarded scope, policy grant, and no-user fail-closed behavior.
-- [ ] 5.4 Add capability-honesty tests proving batch adapters without pre-execution hooks do not claim per-scope policy-grant enforcement.
+- [x] 5.1 Extend runtime permission policy with `interactive-user`, `policy-grant`, and `fail-closed` semantics.
+- [x] 5.2 Ensure headless/API jobs fail closed when a selected adapter needs interactive approval, AskUserQuestion, MCP elicitation, or unknown side-effect approval.
+- [x] 5.3 Add tests for plan mode, agent mode, guarded scope, policy grant, and no-user fail-closed behavior.
+- [x] 5.4 Add capability-honesty tests proving batch adapters without pre-execution hooks do not claim per-scope policy-grant enforcement.
 
 ## 6. Gated Codex App-Server Job Adapter
 - [ ] 6.1 Add a Codex app-server job adapter path only after shared request, selector, event, and permission tests pass.
