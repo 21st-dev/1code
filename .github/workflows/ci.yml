@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -34,6 +36,11 @@ jobs:
         env:
           LOCUS_SKIP_POSTINSTALL: "1"
         run: bun install --frozen-lockfile
+
+      - name: Lint changed files
+        env:
+          BIOME_CHANGED_SINCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: bun run lint
 
       - name: Run tests
         run: bun run test
