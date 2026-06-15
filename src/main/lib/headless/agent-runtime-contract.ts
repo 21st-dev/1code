@@ -41,6 +41,7 @@ export type AgentRuntimeRunContext = AgentRuntimeRunContextBase & {
   mode: AgentJobMode
   source: AgentJobSource
   executionProfile: AgentRuntimeExecutionProfile
+  hasScopeContract?: boolean
   projectId?: string | null
   chatId?: string | null
   subChatId?: string | null
@@ -83,6 +84,7 @@ export type CreateAgentRuntimeRunRequestInput = {
   prompt: string
   signal: AbortSignal
   attempt?: number | null
+  hasScopeContract?: boolean
   projectId?: string | null
   chatId?: string | null
   subChatId?: string | null
@@ -124,6 +126,9 @@ function optionalContext(
     ...(input.artifactManifestPath !== undefined
       ? { artifactManifestPath: input.artifactManifestPath }
       : {}),
+    ...(input.hasScopeContract !== undefined
+      ? { hasScopeContract: input.hasScopeContract }
+      : {}),
   }
 }
 
@@ -153,7 +158,7 @@ export function createAgentRuntimeRunRequest(
     signal: input.signal,
     requestedCapabilities: getAgentRunRequiredCapabilityIds({
       mode: input.mode,
-      hasScopeContract: false,
+      hasScopeContract: input.hasScopeContract ?? false,
     }),
     permissionPolicy: resolveNonDesktopPermissionPolicy({
       source: input.source,

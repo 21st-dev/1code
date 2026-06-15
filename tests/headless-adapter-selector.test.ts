@@ -84,6 +84,7 @@ describe("headless adapter selector", () => {
         sourceId: "codex-batch",
         executionProfile: "batch",
         requiresInteraction: false,
+        policyGrantEnforcement: "sandbox-level",
       },
       diagnostic: {
         status: "selected",
@@ -108,6 +109,7 @@ describe("headless adapter selector", () => {
         sourceId: "claude-code-batch",
         executionProfile: "batch",
         requiresInteraction: false,
+        policyGrantEnforcement: "sandbox-level",
       },
       diagnostic: {
         status: "selected",
@@ -241,6 +243,75 @@ describe("headless adapter selector", () => {
           message:
             "api agent job refused before provider work: interactive approval, AskUserQuestion, MCP elicitation, and unknown side-effect approval require a visible user channel or bounded policy grant.",
           errorCode: "permission_policy_fail_closed",
+        },
+      },
+    ])
+  })
+
+  test("refuses guarded scope on batch adapters without claiming hard guard enforcement", async () => {
+    const { observer: runtimeObserver, events } = observer()
+    const result = await runAgentTask(
+      request({
+        runtime: "codex",
+        hasScopeContract: true,
+      }),
+      runtimeObserver,
+    )
+
+    expect(result).toMatchObject({
+      status: "failed",
+      exitCode: 1,
+      errorCode: "policy_grant_requires_pre_execution_hook",
+    })
+    expect(events).toEqual([
+      {
+        type: "status",
+        payload: {
+          status: "runtime_selection_refused",
+          runtime: "codex",
+          source: "api",
+          adapterSource: "codex-batch",
+          executionProfile: "batch",
+          reason: "policy_grant_requires_pre_execution_hook",
+          message:
+            "Codex headless/batch exposes only sandbox-level enforcement for this headless adapter; per-scope policy grants and guarded scope contracts require a pre-execution hook or must fail closed before provider work.",
+          errorCode: "policy_grant_requires_pre_execution_hook",
+        },
+      },
+    ])
+  })
+
+  test("refuses policy-grant profile on batch adapters without per-scope hook support", async () => {
+    const { observer: runtimeObserver, events } = observer()
+    const result = await runAgentTask(
+      request({
+        runtime: "claude-code",
+        executionProfile: "policy-grant",
+        policyGrant: {
+          scopes: ["workspace:file-write"],
+        },
+      }),
+      runtimeObserver,
+    )
+
+    expect(result).toMatchObject({
+      status: "failed",
+      exitCode: 1,
+      errorCode: "policy_grant_requires_pre_execution_hook",
+    })
+    expect(events).toEqual([
+      {
+        type: "status",
+        payload: {
+          status: "runtime_selection_refused",
+          runtime: "claude-code",
+          source: "api",
+          adapterSource: "claude-code-batch",
+          executionProfile: "policy-grant",
+          reason: "policy_grant_requires_pre_execution_hook",
+          message:
+            "Claude Code batch exposes only sandbox-level enforcement for this headless adapter; per-scope policy grants and guarded scope contracts require a pre-execution hook or must fail closed before provider work.",
+          errorCode: "policy_grant_requires_pre_execution_hook",
         },
       },
     ])

@@ -33,6 +33,7 @@ export type AgentRuntimeAdapter = {
   executionProfile: "batch"
   label: string
   requiresInteraction: false
+  policyGrantEnforcement: "none" | "sandbox-level" | "pre-execution"
   manifest: AgentRuntimeCapabilityManifest
   run(
     request: AgentRuntimeRunRequest,
@@ -74,6 +75,7 @@ const batchAdapters: Record<AgentRuntimeId, AgentRuntimeAdapter> = {
     executionProfile: "batch",
     label: "Claude Code batch",
     requiresInteraction: false,
+    policyGrantEnforcement: "sandbox-level",
     manifest: getAgentRuntimeCapabilityManifest("claude-code"),
     run: runClaudeCodeHeadlessTask,
   },
@@ -83,6 +85,7 @@ const batchAdapters: Record<AgentRuntimeId, AgentRuntimeAdapter> = {
     executionProfile: "batch",
     label: "Codex headless/batch",
     requiresInteraction: false,
+    policyGrantEnforcement: "sandbox-level",
     manifest: getAgentRuntimeCapabilityManifest("codex"),
     run: runCodexHeadlessTask,
   },
@@ -102,10 +105,19 @@ function requestedCapabilities(
       ...request.requestedCapabilities,
       ...getAgentRunRequiredCapabilityIds({
         mode: request.mode,
-        hasScopeContract: false,
+        hasScopeContract: request.context.hasScopeContract ?? false,
       }),
     ]),
   ]
+}
+
+function requiresPerScopePolicyEnforcement(
+  request: AgentRuntimeRunRequest,
+): boolean {
+  return (
+    request.permissionPolicy.kind === "policy-grant" ||
+    requestedCapabilities(request).includes("hardToolGuard")
+  )
 }
 
 function unsupportedCapabilityResult(
@@ -188,6 +200,19 @@ function failClosedPermissionPolicyResult(input: {
   })
 }
 
+function unsupportedPolicyGrantEnforcementResult(input: {
+  request: AgentRuntimeRunRequest
+  adapter: AgentRuntimeAdapter
+}): AgentRuntimeAdapterSelection {
+  return refusedSelectionResult({
+    request: input.request,
+    adapter: input.adapter,
+    reason: "policy_grant_requires_pre_execution_hook",
+    errorCode: "policy_grant_requires_pre_execution_hook",
+    message: `${input.adapter.label} exposes only ${input.adapter.policyGrantEnforcement} enforcement for this headless adapter; per-scope policy grants and guarded scope contracts require a pre-execution hook or must fail closed before provider work.`,
+  })
+}
+
 export function getAgentRuntimeAdapter(
   runtime: AgentRuntimeId,
 ): AgentRuntimeAdapter {
@@ -216,6 +241,13 @@ export function selectAgentRuntimeAdapter(
 
   if (request.permissionPolicy.kind === "fail-closed") {
     return failClosedPermissionPolicyResult({ request, adapter })
+  }
+
+  if (
+    requiresPerScopePolicyEnforcement(request) &&
+    adapter.policyGrantEnforcement !== "pre-execution"
+  ) {
+    return unsupportedPolicyGrantEnforcementResult({ request, adapter })
   }
 
   if (executionProfile === "interactive") {

@@ -130,6 +130,29 @@ describe("runtime run contract", () => {
     expect("trace" in request).toBe(false)
   })
 
+  test("headless guarded scope requests declare hard guard capability without desktop fields", () => {
+    const request = createAgentRuntimeRunRequest({
+      jobId: "job-guarded",
+      runtime: "codex",
+      cwd: "/repo",
+      mode: "agent",
+      source: "api",
+      prompt: "Run inside a guarded scope",
+      signal: new AbortController().signal,
+      hasScopeContract: true,
+    })
+
+    expect(request.context).toMatchObject({
+      source: "api",
+      executionProfile: "batch",
+      hasScopeContract: true,
+    })
+    expect(request.requestedCapabilities).toEqual(["hardToolGuard"])
+    expect("mcp" in request).toBe(false)
+    expect("attachments" in request).toBe(false)
+    expect("trace" in request).toBe(false)
+  })
+
   test("headless observer conforms to the shared persisted observer shape", () => {
     const observer: AgentRuntimeObserver = {
       appendEvent(type, payload) {
