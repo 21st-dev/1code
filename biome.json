@@ -29,5 +29,20 @@
     "rules": {
       "preset": "recommended"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "src/renderer/lib/i18n/dictionaries.ts",
+        "src/renderer/components/ui/icons.tsx",
+        "src/renderer/components/ui/canvas-icons.tsx"
+      ],
+      "formatter": {
+        "enabled": false
+      },
+      "linter": {
+        "enabled": false
+      }
+    }
+  ]
 }

@@ -34,13 +34,34 @@ function isBiomeSupportedPath(path) {
   return BIOME_SUPPORTED_EXTENSIONS.has(extname(path))
 }
 
+function isAllZeroSha(value) {
+  return /^0{40}$/i.test(value)
+}
+
+function currentWorktreeChanges() {
+  return [
+    ...git(["diff", "--name-only", "--diff-filter=ACMR", "HEAD"]),
+    ...git(["ls-files", "--others", "--exclude-standard"]),
+  ]
+}
+
 const since = process.env.BIOME_CHANGED_SINCE?.trim()
-const changedFiles = since
-  ? git(["diff", "--name-only", "--diff-filter=ACMR", `${since}...HEAD`])
-  : [
-      ...git(["diff", "--name-only", "--diff-filter=ACMR", "HEAD"]),
-      ...git(["ls-files", "--others", "--exclude-standard"]),
-    ]
+let changedFiles
+if (!since) {
+  changedFiles = currentWorktreeChanges()
+} else if (isAllZeroSha(since)) {
+  console.log(
+    "BIOME_CHANGED_SINCE is the all-zero SHA; checking current HEAD diff.",
+  )
+  changedFiles = currentWorktreeChanges()
+} else {
+  changedFiles = git([
+    "diff",
+    "--name-only",
+    "--diff-filter=ACMR",
+    `${since}...HEAD`,
+  ])
+}
 
 const files = [...new Set(changedFiles)].filter(isBiomeSupportedPath)
 
