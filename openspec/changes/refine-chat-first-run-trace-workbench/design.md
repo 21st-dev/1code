@@ -118,6 +118,13 @@ kept behind an explicit temporary migration gate with a deletion follow-up.
 5. Decide and document the fate of `unifiedSidebarEnabledAtom=false` before the
    change is marked complete.
 
+Implementation note: this change adds the DetailsSidebar trace, usage, and
+error widgets, reuses the existing Plan/Diff/Terminal expanded renderer
+callbacks, and documents `unifiedSidebarEnabledAtom=false` as a temporary
+rollback gate. It does not complete the remaining `active-chat.tsx` right-sidebar
+migration; that work stays as a follow-up to avoid a broad ActiveChat rewrite in
+this slice.
+
 ## Open Questions
 - Should the Runs/History surface keep the internal component name
   `AgentWorkbench`, or should only visible copy change in this slice?

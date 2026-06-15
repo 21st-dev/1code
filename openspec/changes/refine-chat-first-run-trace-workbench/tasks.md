@@ -40,10 +40,11 @@
   procedure above the semantic timeline, reusing already-redacted job data.
 
 ## 5. Right-sidebar convergence
-- [x] 5.1 Route Plan, Diff, and Terminal product entry points through
-  DetailsSidebar widgets before opening expanded renderers.
-- [x] 5.2 Migrate independent right-sidebar controls one at a time using the
-  existing hidden-button and expanded-widget patterns.
+- [ ] 5.1 Follow-up: route any remaining direct Plan, Diff, and Terminal
+  product entry points through DetailsSidebar widgets before opening expanded
+  renderers.
+- [ ] 5.2 Follow-up: migrate the remaining independent right-sidebar controls
+  one at a time using the existing hidden-button and expanded-widget patterns.
 - [x] 5.3 Decide whether `unifiedSidebarEnabledAtom=false` is removed or kept as
   an explicit temporary migration fallback with a deletion follow-up.
 - [x] 5.4 Do not rewrite `active-chat.tsx` broadly as part of this convergence.

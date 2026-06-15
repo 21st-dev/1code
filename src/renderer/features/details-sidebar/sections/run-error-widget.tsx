@@ -49,7 +49,7 @@ export const RunErrorWidget = memo(function RunErrorWidget({
         <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-destructive" />
         <div className="min-w-0">
           <div className="text-xs font-medium text-foreground">
-            {trace.error.title}
+            {t(trace.error.titleKey)}
           </div>
           <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
             {trace.error.code}
@@ -57,13 +57,13 @@ export const RunErrorWidget = memo(function RunErrorWidget({
         </div>
       </div>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">
-        {trace.error.body}
+        {t(trace.error.bodyKey)}
       </p>
       <div className="mt-2 rounded-md bg-muted/60 px-2 py-1.5 text-[11px] leading-4 text-muted-foreground">
         <div className="font-medium text-foreground/80">
           {t("details.error.nextAction")}
         </div>
-        <div>{trace.error.nextAction}</div>
+        <div>{t(trace.error.nextActionKey)}</div>
       </div>
       {trace.error.details && (
         <details className="mt-2 text-[11px] text-muted-foreground">

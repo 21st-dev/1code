@@ -1123,6 +1123,12 @@ function JobEventRow({ event }: { event: HeadlessJobEvent }) {
   const { t } = useI18n()
   const row = getWorkbenchTraceRow(event)
   const observed = row.observedPermission
+  const summary = row.summaryKey
+    ? t(row.summaryKey, row.summaryValues)
+    : row.summary
+  const nextAction = row.nextActionKey
+    ? t(row.nextActionKey, row.nextActionValues)
+    : row.nextAction
 
   return (
     <div className="grid grid-cols-[3.5rem_11rem_minmax(0,1fr)] gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs">
@@ -1137,15 +1143,13 @@ function JobEventRow({ event }: { event: HeadlessJobEvent }) {
       </div>
       <div className="min-w-0 space-y-1">
         {observed && <ObservedPermissionSummary observed={observed} />}
-        {row.summary && (
+        {summary && (
           <div className="truncate font-medium text-foreground/80">
-            {row.summary}
+            {summary}
           </div>
         )}
-        {row.nextAction && (
-          <div className="text-[11px] text-muted-foreground">
-            {row.nextAction}
-          </div>
+        {nextAction && (
+          <div className="text-[11px] text-muted-foreground">{nextAction}</div>
         )}
         <pre className="min-w-0 whitespace-pre-wrap break-words font-mono text-muted-foreground">
           {formatTracePayload(row.semanticPayload)}

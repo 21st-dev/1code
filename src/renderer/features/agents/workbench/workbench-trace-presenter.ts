@@ -4,6 +4,8 @@ import {
 } from "../../../../shared/agent-runtime-control"
 import type { TranslationKey } from "../../../lib/i18n"
 
+export type WorkbenchTraceTextValues = Record<string, string | number>
+
 export type WorkbenchTraceEvent = {
   id: string
   jobId: string
@@ -56,9 +58,9 @@ export type WorkbenchTraceUsage = {
 
 export type WorkbenchTraceError = {
   code: string
-  title: string
-  body: string
-  nextAction: string
+  titleKey: TranslationKey
+  bodyKey: TranslationKey
+  nextActionKey: TranslationKey
   details?: string
 }
 
@@ -71,7 +73,11 @@ export type WorkbenchTraceRow = {
   severity: WorkbenchTraceSeverity
   status?: string
   summary?: string
+  summaryKey?: TranslationKey
+  summaryValues?: WorkbenchTraceTextValues
   nextAction?: string
+  nextActionKey?: TranslationKey
+  nextActionValues?: WorkbenchTraceTextValues
   semanticPayload: unknown
   rawPayload: unknown
   hasRawPayload: boolean
@@ -105,225 +111,53 @@ export const JOB_EVENT_LABEL_KEYS: Record<string, TranslationKey> = {
   completed: "workbench.event.completed",
 }
 
-const PRODUCT_ERROR_COPY: Record<
-  string,
-  { title: string; body: string; nextAction: string }
-> = {
-  runtime_missing: {
-    title: "Runtime is missing",
-    body: "Locus cannot find the selected runtime on this machine.",
-    nextAction:
-      "Reinstall the app or run the documented runtime setup command.",
-  },
-  runtime_not_executable: {
-    title: "Runtime is not executable",
-    body: "The runtime file exists, but macOS or the filesystem will not execute it.",
-    nextAction: "Fix file permissions or reinstall the runtime.",
-  },
-  runtime_spawn_failed: {
-    title: "Runtime failed to start",
-    body: "Locus tried to start the runtime, but the process failed before it became ready.",
-    nextAction: "Open runtime diagnostics and follow the probe hint.",
-  },
-  runtime_auth_required: {
-    title: "Runtime needs authentication",
-    body: "The selected runtime needs a valid login before this run can start.",
-    nextAction: "Reconnect the runtime in Settings.",
-  },
-  runtime_adapter_unavailable: {
-    title: "Runtime adapter is unavailable",
-    body: "The selected runtime path is not available in this build or environment.",
-    nextAction: "Switch adapter or remove the temporary rollback flag.",
-  },
-  unsupported_runtime: {
-    title: "Runtime is not supported",
-    body: "This Locus build does not support the requested runtime.",
-    nextAction: "Choose codex or claude-code.",
-  },
-  provider_profile_missing: {
-    title: "Provider profile is missing",
-    body: "This run needs a provider profile before provider work can start.",
-    nextAction: "Choose or create a provider profile in Settings.",
-  },
-  provider_profile_wrong_target: {
-    title: "Provider profile cannot run here",
-    body: "The selected provider profile is not enabled for this runtime.",
-    nextAction: "Edit the profile targets or choose a compatible profile.",
-  },
-  provider_secret_unavailable: {
-    title: "Provider credential is unavailable",
-    body: "Locus could not resolve the saved provider credential in the main process.",
-    nextAction: "Re-save the provider credential in Settings.",
-  },
-  provider_auth_rejected: {
-    title: "Provider authentication failed",
-    body: "The provider rejected the saved credential.",
-    nextAction: "Update the credential or reconnect the provider.",
-  },
-  provider_request_failed: {
-    title: "Provider request failed",
-    body: "The runtime reached the provider, but the provider request failed.",
-    nextAction:
-      "Check provider status, base URL, model name, and network access.",
-  },
-  mcp_auth_required: {
-    title: "MCP server needs authentication",
-    body: "One or more MCP servers need authentication before this run can use them.",
-    nextAction: "Authenticate the MCP server in Settings.",
-  },
-  mcp_server_failed: {
-    title: "MCP server failed",
-    body: "A configured MCP server did not become available.",
-    nextAction:
-      "Open MCP settings and inspect the server command or auth state.",
-  },
-  mcp_status_unknown: {
-    title: "MCP status is unknown",
-    body: "The runtime could not confirm MCP readiness.",
-    nextAction: "Retry or inspect runtime diagnostics if tools are missing.",
-  },
-  command_denied: {
-    title: "Command was denied",
-    body: "The command is outside the allowed policy for this run.",
-    nextAction:
-      "Review the command and switch mode or approve scope if appropriate.",
-  },
-  file_change_denied: {
-    title: "File change was denied",
-    body: "The requested file change is outside the approved scope.",
-    nextAction: "Approve a scope expansion or edit the scope contract.",
-  },
-  scope_expansion_required: {
-    title: "Scope expansion required",
-    body: "The agent needs access to paths that are not in the approved editable scope.",
-    nextAction: "Review and approve or reject the scope expansion.",
-  },
-  permission_policy_fail_closed: {
-    title: "Permission policy blocked the run",
-    body: "Locus could not prove that required approvals would be enforced, so it stopped before provider work.",
-    nextAction:
-      "Use a supported runtime path or retry after diagnostics are ready.",
-  },
-  no_interaction_channel: {
-    title: "No user interaction channel",
-    body: "This run needs approval, a question answer, or MCP elicitation, but no visible user channel was declared.",
-    nextAction: "Use the desktop workbench or provide a bounded policy grant.",
-  },
-  missing_policy_grant: {
-    title: "Policy grant is incomplete",
-    body: "The request asked Locus to decide without a visible user, but did not provide bounded scopes.",
-    nextAction: "Add explicit policy grant scopes or use an interactive run.",
-  },
-  controlled_edit_rejected: {
-    title: "Edit was not applied",
-    body: "The proposed controlled edit was rejected.",
-    nextAction: "Continue the run, revise the request, or approve a new edit.",
-  },
-  controlled_edit_failed: {
-    title: "Edit failed",
-    body: "Locus approved the edit path, but applying the edit failed.",
-    nextAction: "Inspect the diff and filesystem state, then retry.",
-  },
-  chat_context_missing: {
-    title: "Chat context is missing",
-    body: "Locus could not find the saved chat, sub-chat, or project for this run.",
-    nextAction: "Refresh the workspace or reopen the project.",
-  },
-  cwd_mismatch: {
-    title: "Workspace path mismatch",
-    body: "The run requested a different path than the verified project or worktree path.",
-    nextAction: "Reopen the chat from the correct workspace.",
-  },
-  invalid_cwd: {
-    title: "Workspace path is invalid",
-    body: "The requested working directory does not exist or cannot be accessed.",
-    nextAction: "Choose an accessible project folder.",
-  },
-  worktree_checkout_timeout: {
-    title: "Worktree checkout timed out",
-    body: "Git did not finish checking out the worktree in time.",
-    nextAction: "Retry, then inspect git status if it repeats.",
-  },
-  worktree_creation_failed: {
-    title: "Worktree creation failed",
-    body: "Locus could not create the temporary worktree for this agent run.",
-    nextAction: "Inspect the repository state and retry.",
-  },
-  worktree_setup_failed: {
-    title: "Worktree setup failed",
-    body: "The worktree was created, but the configured setup command failed.",
-    nextAction: "Open project settings and fix or disable the setup command.",
-  },
-  attachment_invalid: {
-    title: "Attachment is invalid",
-    body: "One attachment could not be resolved safely before provider work.",
-    nextAction: "Remove the attachment or attach it again.",
-  },
-  attachment_unsupported: {
-    title: "Attachment is not supported",
-    body: "The selected runtime or provider cannot use this attachment type.",
-    nextAction:
-      "Remove the attachment or choose a compatible runtime/provider.",
-  },
-  job_canceled: {
-    title: "Job was canceled",
-    body: "The run was stopped before it completed.",
-    nextAction: "Retry from the chat or job history if needed.",
-  },
-  desktop_chat_canceled: {
-    title: "Chat run was canceled",
-    body: "The desktop chat stream was stopped before natural completion.",
-    nextAction: "Retry from the linked chat.",
-  },
-  desktop_chat_failed: {
-    title: "Chat run failed",
-    body: "The desktop runtime stream failed before a successful finish.",
-    nextAction: "Open the run trace and inspect the first error event.",
-  },
-  runtime_process_failed: {
-    title: "Runtime process failed",
-    body: "The runtime process exited with a failure code.",
-    nextAction: "Inspect stdout/stderr in job logs.",
-  },
-  process_error: {
-    title: "Process error",
-    body: "The process failed while running.",
-    nextAction:
-      "Inspect the process error and retry after fixing the environment.",
-  },
-  spawn_failed: {
-    title: "Process could not start",
-    body: "Locus could not spawn the runtime command.",
-    nextAction: "Check path, permissions, and runtime installation.",
-  },
-  heartbeat_failed: {
-    title: "Job heartbeat failed",
-    body: "Locus could not update the running job heartbeat.",
-    nextAction:
-      "Retry, then inspect local database/storage health if it repeats.",
-  },
-  internal_error: {
-    title: "Internal error",
-    body: "Locus hit an unexpected local error.",
-    nextAction: "Copy redacted details and inspect logs.",
-  },
-  local_only_guard_blocked: {
-    title: "Blocked by local-only mode",
-    body: "This action would leave the allowed local boundary.",
-    nextAction:
-      "Disable local-only mode only if you intend to use hosted services.",
-  },
-  unsupported_capability: {
-    title: "Capability is not available",
-    body: "The selected runtime cannot safely provide the required capability.",
-    nextAction: "Choose another runtime/profile or change the run mode.",
-  },
-  unsupported_execution_profile: {
-    title: "Execution profile is unsupported",
-    body: "This adapter cannot run with the requested execution profile.",
-    nextAction: "Use batch, interactive desktop, or a supported policy grant.",
-  },
-}
+export const WORKBENCH_TRACE_PRODUCT_ERROR_CODES = [
+  "runtime_missing",
+  "runtime_not_executable",
+  "runtime_spawn_failed",
+  "runtime_auth_required",
+  "runtime_adapter_unavailable",
+  "unsupported_runtime",
+  "provider_profile_missing",
+  "provider_profile_wrong_target",
+  "provider_secret_unavailable",
+  "provider_auth_rejected",
+  "provider_request_failed",
+  "mcp_auth_required",
+  "mcp_server_failed",
+  "mcp_status_unknown",
+  "command_denied",
+  "file_change_denied",
+  "scope_expansion_required",
+  "permission_policy_fail_closed",
+  "no_interaction_channel",
+  "missing_policy_grant",
+  "controlled_edit_rejected",
+  "controlled_edit_failed",
+  "chat_context_missing",
+  "cwd_mismatch",
+  "invalid_cwd",
+  "worktree_checkout_timeout",
+  "worktree_creation_failed",
+  "worktree_setup_failed",
+  "attachment_invalid",
+  "attachment_unsupported",
+  "job_canceled",
+  "desktop_chat_canceled",
+  "desktop_chat_failed",
+  "runtime_process_failed",
+  "process_error",
+  "spawn_failed",
+  "heartbeat_failed",
+  "internal_error",
+  "local_only_guard_blocked",
+  "unsupported_capability",
+  "unsupported_execution_profile",
+] as const
+
+const PRODUCT_ERROR_CODE_SET = new Set<string>(
+  WORKBENCH_TRACE_PRODUCT_ERROR_CODES,
+)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -543,11 +377,14 @@ function getUsage(payload: unknown): WorkbenchTraceUsage | undefined {
 
 function getUsageSummary(
   usage: WorkbenchTraceUsage | undefined,
-): string | undefined {
+): { key: TranslationKey; values: WorkbenchTraceTextValues } | undefined {
   if (!usage) return undefined
   const total = usage.totalTokens ?? usage.inputTokens ?? usage.outputTokens
   if (total === undefined) return undefined
-  return `${total.toLocaleString()} tokens`
+  return {
+    key: "workbench.trace.tokens",
+    values: { total: total.toLocaleString() },
+  }
 }
 
 function getErrorCode(payload: unknown): string {
@@ -558,9 +395,19 @@ function getErrorCode(payload: unknown): string {
   )
 }
 
+function getProductErrorCode(code: string): string {
+  return PRODUCT_ERROR_CODE_SET.has(code) ? code : "internal_error"
+}
+
+function getProductErrorKey(
+  code: string,
+  field: "title" | "body" | "nextAction",
+): TranslationKey {
+  return `workbench.error.${getProductErrorCode(code)}.${field}` as TranslationKey
+}
+
 export function getWorkbenchTraceError(payload: unknown): WorkbenchTraceError {
   const code = getErrorCode(payload)
-  const copy = PRODUCT_ERROR_COPY[code] ?? PRODUCT_ERROR_COPY.internal_error
   const payloadRecord = isRecord(payload) ? payload : {}
   const message =
     readPayloadString(payloadRecord, ["message", "errorMessage", "details"]) ??
@@ -568,9 +415,9 @@ export function getWorkbenchTraceError(payload: unknown): WorkbenchTraceError {
 
   return {
     code,
-    title: copy.title,
-    body: copy.body,
-    nextAction: copy.nextAction,
+    titleKey: getProductErrorKey(code, "title"),
+    bodyKey: getProductErrorKey(code, "body"),
+    nextActionKey: getProductErrorKey(code, "nextAction"),
     ...(message ? { details: message } : {}),
   }
 }
@@ -587,7 +434,7 @@ function getFinalStatus(payload: unknown): string {
   ) {
     return status
   }
-  return "succeeded"
+  return "interrupted"
 }
 
 function getKindForStatusPayload(payload: unknown): WorkbenchTraceKind {
@@ -618,7 +465,11 @@ function getRowParts(
   | "severity"
   | "status"
   | "summary"
+  | "summaryKey"
+  | "summaryValues"
   | "nextAction"
+  | "nextActionKey"
+  | "nextActionValues"
   | "observedPermission"
   | "usage"
   | "error"
@@ -704,7 +555,7 @@ function getRowParts(
         titleKey: "workbench.event.scopeExpansionRequested",
         severity: "warning",
         status: "pending",
-        nextAction: "Review the requested scope expansion.",
+        nextActionKey: "workbench.trace.scopeExpansion.nextAction",
       }
     case "question_pending":
       return {
@@ -735,16 +586,18 @@ function getRowParts(
               "message",
             ])
           : undefined,
-        nextAction: PRODUCT_ERROR_COPY.mcp_auth_required.nextAction,
+        nextActionKey: getProductErrorKey("mcp_auth_required", "nextAction"),
       }
     case "usage_update": {
       const usage = getUsage(semanticPayload)
+      const usageSummary = getUsageSummary(usage)
       return {
         kind: "usage",
         titleKey: "workbench.event.usageUpdate",
         severity: "info",
         status: usage ? "observed" : "unavailable",
-        summary: getUsageSummary(usage),
+        summaryKey: usageSummary?.key,
+        summaryValues: usageSummary?.values,
         usage,
       }
     }
@@ -812,8 +665,8 @@ function getRowParts(
         titleKey: "workbench.event.error",
         severity: "error",
         status: error.code,
-        summary: error.title,
-        nextAction: error.nextAction,
+        summaryKey: error.titleKey,
+        nextActionKey: error.nextActionKey,
         error,
       }
     }
@@ -824,7 +677,9 @@ function getRowParts(
         titleKey:
           status === "canceled"
             ? "workbench.event.canceled"
-            : "workbench.event.completed",
+            : status === "interrupted"
+              ? "workbench.event.interrupted"
+              : "workbench.event.completed",
         severity:
           status === "failed" || status === "interrupted"
             ? "error"

@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test"
 import {
   formatTracePayload,
   getWorkbenchTraceRow,
+  WORKBENCH_TRACE_PRODUCT_ERROR_CODES,
   type WorkbenchTraceEvent,
 } from "../src/renderer/features/agents/workbench/workbench-trace-presenter"
+import { en, zhCN } from "../src/renderer/lib/i18n/dictionaries"
 
 function event(
   type: string,
@@ -105,7 +107,7 @@ describe("workbench trace presenter", () => {
       severity: "warning",
       status: "needs-auth",
       summary: "github",
-      nextAction: "Authenticate the MCP server in Settings.",
+      nextActionKey: "workbench.error.mcp_auth_required.nextAction",
     })
   })
 
@@ -130,7 +132,8 @@ describe("workbench trace presenter", () => {
     expect(row).toMatchObject({
       kind: "usage",
       status: "observed",
-      summary: "13 tokens",
+      summaryKey: "workbench.trace.tokens",
+      summaryValues: { total: "13" },
       hasRawPayload: true,
     })
     expect(row.usage).toMatchObject({
@@ -155,12 +158,14 @@ describe("workbench trace presenter", () => {
       kind: "error",
       severity: "error",
       status: "runtime_auth_required",
-      summary: "Runtime needs authentication",
-      nextAction: "Reconnect the runtime in Settings.",
+      summaryKey: "workbench.error.runtime_auth_required.title",
+      nextActionKey: "workbench.error.runtime_auth_required.nextAction",
     })
     expect(row.error).toMatchObject({
       code: "runtime_auth_required",
-      title: "Runtime needs authentication",
+      titleKey: "workbench.error.runtime_auth_required.title",
+      bodyKey: "workbench.error.runtime_auth_required.body",
+      nextActionKey: "workbench.error.runtime_auth_required.nextAction",
       details: "Token expired",
     })
   })
@@ -186,6 +191,13 @@ describe("workbench trace presenter", () => {
       severity: "success",
       status: "succeeded",
     })
+
+    expect(getWorkbenchTraceRow(event("completed", {}))).toMatchObject({
+      kind: "final",
+      titleKey: "workbench.event.interrupted",
+      severity: "error",
+      status: "interrupted",
+    })
   })
 
   test("keeps unknown events inspectable with secondary raw payload", () => {
@@ -205,5 +217,15 @@ describe("workbench trace presenter", () => {
       semanticPayload: { message: "redacted detail" },
     })
     expect(formatTracePayload(row.rawPayload)).toContain("runEventSequence")
+  })
+
+  test("keeps product error copy in i18n dictionaries", () => {
+    for (const code of WORKBENCH_TRACE_PRODUCT_ERROR_CODES) {
+      for (const field of ["title", "body", "nextAction"] as const) {
+        const key = `workbench.error.${code}.${field}` as keyof typeof en
+        expect(en[key]).toBeTruthy()
+        expect(zhCN[key]).toBeTruthy()
+      }
+    }
   })
 })

@@ -38,6 +38,9 @@ function getRowIcon(row: WorkbenchTraceRow) {
 function TraceRow({ row }: { row: WorkbenchTraceRow }) {
   const { t } = useI18n()
   const Icon = getRowIcon(row)
+  const summary = row.summaryKey
+    ? t(row.summaryKey, row.summaryValues)
+    : row.summary
 
   return (
     <div className="grid grid-cols-[1rem_minmax(0,1fr)] gap-2 px-2 py-1.5">
@@ -61,12 +64,12 @@ function TraceRow({ row }: { row: WorkbenchTraceRow }) {
             </span>
           )}
         </div>
-        {row.summary && (
+        {summary && (
           <div
             className="mt-0.5 truncate text-[11px] text-muted-foreground"
-            title={row.summary}
+            title={summary}
           >
-            {row.summary}
+            {summary}
           </div>
         )}
       </div>

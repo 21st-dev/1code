@@ -108,15 +108,34 @@ describe("details sidebar run trace data", () => {
     expect(eventError).toMatchObject({
       source: "event",
       code: "provider_auth_rejected",
-      title: "Provider authentication failed",
+      titleKey: "workbench.error.provider_auth_rejected.title",
     })
 
     expect(
-      getLatestTraceError([], job({ errorCode: "job_canceled" })),
+      getLatestTraceError(
+        [],
+        job({
+          errorCode: "job_canceled",
+          errorMessage: "Job was canceled after token=[redacted].",
+        }),
+      ),
     ).toMatchObject({
       source: "job",
       code: "job_canceled",
-      title: "Job was canceled",
+      titleKey: "workbench.error.job_canceled.title",
+      details: "Job was canceled after token=[redacted].",
     })
+  })
+
+  test("suppresses stale event errors after a successful final row", () => {
+    const eventError = getLatestTraceError(
+      [
+        row("error", { errorCode: "provider_request_failed" }, 1),
+        row("completed", { status: "succeeded" }, 2),
+      ],
+      job({ errorCode: "runtime_process_failed" }),
+    )
+
+    expect(eventError).toBeNull()
   })
 })
