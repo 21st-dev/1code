@@ -550,6 +550,123 @@ describe("headless CLI dispatcher", () => {
     expect(db.select().from(projects).all()).toHaveLength(0)
   })
 
+  test("runs Local Job API job after headless project onboarding", async () => {
+    const db = createAgentJobTestDb()
+    const projectRoot = realpathSync(
+      mkdtempSync(join(tmpdir(), "locus-api-lifecycle-project-")),
+    )
+    const packageDir = join(projectRoot, "package")
+    mkdirSync(packageDir)
+    const artifactBaseDir = join(packageDir, ".locus", "runs")
+
+    const registerStdout = writer()
+    const registerCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "register",
+        "--cwd",
+        projectRoot,
+        "--json",
+      ],
+      stdout: registerStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(registerCode).toBe(0)
+    const project = JSON.parse(registerStdout.value()).project
+
+    const createStdout = writer()
+    const createStderr = writer()
+    const createCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "runs",
+        "create",
+        "--request",
+        "-",
+        "--json",
+      ],
+      stdin: Readable.from([
+        JSON.stringify({
+          apiVersion: "locus.local-job.v1",
+          consumer: {
+            id: "connected-canary",
+            runExternalId: "project-onboarding",
+          },
+          project: {
+            cwd: packageDir,
+          },
+          runtime: {
+            id: "codex",
+            requiredCapabilities: ["planMode"],
+          },
+          mode: "plan",
+          prompt: {
+            text: "Run the connected canary.",
+          },
+          artifacts: {
+            baseDir: artifactBaseDir,
+            writePolicy: "metadata-only",
+          },
+        }),
+      ]),
+      stdout: createStdout.stream,
+      stderr: createStderr.stream,
+      env: { LOCUS_HEADLESS_FAKE_RUNNER: "1" },
+    })
+
+    expect(createCode).toBe(0)
+    expect(createStderr.value()).toBe("")
+    const created = JSON.parse(createStdout.value())
+    expect(created).toMatchObject({
+      apiVersion: "locus.local-job.v1",
+      job: {
+        source: "api",
+        status: "succeeded",
+        projectId: project.id,
+        apiConsumerId: "connected-canary",
+        apiConsumerRunId: "project-onboarding",
+      },
+      result: {
+        status: "succeeded",
+      },
+    })
+    expect(existsSync(join(artifactBaseDir, created.job.id, "result.json"))).toBe(
+      true,
+    )
+
+    const unregisterStdout = writer()
+    const unregisterCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "unregister",
+        "--cwd",
+        projectRoot,
+        "--json",
+      ],
+      stdout: unregisterStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(unregisterCode).toBe(0)
+    expect(JSON.parse(unregisterStdout.value())).toMatchObject({
+      removed: true,
+      project: {
+        id: project.id,
+      },
+      activeJobs: [],
+    })
+  })
+
   test("rejects Local Job API secrets before job creation", async () => {
     const db = createAgentJobTestDb()
     seedCurrentProject(db)

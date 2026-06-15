@@ -22,7 +22,7 @@
 - [x] 4.5 Add command tests for register success, idempotent re-register, status membership/non-membership, unregister cleanup, and unregister-refused-with-active-jobs.
 
 ## 5. Automation Lifecycle Proof
-- [ ] 5.1 Add a test that registers a temporary directory, creates and runs a Local Job API job in it, and unregisters it, proving the headless connected canary path works end to end.
+- [x] 5.1 Add a test that registers a temporary directory, creates and runs a Local Job API job in it, and unregisters it, proving the headless connected canary path works end to end.
 
 ## 6. Verification
 - [ ] 6.1 Run targeted tests for project registration, headless CLI commands, and Local Job API create errors.
