@@ -22,6 +22,7 @@ import type {
   AgentTaskRunner,
 } from "./agent-runtime-contract"
 import { createAgentRuntimeRunRequest } from "./agent-runtime-contract"
+import { getLocalJobApiStoredRequest } from "./local-job-api"
 
 export const HEADLESS_EXIT_CODES = {
   success: 0,
@@ -164,6 +165,22 @@ function waitForAbort(signal: AbortSignal): Promise<AgentRuntimeRunResult> {
   })
 }
 
+function localJobApiRuntimeOptions(job: AgentJob): Pick<
+  Parameters<typeof createAgentRuntimeRunRequest>[0],
+  "executionProfile" | "policyGrant"
+> {
+  if (job.source !== "api") return {}
+  try {
+    const request = getLocalJobApiStoredRequest(job)
+    return {
+      executionProfile: request.runtime.executionProfile,
+      policyGrant: request.runtime.policyGrant,
+    }
+  } catch {
+    return {}
+  }
+}
+
 export async function runPersistedAgentJob(
   options: RunPersistedAgentJobOptions,
 ): Promise<RunPersistedAgentJobResult> {
@@ -194,6 +211,7 @@ export async function runPersistedAgentJob(
     workerId,
     abortController,
   )
+  const runtimeOptions = localJobApiRuntimeOptions(job)
 
   try {
     const result = abortController.signal.aborted
@@ -209,6 +227,7 @@ export async function runPersistedAgentJob(
               prompt,
               signal: abortController.signal,
               attempt: job.attempt,
+              ...runtimeOptions,
               projectId: job.projectId,
               chatId: job.chatId,
               subChatId: job.subChatId,

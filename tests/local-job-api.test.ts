@@ -59,6 +59,63 @@ describe("Local Job API v1 shared contract", () => {
     })
   })
 
+  test("normalizes an explicit policy-grant execution profile", () => {
+    const request = validateLocalJobApiCreateRequest({
+      apiVersion: LOCAL_JOB_API_VERSION,
+      consumer: {
+        id: "docs-workbench",
+      },
+      project: {
+        cwd: process.cwd(),
+      },
+      runtime: {
+        id: "codex",
+        executionProfile: "policy-grant",
+        policyGrant: {
+          scopes: ["workspace:file-write", "shell:project-only"],
+        },
+      },
+      mode: "agent",
+      prompt: {
+        text: "Run through the gated app-server profile.",
+      },
+    })
+
+    expect(request).toMatchObject({
+      ok: true,
+      request: {
+        runtime: {
+          id: "codex",
+          executionProfile: "policy-grant",
+          policyGrant: {
+            scopes: ["workspace:file-write", "shell:project-only"],
+          },
+        },
+      },
+    })
+  })
+
+  test("requires bounded policy scopes for policy-grant execution", () => {
+    const request = validateLocalJobApiCreateRequest({
+      apiVersion: LOCAL_JOB_API_VERSION,
+      consumer: { id: "docs-workbench" },
+      project: { cwd: process.cwd() },
+      runtime: {
+        id: "codex",
+        executionProfile: "policy-grant",
+      },
+      mode: "agent",
+      prompt: { text: "Run through the gated app-server profile." },
+    })
+
+    expect(request.ok).toBe(false)
+    if (!request.ok) {
+      expect(request.errors.join("\n")).toContain(
+        "runtime.policyGrant.scopes is required",
+      )
+    }
+  })
+
   test("rejects secret-like request fields and values", () => {
     const request = validateLocalJobApiCreateRequest({
       apiVersion: LOCAL_JOB_API_VERSION,
@@ -90,6 +147,7 @@ describe("Local Job API v1 shared contract", () => {
       runtime: {
         id: secretLike,
         requiredCapabilities: [secretLike],
+        executionProfile: secretLike,
       },
       mode: secretLike,
       prompt: { text: "Review this package." },
@@ -103,6 +161,7 @@ describe("Local Job API v1 shared contract", () => {
       const message = request.errors.join("\n")
       expect(message).toContain("Unsupported runtime.id")
       expect(message).toContain("Unsupported required capability")
+      expect(message).toContain("Unsupported runtime.executionProfile")
       expect(message).toContain("Unsupported mode")
       expect(message).toContain("Unsupported artifacts.writePolicy")
       expect(message).not.toContain(secretLike)

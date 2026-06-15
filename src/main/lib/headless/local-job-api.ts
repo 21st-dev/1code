@@ -308,6 +308,8 @@ export function getLocalJobApiStoredRequest(
     runtime: {
       id: job.runtime,
       requiredCapabilities: storedRuntime.requiredCapabilities,
+      executionProfile: storedRuntime.executionProfile,
+      policyGrant: storedRuntime.policyGrant,
     },
     mode: job.mode,
     prompt: {

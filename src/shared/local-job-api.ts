@@ -22,6 +22,19 @@ export const LOCAL_JOB_API_WRITE_POLICIES = [
 export type LocalJobApiWritePolicy =
   (typeof LOCAL_JOB_API_WRITE_POLICIES)[number]
 
+export const LOCAL_JOB_API_EXECUTION_PROFILES = [
+  "batch",
+  "policy-grant",
+] as const
+
+export type LocalJobApiExecutionProfile =
+  (typeof LOCAL_JOB_API_EXECUTION_PROFILES)[number]
+
+export type LocalJobApiPolicyGrant = {
+  scopes: string[]
+  canDecideAutomatically?: boolean
+}
+
 export const LOCAL_JOB_API_EVENT_TYPES = [
   "job_created",
   "job_started",
@@ -56,6 +69,8 @@ export type LocalJobApiCreateRequest = {
   runtime: {
     id: AgentRuntimeId | "claude"
     requiredCapabilities?: AgentRuntimeCapabilityId[]
+    executionProfile?: LocalJobApiExecutionProfile
+    policyGrant?: LocalJobApiPolicyGrant | null
   }
   mode: AgentJobMode
   prompt: {
@@ -78,6 +93,8 @@ export type NormalizedLocalJobApiCreateRequest = {
   runtime: {
     id: AgentRuntimeId
     requiredCapabilities: AgentRuntimeCapabilityId[]
+    executionProfile: LocalJobApiExecutionProfile
+    policyGrant: LocalJobApiPolicyGrant | null
   }
   mode: AgentJobMode
   prompt: {
@@ -143,6 +160,7 @@ export type LocalJobApiValidationResult =
 
 const MAX_CONSUMER_ID_LENGTH = 80
 const MAX_EXTERNAL_ID_LENGTH = 160
+const MAX_POLICY_GRANT_SCOPE_LENGTH = 120
 const MAX_PROMPT_LENGTH = 256 * 1024
 const MAX_REQUEST_JSON_LENGTH = 1024 * 1024
 
@@ -240,6 +258,73 @@ function normalizeRequiredCapabilities(
   return capabilities
 }
 
+function normalizeExecutionProfile(
+  value: unknown,
+  errors: string[],
+): LocalJobApiExecutionProfile {
+  if (value === undefined || value === null) return "batch"
+  if (
+    typeof value !== "string" ||
+    !(LOCAL_JOB_API_EXECUTION_PROFILES as readonly string[]).includes(value)
+  ) {
+    errors.push("Unsupported runtime.executionProfile")
+    return "batch"
+  }
+  return value as LocalJobApiExecutionProfile
+}
+
+function normalizePolicyGrant(
+  value: unknown,
+  executionProfile: LocalJobApiExecutionProfile,
+  errors: string[],
+): LocalJobApiPolicyGrant | null {
+  if (value === undefined || value === null) {
+    if (executionProfile === "policy-grant") {
+      errors.push("runtime.policyGrant.scopes is required for policy-grant execution")
+    }
+    return null
+  }
+  if (!isRecord(value)) {
+    errors.push("runtime.policyGrant must be an object")
+    return null
+  }
+  const scopesInput = value.scopes
+  if (!Array.isArray(scopesInput)) {
+    errors.push("runtime.policyGrant.scopes must be an array")
+    return null
+  }
+  const scopes: string[] = []
+  for (const item of scopesInput) {
+    if (
+      typeof item !== "string" ||
+      !isBoundedId(item.trim(), MAX_POLICY_GRANT_SCOPE_LENGTH)
+    ) {
+      errors.push(
+        `runtime.policyGrant.scopes entries must be 1-${MAX_POLICY_GRANT_SCOPE_LENGTH} chars: letters, numbers, '.', '_', ':', '-'`,
+      )
+      continue
+    }
+    const scope = item.trim()
+    if (!scopes.includes(scope)) scopes.push(scope)
+  }
+  if (executionProfile === "policy-grant" && scopes.length === 0) {
+    errors.push("runtime.policyGrant.scopes must contain at least one scope for policy-grant execution")
+  }
+  const canDecideAutomatically = value.canDecideAutomatically
+  if (
+    canDecideAutomatically !== undefined &&
+    typeof canDecideAutomatically !== "boolean"
+  ) {
+    errors.push("runtime.policyGrant.canDecideAutomatically must be a boolean")
+  }
+  return {
+    scopes,
+    ...(typeof canDecideAutomatically === "boolean"
+      ? { canDecideAutomatically }
+      : {}),
+  }
+}
+
 export function validateLocalJobApiCreateRequest(
   value: unknown,
 ): LocalJobApiValidationResult {
@@ -291,6 +376,15 @@ export function validateLocalJobApiCreateRequest(
   }
   const requiredCapabilities = normalizeRequiredCapabilities(
     runtimeInput?.requiredCapabilities,
+    errors,
+  )
+  const executionProfile = normalizeExecutionProfile(
+    runtimeInput?.executionProfile,
+    errors,
+  )
+  const policyGrant = normalizePolicyGrant(
+    runtimeInput?.policyGrant,
+    executionProfile,
     errors,
   )
 
@@ -357,6 +451,8 @@ export function validateLocalJobApiCreateRequest(
       runtime: {
         id: runtimeId,
         requiredCapabilities,
+        executionProfile,
+        policyGrant,
       },
       mode: mode as AgentJobMode,
       prompt: {
