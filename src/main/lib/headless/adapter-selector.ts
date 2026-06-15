@@ -22,6 +22,11 @@ export type AgentRuntimeAdapterSourceId =
   | "claude-code-batch"
   | "codex-batch"
 
+export type AgentRuntimeAdapterPreferenceSourceId =
+  | AgentRuntimeAdapterSourceId
+  | "claude-code-interactive"
+  | "codex-interactive"
+
 export type AgentRuntimeAdapter = {
   id: AgentRuntimeId
   sourceId: AgentRuntimeAdapterSourceId
@@ -42,6 +47,7 @@ export type AgentRuntimeSelectionDiagnostic = {
   source: AgentRuntimeRunRequest["source"]
   executionProfile: AgentRuntimeExecutionProfile
   adapterSource?: AgentRuntimeAdapterSourceId | null
+  preferredAdapterSource?: AgentRuntimeAdapterPreferenceSourceId | null
   adapterLabel?: string | null
   fallbackReason?: string | null
   reason?: string
@@ -117,6 +123,7 @@ function unsupportedCapabilityResult(
       source: request.source,
       executionProfile,
       adapterSource: adapter.sourceId,
+      preferredAdapterSource: null,
       adapterLabel: adapter.label,
       reason: "unsupported_capability",
       message: capability.message,
@@ -148,6 +155,7 @@ function refusedSelectionResult(input: {
       source: input.request.source,
       executionProfile,
       adapterSource: input.adapter?.sourceId ?? null,
+      preferredAdapterSource: null,
       adapterLabel: input.adapter?.label ?? null,
       reason: input.reason,
       message: input.message,
@@ -167,8 +175,22 @@ export function getAgentRuntimeAdapter(
   return batchAdapters[runtime]
 }
 
+export type SelectAgentRuntimeAdapterOptions = {
+  preferredAdapterSource?: AgentRuntimeAdapterPreferenceSourceId | null
+}
+
+function fallbackReasonFor(input: {
+  adapter: AgentRuntimeAdapter
+  preferredAdapterSource?: AgentRuntimeAdapterPreferenceSourceId | null
+}): string | null {
+  if (!input.preferredAdapterSource) return null
+  if (input.preferredAdapterSource === input.adapter.sourceId) return null
+  return "preferred_adapter_unavailable"
+}
+
 export function selectAgentRuntimeAdapter(
   request: AgentRuntimeRunRequest,
+  options: SelectAgentRuntimeAdapterOptions = {},
 ): AgentRuntimeAdapterSelection {
   const executionProfile = requestedExecutionProfile(request)
   const adapter = getAgentRuntimeAdapter(request.runtime)
@@ -214,8 +236,12 @@ export function selectAgentRuntimeAdapter(
       source: request.source,
       executionProfile,
       adapterSource: adapter.sourceId,
+      preferredAdapterSource: options.preferredAdapterSource ?? null,
       adapterLabel: adapter.label,
-      fallbackReason: null,
+      fallbackReason: fallbackReasonFor({
+        adapter,
+        preferredAdapterSource: options.preferredAdapterSource,
+      }),
       message: `Selected ${adapter.label} for ${request.source} batch execution.`,
     },
   }

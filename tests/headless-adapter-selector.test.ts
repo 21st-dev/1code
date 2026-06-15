@@ -152,6 +152,32 @@ describe("headless adapter selector", () => {
     }
   })
 
+  test("records fallback diagnostics when a preferred adapter source is unavailable", () => {
+    const selection = selectAgentRuntimeAdapter(
+      request({ runtime: "codex", source: "api" }),
+      { preferredAdapterSource: "codex-interactive" },
+    )
+
+    expect(selection).toMatchObject({
+      ok: true,
+      adapter: {
+        id: "codex",
+        sourceId: "codex-batch",
+      },
+      diagnostic: {
+        status: "selected",
+        runtime: "codex",
+        source: "api",
+        adapterSource: "codex-batch",
+        preferredAdapterSource: "codex-interactive",
+        fallbackReason: "preferred_adapter_unavailable",
+      },
+    })
+    if (selection.ok) {
+      expect(selection.diagnostic.message).not.toMatch(/token|authorization/i)
+    }
+  })
+
   test("refuses interactive headless execution without a visible user channel", async () => {
     const { observer: runtimeObserver, events } = observer()
     const result = await runAgentTask(
