@@ -405,6 +405,137 @@ function HeadlessJobApiMetadata({
   )
 }
 
+function HeadlessJobRecordHeader({ job }: { job: HeadlessJob }) {
+  const { t } = useI18n()
+  const createdAt = formatUpdatedAt(job.createdAt)
+  const startedAt = formatUpdatedAt(job.startedAt)
+  const finishedAt = formatUpdatedAt(job.finishedAt)
+  const heartbeatAt = formatUpdatedAt(job.heartbeatAt)
+  const details = [
+    {
+      key: "job-id",
+      label: t("workbench.record.jobId"),
+      value: job.id,
+      monospace: true,
+    },
+    {
+      key: "source",
+      label: t("workbench.record.source"),
+      value: t(getHeadlessJobSourceLabelKey(job)),
+    },
+    {
+      key: "runtime",
+      label: t("workbench.record.runtime"),
+      value: formatHeadlessRuntime(job.runtime),
+    },
+    {
+      key: "mode",
+      label: t("workbench.record.mode"),
+      value: job.mode.toUpperCase(),
+    },
+    {
+      key: "status",
+      label: t("workbench.record.status"),
+      value: t(`workbench.jobStatus.${job.status}` as TranslationKey),
+    },
+    createdAt
+      ? {
+          key: "created",
+          label: t("workbench.record.created"),
+          value: createdAt,
+        }
+      : null,
+    startedAt
+      ? {
+          key: "started",
+          label: t("workbench.record.started"),
+          value: startedAt,
+        }
+      : null,
+    {
+      key: "finished",
+      label: t("workbench.record.finished"),
+      value: finishedAt || t("workbench.record.notFinished"),
+    },
+    heartbeatAt
+      ? {
+          key: "heartbeat",
+          label: t("workbench.record.heartbeat"),
+          value: heartbeatAt,
+        }
+      : null,
+    job.exitCode !== null
+      ? {
+          key: "exit-code",
+          label: t("workbench.record.exitCode"),
+          value: String(job.exitCode),
+        }
+      : null,
+    job.workerPid !== null
+      ? {
+          key: "worker",
+          label: t("workbench.record.worker"),
+          value: String(job.workerPid),
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    key: string
+    label: string
+    value: string
+    monospace?: boolean
+  }>
+
+  return (
+    <div className="mb-4 rounded-lg border border-border bg-muted/30 p-3">
+      <dl className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+        {details.map((item) => (
+          <div key={item.key} className="min-w-0">
+            <dt className="text-[11px] font-medium uppercase text-muted-foreground">
+              {item.label}
+            </dt>
+            <dd
+              className={cn(
+                "mt-0.5 truncate text-xs text-foreground",
+                item.monospace && "font-mono",
+              )}
+              title={item.value}
+            >
+              {item.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="mt-3 min-w-0 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">
+          {t("workbench.record.cwd")}
+        </span>
+        <span className="ml-2 break-all font-mono">{job.cwd}</span>
+      </div>
+
+      {(job.errorCode || job.errorMessage) && (
+        <div className="mt-3 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs">
+          <div className="font-medium text-destructive">
+            {t("workbench.record.error")}
+          </div>
+          {job.errorCode && (
+            <div className="mt-1 font-mono text-destructive/90">
+              {job.errorCode}
+            </div>
+          )}
+          {job.errorMessage && (
+            <div className="mt-1 whitespace-pre-wrap break-words text-destructive/90">
+              {job.errorMessage}
+            </div>
+          )}
+        </div>
+      )}
+
+      <HeadlessJobApiMetadata job={job} compact />
+    </div>
+  )
+}
+
 function formatHeadlessRuntime(runtime: string): string {
   if (runtime === "claude-code") return "Claude Code"
   if (runtime === "codex") return "Codex"
@@ -959,13 +1090,13 @@ function HeadlessJobLogsDialog({
           <DialogTitle className="text-base">
             {t("workbench.jobLogs")}
           </DialogTitle>
-          <DialogDescription className="truncate">
-            {job?.id || t("workbench.headlessJobUntitled")}
+          <DialogDescription>
+            {t("workbench.jobTraceSubtitle")}
           </DialogDescription>
-          {job && <HeadlessJobApiMetadata job={job} compact />}
         </DialogHeader>
 
         <div className="max-h-[68vh] overflow-y-auto px-5 py-4">
+          {job && <HeadlessJobRecordHeader job={job} />}
           {isLoading ? (
             <div className="flex items-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1458,6 +1589,15 @@ export function AgentWorkbench() {
       placeholderData: (previous) => previous,
     },
   )
+  const jobRecordQuery = trpc.agentJobs.show.useQuery(
+    { jobId: selectedJobId ?? "" },
+    {
+      enabled: !!selectedJobId,
+      refetchInterval:
+        selectedJob && isActiveHeadlessJob(selectedJob) ? 3000 : false,
+      placeholderData: (previous) => previous,
+    },
+  )
 
   const tasks = (tasksQuery.data?.tasks ?? []) as WorkbenchTask[]
   const schedules = (schedulesQuery.data?.schedules ?? []) as AgentSchedule[]
@@ -1494,10 +1634,20 @@ export function AgentWorkbench() {
     () => getHeadlessJobCounts(headlessJobs),
     [headlessJobs],
   )
-  const headlessJobEvents = (jobLogsQuery.data?.events ??
+  const selectedJobLogs =
+    (jobLogsQuery.data?.job as HeadlessJob | undefined)?.id === selectedJobId
+      ? jobLogsQuery.data
+      : null
+  const selectedJobRecord =
+    (jobRecordQuery.data?.job as HeadlessJob | undefined)?.id === selectedJobId
+      ? (jobRecordQuery.data?.job as HeadlessJob)
+      : null
+  const headlessJobEvents = (selectedJobLogs?.events ??
     []) as HeadlessJobEvent[]
   const loggedJob =
-    (jobLogsQuery.data?.job as HeadlessJob | undefined) ?? selectedJob
+    selectedJobRecord ??
+    (selectedJobLogs?.job as HeadlessJob | undefined) ??
+    selectedJob
   const counts = mergeWorkbenchCounts(
     tasksQuery.data?.counts,
     headlessJobCounts,
@@ -1995,7 +2145,7 @@ export function AgentWorkbench() {
       <HeadlessJobLogsDialog
         job={loggedJob}
         events={headlessJobEvents}
-        isLoading={jobLogsQuery.isLoading}
+        isLoading={jobLogsQuery.isLoading || jobRecordQuery.isLoading}
         isOpen={!!selectedJobId}
         onOpenChange={(open) => {
           if (!open) setSelectedJobId(null)
