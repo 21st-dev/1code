@@ -1,5 +1,11 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, test } from "bun:test"
+import Ajv2020 from "ajv/dist/2020"
+import addFormats from "ajv-formats"
+import type { AgentJob } from "../src/main/lib/db/schema"
+import {
+  toLocalJobApiResultEnvelope,
+} from "../src/main/lib/headless/local-job-api"
 import {
   AGENT_JOB_MODES,
   AGENT_JOB_SOURCES,
@@ -11,6 +17,7 @@ import {
 } from "../src/shared/agent-runtime-capabilities"
 import {
   LOCAL_JOB_API_EVENT_TYPES,
+  type LocalJobApiArtifact,
   LOCAL_JOB_API_VERSION,
   LOCAL_JOB_API_WRITE_POLICIES,
 } from "../src/shared/local-job-api"
@@ -36,6 +43,55 @@ function schemaEnum(schema: SchemaObject): string[] {
   const value = schema.enum
   expect(Array.isArray(value)).toBe(true)
   return value as string[]
+}
+
+function schemaValidator(schema: SchemaObject, ref: string) {
+  const ajv = new Ajv2020({ allErrors: true })
+  addFormats(ajv)
+  ajv.addSchema(schema, "local-job-api-v1")
+  const validate = ajv.getSchema(`local-job-api-v1${ref}`)
+  expect(validate, `Missing schema validator for ${ref}`).toBeDefined()
+  return validate!
+}
+
+function exampleAgentJob(overrides: Partial<AgentJob> = {}): AgentJob {
+  return {
+    id: "job_schema_result",
+    retryOfJobId: null,
+    attempt: 1,
+    source: "api",
+    runtime: "codex",
+    status: "failed",
+    mode: "agent",
+    cwd: "/tmp/locus-schema-project",
+    projectId: "project_schema",
+    chatId: null,
+    subChatId: null,
+    promptPreview: "Validate schema output",
+    inputJson: "{}",
+    apiConsumerId: "schema-test",
+    apiConsumerRunId: "schema-run-001",
+    artifactBaseDir: "/tmp/locus-schema-project/.locus/runs",
+    artifactManifestPath:
+      "/tmp/locus-schema-project/.locus/runs/job_schema_result/artifacts.json",
+    createdAt: new Date("2026-06-15T00:00:00.000Z"),
+    startedAt: new Date("2026-06-15T00:00:01.000Z"),
+    finishedAt: new Date("2026-06-15T00:00:02.000Z"),
+    exitCode: 1,
+    errorCode: "runtime_process_failed",
+    errorMessage: "Codex exited with code 1.",
+    resultJson: JSON.stringify({
+      summary: "schema validation sample",
+    }),
+    createdByVersion: "test",
+    workerId: "worker-schema",
+    workerPid: 12345,
+    workerStartedAt: new Date("2026-06-15T00:00:01.000Z"),
+    heartbeatAt: new Date("2026-06-15T00:00:01.500Z"),
+    cancelRequestedAt: null,
+    cancelRequestedBy: null,
+    ...overrides,
+  }
 }
 
 describe("Local Job API v1 JSON Schema", () => {
@@ -136,5 +192,24 @@ describe("Local Job API v1 JSON Schema", () => {
     expect(createProperties.result).toEqual({
       $ref: "#/$defs/resultEnvelope",
     })
+  })
+
+  test("validates a real result envelope built by the Local Job API serializer", () => {
+    const schema = loadSchema()
+    const validate = schemaValidator(schema, "#/$defs/resultEnvelope")
+    const artifacts: LocalJobApiArtifact[] = [
+      {
+        role: "result-json",
+        path: "/tmp/locus-schema-project/.locus/runs/job_schema_result/result.json",
+        sha256: "abcdef0123456789",
+        contentType: "application/json",
+        sizeBytes: 42,
+      },
+    ]
+    const envelope = toLocalJobApiResultEnvelope(exampleAgentJob(), artifacts)
+
+    expect(validate(envelope), JSON.stringify(validate.errors, null, 2)).toBe(
+      true,
+    )
   })
 })

@@ -139,6 +139,8 @@
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
     "@welldone-software/why-did-you-render": "^10.0.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.8",
     "electron": "~39.4.0",
