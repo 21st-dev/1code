@@ -12,11 +12,11 @@ function buildCodexArgs(request: AgentRuntimeRunRequest): string[] {
   return [
     "exec",
     "--cd",
-    request.cwd,
+    request.context.cwd,
     "--color",
     "never",
     "--sandbox",
-    request.mode === "plan" ? "read-only" : "workspace-write",
+    request.context.mode === "plan" ? "read-only" : "workspace-write",
     "--skip-git-repo-check",
     request.prompt,
   ]
@@ -29,7 +29,7 @@ function buildCodexEnv(
 ): NodeJS.ProcessEnv {
   return {
     ...buildCodexProviderEnv({ processEnv, shellEnv }),
-    LOCUS_HEADLESS_JOB_ID: request.jobId,
+    LOCUS_HEADLESS_JOB_ID: request.identity.jobId,
   }
 }
 

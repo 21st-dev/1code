@@ -9,6 +9,7 @@ import {
 } from "../../../shared/agent-runtime-capabilities"
 import type {
   AgentRuntimeExecutionProfile,
+  AgentRuntimeRunContextBase,
 } from "../agent-runtime/run-contract"
 import type {
   AgentRuntimeObserver,
@@ -55,7 +56,7 @@ export type AgentRuntimeSelectionDiagnostic = {
   type: "adapter-selected" | "adapter-refused" | "unsupported-capability"
   status: "selected" | "refused"
   runtime: AgentRuntimeId
-  source: AgentRuntimeRunRequest["source"]
+  source: AgentRuntimeRunContextBase["source"]
   executionProfile: AgentRuntimeExecutionProfile
   adapterSource?: AgentRuntimeAdapterSourceId | null
   preferredAdapterSource?: AgentRuntimeAdapterPreferenceSourceId | null
@@ -126,7 +127,7 @@ function requestedCapabilities(
     ...new Set([
       ...request.requestedCapabilities,
       ...getAgentRunRequiredCapabilityIds({
-        mode: request.mode,
+        mode: request.context.mode,
         hasScopeContract: request.context.hasScopeContract ?? false,
       }),
     ]),
@@ -161,8 +162,8 @@ function unsupportedCapabilityResult(
     diagnostic: {
       type: "unsupported-capability",
       status: "refused",
-      runtime: request.runtime,
-      source: request.source,
+      runtime: request.context.runtimeId,
+      source: request.context.source,
       executionProfile,
       adapterSource: adapter.sourceId,
       preferredAdapterSource: null,
@@ -193,8 +194,8 @@ function refusedSelectionResult(input: {
     diagnostic: {
       type: "adapter-refused",
       status: "refused",
-      runtime: input.request.runtime,
-      source: input.request.source,
+      runtime: input.request.context.runtimeId,
+      source: input.request.context.source,
       executionProfile,
       adapterSource: input.adapter?.sourceId ?? null,
       preferredAdapterSource: null,
@@ -267,12 +268,12 @@ function selectCandidateAdapter(input: {
   executionProfile: AgentRuntimeExecutionProfile
 }): AgentRuntimeAdapter {
   if (
-    input.request.runtime === "codex" &&
+    input.request.context.runtimeId === "codex" &&
     input.executionProfile === "policy-grant"
   ) {
     return codexAppServerAdapter
   }
-  return getAgentRuntimeAdapter(input.request.runtime)
+  return getAgentRuntimeAdapter(input.request.context.runtimeId)
 }
 
 export type SelectAgentRuntimeAdapterOptions = {
@@ -347,8 +348,8 @@ export function selectAgentRuntimeAdapter(
     diagnostic: {
       type: "adapter-selected",
       status: "selected",
-      runtime: request.runtime,
-      source: request.source,
+      runtime: request.context.runtimeId,
+      source: request.context.source,
       executionProfile,
       adapterSource: adapter.sourceId,
       preferredAdapterSource: options.preferredAdapterSource ?? null,
@@ -366,8 +367,8 @@ export function selectAgentRuntimeAdapter(
       message:
         request.permissionPolicy.kind === "policy-grant" &&
         adapter.policyGrantEnforcement === "admission-audit"
-          ? `Selected ${adapter.label} for ${request.source} ${executionProfile} execution; declared policy grant scopes are admission/audit metadata and are not bound to app-server permission enforcement in this change.`
-          : `Selected ${adapter.label} for ${request.source} ${executionProfile} execution.`,
+          ? `Selected ${adapter.label} for ${request.context.source} ${executionProfile} execution; declared policy grant scopes are admission/audit metadata and are not bound to app-server permission enforcement in this change.`
+          : `Selected ${adapter.label} for ${request.context.source} ${executionProfile} execution.`,
     },
   }
 }

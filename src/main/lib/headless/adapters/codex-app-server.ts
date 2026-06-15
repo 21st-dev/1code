@@ -43,7 +43,7 @@ function createFailClosedResult(input: {
 function assertAppServerPolicyGrantRequest(
   request: AgentRuntimeRunRequest,
 ): AgentRuntimeRunResult | null {
-  if (request.runtime !== "codex") {
+  if (request.context.runtimeId !== "codex") {
     return createFailClosedResult({
       errorCode: "unsupported_runtime",
       errorMessage: "Codex app-server headless adapter can only run Codex jobs.",
@@ -83,7 +83,7 @@ function createDesktopRequestFromHeadless(
 ): DesktopRunRequest {
   const permissionPolicy = resolveDesktopPermissionPolicy({
     runtimeId: "codex",
-    mode: request.mode,
+    mode: request.context.mode,
     hasScopeContract: request.context.hasScopeContract ?? false,
     codexAdapterSource: "codex-app-server",
   })
@@ -95,7 +95,7 @@ function createDesktopRequestFromHeadless(
     },
     context: {
       runtimeId: "codex",
-      mode: request.mode,
+      mode: request.context.mode,
       source: "desktop",
       executionProfile: "interactive",
       projectId:
@@ -103,7 +103,7 @@ function createDesktopRequestFromHeadless(
       chatId: request.context.chatId ?? syntheticId("headless-chat", request),
       subChatId:
         request.context.subChatId ?? syntheticId("headless-subchat", request),
-      cwd: request.cwd,
+      cwd: request.context.cwd,
     },
     prompt: request.prompt,
     requestedCapabilities: request.requestedCapabilities,

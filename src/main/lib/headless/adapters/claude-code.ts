@@ -13,7 +13,7 @@ function buildClaudeArgs(request: AgentRuntimeRunRequest): string[] {
     "text",
     "--no-session-persistence",
     "--permission-mode",
-    request.mode === "plan" ? "plan" : "acceptEdits",
+    request.context.mode === "plan" ? "plan" : "acceptEdits",
     request.prompt,
   ]
 }
@@ -29,7 +29,7 @@ export async function runClaudeCodeHeadlessTask(
     args: buildClaudeArgs(request),
     env: {
       ...buildClaudeEnv({ enableTasks: true }),
-      LOCUS_HEADLESS_JOB_ID: request.jobId,
+      LOCUS_HEADLESS_JOB_ID: request.identity.jobId,
     },
     label: "Claude Code",
   })

@@ -69,7 +69,7 @@ export async function runProcessAgentTask(
     label: input.label,
     executable: basename(input.executable),
     args: sanitizeArgs(input.args),
-    cwd: request.cwd,
+    cwd: request.context.cwd,
   })
   if (request.signal.aborted) {
     observer.appendEvent("command_finished", {
@@ -122,7 +122,7 @@ export async function runProcessAgentTask(
     try {
       const hasStdin = input.stdin !== undefined && input.stdin !== null
       child = spawn(input.executable, input.args, {
-        cwd: request.cwd,
+        cwd: request.context.cwd,
         env: input.env ?? process.env,
         stdio: [hasStdin ? "pipe" : "ignore", "pipe", "pipe"],
         windowsHide: true,

@@ -56,13 +56,7 @@ export type AgentRuntimeRunRequest = AgentRuntimeRunRequestBase<
   AgentRuntimeRunContext,
   AgentRuntimePermissionPolicySummary,
   AgentRuntimeProviderReference | null
-> & {
-  jobId: string
-  runtime: AgentRuntimeId
-  cwd: string
-  mode: AgentJobMode
-  source: AgentJobSource
-}
+>
 
 export type AgentRuntimeRunResult = AgentRuntimeRunResultBase<
   Exclude<AgentJobStatus, "queued" | "running">
@@ -149,11 +143,6 @@ export function createAgentRuntimeRunRequest(
       executionProfile,
       ...optionalContext(input),
     },
-    jobId: input.jobId,
-    runtime: input.runtime,
-    cwd: input.cwd,
-    mode: input.mode,
-    source: input.source,
     prompt: input.prompt,
     signal: input.signal,
     requestedCapabilities: getAgentRunRequiredCapabilityIds({

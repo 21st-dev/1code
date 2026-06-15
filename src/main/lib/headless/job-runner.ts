@@ -65,11 +65,11 @@ export function fakeAgentTaskRunner(
   observer.appendEvent("status", {
     fake: true,
     status: "running",
-    runtime: request.runtime,
+    runtime: request.context.runtimeId,
   })
   observer.appendEvent("assistant_delta", {
     fake: true,
-    text: `Fake ${request.runtime} response for: ${request.prompt.slice(0, 120)}`,
+    text: `Fake ${request.context.runtimeId} response for: ${request.prompt.slice(0, 120)}`,
   })
   observer.heartbeat()
   return Promise.resolve({
@@ -77,7 +77,7 @@ export function fakeAgentTaskRunner(
     exitCode: 0,
     result: {
       fake: true,
-      finalMessage: `Fake ${request.runtime} job completed.`,
+      finalMessage: `Fake ${request.context.runtimeId} job completed.`,
     },
   })
 }
