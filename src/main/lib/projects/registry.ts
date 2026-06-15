@@ -1,5 +1,5 @@
 import { existsSync, realpathSync, statSync } from "node:fs"
-import { basename, isAbsolute, relative, resolve } from "node:path"
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { and, eq, inArray } from "drizzle-orm"
 import type { getDatabase } from "../db"
 import {
@@ -108,6 +108,32 @@ function canonicalExistingDirectory(path: string, label: string): string {
     })
   }
   return realpathSync(resolved)
+}
+
+function canonicalPathWithExistingAncestor(path: string, label: string): string {
+  const resolved = resolve(path)
+  if (existsSync(resolved)) return canonicalExistingDirectory(path, label)
+
+  const missingSegments: string[] = []
+  let current = resolved
+  while (!existsSync(current)) {
+    const parent = dirname(current)
+    if (parent === current) return resolved
+    missingSegments.unshift(basename(current))
+    current = parent
+  }
+
+  if (!statSync(current).isDirectory()) {
+    throw new ProjectRegistrationError(
+      `${label} nearest existing ancestor must be a directory: ${current}`,
+      {
+        code: "project_path_invalid",
+        cwd: resolved,
+      },
+    )
+  }
+
+  return join(realpathSync(current), ...missingSegments)
 }
 
 function isPathInside(parentPath: string, childPath: string): boolean {
@@ -356,7 +382,10 @@ export function unregisterProjectForPath(input: {
   path: string
   force?: boolean
 }): UnregisterProjectResult {
-  const canonicalPath = canonicalExistingDirectory(input.path, "Project path")
+  const canonicalPath = canonicalPathWithExistingAncestor(
+    input.path,
+    "Project path",
+  )
   const project = findProjectByCanonicalPath(input.db, canonicalPath)
   if (!project) {
     return {

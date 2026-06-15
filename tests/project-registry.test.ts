@@ -201,4 +201,39 @@ describe("project registry", () => {
       expect(db.select().from(projects).all()).toHaveLength(0)
     })
   })
+
+  test("unregister matches deleted project paths through the nearest existing symlink ancestor", async () => {
+    await withTempDir(async (root) => {
+      const db = createAgentJobTestDb()
+      const realParent = join(root, "real-parent")
+      const aliasParent = join(root, "alias-parent")
+      mkdirSync(realParent)
+      symlinkSync(realParent, aliasParent, "dir")
+
+      const projectPathViaAlias = join(aliasParent, "deleted-project")
+      mkdirSync(projectPathViaAlias)
+      const registered = await registerProjectForPath({
+        db,
+        path: projectPathViaAlias,
+      })
+      expect(registered.project.path).toBe(
+        realpathSync(projectPathViaAlias),
+      )
+
+      rmSync(projectPathViaAlias, { recursive: true, force: true })
+      const removed = unregisterProjectForPath({
+        db,
+        path: projectPathViaAlias,
+      })
+
+      expect(removed).toMatchObject({
+        removed: true,
+        canonicalPath: registered.project.path,
+        project: {
+          id: registered.project.id,
+        },
+      })
+      expect(db.select().from(projects).all()).toHaveLength(0)
+    })
+  })
 })
