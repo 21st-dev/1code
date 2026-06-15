@@ -6,13 +6,13 @@
   `agent-workbench`, `usage-panel`, or `agent-runtime-capabilities`.
 
 ## 2. Shared trace presenter
-- [ ] 2.1 Extract the event label and semantic mapping currently embedded in
+- [x] 2.1 Extract the event label and semantic mapping currently embedded in
   `AgentWorkbench` into a shared renderer presenter module.
-- [ ] 2.2 Define the `WorkbenchTraceRow` view model over existing sanitized
+- [x] 2.2 Define the `WorkbenchTraceRow` view model over existing sanitized
   `agentJobs.logs` events.
-- [ ] 2.3 Add targeted tests for tool, guard, MCP auth, usage, error,
+- [x] 2.3 Add targeted tests for tool, guard, MCP auth, usage, error,
   cancellation, completion, and unknown/raw fallback rows.
-- [ ] 2.4 Ensure raw payload display stays secondary and uses already-redacted
+- [x] 2.4 Ensure raw payload display stays secondary and uses already-redacted
   event payloads.
 
 ## 3. DetailsSidebar inspector widgets
@@ -29,7 +29,7 @@
   provider binding and capability evidence are available.
 
 ## 4. Runs/History trace surface
-- [ ] 4.1 Update `AgentWorkbench` to consume the shared `WorkbenchTraceRow`
+- [x] 4.1 Update `AgentWorkbench` to consume the shared `WorkbenchTraceRow`
   presenter instead of keeping its own event-to-row mapping.
 - [ ] 4.2 Reframe visible copy and navigation as Runs/History or Job Trace for
   headless/API/daemon jobs and historical audit.

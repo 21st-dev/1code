@@ -1,6 +1,5 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
 import { useAtomValue, useSetAtom } from "jotai"
 import {
   AlertCircle,
@@ -26,9 +25,9 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react"
-import { Button } from "../../../components/ui/button"
-import { Input } from "../../../components/ui/input"
-import { Textarea } from "../../../components/ui/textarea"
+import { useCallback, useMemo, useState } from "react"
+import type { GitHubDraftPullRequestUnavailableReason } from "../../../../shared/github-workflow-context"
+import { getGitHubDraftPrUnavailableMessageKey } from "../../../../shared/github-workflow-ui-state"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog"
+import { Button } from "../../../components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -47,36 +47,50 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../components/ui/dialog"
+import { Input } from "../../../components/ui/input"
+import { Textarea } from "../../../components/ui/textarea"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
+import { type TranslationKey, useI18n } from "../../../lib/i18n"
 import { trpc } from "../../../lib/trpc"
-import { useI18n, type TranslationKey } from "../../../lib/i18n"
 import { cn } from "../../../lib/utils"
-import type { GitHubDraftPullRequestUnavailableReason } from "../../../../shared/github-workflow-context"
-import { getGitHubDraftPrUnavailableMessageKey } from "../../../../shared/github-workflow-ui-state"
-import {
-  DESKTOP_RUNTIME_CONTROL_LEVELS,
-  type DesktopRuntimeControlLevel,
-} from "../../../../shared/agent-runtime-control"
 import {
   desktopViewAtom,
   diffSidebarOpenAtomFamily,
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
+  pendingUserQuestionsAtom,
   selectedAgentChatIdAtom,
   selectedDiffFilePathAtom,
   selectedDraftIdAtom,
   showNewChatFormAtom,
-  pendingUserQuestionsAtom,
 } from "../atoms"
 import { useStreamingStatusStore } from "../stores/streaming-status-store"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import {
+  formatTracePayload,
+  getWorkbenchTraceRow,
+  type WorkbenchObservedPermission,
+  type WorkbenchTraceEvent,
+} from "./workbench-trace-presenter"
 
-type WorkbenchFilter = "all" | "running" | "needs-review" | "prs" | "blocked" | "clean"
-type WorkbenchTaskStatus = "running" | "blocked" | "needs-review" | "has-pr" | "clean" | "archived"
+type WorkbenchFilter =
+  | "all"
+  | "running"
+  | "needs-review"
+  | "prs"
+  | "blocked"
+  | "clean"
+type WorkbenchTaskStatus =
+  | "running"
+  | "blocked"
+  | "needs-review"
+  | "has-pr"
+  | "clean"
+  | "archived"
 type HeadlessJobStatus =
   | "queued"
   | "running"
@@ -156,29 +170,7 @@ type HeadlessJob = {
   cancelRequestedBy: string | null
 }
 
-type HeadlessJobEvent = {
-  id: string
-  jobId: string
-  sequence: number
-  type: string
-  payload: unknown
-  createdAt: Date | string | null
-}
-
-type ObservedRiskPayload = {
-  toolName?: unknown
-  riskLevel?: unknown
-  riskCategories?: unknown
-  catastrophic?: unknown
-  reason?: unknown
-}
-
-type ObservedPermissionPayload = {
-  controlLevel: DesktopRuntimeControlLevel
-  decision: "allow" | "deny"
-  message?: string
-  risk: ObservedRiskPayload
-}
+type HeadlessJobEvent = WorkbenchTraceEvent
 
 type AgentSchedule = {
   id: string
@@ -276,7 +268,8 @@ function matchesHeadlessJobFilter(
 ): boolean {
   if (filter === "all") return true
   if (filter === "running") return status === "queued" || status === "running"
-  if (filter === "blocked") return status === "failed" || status === "interrupted"
+  if (filter === "blocked")
+    return status === "failed" || status === "interrupted"
   if (filter === "clean") return status === "succeeded"
   return false
 }
@@ -284,12 +277,14 @@ function matchesHeadlessJobFilter(
 function getHeadlessJobCounts(jobs: HeadlessJob[]): WorkbenchCounts {
   return {
     all: jobs.length,
-    running: jobs.filter((job) => matchesHeadlessJobFilter(job.status, "running"))
-      .length,
+    running: jobs.filter((job) =>
+      matchesHeadlessJobFilter(job.status, "running"),
+    ).length,
     needsReview: 0,
     prs: 0,
-    blocked: jobs.filter((job) => matchesHeadlessJobFilter(job.status, "blocked"))
-      .length,
+    blocked: jobs.filter((job) =>
+      matchesHeadlessJobFilter(job.status, "blocked"),
+    ).length,
     clean: jobs.filter((job) => matchesHeadlessJobFilter(job.status, "clean"))
       .length,
   }
@@ -393,7 +388,7 @@ function HeadlessJobApiMetadata({
         <span
           key={item.key}
           className="flex min-w-0 max-w-full items-baseline gap-1.5"
-          aria-label={`${item.label}: ${item.value}`}
+          title={`${item.label}: ${item.value}`}
         >
           <span className="flex-shrink-0 text-muted-foreground">
             {item.label}
@@ -428,91 +423,19 @@ function formatScheduleInterval(intervalSeconds: number): string {
   return `${intervalSeconds}s`
 }
 
-function formatPayload(payload: unknown): string {
-  if (payload === null || payload === undefined) return ""
-  if (typeof payload === "string") return payload
-  try {
-    return JSON.stringify(payload, null, 2)
-  } catch {
-    return String(payload)
-  }
-}
-
-const JOB_EVENT_LABEL_KEYS: Record<string, TranslationKey> = {
-  assistant_delta: "workbench.event.assistantDelta",
-  reasoning_delta: "workbench.event.reasoningDelta",
-  tool_started: "workbench.event.toolStarted",
-  tool_delta: "workbench.event.toolDelta",
-  tool_finished: "workbench.event.toolFinished",
-  guard_decision: "workbench.event.guardDecision",
-  permission_requested: "workbench.event.permissionRequested",
-  scope_expansion_requested: "workbench.event.scopeExpansionRequested",
-  question_pending: "workbench.event.questionPending",
-  question_result: "workbench.event.questionResult",
-  mcp_needs_auth: "workbench.event.mcpNeedsAuth",
-  usage_update: "workbench.event.usageUpdate",
-  command_started: "workbench.event.commandStarted",
-  command_output: "workbench.event.commandOutput",
-  command_finished: "workbench.event.commandFinished",
-  artifact_created: "workbench.event.artifactCreated",
-  status: "workbench.event.status",
-  error: "workbench.event.error",
-  completed: "workbench.event.completed",
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-function isDesktopRuntimeControlLevel(
-  value: unknown,
-): value is DesktopRuntimeControlLevel {
-  return (
-    typeof value === "string" &&
-    DESKTOP_RUNTIME_CONTROL_LEVELS.includes(value as DesktopRuntimeControlLevel)
-  )
-}
-
-function getSemanticPayload(event: HeadlessJobEvent): unknown {
-  if (isRecord(event.payload) && "runEventSequence" in event.payload) {
-    return event.payload.payload
-  }
-  return event.payload
-}
-
-function getObservedPermissionPayload(
-  event: HeadlessJobEvent,
-): ObservedPermissionPayload | null {
-  if (event.type !== "permission_requested") return null
-  const payload = getSemanticPayload(event)
-  if (!isRecord(payload)) return null
-  if (!isDesktopRuntimeControlLevel(payload.controlLevel)) return null
-  if (payload.controlLevel !== "observe") return null
-  const risk = isRecord(payload.risk) ? payload.risk : {}
-  const decision = payload.decision === "deny" ? "deny" : "allow"
-  return {
-    controlLevel: payload.controlLevel,
-    decision,
-    ...(typeof payload.message === "string" ? { message: payload.message } : {}),
-    risk,
-  }
-}
-
-function getObservedRiskCategories(risk: ObservedRiskPayload): string[] {
-  return Array.isArray(risk.riskCategories)
-    ? risk.riskCategories.filter(
-        (category): category is string => typeof category === "string",
-      )
-    : []
-}
-
-function getReviewDisabledReason(task: WorkbenchTask, t: ReturnType<typeof useI18n>["t"]) {
+function getReviewDisabledReason(
+  task: WorkbenchTask,
+  t: ReturnType<typeof useI18n>["t"],
+) {
   if (task.actions.canReviewDiff) return null
   if (!task.worktreePath) return t("workbench.noWorkspacePath")
   return t("workbench.noReviewableDiff")
 }
 
-function getPreparePrHint(task: WorkbenchTask, t: ReturnType<typeof useI18n>["t"]) {
+function getPreparePrHint(
+  task: WorkbenchTask,
+  t: ReturnType<typeof useI18n>["t"],
+) {
   if (!task.worktreePath) return t("workbench.noWorkspacePath")
   if (!task.actions.canCreatePr) return t("workbench.preparePrUnavailable")
   return t("workbench.preparePrHint")
@@ -549,7 +472,10 @@ function TaskCard({
 }: {
   task: WorkbenchTask
   onOpen: (task: WorkbenchTask) => void
-  onReview: (task: WorkbenchTask, setDiffSidebarOpen: (open: boolean) => void) => void
+  onReview: (
+    task: WorkbenchTask,
+    setDiffSidebarOpen: (open: boolean) => void,
+  ) => void
   onOpenPr: (task: WorkbenchTask) => void
   onPreparePr: (task: WorkbenchTask) => void
   isPreparingPr: boolean
@@ -557,8 +483,12 @@ function TaskCard({
   const { t } = useI18n()
   const StatusIcon = getStatusIcon(task.status)
   const updatedAt = formatUpdatedAt(task.updatedAt)
-  const diffHasLines = task.diff.additions !== null || task.diff.deletions !== null
-  const diffSidebarAtom = useMemo(() => diffSidebarOpenAtomFamily(task.id), [task.id])
+  const diffHasLines =
+    task.diff.additions !== null || task.diff.deletions !== null
+  const diffSidebarAtom = useMemo(
+    () => diffSidebarOpenAtomFamily(task.id),
+    [task.id],
+  )
   const setDiffSidebarOpen = useSetAtom(diffSidebarAtom)
   const reviewDisabledReason = getReviewDisabledReason(task, t)
   const preparePrHint = getPreparePrHint(task, t)
@@ -617,7 +547,9 @@ function TaskCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <div className="flex items-baseline gap-1.5">
-          <span className="font-medium text-foreground">{task.diff.fileCount}</span>
+          <span className="font-medium text-foreground">
+            {task.diff.fileCount}
+          </span>
           <span>{t("workbench.filesChanged")}</span>
         </div>
         <div className="flex items-baseline gap-1.5">
@@ -767,14 +699,10 @@ function ScheduleCard({
               })}
             </span>
             {nextRunAt && (
-              <span>
-                {t("workbench.scheduleNextRun", { time: nextRunAt })}
-              </span>
+              <span>{t("workbench.scheduleNextRun", { time: nextRunAt })}</span>
             )}
             {lastRunAt && (
-              <span>
-                {t("workbench.scheduleLastRun", { time: lastRunAt })}
-              </span>
+              <span>{t("workbench.scheduleLastRun", { time: lastRunAt })}</span>
             )}
             <span className="truncate">{schedule.cwd}</span>
           </div>
@@ -1062,14 +990,15 @@ function HeadlessJobLogsDialog({
 
 function JobEventRow({ event }: { event: HeadlessJobEvent }) {
   const { t } = useI18n()
-  const observed = getObservedPermissionPayload(event)
+  const row = getWorkbenchTraceRow(event)
+  const observed = row.observedPermission
 
   return (
     <div className="grid grid-cols-[3.5rem_11rem_minmax(0,1fr)] gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs">
       <span className="font-mono text-muted-foreground">#{event.sequence}</span>
       <div className="min-w-0">
         <div className="truncate font-medium text-foreground">
-          {t(JOB_EVENT_LABEL_KEYS[event.type] ?? "workbench.event.unknown")}
+          {t(row.titleKey)}
         </div>
         <div className="truncate font-mono text-[11px] text-muted-foreground">
           {event.type}
@@ -1077,15 +1006,25 @@ function JobEventRow({ event }: { event: HeadlessJobEvent }) {
       </div>
       <div className="min-w-0 space-y-1">
         {observed && <ObservedPermissionSummary observed={observed} />}
+        {row.summary && (
+          <div className="truncate font-medium text-foreground/80">
+            {row.summary}
+          </div>
+        )}
+        {row.nextAction && (
+          <div className="text-[11px] text-muted-foreground">
+            {row.nextAction}
+          </div>
+        )}
         <pre className="min-w-0 whitespace-pre-wrap break-words font-mono text-muted-foreground">
-          {formatPayload(getSemanticPayload(event))}
+          {formatTracePayload(row.semanticPayload)}
         </pre>
         <details className="text-muted-foreground">
           <summary className="cursor-pointer text-[11px] font-medium">
             {t("workbench.rawPayload")}
           </summary>
           <pre className="mt-1 min-w-0 whitespace-pre-wrap break-words font-mono">
-            {formatPayload(event.payload)}
+            {formatTracePayload(row.rawPayload)}
           </pre>
         </details>
       </div>
@@ -1096,18 +1035,9 @@ function JobEventRow({ event }: { event: HeadlessJobEvent }) {
 function ObservedPermissionSummary({
   observed,
 }: {
-  observed: ObservedPermissionPayload
+  observed: WorkbenchObservedPermission
 }) {
   const { t } = useI18n()
-  const riskLevel =
-    typeof observed.risk.riskLevel === "string"
-      ? observed.risk.riskLevel
-      : "unknown"
-  const toolName =
-    typeof observed.risk.toolName === "string" ? observed.risk.toolName : null
-  const reason =
-    typeof observed.risk.reason === "string" ? observed.risk.reason : null
-  const categories = getObservedRiskCategories(observed.risk)
   const denied = observed.decision === "deny"
 
   return (
@@ -1132,23 +1062,25 @@ function ObservedPermissionSummary({
             : t("workbench.observedAllowed")}
         </span>
         <span className="rounded bg-background/70 px-1.5 py-0.5">
-          {t("workbench.observedRisk", { risk: riskLevel })}
+          {t("workbench.observedRisk", { risk: observed.riskLevel })}
         </span>
-        {toolName && (
+        {observed.toolName && (
           <span className="rounded bg-background/70 px-1.5 py-0.5 font-mono">
-            {toolName}
+            {observed.toolName}
           </span>
         )}
       </div>
-      {(reason || observed.message || categories.length > 0) && (
+      {(observed.reason ||
+        observed.message ||
+        observed.categories.length > 0) && (
         <div className="mt-1.5 space-y-1 text-[11px]">
-          {(observed.message || reason) && (
-            <p className="break-words">{observed.message || reason}</p>
+          {(observed.message || observed.reason) && (
+            <p className="break-words">{observed.message || observed.reason}</p>
           )}
-          {categories.length > 0 && (
+          {observed.categories.length > 0 && (
             <p className="break-words">
               {t("workbench.observedCategories", {
-                categories: categories.join(", "),
+                categories: observed.categories.join(", "),
               })}
             </p>
           )}
@@ -1244,26 +1176,36 @@ function DraftPrDialog({
                   })}
                 </div>
 
-                <label className="block space-y-1.5">
+                <label
+                  className="block space-y-1.5"
+                  htmlFor="github-draft-pr-title"
+                >
                   <span className="text-xs font-medium text-muted-foreground">
                     {t("githubWorkflow.draftPr.title")}
                   </span>
                   <Input
+                    id="github-draft-pr-title"
                     value={form.title}
                     onChange={(event) =>
-                      onFormChange("title", event.target.value)}
+                      onFormChange("title", event.target.value)
+                    }
                     className="h-8"
                   />
                 </label>
 
-                <label className="block space-y-1.5">
+                <label
+                  className="block space-y-1.5"
+                  htmlFor="github-draft-pr-body"
+                >
                   <span className="text-xs font-medium text-muted-foreground">
                     {t("githubWorkflow.draftPr.body")}
                   </span>
                   <Textarea
+                    id="github-draft-pr-body"
                     value={form.body}
                     onChange={(event) =>
-                      onFormChange("body", event.target.value)}
+                      onFormChange("body", event.target.value)
+                    }
                     className="min-h-64 font-mono text-xs"
                   />
                 </label>
@@ -1345,12 +1287,16 @@ function DraftPrDialog({
 export function AgentWorkbench() {
   const { t } = useI18n()
   const [filter, setFilter] = useState<WorkbenchFilter>("all")
-  const [preparingPrTaskId, setPreparingPrTaskId] = useState<string | null>(null)
+  const [preparingPrTaskId, setPreparingPrTaskId] = useState<string | null>(
+    null,
+  )
   const [draftPrTask, setDraftPrTask] = useState<WorkbenchTask | null>(null)
   const [draftPrForm, setDraftPrForm] = useState<DraftPrFormState | null>(null)
   const [draftPrMeta, setDraftPrMeta] = useState<DraftPrMetaState | null>(null)
   const [draftPrError, setDraftPrError] = useState<string | null>(null)
-  const [createdDraftPrUrl, setCreatedDraftPrUrl] = useState<string | null>(null)
+  const [createdDraftPrUrl, setCreatedDraftPrUrl] = useState<string | null>(
+    null,
+  )
   const [isDraftPrDialogOpen, setIsDraftPrDialogOpen] = useState(false)
   const [isCreateDraftPrDialogOpen, setIsCreateDraftPrDialogOpen] =
     useState(false)
@@ -1384,7 +1330,9 @@ export function AgentWorkbench() {
   const runningSubChatIds = useMemo(
     () =>
       Object.entries(streamingStatuses)
-        .filter(([, status]) => status === "streaming" || status === "submitted")
+        .filter(
+          ([, status]) => status === "streaming" || status === "submitted",
+        )
         .map(([subChatId]) => subChatId),
     [streamingStatuses],
   )
@@ -1483,16 +1431,14 @@ export function AgentWorkbench() {
   )
   const selectedJob = useMemo(
     () =>
-      ([
+      [
         ...((desktopJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((cliJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((daemonJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((scheduleJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((protocolJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
         ...((apiJobsQuery.data?.jobs ?? []) as HeadlessJob[]),
-      ]).find(
-        (job) => job.id === selectedJobId,
-      ) ?? null,
+      ].find((job) => job.id === selectedJobId) ?? null,
     [
       apiJobsQuery.data?.jobs,
       cliJobsQuery.data?.jobs,
@@ -1507,9 +1453,8 @@ export function AgentWorkbench() {
     { jobId: selectedJobId ?? "", afterSequence: 0 },
     {
       enabled: !!selectedJobId,
-      refetchInterval: selectedJob && isActiveHeadlessJob(selectedJob)
-        ? 3000
-        : false,
+      refetchInterval:
+        selectedJob && isActiveHeadlessJob(selectedJob) ? 3000 : false,
       placeholderData: (previous) => previous,
     },
   )
@@ -1549,9 +1494,14 @@ export function AgentWorkbench() {
     () => getHeadlessJobCounts(headlessJobs),
     [headlessJobs],
   )
-  const headlessJobEvents = (jobLogsQuery.data?.events ?? []) as HeadlessJobEvent[]
-  const loggedJob = ((jobLogsQuery.data?.job as HeadlessJob | undefined) ?? selectedJob)
-  const counts = mergeWorkbenchCounts(tasksQuery.data?.counts, headlessJobCounts)
+  const headlessJobEvents = (jobLogsQuery.data?.events ??
+    []) as HeadlessJobEvent[]
+  const loggedJob =
+    (jobLogsQuery.data?.job as HeadlessJob | undefined) ?? selectedJob
+  const counts = mergeWorkbenchCounts(
+    tasksQuery.data?.counts,
+    headlessJobCounts,
+  )
   const isRefreshing =
     tasksQuery.isFetching ||
     cliJobsQuery.isFetching ||
@@ -1589,7 +1539,13 @@ export function AgentWorkbench() {
       }
       setSelectedChatId(task.id)
     },
-    [setDesktopView, setSelectedChatId, setSelectedDraftId, setShowNewChatForm, t],
+    [
+      setDesktopView,
+      setSelectedChatId,
+      setSelectedDraftId,
+      setShowNewChatForm,
+      t,
+    ],
   )
 
   const handleReview = useCallback(
@@ -1600,7 +1556,12 @@ export function AgentWorkbench() {
       setSelectedDiffFilePath(null)
       setDiffSidebarOpen(true)
     },
-    [openTask, setFilteredDiffFiles, setFilteredSubChatId, setSelectedDiffFilePath],
+    [
+      openTask,
+      setFilteredDiffFiles,
+      setFilteredSubChatId,
+      setSelectedDiffFilePath,
+    ],
   )
 
   const handleOpenPr = useCallback((task: WorkbenchTask) => {
@@ -1644,7 +1605,10 @@ export function AgentWorkbench() {
         await cancelJobMutation.mutateAsync({ jobId: job.id })
         await Promise.all([
           trpcUtils.agentJobs.list.invalidate(),
-          trpcUtils.agentJobs.logs.invalidate({ jobId: job.id, afterSequence: 0 }),
+          trpcUtils.agentJobs.logs.invalidate({
+            jobId: job.id,
+            afterSequence: 0,
+          }),
         ])
       } finally {
         setMutatingJobId(null)
@@ -1875,21 +1839,18 @@ export function AgentWorkbench() {
             className="h-8 gap-1.5 text-xs"
             onClick={() => {
               void tasksQuery.refetch()
-                void cliJobsQuery.refetch()
-                void desktopJobsQuery.refetch()
-                void daemonJobsQuery.refetch()
-                void scheduleJobsQuery.refetch()
-                void protocolJobsQuery.refetch()
-                void apiJobsQuery.refetch()
-                void schedulesQuery.refetch()
-              }}
-              disabled={isRefreshing}
+              void cliJobsQuery.refetch()
+              void desktopJobsQuery.refetch()
+              void daemonJobsQuery.refetch()
+              void scheduleJobsQuery.refetch()
+              void protocolJobsQuery.refetch()
+              void apiJobsQuery.refetch()
+              void schedulesQuery.refetch()
+            }}
+            disabled={isRefreshing}
           >
             <RefreshCw
-              className={cn(
-                "h-3.5 w-3.5",
-                isRefreshing && "animate-spin",
-              )}
+              className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
             />
             {t("workbench.refresh")}
           </Button>
@@ -1918,21 +1879,21 @@ export function AgentWorkbench() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {cliJobsQuery.isLoading &&
-          desktopJobsQuery.isLoading &&
-          daemonJobsQuery.isLoading &&
-          scheduleJobsQuery.isLoading &&
-          protocolJobsQuery.isLoading &&
-          apiJobsQuery.isLoading &&
-          schedulesQuery.isLoading &&
-          tasksQuery.isLoading ? (
+        {cliJobsQuery.isLoading &&
+        desktopJobsQuery.isLoading &&
+        daemonJobsQuery.isLoading &&
+        scheduleJobsQuery.isLoading &&
+        protocolJobsQuery.isLoading &&
+        apiJobsQuery.isLoading &&
+        schedulesQuery.isLoading &&
+        tasksQuery.isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             {t("workbench.loading")}
           </div>
-          ) : tasks.length === 0 &&
-            schedules.length === 0 &&
-            visibleHeadlessJobs.length === 0 ? (
+        ) : tasks.length === 0 &&
+          schedules.length === 0 &&
+          visibleHeadlessJobs.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="max-w-sm text-center">
               <Circle className="mx-auto h-6 w-6 text-muted-foreground" />
@@ -1944,43 +1905,43 @@ export function AgentWorkbench() {
               </p>
             </div>
           </div>
-          ) : (
-            <div className="space-y-5">
-              {schedules.length > 0 && (
-                <section className="space-y-2">
-                  <div className="flex min-w-0 items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <h2 className="text-sm font-medium text-foreground">
-                        {t("workbench.schedules")}
-                      </h2>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {t("workbench.schedulesSubtitle")}
-                      </p>
-                    </div>
+        ) : (
+          <div className="space-y-5">
+            {schedules.length > 0 && (
+              <section className="space-y-2">
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-medium text-foreground">
+                      {t("workbench.schedules")}
+                    </h2>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {t("workbench.schedulesSubtitle")}
+                    </p>
                   </div>
-                  <div className="grid gap-3">
-                    {schedules.map((schedule) => (
-                      <ScheduleCard
-                        key={schedule.id}
-                        schedule={schedule}
-                        onRunNow={handleRunScheduleNow}
-                        onPause={handlePauseSchedule}
-                        onResume={handleResumeSchedule}
-                        onDelete={handleDeleteSchedule}
-                        onOpenLastJob={handleOpenScheduleJob}
-                        mutatingAction={
-                          mutatingSchedule?.id === schedule.id
-                            ? mutatingSchedule.action
-                            : null
-                        }
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
+                </div>
+                <div className="grid gap-3">
+                  {schedules.map((schedule) => (
+                    <ScheduleCard
+                      key={schedule.id}
+                      schedule={schedule}
+                      onRunNow={handleRunScheduleNow}
+                      onPause={handlePauseSchedule}
+                      onResume={handleResumeSchedule}
+                      onDelete={handleDeleteSchedule}
+                      onOpenLastJob={handleOpenScheduleJob}
+                      mutatingAction={
+                        mutatingSchedule?.id === schedule.id
+                          ? mutatingSchedule.action
+                          : null
+                      }
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
-              {visibleHeadlessJobs.length > 0 && (
-                <section className="space-y-2">
+            {visibleHeadlessJobs.length > 0 && (
+              <section className="space-y-2">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="text-sm font-medium text-foreground">
@@ -2031,8 +1992,8 @@ export function AgentWorkbench() {
           </div>
         )}
       </div>
-        <HeadlessJobLogsDialog
-          job={loggedJob}
+      <HeadlessJobLogsDialog
+        job={loggedJob}
         events={headlessJobEvents}
         isLoading={jobLogsQuery.isLoading}
         isOpen={!!selectedJobId}
