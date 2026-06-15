@@ -1,6 +1,6 @@
 ## 1. Proposal Validation
-- [ ] 1.1 Confirm this change does not overlap requirement names with `refactor-runtime-core-execution-boundary` in the `local-job-api` spec.
-- [ ] 1.2 Validate this proposal with `bunx openspec validate add-local-job-api-project-onboarding --strict --no-interactive`.
+- [x] 1.1 Confirm this change does not overlap requirement names with `refactor-runtime-core-execution-boundary` in the `local-job-api` spec.
+- [x] 1.2 Validate this proposal with `bunx openspec validate add-local-job-api-project-onboarding --strict --no-interactive`.
 
 ## 2. Shared Registration Owner
 - [ ] 2.1 Add a shared main-process registration owner (e.g. `src/main/lib/projects/registry.ts`) with `registerProjectForPath`, `getProjectRegistrationForCwd`, and `unregisterProjectForPath` over an injected database handle.
