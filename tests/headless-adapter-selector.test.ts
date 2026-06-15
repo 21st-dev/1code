@@ -6,12 +6,31 @@ import {
   type CreateAgentRuntimeRunRequestInput,
 } from "../src/main/lib/headless/agent-runtime-contract"
 
+const adapterRunCalls = {
+  codex: 0,
+  claude: 0,
+}
+
 mock.module("electron", () => ({
   app: {
     isPackaged: false,
     getAppPath() {
       return process.cwd()
     },
+  },
+}))
+
+mock.module("../src/main/lib/headless/adapters/codex", () => ({
+  async runCodexHeadlessTask() {
+    adapterRunCalls.codex += 1
+    return { status: "completed", exitCode: 0 }
+  },
+}))
+
+mock.module("../src/main/lib/headless/adapters/claude-code", () => ({
+  async runClaudeCodeHeadlessTask() {
+    adapterRunCalls.claude += 1
+    return { status: "completed", exitCode: 0 }
   },
 }))
 
@@ -181,12 +200,14 @@ describe("headless adapter selector", () => {
   })
 
   test("refuses interactive headless execution without a visible user channel", async () => {
+    adapterRunCalls.codex = 0
     const { observer: runtimeObserver, events } = observer()
     const result = await runAgentTask(
       request({ runtime: "codex", executionProfile: "interactive" }),
       runtimeObserver,
     )
 
+    expect(adapterRunCalls.codex).toBe(0)
     expect(result).toMatchObject({
       status: "failed",
       exitCode: 1,
@@ -211,6 +232,7 @@ describe("headless adapter selector", () => {
   })
 
   test("fails closed when non-desktop requests require interaction-only callbacks", async () => {
+    adapterRunCalls.codex = 0
     const { observer: runtimeObserver, events } = observer()
     const result = await runAgentTask(
       request({
@@ -225,6 +247,7 @@ describe("headless adapter selector", () => {
       runtimeObserver,
     )
 
+    expect(adapterRunCalls.codex).toBe(0)
     expect(result).toMatchObject({
       status: "failed",
       exitCode: 1,
@@ -249,6 +272,7 @@ describe("headless adapter selector", () => {
   })
 
   test("refuses guarded scope on batch adapters without claiming hard guard enforcement", async () => {
+    adapterRunCalls.codex = 0
     const { observer: runtimeObserver, events } = observer()
     const result = await runAgentTask(
       request({
@@ -258,6 +282,7 @@ describe("headless adapter selector", () => {
       runtimeObserver,
     )
 
+    expect(adapterRunCalls.codex).toBe(0)
     expect(result).toMatchObject({
       status: "failed",
       exitCode: 1,
@@ -282,6 +307,7 @@ describe("headless adapter selector", () => {
   })
 
   test("refuses policy-grant profile on batch adapters without per-scope hook support", async () => {
+    adapterRunCalls.claude = 0
     const { observer: runtimeObserver, events } = observer()
     const result = await runAgentTask(
       request({
@@ -294,6 +320,7 @@ describe("headless adapter selector", () => {
       runtimeObserver,
     )
 
+    expect(adapterRunCalls.claude).toBe(0)
     expect(result).toMatchObject({
       status: "failed",
       exitCode: 1,
