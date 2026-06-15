@@ -63,7 +63,10 @@ The selector MUST emit a renderer-safe diagnostic when it falls back or refuses
 to select an adapter.
 `policy-grant` is not a promise of per-scope enforcement on every adapter:
 batch adapters without pre-execution hooks may only use documented
-sandbox-level controls or fail closed.
+sandbox-level controls or fail closed. The initial Codex app-server headless
+profile is explicitly `admission-audit`: the request must carry a valid
+non-desktop grant before provider work starts, but the declared scope strings
+are not yet translated into app-server permission boundaries.
 
 ### Event Boundary
 Runtime adapters emit canonical `RunEvent` records after redaction. Job storage
@@ -92,7 +95,9 @@ Codex app-server job execution is allowed only after the shared request,
 selector, event, and permission policy boundaries exist. The initial selector
 MUST keep batch as the default for existing Local Job API v1 callers unless the
 request explicitly asks for an app-server-capable profile and passes policy
-gates.
+gates. In this change, policy-grant scopes are admission/audit metadata for the
+headless app-server wrapper; true per-scope app-server enforcement is deferred
+to a follow-up change.
 
 ## Risks / Trade-Offs
 - Event migration can create duplicate or mismatched job events. Mitigation:
@@ -104,6 +109,10 @@ gates.
 - Policy grants can be overstated on batch adapters. Mitigation: adapters
   without pre-execution hooks must report sandbox-level enforcement honestly or
   fail closed instead of claiming per-scope control.
+- Policy grants can be overstated on the initial app-server wrapper. Mitigation:
+  the wrapper is opt-in, default batch behavior is unchanged, selector
+  diagnostics mark it as admission/audit-only, and declared-scope binding is
+  deferred to a dedicated follow-up.
 - Selector complexity can hide fallback behavior. Mitigation: adapter source,
   fallback reason, and unsupported-capability diagnostics are emitted and
   persisted without secrets.
@@ -118,6 +127,11 @@ gates.
 - Persisting redaction metadata is a Local Job API v2 or diagnostics follow-up.
   The bridge computes redaction status/rules internally, but v1 payloads do not
   expose a stable field for "this event was redacted" metadata.
+- Binding Local Job API `runtime.policyGrant.scopes` to Codex app-server
+  permission decisions is deferred. This change validates and audits those
+  scopes as admission metadata only; a future proposal must define the scope
+  schema, adapter translation, out-of-scope fail-closed behavior, and a true
+  app-server smoke.
 
 ## Migration Plan
 1. Add shared request/result/observer types and keep adapters on existing call

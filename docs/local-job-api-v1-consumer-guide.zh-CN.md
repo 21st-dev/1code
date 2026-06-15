@@ -152,6 +152,14 @@ locus api runtimes list --json
 - `plan`
 - `agent`
 
+Execution profiles：
+
+- 省略 `runtime.executionProfile` 或设为 `batch`：v1 默认行为。能力和权限
+  gate 允许时，Codex 使用 `codex exec`，Claude 使用 `claude -p`。
+- `policy-grant`：高级、显式 opt-in 的非 batch adapter profile。目前必须提供
+  `runtime.policyGrant.scopes`，且这些 scope 在 v1 中只作为准入/审计 metadata；
+  它们还不是稳定的 app-server per-scope 强制边界。
+
 ## Create Request
 
 通用本地 package 示例：
@@ -210,6 +218,9 @@ cat request.json | locus api runs create --request - --json
 | `project.projectId` | 否 | 可选 Locus project ID。提供后，`cwd` 必须在该 project 内。 |
 | `runtime.id` | 是 | `codex`、`claude-code`，或 alias `claude`。 |
 | `runtime.requiredCapabilities` | 否 | runtime work 开始前必须满足的 capability IDs。 |
+| `runtime.executionProfile` | 否 | `batch` 或 `policy-grant`。默认 `batch`；现有 v1 caller 应该省略，除非需要显式 gated profile。 |
+| `runtime.policyGrant.scopes` | 当 `runtime.executionProfile` 为 `policy-grant` 时必填 | 用于准入/审计的 bounded scope labels。v1 中这些 labels 还不会绑定 app-server permission decisions。 |
+| `runtime.policyGrant.canDecideAutomatically` | 否 | 可选 boolean。若在 `policy-grant` 中为 false，Locus 会 fail closed，因为没有可见用户。 |
 | `mode` | 是 | `plan` 或 `agent`。 |
 | `prompt.text` | 是 | prompt 文本，最大 256 KiB。 |
 | `input` | 否 | consumer 自己的结构化 metadata，不能包含 secrets。 |

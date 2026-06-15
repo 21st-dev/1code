@@ -37,11 +37,14 @@ before adapter selection and provider work.
 - **AND** otherwise resolves interactive-only side-effect requests to
   `fail-closed`
 
-#### Scenario: Policy grant is insufficient
-- **WHEN** an adapter asks for approval outside the granted policy scope
-- **THEN** the runtime denies the request before the side effect executes when
-  the adapter exposes a pre-execution hook
-- **AND** emits a sanitized permission or guard event
+#### Scenario: Policy grant scopes are not silently overclaimed
+- **WHEN** a non-desktop run declares policy-grant scopes
+- **THEN** the permission policy records those scopes as non-desktop grant
+  metadata without claiming the selected adapter binds every declared scope
+- **AND** an adapter that only provides an app-server admission gate may be
+  selected only with an explicit admission/audit diagnostic
+- **AND** guarded scope contracts and hard-tool guard requests still require a
+  true pre-execution hook or fail closed before provider work starts
 
 #### Scenario: Interactive user is present
 - **WHEN** a desktop run or future approved interactive headless channel
@@ -87,9 +90,11 @@ unsupported behavior.
   lacks a pre-execution hook for the requested side-effect scope
 - **THEN** the runtime does not claim per-scope pre-execution enforcement for
   that adapter
-- **AND** the selector either limits enforcement to documented sandbox-level
-  controls or fails closed before provider work starts
-- **AND** emits a sanitized degraded-capability or fail-closed diagnostic
+- **AND** the selector either limits the run to a documented admission/audit
+  gate, limits enforcement to documented sandbox-level controls, or fails
+  closed before provider work starts
+- **AND** emits a sanitized diagnostic that distinguishes admission/audit-only
+  policy grants from declared-scope-bound enforcement
 
 ### Requirement: Runtime-Neutral Agent Runner
 The system SHALL provide a main-process runtime-neutral agent runner that

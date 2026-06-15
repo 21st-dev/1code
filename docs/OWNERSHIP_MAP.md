@@ -61,6 +61,19 @@ or UI helper.
   second durable interpretation of plan mode, guarded scope, or side-effect
   approval.
 
+## Headless Runtime Adapter Selection
+
+- Canonical owner: `src/main/lib/headless/adapter-selector.ts`
+- Consumers: `src/main/lib/headless/agent-runtime.ts`, Local Job API job
+  runner, headless process adapters, Codex app-server headless wrapper
+- Rule: headless/runtime adapter choice, execution profile gating, selected or
+  refused diagnostics, fallback reasons, and policy-grant enforcement labels
+  belong to the selector. Local Job API request parsing may validate input, but
+  must not own a second adapter-selection or policy-grant enforcement table.
+  Current Local Job API `policyGrant.scopes` are admission/audit metadata unless
+  a later approved scope-enforcement change binds them to adapter permission
+  decisions.
+
 ## Desktop Runtime Request And Adapter Boundary
 
 - Canonical owners: `src/main/lib/agent-runtime/desktop-run-request.ts`,

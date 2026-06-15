@@ -37,3 +37,14 @@ profile unless a request is explicitly allowed to use another adapter profile.
 - **AND** the request lacks an approved policy grant or interactive channel
 - **THEN** Locus rejects or fails the run before provider work starts
 - **AND** reports a sanitized unsupported-profile or fail-closed diagnostic
+
+#### Scenario: Policy grant scopes are admission and audit metadata
+- **WHEN** a Local Job API v1 request explicitly asks for `policy-grant`
+  execution and supplies `runtime.policyGrant.scopes`
+- **THEN** Locus may select an app-server-capable adapter only after validating
+  the grant before provider work starts
+- **AND** the v1 scope strings are treated as admission and audit metadata
+  unless a later approved scope-enforcement change binds those strings to
+  adapter permission decisions
+- **AND** existing v1 callers that omit `runtime.executionProfile` continue to
+  use the default batch selector path

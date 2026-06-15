@@ -161,6 +161,16 @@ Common modes:
 - `plan`
 - `agent`
 
+Execution profiles:
+
+- omit `runtime.executionProfile` or set `batch`: default v1 behavior. Codex
+  uses `codex exec`; Claude uses `claude -p` when capability and permission
+  gates allow the run.
+- `policy-grant`: advanced, explicit opt-in for a non-batch adapter profile.
+  It currently requires `runtime.policyGrant.scopes` and is treated as
+  admission/audit metadata in v1. The declared scope strings are not yet a
+  stable per-scope app-server enforcement boundary.
+
 ## Create Request
 
 Example for a generic local package:
@@ -219,6 +229,9 @@ cat request.json | locus api runs create --request - --json
 | `project.projectId` | no | Optional Locus project ID. If provided, `cwd` must be inside that project. |
 | `runtime.id` | yes | `codex`, `claude-code`, or accepted alias `claude`. |
 | `runtime.requiredCapabilities` | no | Capability IDs that must be supported before runtime work starts. |
+| `runtime.executionProfile` | no | `batch` or `policy-grant`. Defaults to `batch`; existing v1 callers should omit it unless they need the explicit gated profile. |
+| `runtime.policyGrant.scopes` | when `runtime.executionProfile` is `policy-grant` | Bounded scope labels for admission/audit. In v1 these labels do not yet bind app-server permission decisions. |
+| `runtime.policyGrant.canDecideAutomatically` | no | Optional boolean. If false for `policy-grant`, Locus fails closed because no visible user is available. |
 | `mode` | yes | `plan` or `agent`. |
 | `prompt.text` | yes | Prompt text. Max size is 256 KiB. |
 | `input` | no | Consumer-owned structured metadata. Must not contain secrets. |
