@@ -45,8 +45,8 @@ Local repo evidence:
 
 Local CLI evidence:
 
-- `codex --version`: `codex-cli 0.136.0-alpha.1`
-- `claude --version`: `2.1.156 (Claude Code)`
+- `codex --version`: `codex-cli 0.139.0`
+- `claude --version`: `2.1.177 (Claude Code)`
 - `codex --help`, `codex exec --help`, `codex review --help`,
   `codex mcp --help`, `codex plugin --help`
 - `claude --help`, `claude mcp --help`, `claude plugin --help`,
@@ -167,7 +167,7 @@ the behavior.
 
 ### Claude Code CLI
 
-Observed locally with Claude Code `2.1.156` and checked against official docs.
+Observed locally with Claude Code `2.1.177` and checked against official docs.
 
 Published CLI surfaces include:
 

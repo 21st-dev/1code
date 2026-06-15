@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test"
+import { LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT_ENV } from "../src/main/lib/codex/desktop-adapter-selection"
+import { buildCodexAdapterRuntimeStatusMetadata } from "../src/main/lib/codex/runtime-status"
 import {
   buildCodexCapabilityErrorChunk,
   buildCodexRuntimeAvailability,
   buildCodexRuntimeAvailabilityFromComponents,
   buildCodexRuntimeStatusChunk,
-  createCodexRuntimeComponent,
-  createCodexRuntimeBlocker,
   type CodexAcpRuntimeLike,
+  createCodexRuntimeBlocker,
+  createCodexRuntimeComponent,
   type RuntimeExecutableLike,
 } from "../src/shared/codex-runtime-status"
-import { buildCodexAdapterRuntimeStatusMetadata } from "../src/main/lib/codex/runtime-status"
-import { LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT_ENV } from "../src/main/lib/codex/desktop-adapter-selection"
 
 const readyExecutable = (path: string): RuntimeExecutableLike => ({
   ok: true,
@@ -53,7 +53,7 @@ describe("Codex runtime status", () => {
   test("reports renderer-safe adapter source, target, version, and ACP exit status", () => {
     const adapters = buildCodexAdapterRuntimeStatusMetadata({ env: {} })
 
-    expect(adapters.bundledCodexVersion).toBe("0.134.0")
+    expect(adapters.bundledCodexVersion).toBe("0.139.0")
     expect(adapters.current).toMatchObject({
       runtimeId: "codex",
       source: "codex-app-server",
@@ -114,7 +114,9 @@ describe("Codex runtime status", () => {
       "acp-runtime",
       "acp-spawn",
     ])
-    expect(availability.components.every((component) => component.ok)).toBe(true)
+    expect(availability.components.every((component) => component.ok)).toBe(
+      true,
+    )
   })
 
   test("separates missing CLI from ACP runtime status", () => {
@@ -131,7 +133,9 @@ describe("Codex runtime status", () => {
       hint: "download Codex CLI",
     })
     expect(
-      availability.components.find((component) => component.id === "acp-runtime"),
+      availability.components.find(
+        (component) => component.id === "acp-runtime",
+      ),
     ).toMatchObject({ ok: true, status: "ready" })
   })
 

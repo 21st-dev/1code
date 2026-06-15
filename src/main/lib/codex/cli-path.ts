@@ -1,12 +1,14 @@
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { getElectronApp, type ElectronAppLike } from "../electron-app"
+import { type ElectronAppLike, getElectronApp } from "../electron-app"
 
-export const BUNDLED_CODEX_CLI_VERSION = "0.134.0"
+export const BUNDLED_CODEX_CLI_VERSION = "0.139.0"
 
 export function getBundledCodexCliPath(
-  appContext: Pick<ElectronAppLike, "isPackaged" | "getAppPath"> =
-    getElectronApp(),
+  appContext: Pick<
+    ElectronAppLike,
+    "isPackaged" | "getAppPath"
+  > = getElectronApp(),
 ): string {
   const binaryName = process.platform === "win32" ? "codex.exe" : "codex"
   const resourcesDir = appContext.isPackaged
@@ -22,8 +24,10 @@ export function getBundledCodexCliPath(
 }
 
 export function resolveBundledCodexCliPath(
-  appContext: Pick<ElectronAppLike, "isPackaged" | "getAppPath"> =
-    getElectronApp(),
+  appContext: Pick<
+    ElectronAppLike,
+    "isPackaged" | "getAppPath"
+  > = getElectronApp(),
 ): string {
   const binaryPath = getBundledCodexCliPath(appContext)
   if (existsSync(binaryPath)) {

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * Downloads Claude Code native binaries for bundling with the Electron app.
  *
@@ -9,10 +10,10 @@
  *   node scripts/download-claude-binary.mjs --version=2.1.5          # Specific version
  */
 
-import fs from "node:fs"
-import path from "node:path"
-import https from "node:https"
 import crypto from "node:crypto"
+import fs from "node:fs"
+import https from "node:https"
+import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -136,7 +137,9 @@ async function getLatestVersion() {
 
   try {
     // Fetch from the same endpoint that install.sh uses
-    const response = await fetch("https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest")
+    const response = await fetch(
+      "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest",
+    )
     if (response.ok) {
       const version = await response.text()
       return version.trim()
@@ -146,7 +149,7 @@ async function getLatestVersion() {
   }
 
   // Fallback to known version (should be updated periodically)
-  return "2.1.156"
+  return "2.1.177"
 }
 
 /**
@@ -278,7 +281,7 @@ async function main() {
   // Write version file
   fs.writeFileSync(
     path.join(BIN_DIR, "VERSION"),
-    `${version}\n${new Date().toISOString()}\n`
+    `${version}\n${new Date().toISOString()}\n`,
   )
 
   // Download each platform

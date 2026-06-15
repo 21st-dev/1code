@@ -76,7 +76,7 @@ headless/batch fallback path.
 
 - shell executable: `/opt/homebrew/bin/codex`
 - Locus bundled dev executable: `resources/bin/darwin-arm64/codex`
-- version: `codex-cli 0.136.0-alpha.1`
+- version: `codex-cli 0.139.0`
 - top-level commands observed: `exec`, `review`, `login`, `logout`, `mcp`,
   `plugin`, `mcp-server`, `app-server`, `remote-control`, `app`,
   `completion`, `update`, `doctor`, `sandbox`, `debug`, `apply`, `resume`,
@@ -89,11 +89,10 @@ headless/batch fallback path.
   `--output-last-message`, `--ephemeral`, `--ignore-user-config`,
   `--ignore-rules`, and `exec resume`
 - public package freshness check: `npm view @openai/codex` reported
-  `latest` as `0.135.0` and `alpha` as `0.136.0-alpha.1`; the shell CLI and
-  local bundled dev CLI now match the newest published alpha line
-- release-script caveat: `package.json` and CI download commands are still
-  pinned to `0.134.0`, so release packaging would need a separate tracked
-  version bump before shipping this alpha as Locus's bundled Codex version
+  `latest` as `0.139.0` and `alpha` as `0.140.0-alpha.21`; the local bundled
+  dev CLI now matches the current stable release line
+- release-script status: `package.json` and CI download commands are pinned to
+  `0.139.0`, matching the local bundled Codex version
 
 Do not treat this local baseline as a permanent public contract. Re-run the
 same command help checks before opening implementation OpenSpecs.
@@ -111,7 +110,7 @@ capability audit before public parity claims.
 | Capability | Locus status | Native support to verify | Current gap | Value | Risk | Needs OpenSpec | Next |
 |---|---|---|---|---|---|---|---|
 | Runtime startup/status | supported | Codex CLI, ACP startup, and `codex doctor --json` behavior | Existing status and preflight paths work; shared capability manifest extraction still belongs in `add-agent-runtime-capability-model`; full doctor diagnostics are not surfaced | high | medium | yes | proposal |
-| Bundled CLI version management | degraded | GitHub release assets for `rust-v0.136.0-alpha.1` and npm dist-tags | Local dev binary can be updated with `scripts/download-codex-binary.mjs`, but tracked release scripts still pin `0.134.0` | medium | medium | yes | proposal |
+| Bundled CLI version management | supported | GitHub release assets for `rust-v0.139.0` and npm dist-tags | Local dev binary and tracked release scripts both pin the current stable `0.139.0` release; re-check before each release | medium | medium | no | audit |
 | Doctor diagnostics | unsupported | `codex doctor --json`, `--summary`, and detailed human output | Locus has runtime status but not the full Codex doctor report, grouping, or remediation detail | medium | medium | yes | proposal |
 | Login/session auth | supported | `codex login`, `login status`, `--with-api-key`, `--with-access-token`, `--device-auth`, and `logout` | Locus supports login/status/logout and runtime API-key paths; exact CLI auth mode coverage and diagnostics need audit | high | high | no | audit |
 | Plan mode | supported | Codex ACP read-only/plan behavior | Already guarded through ACP permission handling; needs shared manifest mapping | high | medium | yes | proposal |

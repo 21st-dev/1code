@@ -18,7 +18,7 @@ export type DispatchCodexAppServerServerRequestInput = {
   dispatch: (request: CodexAppServerServerRequest) => unknown | Promise<unknown>
 }
 
-export const CODEX_APP_SERVER_0_134_SERVER_REQUEST_METHODS = [
+export const CODEX_APP_SERVER_BUNDLED_SERVER_REQUEST_METHODS = [
   "item/commandExecution/requestApproval",
   "item/fileChange/requestApproval",
   "item/tool/requestUserInput",
@@ -31,7 +31,7 @@ export const CODEX_APP_SERVER_0_134_SERVER_REQUEST_METHODS = [
   "execCommandApproval",
 ] as const
 
-export const CODEX_APP_SERVER_0_134_SIDE_EFFECT_SERVER_REQUEST_METHODS = [
+export const CODEX_APP_SERVER_BUNDLED_SIDE_EFFECT_SERVER_REQUEST_METHODS = [
   "item/commandExecution/requestApproval",
   "item/fileChange/requestApproval",
   "item/permissions/requestApproval",
@@ -41,11 +41,11 @@ export const CODEX_APP_SERVER_0_134_SIDE_EFFECT_SERVER_REQUEST_METHODS = [
 ] as const
 
 const KNOWN_SERVER_REQUEST_METHODS = new Set<string>(
-  CODEX_APP_SERVER_0_134_SERVER_REQUEST_METHODS,
+  CODEX_APP_SERVER_BUNDLED_SERVER_REQUEST_METHODS,
 )
 
 const PRE_EXECUTION_APPROVAL_METHODS = new Set<string>(
-  CODEX_APP_SERVER_0_134_SIDE_EFFECT_SERVER_REQUEST_METHODS,
+  CODEX_APP_SERVER_BUNDLED_SIDE_EFFECT_SERVER_REQUEST_METHODS,
 )
 
 export function isCodexAppServerKnownServerRequest(method: string): boolean {

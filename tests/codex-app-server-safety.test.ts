@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import {
-  CODEX_APP_SERVER_0_134_SERVER_REQUEST_METHODS,
-  CODEX_APP_SERVER_0_134_SIDE_EFFECT_SERVER_REQUEST_METHODS,
+  CODEX_APP_SERVER_BUNDLED_SERVER_REQUEST_METHODS,
+  CODEX_APP_SERVER_BUNDLED_SIDE_EFFECT_SERVER_REQUEST_METHODS,
+  type CodexAppServerApprovalGateState,
+  type CodexAppServerServerRequest,
   dispatchCodexAppServerServerRequest,
   isCodexAppServerKnownServerRequest,
   isCodexAppServerPreExecutionApprovalRequest,
-  type CodexAppServerApprovalGateState,
-  type CodexAppServerServerRequest,
 } from "../src/main/lib/codex/app-server-safety"
 
 function sideEffectRequest(
@@ -24,8 +24,8 @@ function sideEffectRequest(
 }
 
 describe("Codex app-server safety proof", () => {
-  test("covers every bundled 0.134.0 server request method with default-deny classification", () => {
-    expect(CODEX_APP_SERVER_0_134_SERVER_REQUEST_METHODS).toEqual([
+  test("covers every bundled 0.139.0 server request method with default-deny classification", () => {
+    expect(CODEX_APP_SERVER_BUNDLED_SERVER_REQUEST_METHODS).toEqual([
       "item/commandExecution/requestApproval",
       "item/fileChange/requestApproval",
       "item/tool/requestUserInput",
@@ -38,11 +38,11 @@ describe("Codex app-server safety proof", () => {
       "execCommandApproval",
     ])
 
-    for (const method of CODEX_APP_SERVER_0_134_SERVER_REQUEST_METHODS) {
+    for (const method of CODEX_APP_SERVER_BUNDLED_SERVER_REQUEST_METHODS) {
       expect(isCodexAppServerKnownServerRequest(method)).toBe(true)
     }
 
-    for (const method of CODEX_APP_SERVER_0_134_SIDE_EFFECT_SERVER_REQUEST_METHODS) {
+    for (const method of CODEX_APP_SERVER_BUNDLED_SIDE_EFFECT_SERVER_REQUEST_METHODS) {
       expect(isCodexAppServerPreExecutionApprovalRequest(method)).toBe(true)
     }
   })
@@ -66,12 +66,12 @@ describe("Codex app-server safety proof", () => {
     expect(isCodexAppServerPreExecutionApprovalRequest("item/tool/call")).toBe(
       true,
     )
-    expect(isCodexAppServerPreExecutionApprovalRequest("applyPatchApproval")).toBe(
-      true,
-    )
-    expect(isCodexAppServerPreExecutionApprovalRequest("execCommandApproval")).toBe(
-      true,
-    )
+    expect(
+      isCodexAppServerPreExecutionApprovalRequest("applyPatchApproval"),
+    ).toBe(true)
+    expect(
+      isCodexAppServerPreExecutionApprovalRequest("execCommandApproval"),
+    ).toBe(true)
     expect(isCodexAppServerPreExecutionApprovalRequest("turn/completed")).toBe(
       false,
     )

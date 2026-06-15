@@ -1,18 +1,19 @@
 #!/usr/bin/env node
+
 /**
  * Downloads Codex CLI native binaries for bundling with the Electron app.
  *
  * Usage:
  *   node scripts/download-codex-binary.mjs              # Download for current platform
  *   node scripts/download-codex-binary.mjs --all        # Download all platforms
- *   node scripts/download-codex-binary.mjs --version=0.134.0
+ *   node scripts/download-codex-binary.mjs --version=0.139.0
  */
 
-import fs from "node:fs"
-import path from "node:path"
-import https from "node:https"
-import crypto from "node:crypto"
 import { spawnSync } from "node:child_process"
+import crypto from "node:crypto"
+import fs from "node:fs"
+import https from "node:https"
+import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -128,7 +129,10 @@ function downloadFile(url, destPath) {
             return reject(new Error(`HTTP ${res.statusCode}`))
           }
 
-          const totalSize = Number.parseInt(res.headers["content-length"] || "0", 10)
+          const totalSize = Number.parseInt(
+            res.headers["content-length"] || "0",
+            10,
+          )
           let downloaded = 0
           let lastPrintedPercent = -1
 
@@ -201,7 +205,9 @@ function extractTarGz(archivePath, targetDir) {
   })
 
   if (result.status !== 0) {
-    throw new Error(`tar extraction failed with code ${result.status ?? "unknown"}`)
+    throw new Error(
+      `tar extraction failed with code ${result.status ?? "unknown"}`,
+    )
   }
 }
 
@@ -243,7 +249,7 @@ function findAsset(release, assetName) {
   return assets.find((asset) => asset?.name === assetName)
 }
 
-async function downloadPlatform(version, platformKey, release) {
+async function downloadPlatform(_version, platformKey, release) {
   const platform = PLATFORMS[platformKey]
   if (!platform) {
     console.error(`Unknown platform: ${platformKey}`)
@@ -300,7 +306,9 @@ async function downloadPlatform(version, platformKey, release) {
     }
     console.log(`  Verified SHA256: ${actualHash.slice(0, 16)}...`)
   } else {
-    console.warn("  Warning: release digest missing, skipping hash verification")
+    console.warn(
+      "  Warning: release digest missing, skipping hash verification",
+    )
   }
 
   if (platform.assetName.endsWith(".tar.gz")) {
