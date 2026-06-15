@@ -1,5 +1,24 @@
 # Change: Bind policy-grant scopes to runtime enforcement
 
+## Status
+
+**Deferred — parked proposal. Do not implement yet.** (As of 2026-06-16.)
+
+This change is intentionally not scheduled. The parent change
+`refactor-runtime-core-execution-boundary` already makes current behavior honest
+(policy-grant scopes are admission/audit-only, default stays batch, guarded runs
+fail closed), so there is no integrity or security gap forcing this work now.
+
+Implement only when ALL of the following are true:
+- A real first-party consumer (e.g. Career Kit) needs non-interactive Codex
+  app-server execution with a bounded write/shell/MCP surface, AND
+- batch `codex exec` cannot serve that use case, AND
+- admission/audit-only enforcement is insufficient for that consumer.
+
+When triggered, let the consumer's actual requirements define the scope grammar,
+and first resolve whether to reuse the existing `agent-scope-contracts`
+vocabulary instead of inventing a second scope language.
+
 ## Why
 `refactor-runtime-core-execution-boundary` keeps Local Job API
 `runtime.policyGrant.scopes` honest by treating them as admission/audit metadata.

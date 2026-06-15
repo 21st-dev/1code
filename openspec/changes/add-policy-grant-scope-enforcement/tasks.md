@@ -1,3 +1,5 @@
+> **Deferred** — do not start. See `proposal.md` → Status for the trigger conditions that must all be true before implementing.
+
 ## 1. Scope Contract
 - [ ] 1.1 Define the supported Local Job API policy-grant scope grammar and map it to runtime permission categories.
 - [ ] 1.2 Reject unknown, contradictory, or non-enforceable scopes before provider work starts.
