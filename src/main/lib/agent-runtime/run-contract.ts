@@ -49,11 +49,21 @@ export type AgentRuntimeProviderReference = {
   diagnostics?: AgentRuntimeProviderDiagnostic[]
 }
 
+export type AgentRuntimePermissionPolicyKind =
+  | "desktop"
+  | "headless-batch"
+  | "interactive-user"
+  | "policy-grant"
+  | "fail-closed"
+
 export type AgentRuntimePermissionPolicySummary = {
-  kind: "desktop" | "headless-batch"
+  kind: AgentRuntimePermissionPolicyKind
   interaction: "visible-user" | "none"
   enforcement: string
   diagnostics: string[]
+  grantedScopes?: string[]
+  blockedRequirements?: string[]
+  failClosedReasons?: string[]
 }
 
 export type AgentRuntimeRunRequestBase<

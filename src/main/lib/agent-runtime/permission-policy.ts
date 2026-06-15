@@ -1,8 +1,12 @@
 import type { AgentRuntimeId } from "../../../shared/agent-runtime-capabilities"
-import type { AgentJobMode } from "../../../shared/agent-jobs"
+import type { AgentJobMode, AgentJobSource } from "../../../shared/agent-jobs"
 import type {
   ResolvedDesktopRuntimeControlLevel,
 } from "../../../shared/agent-runtime-control"
+import type {
+  AgentRuntimeExecutionProfile,
+  AgentRuntimePermissionPolicySummary,
+} from "./run-contract"
 
 export type DesktopPermissionRuntime = Extract<
   AgentRuntimeId,
@@ -104,6 +108,26 @@ export type ResolveDesktopPermissionPolicyInput = {
   codexAdapterSource?: CodexPermissionAdapterSource
 }
 
+export type NonDesktopInteractiveRequirement =
+  | "interactive-approval"
+  | "ask-user-question"
+  | "mcp-elicitation"
+  | "unknown-side-effect-approval"
+
+export type NonDesktopPolicyGrant = {
+  scopes: string[]
+  canDecideAutomatically?: boolean
+}
+
+export type ResolveNonDesktopPermissionPolicyInput = {
+  source: AgentJobSource
+  mode: AgentJobMode
+  executionProfile?: AgentRuntimeExecutionProfile
+  hasVisibleUserInteractionChannel?: boolean
+  interactiveRequirements?: NonDesktopInteractiveRequirement[]
+  policyGrant?: NonDesktopPolicyGrant | null
+}
+
 const PLAN_BLOCKED_SIDE_EFFECTS: PermissionPolicySideEffect[] = [
   "workspace-file-write",
   "side-effecting-shell",
@@ -123,6 +147,106 @@ const DISABLED_OBSERVATION: ObservedToolPolicy = {
   blocksCatastrophicActions: false,
   catastrophicActions: [],
   degradation: "not-applicable",
+}
+
+function uniqueStrings(values: readonly string[] | undefined): string[] {
+  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))]
+}
+
+function failClosedNonDesktopPolicy(input: {
+  source: AgentJobSource
+  mode: AgentJobMode
+  reason: string
+  message: string
+  blockedRequirements?: NonDesktopInteractiveRequirement[]
+}): AgentRuntimePermissionPolicySummary {
+  return {
+    kind: "fail-closed",
+    interaction: "none",
+    enforcement: "non-desktop-fail-closed",
+    diagnostics: [
+      `${input.source} ${input.mode} job refused before provider work: ${input.message}`,
+    ],
+    blockedRequirements: input.blockedRequirements ?? [],
+    failClosedReasons: [input.reason],
+  }
+}
+
+export function resolveNonDesktopPermissionPolicy({
+  source,
+  mode,
+  executionProfile = "batch",
+  hasVisibleUserInteractionChannel = false,
+  interactiveRequirements,
+  policyGrant,
+}: ResolveNonDesktopPermissionPolicyInput): AgentRuntimePermissionPolicySummary {
+  const requestedInteractiveRequirements = [
+    ...new Set(interactiveRequirements ?? []),
+  ]
+  const grantedScopes = uniqueStrings(policyGrant?.scopes)
+  const grantCanDecide =
+    policyGrant?.canDecideAutomatically ?? grantedScopes.length > 0
+
+  if (hasVisibleUserInteractionChannel) {
+    return {
+      kind: "interactive-user",
+      interaction: "visible-user",
+      enforcement: "interactive-user-bridge",
+      diagnostics: [
+        `${source} ${mode} job may route approvals, questions, and MCP elicitation through the declared interaction bridge.`,
+      ],
+    }
+  }
+
+  if (executionProfile === "policy-grant" || grantedScopes.length > 0) {
+    if (grantedScopes.length === 0 || !grantCanDecide) {
+      return failClosedNonDesktopPolicy({
+        source,
+        mode,
+        reason: "missing_policy_grant",
+        message:
+          "policy-grant execution requires bounded scopes that can be decided without a visible user.",
+        blockedRequirements: requestedInteractiveRequirements,
+      })
+    }
+
+    return {
+      kind: "policy-grant",
+      interaction: "none",
+      enforcement: "non-desktop-policy-grant",
+      diagnostics: [
+        `${source} ${mode} job uses bounded policy grant scopes; adapters without matching pre-execution hooks must not claim per-scope enforcement.`,
+      ],
+      grantedScopes,
+      blockedRequirements: [],
+      failClosedReasons: [],
+    }
+  }
+
+  if (
+    executionProfile === "interactive" ||
+    requestedInteractiveRequirements.length > 0
+  ) {
+    return failClosedNonDesktopPolicy({
+      source,
+      mode,
+      reason: "no_interaction_channel",
+      message:
+        "interactive approval, AskUserQuestion, MCP elicitation, and unknown side-effect approval require a visible user channel or bounded policy grant.",
+      blockedRequirements: requestedInteractiveRequirements,
+    })
+  }
+
+  return {
+    kind: "headless-batch",
+    interaction: "none",
+    enforcement: "batch-adapter-capability-gate",
+    diagnostics: [
+      `${source} jobs use the existing batch adapter capability gate; interactive approvals are unavailable.`,
+    ],
+    blockedRequirements: [],
+    failClosedReasons: [],
+  }
 }
 
 function createCodexAcpPermissionMapping({

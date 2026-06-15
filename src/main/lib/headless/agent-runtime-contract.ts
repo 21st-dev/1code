@@ -19,6 +19,11 @@ import type {
   AgentRuntimeRunRequestBase,
   AgentRuntimeRunResultBase,
 } from "../agent-runtime/run-contract"
+import {
+  resolveNonDesktopPermissionPolicy,
+  type NonDesktopInteractiveRequirement,
+  type NonDesktopPolicyGrant,
+} from "../agent-runtime/permission-policy"
 
 export type AgentRuntimeObserver = AgentRuntimePersistedObserver<
   AgentJobEventType,
@@ -85,19 +90,19 @@ export type CreateAgentRuntimeRunRequestInput = {
   apiConsumerRunId?: string | null
   artifactBaseDir?: string | null
   artifactManifestPath?: string | null
+  hasVisibleUserInteractionChannel?: boolean
+  interactiveRequirements?: NonDesktopInteractiveRequirement[]
+  policyGrant?: NonDesktopPolicyGrant | null
 }
 
 export function createHeadlessBatchPermissionSummary(input: {
   source: AgentJobSource
+  mode?: AgentJobMode
 }): AgentRuntimePermissionPolicySummary {
-  return {
-    kind: "headless-batch",
-    interaction: "none",
-    enforcement: "batch-adapter-capability-gate",
-    diagnostics: [
-      `${input.source} jobs use the existing batch adapter capability gate; interactive approvals are unavailable.`,
-    ],
-  }
+  return resolveNonDesktopPermissionPolicy({
+    source: input.source,
+    mode: input.mode ?? "agent",
+  })
 }
 
 function optionalContext(
@@ -125,6 +130,7 @@ function optionalContext(
 export function createAgentRuntimeRunRequest(
   input: CreateAgentRuntimeRunRequestInput,
 ): AgentRuntimeRunRequest {
+  const executionProfile = input.executionProfile ?? "batch"
   return {
     identity: {
       jobId: input.jobId,
@@ -135,7 +141,7 @@ export function createAgentRuntimeRunRequest(
       mode: input.mode,
       cwd: input.cwd,
       source: input.source,
-      executionProfile: input.executionProfile ?? "batch",
+      executionProfile,
       ...optionalContext(input),
     },
     jobId: input.jobId,
@@ -149,8 +155,14 @@ export function createAgentRuntimeRunRequest(
       mode: input.mode,
       hasScopeContract: false,
     }),
-    permissionPolicy: createHeadlessBatchPermissionSummary({
+    permissionPolicy: resolveNonDesktopPermissionPolicy({
       source: input.source,
+      mode: input.mode,
+      executionProfile,
+      hasVisibleUserInteractionChannel:
+        input.hasVisibleUserInteractionChannel,
+      interactiveRequirements: input.interactiveRequirements,
+      policyGrant: input.policyGrant,
     }),
     providerBinding: null,
   }
