@@ -32,11 +32,11 @@
 ## 7. Documentation And Ownership
 - [x] 7.1 Update `docs/OWNERSHIP_MAP.md` to reflect shared execution selector and RunEvent ownership across desktop and headless.
 - [x] 7.2 Update Local Job API docs to describe v1 compatibility and deferred v2 rich interaction boundary.
-- [ ] 7.3 Run targeted tests for shared request, selector, event bridge, permission policy, and Local Job API compatibility before implementation handoff.
-- [ ] 7.4 Run `bun run ts:check`.
-- [ ] 7.5 Run `bun run build`.
-- [ ] 7.6 Run `bunx openspec validate --all --strict --no-interactive`.
-- [ ] 7.7 Confirm implementation preserves existing `agent-scope-contracts` and `runtime-security-baseline` behavior unless a follow-up proposal changes them.
+- [x] 7.3 Run targeted tests for shared request, selector, event bridge, permission policy, and Local Job API compatibility before implementation handoff.
+- [x] 7.4 Run `bun run ts:check`.
+- [x] 7.5 Run `bun run build`.
+- [x] 7.6 Run `bunx openspec validate --all --strict --no-interactive`.
+- [x] 7.7 Confirm implementation preserves existing `agent-scope-contracts` and `runtime-security-baseline` behavior unless a follow-up proposal changes them.
 - [x] 7.8 Document headless app-server policy grants as admission/audit-only in this change and create a follow-up proposal for true declared-scope enforcement.
 
 ## 8. Transitional Cleanup
