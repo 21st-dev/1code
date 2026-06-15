@@ -143,9 +143,11 @@ function createDesktopRequestFromHeadless(
 function mapDesktopRunResult(
   result: DesktopRunResult,
 ): AgentRuntimeRunResult {
+  const exitCode =
+    result.status === "succeeded" ? 0 : result.status === "canceled" ? 5 : 1
   return {
     status: result.status,
-    exitCode: result.status === "succeeded" ? 0 : 1,
+    exitCode,
     errorCode:
       result.status === "succeeded" ? null : "codex_app_server_failed",
     errorMessage: result.error?.message ?? null,

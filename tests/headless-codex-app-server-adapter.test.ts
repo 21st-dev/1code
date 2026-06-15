@@ -200,4 +200,46 @@ describe("headless Codex app-server adapter", () => {
       },
     ])
   })
+
+  test("passes cancellation signal into the desktop app-server adapter", async () => {
+    const abortController = new AbortController()
+    abortController.abort()
+    const { observer: runtimeObserver } = observer()
+    let sawAbortedSignal = false
+    const runner = createCodexAppServerHeadlessTaskRunner({
+      createDesktopAdapter: () => ({
+        metadata: {
+          runtimeId: "codex",
+          source: "codex-app-server",
+          label: "Codex app-server adapter",
+          temporaryFallback: false,
+        },
+        async run(request) {
+          sawAbortedSignal = request.signal.aborted
+          return {
+            status: "canceled",
+            sessionId: "session-canceled",
+          }
+        },
+      }),
+    })
+
+    const result = await runner(
+      request({
+        signal: abortController.signal,
+        executionProfile: "policy-grant",
+        policyGrant: {
+          scopes: ["workspace:file-write"],
+        },
+      }),
+      runtimeObserver,
+    )
+
+    expect(sawAbortedSignal).toBe(true)
+    expect(result).toMatchObject({
+      status: "canceled",
+      exitCode: 5,
+      sessionId: "session-canceled",
+    })
+  })
 })
