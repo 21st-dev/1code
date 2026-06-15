@@ -11,6 +11,7 @@ import {
 } from "../../../shared/agent-runtime-capabilities"
 import type {
   AgentRuntimePermissionPolicySummary,
+  AgentRuntimeExecutionProfile,
   AgentRuntimePersistedObserver,
   AgentRuntimeProviderReference,
   AgentRuntimeRunContextBase,
@@ -34,6 +35,7 @@ export type AgentRuntimeRunContext = AgentRuntimeRunContextBase & {
   runtimeId: AgentRuntimeId
   mode: AgentJobMode
   source: AgentJobSource
+  executionProfile: AgentRuntimeExecutionProfile
   projectId?: string | null
   chatId?: string | null
   subChatId?: string | null
@@ -72,6 +74,7 @@ export type CreateAgentRuntimeRunRequestInput = {
   cwd: string
   mode: AgentJobMode
   source: AgentJobSource
+  executionProfile?: AgentRuntimeExecutionProfile
   prompt: string
   signal: AbortSignal
   attempt?: number | null
@@ -132,6 +135,7 @@ export function createAgentRuntimeRunRequest(
       mode: input.mode,
       cwd: input.cwd,
       source: input.source,
+      executionProfile: input.executionProfile ?? "batch",
       ...optionalContext(input),
     },
     jobId: input.jobId,

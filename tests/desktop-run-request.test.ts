@@ -27,6 +27,7 @@ describe("desktop run request contract", () => {
       runtimeId: "claude-code",
       mode: "agent",
       source: "desktop",
+      executionProfile: "interactive",
       projectId: "project-1",
       chatId: "chat-1",
       subChatId: "sub-chat-1",

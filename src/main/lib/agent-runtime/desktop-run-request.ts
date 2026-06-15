@@ -151,6 +151,7 @@ export function createDesktopRunContextFromPreflight(
     runtimeId,
     mode,
     source: "desktop",
+    executionProfile: "interactive",
     projectId: preflight.project.id,
     chatId: preflight.chat.id,
     subChatId: preflight.subChat.id,

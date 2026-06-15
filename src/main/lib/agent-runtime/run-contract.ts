@@ -15,11 +15,17 @@ export type AgentRuntimeRunIdentityBase = {
   attempt?: number | null
 }
 
+export type AgentRuntimeExecutionProfile =
+  | "batch"
+  | "interactive"
+  | "policy-grant"
+
 export type AgentRuntimeRunContextBase = {
   runtimeId: AgentRuntimeId
   mode: AgentJobMode
   cwd: string
   source: AgentJobSource
+  executionProfile?: AgentRuntimeExecutionProfile
 }
 
 export type AgentRuntimeProviderAuthMode =

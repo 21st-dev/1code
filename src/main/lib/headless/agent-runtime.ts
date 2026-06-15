@@ -1,84 +1,42 @@
-import {
-  checkAgentRuntimeCapability,
-  getAgentRunRequiredCapabilityIds,
-  getAgentRuntimeCapabilityManifest,
-  type AgentRuntimeCapabilityManifest,
-  type AgentRuntimeId,
-} from "../../../shared/agent-runtime-capabilities"
 import type {
   AgentRuntimeObserver,
   AgentRuntimeRunRequest,
   AgentRuntimeRunResult,
 } from "./agent-runtime-contract"
-import { runClaudeCodeHeadlessTask } from "./adapters/claude-code"
-import { runCodexHeadlessTask } from "./adapters/codex"
-
-export type AgentRuntimeAdapter = {
-  id: AgentRuntimeId
-  manifest: AgentRuntimeCapabilityManifest
-  run(
-    request: AgentRuntimeRunRequest,
-    observer: AgentRuntimeObserver,
-  ): Promise<AgentRuntimeRunResult>
-}
-
-const adapters: Record<AgentRuntimeId, AgentRuntimeAdapter> = {
-  "claude-code": {
-    id: "claude-code",
-    manifest: getAgentRuntimeCapabilityManifest("claude-code"),
-    run: runClaudeCodeHeadlessTask,
-  },
-  codex: {
-    id: "codex",
-    manifest: getAgentRuntimeCapabilityManifest("codex"),
-    run: runCodexHeadlessTask,
-  },
-}
-
-function checkRunCapabilities(
-  request: AgentRuntimeRunRequest,
-): AgentRuntimeRunResult | null {
-  const required = getAgentRunRequiredCapabilityIds({
-    mode: request.mode,
-    hasScopeContract: false,
-  })
-
-  for (const capabilityId of required) {
-    const gate = checkAgentRuntimeCapability({
-      runtime: request.runtime,
-      capabilityId,
-    })
-    if (!gate.ok) {
-      return {
-        status: "failed",
-        exitCode: 1,
-        errorCode: "unsupported_capability",
-        errorMessage: gate.diagnostic.message,
-      }
-    }
-  }
-
-  return null
-}
-
-export function getAgentRuntimeAdapter(
-  runtime: AgentRuntimeId,
-): AgentRuntimeAdapter {
-  return adapters[runtime]
-}
+export {
+  getAgentRuntimeAdapter,
+  type AgentRuntimeAdapter,
+} from "./adapter-selector"
+import { selectAgentRuntimeAdapter } from "./adapter-selector"
 
 export async function runAgentTask(
   request: AgentRuntimeRunRequest,
   observer: AgentRuntimeObserver,
 ): Promise<AgentRuntimeRunResult> {
-  const capabilityFailure = checkRunCapabilities(request)
-  if (capabilityFailure) return capabilityFailure
+  const selection = selectAgentRuntimeAdapter(request)
+  if (!selection.ok) {
+    observer.appendEvent("status", {
+      status: "runtime_selection_refused",
+      runtime: selection.diagnostic.runtime,
+      source: selection.diagnostic.source,
+      adapterSource: selection.diagnostic.adapterSource ?? null,
+      executionProfile: selection.diagnostic.executionProfile,
+      reason: selection.diagnostic.reason,
+      message: selection.diagnostic.message,
+      errorCode: selection.result.errorCode,
+    })
+    return selection.result
+  }
 
-  const adapter = getAgentRuntimeAdapter(request.runtime)
+  const { adapter, diagnostic } = selection
   observer.appendEvent("status", {
     status: "runtime_selected",
     runtime: adapter.id,
     label: adapter.manifest.label,
+    source: diagnostic.source,
+    adapterSource: diagnostic.adapterSource,
+    executionProfile: diagnostic.executionProfile,
+    fallbackReason: diagnostic.fallbackReason ?? null,
   })
   return adapter.run(request, observer)
 }
