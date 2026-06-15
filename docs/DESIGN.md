@@ -1,8 +1,15 @@
 # Locus UI Design Contract v0
 
+Date: 2026-06-16
+
 This document records the current Locus UI rules as a product contract. It is
 not a visual refresh plan. New UI should stay consistent with these rules unless
 an explicit design change updates this file.
+
+Related docs:
+
+- `docs/run-event-trace-inventory.md`
+- `docs/error-semantics.md`
 
 ## Intent
 
@@ -170,10 +177,11 @@ Every user-visible runtime/job/provider/MCP error should have:
 Preferred structure:
 
 ```text
-Title: Provider profile is missing
-Body: This run needs a Codex-capable provider profile before it can start.
-Action: Open Settings
-Details: runtime=codex, profile=not configured
+code: provider_profile_missing
+title: Provider profile is missing
+body: This run needs a Codex-capable provider profile before it can start.
+nextAction: Open Settings
+details: runtime=codex, profile=not configured
 ```
 
 Do not show raw stack traces, raw IPC errors, provider tokens, Authorization

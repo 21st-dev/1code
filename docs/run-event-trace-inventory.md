@@ -5,6 +5,11 @@ Date: 2026-06-16
 This inventory records what Locus already has for runtime events and trace
 display. It is a status document, not a rewrite plan.
 
+Related docs:
+
+- `docs/DESIGN.md`
+- `docs/error-semantics.md`
+
 ## Ownership
 
 Canonical owners are defined in `docs/OWNERSHIP_MAP.md`.
@@ -228,3 +233,6 @@ type WorkbenchTraceRow =
 
 This should be a renderer view-model layer over existing events, not a new
 durable event source.
+
+Error trace rows should use the product codes and field names defined in
+`docs/error-semantics.md`.
