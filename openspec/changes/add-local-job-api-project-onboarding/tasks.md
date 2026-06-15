@@ -25,7 +25,7 @@
 - [x] 5.1 Add a test that registers a temporary directory, creates and runs a Local Job API job in it, and unregisters it, proving the headless connected canary path works end to end.
 
 ## 6. Verification
-- [ ] 6.1 Run targeted tests for project registration, headless CLI commands, and Local Job API create errors.
-- [ ] 6.2 Run `bun run ts:check`.
-- [ ] 6.3 Run `bun run build`.
-- [ ] 6.4 Run `bunx openspec validate add-local-job-api-project-onboarding --strict --no-interactive` and `bunx openspec validate --all --strict --no-interactive`.
+- [x] 6.1 Run targeted tests for project registration, headless CLI commands, and Local Job API create errors.
+- [x] 6.2 Run `bun run ts:check`.
+- [x] 6.3 Run `bun run build`.
+- [x] 6.4 Run `bunx openspec validate add-local-job-api-project-onboarding --strict --no-interactive` and `bunx openspec validate --all --strict --no-interactive`.
