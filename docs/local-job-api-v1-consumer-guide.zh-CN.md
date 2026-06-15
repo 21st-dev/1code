@@ -12,6 +12,8 @@ v1 的正式入口是机器可读 CLI：
 locus api ...
 ```
 
+机器可读合同：[local-job-api-v1.schema.json](local-job-api-v1.schema.json)
+
 下游集成应该使用 `locus api`。`locus run` 和 `locus jobs` 继续保留给人工使用和兼容脚本。
 
 ## 文档参考模型

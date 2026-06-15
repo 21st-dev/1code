@@ -12,6 +12,8 @@ The v1 entrypoint is the machine-readable CLI group:
 locus api ...
 ```
 
+Machine-readable contract: [local-job-api-v1.schema.json](local-job-api-v1.schema.json)
+
 Use `locus api` for integrations. Keep `locus run` and `locus jobs` for humans
 and compatibility scripts.
 

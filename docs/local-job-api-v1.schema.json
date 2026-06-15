@@ -1,0 +1,989 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/lupanpan1030/agent-code-for-me/blob/main/docs/local-job-api-v1.schema.json",
+  "title": "Locus Local Job API v1 schema bundle",
+  "description": "Machine-readable JSON Schema bundle for the local CLI + JSON contract exposed by `locus api ...`. Consumers may validate individual shapes with refs such as `#/$defs/createRequest`, `#/$defs/eventEnvelope`, and `#/$defs/resultEnvelope`.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/createRequest"
+    },
+    {
+      "$ref": "#/$defs/createResponseEnvelope"
+    },
+    {
+      "$ref": "#/$defs/jobEnvelope"
+    },
+    {
+      "$ref": "#/$defs/runtimeManifestEnvelope"
+    },
+    {
+      "$ref": "#/$defs/eventEnvelope"
+    },
+    {
+      "$ref": "#/$defs/resultEnvelope"
+    },
+    {
+      "$ref": "#/$defs/artifactManifest"
+    }
+  ],
+  "$defs": {
+    "apiVersion": {
+      "const": "locus.local-job.v1"
+    },
+    "boundedId80": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "boundedId160": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "absoluteLocalPath": {
+      "type": "string",
+      "minLength": 1,
+      "anyOf": [
+        {
+          "pattern": "^/"
+        },
+        {
+          "pattern": "^[A-Za-z]:[\\\\/]"
+        },
+        {
+          "pattern": "^\\\\\\\\"
+        }
+      ]
+    },
+    "dateTimeOrNull": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "runtimeId": {
+      "enum": [
+        "claude-code",
+        "codex"
+      ]
+    },
+    "runtimeIdInput": {
+      "description": "`claude` is accepted in create requests and normalized to `claude-code` in persisted/envelope output.",
+      "enum": [
+        "claude-code",
+        "codex",
+        "claude"
+      ]
+    },
+    "runtimeCapabilityId": {
+      "enum": [
+        "hardToolGuard",
+        "planMode",
+        "scopeExpansion",
+        "askUserQuestion",
+        "rollback",
+        "mcpAuth",
+        "mcpConfiguration",
+        "providerProfiles",
+        "attachments",
+        "usageMetadata",
+        "runtimePlugins",
+        "runtimeCommands",
+        "runtimeWorkflows",
+        "appAgents"
+      ]
+    },
+    "runtimeCapabilityStatus": {
+      "enum": [
+        "supported",
+        "degraded",
+        "unsupported"
+      ]
+    },
+    "runtimeCapabilityScope": {
+      "enum": [
+        "runtime-neutral",
+        "runtime-specific",
+        "unavailable"
+      ]
+    },
+    "agentMode": {
+      "enum": [
+        "plan",
+        "agent"
+      ]
+    },
+    "agentJobStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "canceled",
+        "interrupted"
+      ]
+    },
+    "writePolicy": {
+      "enum": [
+        "metadata-only",
+        "proposal-only"
+      ]
+    },
+    "eventType": {
+      "enum": [
+        "job_created",
+        "job_started",
+        "assistant_delta",
+        "reasoning_delta",
+        "tool_started",
+        "tool_delta",
+        "tool_finished",
+        "artifact_created",
+        "status",
+        "error",
+        "completed"
+      ]
+    },
+    "consumer": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/boundedId80"
+        },
+        "runExternalId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/boundedId160"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "normalizedConsumer": {
+      "type": "object",
+      "required": [
+        "id",
+        "runExternalId"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/boundedId80"
+        },
+        "runExternalId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/boundedId160"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "createRequest": {
+      "type": "object",
+      "description": "Input accepted by `locus api runs create --request <path|-> --json`. Runtime validation also rejects secret-like keys and values recursively, enforces a 1 MiB request JSON limit, and validates artifact paths against the filesystem/project boundary.",
+      "required": [
+        "apiVersion",
+        "consumer",
+        "project",
+        "runtime",
+        "mode",
+        "prompt"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/$defs/apiVersion"
+        },
+        "consumer": {
+          "$ref": "#/$defs/consumer"
+        },
+        "project": {
+          "type": "object",
+          "required": [
+            "cwd"
+          ],
+          "properties": {
+            "cwd": {
+              "$ref": "#/$defs/absoluteLocalPath"
+            },
+            "projectId": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/runtimeIdInput"
+            },
+            "requiredCapabilities": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/runtimeCapabilityId"
+              },
+              "uniqueItems": true,
+              "default": []
+            }
+          }
+        },
+        "mode": {
+          "$ref": "#/$defs/agentMode"
+        },
+        "prompt": {
+          "type": "object",
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 262144
+            }
+          }
+        },
+        "input": {
+          "type": "object",
+          "description": "Consumer-owned structured metadata. Provider credentials, authorization headers, environment snapshots, private keys, passwords, and secret-like values are rejected by runtime validation.",
+          "default": {}
+        },
+        "artifacts": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "baseDir": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/$defs/absoluteLocalPath"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "writePolicy": {
+                  "$ref": "#/$defs/writePolicy",
+                  "default": "metadata-only"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {}
+        }
+      }
+    },
+    "normalizedCreateRequest": {
+      "type": "object",
+      "description": "Normalized request shape after `validateLocalJobApiCreateRequest` succeeds.",
+      "required": [
+        "apiVersion",
+        "consumer",
+        "project",
+        "runtime",
+        "mode",
+        "prompt",
+        "input",
+        "artifacts"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/$defs/apiVersion"
+        },
+        "consumer": {
+          "$ref": "#/$defs/normalizedConsumer"
+        },
+        "project": {
+          "type": "object",
+          "required": [
+            "cwd",
+            "projectId"
+          ],
+          "properties": {
+            "cwd": {
+              "$ref": "#/$defs/absoluteLocalPath"
+            },
+            "projectId": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "required": [
+            "id",
+            "requiredCapabilities"
+          ],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/runtimeId"
+            },
+            "requiredCapabilities": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/runtimeCapabilityId"
+              },
+              "uniqueItems": true
+            }
+          }
+        },
+        "mode": {
+          "$ref": "#/$defs/agentMode"
+        },
+        "prompt": {
+          "type": "object",
+          "required": [
+            "text"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 262144
+            }
+          }
+        },
+        "input": {
+          "type": "object"
+        },
+        "artifacts": {
+          "type": "object",
+          "required": [
+            "baseDir",
+            "writePolicy"
+          ],
+          "properties": {
+            "baseDir": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/absoluteLocalPath"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "writePolicy": {
+              "$ref": "#/$defs/writePolicy"
+            }
+          }
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": [
+        "role",
+        "path",
+        "sha256",
+        "contentType",
+        "sizeBytes"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "$ref": "#/$defs/absoluteLocalPath"
+        },
+        "sha256": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contentType": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sizeBytes": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "artifactManifest": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "jobId",
+        "artifactBaseDir",
+        "artifacts",
+        "createdAt"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/$defs/apiVersion"
+        },
+        "jobId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactBaseDir": {
+          "$ref": "#/$defs/absoluteLocalPath"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "runtimeCapability": {
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "status",
+        "scope",
+        "reason",
+        "hint",
+        "support"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/runtimeCapabilityId"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "$ref": "#/$defs/runtimeCapabilityStatus"
+        },
+        "scope": {
+          "$ref": "#/$defs/runtimeCapabilityScope"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hint": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "support": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "kind",
+                "references"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "runtime-code",
+                    "stable-runtime-primitive",
+                    "locus-shared-layer"
+                  ]
+                },
+                "references": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "runtimeManifest": {
+      "type": "object",
+      "required": [
+        "runtimeId",
+        "label",
+        "description",
+        "capabilities"
+      ],
+      "properties": {
+        "runtimeId": {
+          "$ref": "#/$defs/runtimeId"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/runtimeCapability"
+          }
+        }
+      }
+    },
+    "serializedAgentJob": {
+      "type": "object",
+      "required": [
+        "id",
+        "retryOfJobId",
+        "attempt",
+        "source",
+        "runtime",
+        "status",
+        "mode",
+        "cwd",
+        "projectId",
+        "chatId",
+        "subChatId",
+        "promptPreview",
+        "apiConsumerId",
+        "apiConsumerRunId",
+        "artifactBaseDir",
+        "artifactManifestPath",
+        "createdAt",
+        "startedAt",
+        "finishedAt",
+        "exitCode",
+        "errorCode",
+        "errorMessage",
+        "result",
+        "workerId",
+        "workerPid",
+        "heartbeatAt",
+        "cancelRequestedAt",
+        "cancelRequestedBy"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryOfJobId": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source": {
+          "enum": [
+            "desktop",
+            "cli",
+            "api",
+            "daemon",
+            "schedule",
+            "protocol"
+          ]
+        },
+        "runtime": {
+          "$ref": "#/$defs/runtimeId"
+        },
+        "status": {
+          "$ref": "#/$defs/agentJobStatus"
+        },
+        "mode": {
+          "$ref": "#/$defs/agentMode"
+        },
+        "cwd": {
+          "$ref": "#/$defs/absoluteLocalPath"
+        },
+        "projectId": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chatId": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subChatId": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "promptPreview": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiConsumerId": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiConsumerRunId": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "artifactBaseDir": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/absoluteLocalPath"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "artifactManifestPath": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/absoluteLocalPath"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdAt": {
+          "$ref": "#/$defs/dateTimeOrNull"
+        },
+        "startedAt": {
+          "$ref": "#/$defs/dateTimeOrNull"
+        },
+        "finishedAt": {
+          "$ref": "#/$defs/dateTimeOrNull"
+        },
+        "exitCode": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "errorCode": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "errorMessage": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": true,
+        "workerId": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workerPid": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "heartbeatAt": {
+          "$ref": "#/$defs/dateTimeOrNull"
+        },
+        "cancelRequestedAt": {
+          "$ref": "#/$defs/dateTimeOrNull"
+        },
+        "cancelRequestedBy": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "jobEnvelope": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "job"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/$defs/apiVersion"
+        },
+        "job": {
+          "$ref": "#/$defs/serializedAgentJob"
+        }
+      }
+    },
+    "runtimeManifestEnvelope": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "runtimes"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/$defs/apiVersion"
+        },
+        "runtimes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/runtimeManifest"
+          }
+        }
+      }
+    },
+    "eventEnvelope": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "jobId",
+        "sequence",
+        "type",
+        "createdAt",
+        "payload"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/$defs/apiVersion"
+        },
+        "jobId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "type": {
+          "$ref": "#/$defs/eventType"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/dateTimeOrNull"
+        },
+        "payload": true
+      }
+    },
+    "resultEnvelope": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "jobId",
+        "status",
+        "runtime",
+        "mode",
+        "consumer",
+        "artifactManifestPath",
+        "artifacts",
+        "diagnostics",
+        "result"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/$defs/apiVersion"
+        },
+        "jobId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "$ref": "#/$defs/agentJobStatus"
+        },
+        "runtime": {
+          "$ref": "#/$defs/runtimeId"
+        },
+        "mode": {
+          "$ref": "#/$defs/agentMode"
+        },
+        "consumer": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/normalizedConsumer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "artifactManifestPath": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/absoluteLocalPath"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        },
+        "result": true
+      }
+    },
+    "createResponseEnvelope": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "job",
+        "result"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/$defs/apiVersion"
+        },
+        "job": {
+          "$ref": "#/$defs/serializedAgentJob"
+        },
+        "result": {
+          "$ref": "#/$defs/resultEnvelope"
+        }
+      }
+    }
+  }
+}
