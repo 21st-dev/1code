@@ -9,6 +9,7 @@ import {
 const adapterRunCalls = {
   codex: 0,
   claude: 0,
+  appServer: 0,
 }
 
 mock.module("electron", () => ({
@@ -24,6 +25,19 @@ mock.module("../src/main/lib/headless/adapters/codex", () => ({
   async runCodexHeadlessTask() {
     adapterRunCalls.codex += 1
     return { status: "completed", exitCode: 0 }
+  },
+}))
+
+mock.module("../src/main/lib/headless/adapters/codex-app-server", () => ({
+  async runCodexAppServerHeadlessTask() {
+    adapterRunCalls.appServer += 1
+    return {
+      status: "succeeded",
+      exitCode: 0,
+      result: {
+        adapterSource: "codex-app-server",
+      },
+    }
   },
 }))
 
@@ -114,6 +128,76 @@ describe("headless adapter selector", () => {
         fallbackReason: null,
       },
     })
+  })
+
+  test("selects Codex app-server only for explicit policy-grant runs", () => {
+    const selection = selectAgentRuntimeAdapter(
+      request({
+        runtime: "codex",
+        source: "api",
+        executionProfile: "policy-grant",
+        policyGrant: {
+          scopes: ["workspace:file-write"],
+        },
+      }),
+    )
+
+    expect(selection).toMatchObject({
+      ok: true,
+      adapter: {
+        id: "codex",
+        sourceId: "codex-app-server",
+        executionProfile: "policy-grant",
+        requiresInteraction: false,
+        policyGrantEnforcement: "pre-execution",
+      },
+      diagnostic: {
+        status: "selected",
+        runtime: "codex",
+        source: "api",
+        adapterSource: "codex-app-server",
+        executionProfile: "policy-grant",
+        fallbackReason: null,
+      },
+    })
+  })
+
+  test("runs selected Codex app-server adapter for policy-grant jobs", async () => {
+    adapterRunCalls.appServer = 0
+    const { observer: runtimeObserver, events } = observer()
+    const result = await runAgentTask(
+      request({
+        runtime: "codex",
+        source: "api",
+        executionProfile: "policy-grant",
+        policyGrant: {
+          scopes: ["workspace:file-write"],
+        },
+      }),
+      runtimeObserver,
+    )
+
+    expect(adapterRunCalls.appServer).toBe(1)
+    expect(result).toMatchObject({
+      status: "succeeded",
+      result: {
+        adapterSource: "codex-app-server",
+      },
+    })
+    expect(events).toEqual([
+      {
+        type: "status",
+        payload: {
+          status: "runtime_selected",
+          runtime: "codex",
+          label: "Codex",
+          source: "api",
+          adapterSource: "codex-app-server",
+          executionProfile: "policy-grant",
+          fallbackReason: null,
+        },
+      },
+    ])
   })
 
   test("selects Claude batch for daemon runs by default", () => {

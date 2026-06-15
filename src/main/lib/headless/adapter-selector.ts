@@ -16,10 +16,12 @@ import type {
   AgentRuntimeRunResult,
 } from "./agent-runtime-contract"
 import { runClaudeCodeHeadlessTask } from "./adapters/claude-code"
+import { runCodexAppServerHeadlessTask } from "./adapters/codex-app-server"
 import { runCodexHeadlessTask } from "./adapters/codex"
 
 export type AgentRuntimeAdapterSourceId =
   | "claude-code-batch"
+  | "codex-app-server"
   | "codex-batch"
 
 export type AgentRuntimeAdapterPreferenceSourceId =
@@ -30,7 +32,7 @@ export type AgentRuntimeAdapterPreferenceSourceId =
 export type AgentRuntimeAdapter = {
   id: AgentRuntimeId
   sourceId: AgentRuntimeAdapterSourceId
-  executionProfile: "batch"
+  executionProfile: AgentRuntimeExecutionProfile
   label: string
   requiresInteraction: false
   policyGrantEnforcement: "none" | "sandbox-level" | "pre-execution"
@@ -89,6 +91,17 @@ const batchAdapters: Record<AgentRuntimeId, AgentRuntimeAdapter> = {
     manifest: getAgentRuntimeCapabilityManifest("codex"),
     run: runCodexHeadlessTask,
   },
+}
+
+const codexAppServerAdapter: AgentRuntimeAdapter = {
+  id: "codex",
+  sourceId: "codex-app-server",
+  executionProfile: "policy-grant",
+  label: "Codex app-server",
+  requiresInteraction: false,
+  policyGrantEnforcement: "pre-execution",
+  manifest: getAgentRuntimeCapabilityManifest("codex"),
+  run: runCodexAppServerHeadlessTask,
 }
 
 function requestedExecutionProfile(
@@ -219,6 +232,19 @@ export function getAgentRuntimeAdapter(
   return batchAdapters[runtime]
 }
 
+function selectCandidateAdapter(input: {
+  request: AgentRuntimeRunRequest
+  executionProfile: AgentRuntimeExecutionProfile
+}): AgentRuntimeAdapter {
+  if (
+    input.request.runtime === "codex" &&
+    input.executionProfile === "policy-grant"
+  ) {
+    return codexAppServerAdapter
+  }
+  return getAgentRuntimeAdapter(input.request.runtime)
+}
+
 export type SelectAgentRuntimeAdapterOptions = {
   preferredAdapterSource?: AgentRuntimeAdapterPreferenceSourceId | null
 }
@@ -237,7 +263,7 @@ export function selectAgentRuntimeAdapter(
   options: SelectAgentRuntimeAdapterOptions = {},
 ): AgentRuntimeAdapterSelection {
   const executionProfile = requestedExecutionProfile(request)
-  const adapter = getAgentRuntimeAdapter(request.runtime)
+  const adapter = selectCandidateAdapter({ request, executionProfile })
 
   if (request.permissionPolicy.kind === "fail-closed") {
     return failClosedPermissionPolicyResult({ request, adapter })
@@ -261,7 +287,7 @@ export function selectAgentRuntimeAdapter(
     })
   }
 
-  if (executionProfile !== "batch") {
+  if (executionProfile !== "batch" && executionProfile !== "policy-grant") {
     return refusedSelectionResult({
       request,
       adapter,
@@ -297,7 +323,7 @@ export function selectAgentRuntimeAdapter(
         adapter,
         preferredAdapterSource: options.preferredAdapterSource,
       }),
-      message: `Selected ${adapter.label} for ${request.source} batch execution.`,
+      message: `Selected ${adapter.label} for ${request.source} ${executionProfile} execution.`,
     },
   }
 }
