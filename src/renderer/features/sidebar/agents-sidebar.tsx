@@ -1810,6 +1810,7 @@ export function AgentsSidebar({
     const windowId = getWindowId()
     const allIds: string[] = []
     for (const chat of agentChats) {
+      if (!chat.projectId) continue
       try {
         // Use window-prefixed key (matches sub-chat-store.ts)
         const stored = localStorage.getItem(

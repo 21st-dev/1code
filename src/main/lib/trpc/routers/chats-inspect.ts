@@ -1,51 +1,12 @@
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
-import { BrowserWindow } from "electron"
-import * as fs from "fs/promises"
-import * as path from "path"
+import { and, eq, inArray } from "drizzle-orm"
 import simpleGit from "simple-git"
 import { z } from "zod"
-import { buildAgentRuntimeCapabilityDiagnostic } from "../../../../shared/agent-runtime-capabilities"
-import {
-  agentChatProviders,
-  buildAgentChatMessageMetadata,
-} from "../../../../shared/agent-chat-provider"
-import {
-  trackPRCreated,
-  trackWorkspaceArchived,
-  trackWorkspaceCreated,
-  trackWorkspaceDeleted,
-} from "../../analytics"
+import { getProjectBackedFileStats } from "../../chat-file-stats"
 import { chats, getDatabase, projects, subChats } from "../../db"
+import { publicProcedure } from "../index"
 import {
-  createWorktreeForChat,
-  fetchGitHubPRStatus,
-  getWorktreeDiff,
-  removeWorktree,
-  sanitizeProjectName,
-} from "../../git"
-import type { WorktreeSetupResult } from "../../git/worktree-config"
-import { computeContentHash, gitCache } from "../../git/cache"
-import { splitUnifiedDiffByFile } from "../../git/diff-parser"
-import { execWithShellEnv } from "../../git/shell-env"
-import { applyRollbackStash } from "../../git/stash"
-import { assertOfficialCloudAllowed } from "../../local-only"
-import { checkOllamaStatus } from "../../ollama"
-import { terminalManager } from "../../terminal/manager"
-import { publicProcedure, router } from "../index"
-import {
-  getActiveLocalApiProviderConfig,
-  type LocalApiProviderPurpose,
-} from "./local-api-provider-config"
-import { getProviderDefaultRuntimeConfig } from "../../provider-profiles/storage"
-import {
-  buildCommitFileSummary,
-  buildCommitMessagePrompt,
-  cleanGeneratedCommitMessage,
-} from "./commit-message-utils"
-
-import {
-  ContextUsageSummary,
   addUsageTotals,
+  type ContextUsageSummary,
   emptyUsageTotals,
   getContextUsage,
   getMessageTimestampMs,
@@ -55,157 +16,15 @@ import {
 
 export const inspectProcedures = {
   getFileStats: publicProcedure
-    .input(z.object({
-      openSubChatIds: z.array(z.string()).optional(),
-      chatIds: z.array(z.string()).optional(),
-    }))
+    .input(
+      z.object({
+        openSubChatIds: z.array(z.string()).optional(),
+        chatIds: z.array(z.string()).optional(),
+      }),
+    )
     .query(({ input }) => {
-    const db = getDatabase()
-
-    // Early return if nothing to check
-    if ((!input.openSubChatIds || input.openSubChatIds.length === 0) &&
-        (!input.chatIds || input.chatIds.length === 0)) {
-      return []
-    }
-
-    // Query sub-chats based on input mode
-    let allChats: Array<{ chatId: string | null; subChatId: string; messages: string | null }>
-
-    if (input.chatIds && input.chatIds.length > 0) {
-      // Archive mode: query all sub-chats for given chat IDs
-      // Pre-filter with LIKE to skip sub-chats without file edits (avoids loading/parsing large JSON)
-      allChats = db
-        .select({
-          chatId: subChats.chatId,
-          subChatId: subChats.id,
-          messages: subChats.messages,
-        })
-        .from(subChats)
-        .where(
-          and(
-            inArray(subChats.chatId, input.chatIds),
-            sql`(${subChats.messages} LIKE '%tool-Edit%' OR ${subChats.messages} LIKE '%tool-Write%')`
-          )
-        )
-        .all()
-    } else {
-      // Main sidebar mode: query specific sub-chats
-      allChats = db
-        .select({
-          chatId: subChats.chatId,
-          subChatId: subChats.id,
-          messages: subChats.messages,
-        })
-        .from(subChats)
-        .where(inArray(subChats.id, input.openSubChatIds!))
-        .all()
-    }
-
-    // Aggregate stats per workspace (chatId)
-    const statsMap = new Map<
-      string,
-      { additions: number; deletions: number; fileCount: number }
-    >()
-
-    for (const row of allChats) {
-      if (!row.messages || !row.chatId) continue
-      const chatId = row.chatId // TypeScript narrowing
-
-      try {
-        const messages = JSON.parse(row.messages) as Array<{
-          role: string
-          parts?: Array<{
-            type: string
-            input?: {
-              file_path?: string
-              old_string?: string
-              new_string?: string
-              content?: string
-            }
-          }>
-        }>
-
-        // Track file states for this sub-chat
-        const fileStates = new Map<
-          string,
-          { originalContent: string | null; currentContent: string }
-        >()
-
-        for (const msg of messages) {
-          if (msg.role !== "assistant") continue
-          for (const part of msg.parts || []) {
-            if (part.type === "tool-Edit" || part.type === "tool-Write") {
-              const filePath = part.input?.file_path
-              if (!filePath) continue
-              // Skip session files
-              if (
-                filePath.includes("claude-sessions") ||
-                filePath.includes("Application Support")
-              )
-                continue
-
-              const oldString = part.input?.old_string || ""
-              const newString =
-                part.input?.new_string || part.input?.content || ""
-
-              const existing = fileStates.get(filePath)
-              if (existing) {
-                existing.currentContent = newString
-              } else {
-                fileStates.set(filePath, {
-                  originalContent: part.type === "tool-Write" ? null : oldString,
-                  currentContent: newString,
-                })
-              }
-            }
-          }
-        }
-
-        // Calculate stats for this sub-chat and add to workspace total
-        let subChatAdditions = 0
-        let subChatDeletions = 0
-        let subChatFileCount = 0
-
-        for (const [, state] of fileStates) {
-          const original = state.originalContent || ""
-          if (original === state.currentContent) continue
-
-          const oldLines = original ? original.split("\n").length : 0
-          const newLines = state.currentContent
-            ? state.currentContent.split("\n").length
-            : 0
-
-          if (!original) {
-            // New file
-            subChatAdditions += newLines
-          } else {
-            subChatAdditions += newLines
-            subChatDeletions += oldLines
-          }
-          subChatFileCount += 1
-        }
-
-        // Add to workspace total
-        const existing = statsMap.get(chatId) || {
-          additions: 0,
-          deletions: 0,
-          fileCount: 0,
-        }
-        existing.additions += subChatAdditions
-        existing.deletions += subChatDeletions
-        existing.fileCount += subChatFileCount
-        statsMap.set(chatId, existing)
-      } catch {
-        // Skip invalid JSON
-      }
-    }
-
-    // Convert to array for easier consumption
-    return Array.from(statsMap.entries()).map(([chatId, stats]) => ({
-      chatId,
-      ...stats,
-    }))
-  }),
+      return getProjectBackedFileStats(getDatabase(), input)
+    }),
 
   /**
    * Get sub-chats with pending plan approvals
@@ -216,80 +35,80 @@ export const inspectProcedures = {
   getPendingPlanApprovals: publicProcedure
     .input(z.object({ openSubChatIds: z.array(z.string()) }))
     .query(({ input }) => {
-    const db = getDatabase()
+      const db = getDatabase()
 
-    // Early return if no sub-chats to check
-    if (input.openSubChatIds.length === 0) {
-      return []
-    }
+      // Early return if no sub-chats to check
+      if (input.openSubChatIds.length === 0) {
+        return []
+      }
 
-    // Query only the specified sub-chats, including mode for filtering
-    const allSubChats = db
-      .select({
-        chatId: subChats.chatId,
-        subChatId: subChats.id,
-        mode: subChats.mode,
-        messages: subChats.messages,
-      })
-      .from(subChats)
-      .where(inArray(subChats.id, input.openSubChatIds))
-      .all()
+      // Query only the specified sub-chats, including mode for filtering
+      const allSubChats = db
+        .select({
+          chatId: subChats.chatId,
+          subChatId: subChats.id,
+          mode: subChats.mode,
+          messages: subChats.messages,
+        })
+        .from(subChats)
+        .where(inArray(subChats.id, input.openSubChatIds))
+        .all()
 
-    const pendingApprovals: Array<{ subChatId: string; chatId: string }> = []
+      const pendingApprovals: Array<{ subChatId: string; chatId: string }> = []
 
-    for (const row of allSubChats) {
-      if (!row.subChatId || !row.chatId) continue
+      for (const row of allSubChats) {
+        if (!row.subChatId || !row.chatId) continue
 
-      // If mode is "agent", plan is already approved - skip
-      if (row.mode === "agent") continue
+        // If mode is "agent", plan is already approved - skip
+        if (row.mode === "agent") continue
 
-      // Only check for ExitPlanMode in plan mode sub-chats
-      if (!row.messages) continue
+        // Only check for ExitPlanMode in plan mode sub-chats
+        if (!row.messages) continue
 
-      try {
-        const messages = JSON.parse(row.messages) as Array<{
-          role: string
-          content?: string
-          parts?: Array<{
-            type: string
-            text?: string
-            output?: unknown
+        try {
+          const messages = JSON.parse(row.messages) as Array<{
+            role: string
+            content?: string
+            parts?: Array<{
+              type: string
+              text?: string
+              output?: unknown
+            }>
           }>
-        }>
 
-        // Check if there's a completed ExitPlanMode in messages
-        const hasCompletedExitPlanMode = (): boolean => {
-          for (let i = messages.length - 1; i >= 0; i--) {
-            const msg = messages[i]
-            if (!msg) continue
+          // Check if there's a completed ExitPlanMode in messages
+          const hasCompletedExitPlanMode = (): boolean => {
+            for (let i = messages.length - 1; i >= 0; i--) {
+              const msg = messages[i]
+              if (!msg) continue
 
-            // If assistant message with completed ExitPlanMode, we found an unapproved plan
-            if (msg.role === "assistant" && msg.parts) {
-              const exitPlanPart = msg.parts.find(
-                (p) => p.type === "tool-ExitPlanMode"
-              )
-              // Check if ExitPlanMode is completed (has output, even if empty)
-              if (exitPlanPart && exitPlanPart.output !== undefined) {
-                return true
+              // If assistant message with completed ExitPlanMode, we found an unapproved plan
+              if (msg.role === "assistant" && msg.parts) {
+                const exitPlanPart = msg.parts.find(
+                  (p) => p.type === "tool-ExitPlanMode",
+                )
+                // Check if ExitPlanMode is completed (has output, even if empty)
+                if (exitPlanPart && exitPlanPart.output !== undefined) {
+                  return true
+                }
               }
             }
+            return false
           }
-          return false
-        }
 
-        if (hasCompletedExitPlanMode()) {
-          pendingApprovals.push({
-            subChatId: row.subChatId,
-            chatId: row.chatId,
-          })
+          if (hasCompletedExitPlanMode()) {
+            pendingApprovals.push({
+              subChatId: row.subChatId,
+              chatId: row.chatId,
+            })
+          }
+        } catch {
+          // Skip invalid JSON
         }
-      } catch {
-        // Skip invalid JSON
       }
-    }
 
-    return pendingApprovals
-  }),
+      return pendingApprovals
+    }),
 
   /**
    * Get worktree status for archive dialog
@@ -365,10 +184,12 @@ export const inspectProcedures = {
         const singleSubChat = db
           .select()
           .from(subChats)
-          .where(and(
-            eq(subChats.id, input.subChatId),
-            eq(subChats.chatId, input.chatId) // Ensure sub-chat belongs to this chat
-          ))
+          .where(
+            and(
+              eq(subChats.id, input.subChatId),
+              eq(subChats.chatId, input.chatId), // Ensure sub-chat belongs to this chat
+            ),
+          )
           .get()
 
         if (!singleSubChat) {
@@ -412,19 +233,26 @@ export const inspectProcedures = {
 
       // Sanitize filename - remove characters that are invalid on Windows/macOS/Linux
       const sanitizeFilename = (name: string): string => {
-        return name
-          .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_") // Invalid chars
-          .replace(/\s+/g, "_") // Replace spaces with underscores
-          .replace(/_+/g, "_") // Collapse multiple underscores
-          .replace(/^_|_$/g, "") // Trim underscores from ends
-          .slice(0, 100) // Limit length
-          || "chat" // Fallback if empty
+        const invalidFilenameChars = new RegExp(
+          '[<>:"/\\\\|?*\\x00-\\x1F]',
+          "g",
+        )
+        return (
+          name
+            .replace(invalidFilenameChars, "_") // Invalid chars
+            .replace(/\s+/g, "_") // Replace spaces with underscores
+            .replace(/_+/g, "_") // Collapse multiple underscores
+            .replace(/^_|_$/g, "") // Trim underscores from ends
+            .slice(0, 100) || // Limit length
+          "chat"
+        ) // Fallback if empty
       }
 
       // Use sub-chat name if exporting single sub-chat, otherwise use chat name
-      const exportName = input.subChatId && chatSubChats[0]?.name
-        ? `${chat.name || "chat"}-${chatSubChats[0].name}`
-        : (chat.name || "chat")
+      const exportName =
+        input.subChatId && chatSubChats[0]?.name
+          ? `${chat.name || "chat"}-${chatSubChats[0].name}`
+          : chat.name || "chat"
       const safeFilename = sanitizeFilename(exportName)
 
       if (input.format === "json") {
@@ -642,10 +470,12 @@ export const inspectProcedures = {
    * Useful for showing chat summary in sidebar or export dialogs.
    */
   getChatStats: publicProcedure
-    .input(z.object({
-      chatId: z.string(),
-      subChatId: z.string().optional(), // If provided, return stats for only this sub-chat
-    }))
+    .input(
+      z.object({
+        chatId: z.string(),
+        subChatId: z.string().optional(), // If provided, return stats for only this sub-chat
+      }),
+    )
     .query(({ input }) => {
       const db = getDatabase()
 
@@ -655,10 +485,12 @@ export const inspectProcedures = {
         const singleSubChat = db
           .select()
           .from(subChats)
-          .where(and(
-            eq(subChats.id, input.subChatId),
-            eq(subChats.chatId, input.chatId)
-          ))
+          .where(
+            and(
+              eq(subChats.id, input.subChatId),
+              eq(subChats.chatId, input.chatId),
+            ),
+          )
           .get()
 
         chatSubChats = singleSubChat ? [singleSubChat] : []
@@ -684,7 +516,9 @@ export const inspectProcedures = {
           const messages = JSON.parse(subChat.messages || "[]") as Array<{
             role: string
             parts?: Array<{ type: string; toolName?: string }>
-            metadata?: { usage?: { inputTokens?: number; outputTokens?: number } }
+            metadata?: {
+              usage?: { inputTokens?: number; outputTokens?: number }
+            }
           }>
 
           for (const msg of messages) {

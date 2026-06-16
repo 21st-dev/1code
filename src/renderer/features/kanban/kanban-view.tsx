@@ -152,6 +152,7 @@ export function KanbanView() {
     const windowId = getWindowId()
     const allIds: string[] = []
     for (const chat of chats) {
+      if (!chat.projectId) continue
       try {
         const stored = localStorage.getItem(`${windowId}:agent-open-sub-chats-${chat.id}`)
         if (stored) {

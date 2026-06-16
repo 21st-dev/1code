@@ -1,27 +1,27 @@
-import { and, asc, desc, eq, isNull, lt, or, sql } from "drizzle-orm"
+import { and, asc, desc, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/better-sqlite3"
-import type * as schema from "../db/schema"
-import {
-  agentJobEvents,
-  agentJobs,
-  type AgentJob,
-  type AgentJobEvent,
-} from "../db/schema"
-import { createId } from "../db/utils"
 import {
   AGENT_JOB_EVENT_TYPES,
   AGENT_JOB_MODES,
   AGENT_JOB_SOURCES,
   AGENT_JOB_STATUSES,
-  isTerminalAgentJobStatus,
   type AgentJobEventType,
   type AgentJobMode,
   type AgentJobRuntime,
   type AgentJobSource,
   type AgentJobStatus,
+  isTerminalAgentJobStatus,
 } from "../../../shared/agent-jobs"
 import { AGENT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
 import { createAgentJobRunEvent } from "../agent-runtime/job-event-bridge"
+import type * as schema from "../db/schema"
+import {
+  type AgentJob,
+  type AgentJobEvent,
+  agentJobEvents,
+  agentJobs,
+} from "../db/schema"
+import { createId } from "../db/utils"
 
 export type AgentJobDatabase = ReturnType<typeof drizzle<typeof schema>>
 
@@ -71,6 +71,7 @@ export type ListAgentJobsInput = {
   limit?: number
   status?: AgentJobStatus
   source?: AgentJobSource
+  projectOnly?: boolean
 }
 
 export type RetryAgentJobOptions =
@@ -116,7 +117,10 @@ function redactSecretText(value: string): string {
       /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
       "[redacted-jwt]",
     )
-    .replace(/(authorization\s*:\s*basic\s+)[A-Za-z0-9+/=_-]+/gi, "$1[redacted]")
+    .replace(
+      /(authorization\s*:\s*basic\s+)[A-Za-z0-9+/=_-]+/gi,
+      "$1[redacted]",
+    )
     .replace(/bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]")
     .replace(
       /((?:access_token|refresh_token|id_token|anthropic_auth_token|openai_api_key|codex_api_key|github_token|npm_token|aws_secret_access_key|aws_session_token|api[-_]?key|secret|password)["'=:\s]+)["']?[^\s"',;]+/gi,
@@ -244,7 +248,8 @@ function insertAgentJobEventRecord(
     .run()
 
   const event =
-    db.select()
+    db
+      .select()
       .from(agentJobEvents)
       .where(eq(agentJobEvents.id, eventId))
       .get() ?? null
@@ -315,7 +320,9 @@ export function getAgentJob(
   db: AgentJobDatabase,
   jobId: string,
 ): AgentJob | null {
-  return db.select().from(agentJobs).where(eq(agentJobs.id, jobId)).get() ?? null
+  return (
+    db.select().from(agentJobs).where(eq(agentJobs.id, jobId)).get() ?? null
+  )
 }
 
 export function listAgentJobs(
@@ -326,6 +333,7 @@ export function listAgentJobs(
   const whereClauses = [
     input.status ? eq(agentJobs.status, input.status) : undefined,
     input.source ? eq(agentJobs.source, input.source) : undefined,
+    input.projectOnly ? isNotNull(agentJobs.projectId) : undefined,
   ].filter(Boolean)
   const whereClause =
     whereClauses.length === 0
@@ -587,7 +595,10 @@ export function interruptStaleAgentJobs(
     .where(
       and(
         eq(agentJobs.status, "running"),
-        or(isNull(agentJobs.heartbeatAt), lt(agentJobs.heartbeatAt, staleBefore)),
+        or(
+          isNull(agentJobs.heartbeatAt),
+          lt(agentJobs.heartbeatAt, staleBefore),
+        ),
       ),
     )
     .all()
@@ -630,7 +641,9 @@ export function interruptStaleAgentJobs(
     })
   }
 
-  return staleJobs.map((job) => getAgentJob(db, job.id)).filter(Boolean) as AgentJob[]
+  return staleJobs
+    .map((job) => getAgentJob(db, job.id))
+    .filter(Boolean) as AgentJob[]
 }
 
 export function retryAgentJob(

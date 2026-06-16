@@ -303,7 +303,9 @@ export const ArchivePopover = memo(function ArchivePopover({
   // Collect chat IDs for file stats query (only local chats)
   const archivedChatIds = useMemo(() => {
     if (!localArchivedChats) return []
-    return localArchivedChats.map((chat) => chat.id)
+    return localArchivedChats
+      .filter((chat) => !!chat.projectId)
+      .map((chat) => chat.id)
   }, [localArchivedChats])
 
   // Fetch file stats for archived local chats
