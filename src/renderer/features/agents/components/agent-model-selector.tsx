@@ -141,6 +141,7 @@ type ModelGroupId =
   | "custom"
   | "claude"
   | "claudeProfiles"
+  | "codexSource"
   | "codex"
   | "codexProfiles"
   | "local"
@@ -645,6 +646,7 @@ export function AgentModelSelector({
         if (item.runtime === "codex") return "codexProfiles"
         return "local"
       case "codex-source":
+        return "codexSource"
       case "codex":
         return "codex"
       case "ollama":
@@ -660,6 +662,8 @@ export function AgentModelSelector({
         return t("agent.model.group.claudeCodeOAuth")
       case "claudeProfiles":
         return t("agent.model.group.claudeProviderProfiles")
+      case "codexSource":
+        return t("agent.model.group.codexSource")
       case "codex":
         return t("agent.model.group.codexOfficial")
       case "codexProfiles":
@@ -674,6 +678,7 @@ export function AgentModelSelector({
       custom: [],
       claude: [],
       claudeProfiles: [],
+      codexSource: [],
       codex: [],
       codexProfiles: [],
       local: [],
@@ -687,6 +692,7 @@ export function AgentModelSelector({
       "custom",
       "claude",
       "claudeProfiles",
+      "codexSource",
       "codex",
       "codexProfiles",
       "local",
