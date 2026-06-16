@@ -1,23 +1,27 @@
 "use client"
 
-import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { useAtom, useSetAtom } from "jotai"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import {
   CheckIcon,
   CopyIcon,
+  DownloadIcon,
   IconSpinner,
   PauseIcon,
   VolumeIcon,
 } from "../../../components/ui/icons"
-import { cn } from "../../../lib/utils"
 import { apiFetch } from "../../../lib/api-fetch"
 import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
+import { useI18n } from "../../../lib/i18n"
+import { trpcClient } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 import { useHaptic } from "../hooks/use-haptic"
 import {
-  ttsPlaybackRateAtom,
-  setTtsPlaybackRateAtom,
   PLAYBACK_SPEEDS,
   type PlaybackSpeed,
+  setTtsPlaybackRateAtom,
+  ttsPlaybackRateAtom,
 } from "../stores/message-store"
 
 // ============================================================================
@@ -62,6 +66,77 @@ export const CopyButton = memo(function CopyButton({
             copied ? "opacity-100 scale-100" : "opacity-0 scale-50",
           )}
         />
+      </div>
+    </button>
+  )
+})
+
+interface SaveOutputButtonProps {
+  text: string
+  filename?: string
+}
+
+export const SaveOutputButton = memo(function SaveOutputButton({
+  text,
+  filename = "assistant-output.md",
+}: SaveOutputButtonProps) {
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const { trigger: triggerHaptic } = useHaptic()
+  const { t } = useI18n()
+
+  const handleSave = useCallback(async () => {
+    if (!text.trim() || saving) return
+
+    setSaving(true)
+    try {
+      const result = await trpcClient.external.saveTextFile.mutate({
+        content: text,
+        filename,
+      })
+      if (!result.success) return
+
+      triggerHaptic("medium")
+      setSaved(true)
+      toast.success(t("agent.output.saved"))
+      setTimeout(() => setSaved(false), 2000)
+    } catch (error) {
+      toast.error(t("agent.output.saveFailed"), {
+        description: error instanceof Error ? error.message : undefined,
+      })
+    } finally {
+      setSaving(false)
+    }
+  }, [filename, saving, t, text, triggerHaptic])
+
+  return (
+    <button
+      type="button"
+      onClick={handleSave}
+      tabIndex={-1}
+      disabled={saving || !text.trim()}
+      aria-label={t("agent.output.save")}
+      className="p-1.5 rounded-md transition-[background-color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50"
+    >
+      <div className="relative w-3.5 h-3.5">
+        {saving ? (
+          <IconSpinner className="absolute inset-0 w-3.5 h-3.5 text-muted-foreground animate-spin" />
+        ) : (
+          <>
+            <DownloadIcon
+              className={cn(
+                "absolute inset-0 w-3.5 h-3.5 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
+                saved ? "opacity-0 scale-50" : "opacity-100 scale-100",
+              )}
+            />
+            <CheckIcon
+              className={cn(
+                "absolute inset-0 w-3.5 h-3.5 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
+                saved ? "opacity-100 scale-100" : "opacity-0 scale-50",
+              )}
+            />
+          </>
+        )}
       </div>
     </button>
   )

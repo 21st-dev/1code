@@ -2425,6 +2425,9 @@ export const en = {
   "agent.export.copyFailed": "Copy failed",
   "agent.export.unableToCopy": "Unable to copy chat",
   "agent.export.clipboardUnavailable": "Clipboard not available",
+  "agent.output.save": "Save output",
+  "agent.output.saved": "Output saved",
+  "agent.output.saveFailed": "Failed to save output",
   "agent.paste.inputFull": "Cannot paste: input is full",
   "agent.paste.inputFullDescription":
     "Please clear some text or attach content as a file instead.",
@@ -5646,6 +5649,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.export.copyFailed": "复制失败",
   "agent.export.unableToCopy": "无法复制对话",
   "agent.export.clipboardUnavailable": "剪贴板不可用",
+  "agent.output.save": "保存输出",
+  "agent.output.saved": "输出已保存",
+  "agent.output.saveFailed": "保存输出失败",
   "agent.paste.inputFull": "无法粘贴：输入框已满",
   "agent.paste.inputFullDescription":
     "请清除一些文本，或改为作为文件附加。",
