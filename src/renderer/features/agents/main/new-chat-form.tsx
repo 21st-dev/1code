@@ -60,7 +60,6 @@ import {
   codexOnboardingCompletedAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
-  repoOnboardingSkippedAtom,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
@@ -255,6 +254,10 @@ export function NewChatForm({
     agentMode === "plan"
       ? t("chat.placeholder.planMode")
       : t("chat.placeholder.agentMode")
+  const effectiveMode = validatedProject ? agentMode : "agent"
+  const effectiveModePlaceholder = validatedProject
+    ? modePlaceholder
+    : t("chat.placeholder.agentMode")
   const modeSelectorTitle = t("chat.mode.selectorTooltip")
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const [worktreeCreateState, setWorktreeCreateState] = useState<
@@ -317,7 +320,6 @@ export function NewChatForm({
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
-  const setRepoOnboardingSkipped = useSetAtom(repoOnboardingSkippedAtom)
   const [createBranchDialogOpen, setCreateBranchDialogOpen] = useState(false)
 
   // Worktree config banner state
@@ -1121,57 +1123,6 @@ export function NewChatForm({
     },
   })
 
-  // Open folder mutation for selecting a project
-  const openFolder = trpc.projects.openFolder.useMutation({
-    onSuccess: (project) => {
-      if (project) {
-        // Optimistically update the projects list cache to prevent "Select repo" flash
-        // This ensures validatedProject can find the new project immediately
-        utils.projects.list.setData(undefined, (oldData) => {
-          if (!oldData) return [project]
-          // Check if project already exists (reopened existing project)
-          const exists = oldData.some((p) => p.id === project.id)
-          if (exists) {
-            // Update existing project's timestamp
-            return oldData.map((p) =>
-              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
-            )
-          }
-          // Add new project at the beginning
-          return [project, ...oldData]
-        })
-
-        setSelectedProject({
-          id: project.id,
-          name: project.name,
-          path: project.path,
-          gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
-          gitOwner: project.gitOwner,
-          gitRepo: project.gitRepo,
-        })
-        setRepoOnboardingSkipped(false)
-      }
-    },
-  })
-
-  const handleOpenFolder = async () => {
-    try {
-      const project = await openFolder.mutateAsync()
-      if (!project) {
-        toast.info(t("chat.selectRepoCancelled"))
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : t("chat.selectRepoFailed"),
-      )
-    }
-  }
-
   const trpcUtils = trpc.useUtils()
 
   const handleSend = useCallback(async () => {
@@ -1187,8 +1138,10 @@ export function NewChatForm({
     const hasPastedTexts = pastedTexts.length > 0
 
     if (
-      (!hasText && !hasImages && !hasFiles && !hasPastedTexts) ||
-      !projectForChat
+      !hasText &&
+      !hasImages &&
+      !hasFiles &&
+      !hasPastedTexts
     ) {
       return
     }
@@ -1199,7 +1152,9 @@ export function NewChatForm({
       return
     }
 
-    message = await expandCustomSlashCommand(message, projectForChat.path)
+    if (projectForChat) {
+      message = await expandCustomSlashCommand(message, projectForChat.path)
+    }
 
     const finalMessage = message.trim()
     const parts = buildAgentMessageParts({
@@ -1211,7 +1166,7 @@ export function NewChatForm({
 
     // Create chat with selected project, branch, and initial message
     createChatMutation.mutate({
-      projectId: projectForChat.id,
+      projectId: projectForChat?.id ?? null,
       name: message.trim().slice(0, 50), // Use first 50 chars as chat name
       model: selectedChatModel,
       provider: selectedAgent.id as AgentChatProvider,
@@ -1225,10 +1180,15 @@ export function NewChatForm({
           : selectedClaudeProfileId,
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
-        workMode === "worktree" ? selectedBranch || undefined : undefined,
-      branchType: workMode === "worktree" ? selectedBranchType : undefined,
-      useWorktree: workMode === "worktree",
-      mode: agentMode,
+        projectForChat && workMode === "worktree"
+          ? selectedBranch || undefined
+          : undefined,
+      branchType:
+        projectForChat && workMode === "worktree"
+          ? selectedBranchType
+          : undefined,
+      useWorktree: Boolean(projectForChat && workMode === "worktree"),
+      mode: effectiveMode,
     })
     // Editor, images, files, and pasted texts are cleared in onSuccess callback
   }, [
@@ -1247,7 +1207,7 @@ export function NewChatForm({
     effectiveClaudeModelSource,
     selectedCodexProfileId,
     selectedClaudeProfileId,
-    agentMode,
+    effectiveMode,
     imageAttachmentBlocked,
     t,
   ])
@@ -1789,23 +1749,7 @@ export function NewChatForm({
             </div>
           )}
 
-          {/* Input Area or Select Repo State */}
-          {!validatedProject ? (
-            // No project selected - show select repo button (like Sign in button)
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={handleOpenFolder}
-                disabled={openFolder.isPending}
-                className="h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {openFolder.isPending
-                  ? t("chat.opening")
-                  : t("chat.selectRepo")}
-              </button>
-            </div>
-          ) : (
-            // Project selected - show input form
+          {/* Input Area */}
             <div
               className="relative w-full"
               onDragOver={handleDragOver}
@@ -1855,7 +1799,7 @@ export function NewChatForm({
                       onContentChange={handleContentChange}
                       onSubmit={handleSend}
                       onShiftTab={toggleMode}
-                      placeholder={modePlaceholder}
+                      placeholder={effectiveModePlaceholder}
                       className={cn(
                         "bg-transparent max-h-[240px] overflow-y-auto p-1 leading-5",
                         isMobileFullscreen ? "min-h-[56px]" : "min-h-[44px]",
@@ -1869,176 +1813,186 @@ export function NewChatForm({
                   <PromptInputActions className="w-full flex-wrap gap-x-1 gap-y-1">
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-0.5 gap-y-1">
                       {/* Mode toggle (Agent/Plan) */}
-                      <DropdownMenu
-                        open={modeDropdownOpen}
-                        onOpenChange={(open) => {
-                          setModeDropdownOpen(open)
-                          if (!open) {
-                            if (tooltipTimeoutRef.current) {
-                              clearTimeout(tooltipTimeoutRef.current)
-                              tooltipTimeoutRef.current = null
+                      {validatedProject ? (
+                        <DropdownMenu
+                          open={modeDropdownOpen}
+                          onOpenChange={(open) => {
+                            setModeDropdownOpen(open)
+                            if (!open) {
+                              if (tooltipTimeoutRef.current) {
+                                clearTimeout(tooltipTimeoutRef.current)
+                                tooltipTimeoutRef.current = null
+                              }
+                              setModeTooltip(null)
+                              hasShownTooltipRef.current = false
                             }
-                            setModeTooltip(null)
-                            hasShownTooltipRef.current = false
-                          }
-                        }}
-                      >
-                        <DropdownMenuTrigger
-                          aria-label={modeSelectorTitle}
-                          title={modeSelectorTitle}
-                          className="flex max-w-[112px] min-w-0 items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                          }}
                         >
-                          {agentMode === "plan" ? (
-                            <PlanIcon className="h-3.5 w-3.5 shrink-0" />
-                          ) : (
-                            <AgentIcon className="h-3.5 w-3.5 shrink-0" />
-                          )}
-                          <span className="truncate">{modeLabel}</span>
-                          <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          sideOffset={6}
-                          className="!min-w-[116px] !w-[116px]"
-                          onCloseAutoFocus={(e) => e.preventDefault()}
-                        >
-                          <DropdownMenuItem
-                            onClick={() => {
-                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                              setAgentMode("agent")
-                              setModeDropdownOpen(false)
-                            }}
-                            className="justify-between gap-2"
-                            onMouseEnter={(e) => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              const rect =
-                                e.currentTarget.getBoundingClientRect()
-                              const showTooltip = () => {
-                                setModeTooltip({
-                                  visible: true,
-                                  position: {
-                                    top: rect.top,
-                                    left: rect.right + 8,
-                                  },
-                                  mode: "agent",
-                                })
-                                hasShownTooltipRef.current = true
-                                tooltipTimeoutRef.current = null
-                              }
-                              if (hasShownTooltipRef.current) {
-                                showTooltip()
-                              } else {
-                                tooltipTimeoutRef.current = setTimeout(
-                                  showTooltip,
-                                  1000,
-                                )
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                            }}
+                          <DropdownMenuTrigger
+                            aria-label={modeSelectorTitle}
+                            title={modeSelectorTitle}
+                            className="flex max-w-[112px] min-w-0 items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
                           >
-                            <div className="flex items-center gap-2">
-                              <AgentIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>{t("chat.mode.agent")}</span>
-                            </div>
-                            {agentMode !== "plan" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                            {agentMode === "plan" ? (
+                              <PlanIcon className="h-3.5 w-3.5 shrink-0" />
+                            ) : (
+                              <AgentIcon className="h-3.5 w-3.5 shrink-0" />
                             )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              // Clear tooltip before closing dropdown (onMouseLeave won't fire)
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                              setAgentMode("plan")
-                              setModeDropdownOpen(false)
-                            }}
-                            className="justify-between gap-2"
-                            onMouseEnter={(e) => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              const rect =
-                                e.currentTarget.getBoundingClientRect()
-                              const showTooltip = () => {
-                                setModeTooltip({
-                                  visible: true,
-                                  position: {
-                                    top: rect.top,
-                                    left: rect.right + 8,
-                                  },
-                                  mode: "plan",
-                                })
-                                hasShownTooltipRef.current = true
-                                tooltipTimeoutRef.current = null
-                              }
-                              if (hasShownTooltipRef.current) {
-                                showTooltip()
-                              } else {
-                                tooltipTimeoutRef.current = setTimeout(
-                                  showTooltip,
-                                  1000,
-                                )
-                              }
-                            }}
-                            onMouseLeave={() => {
-                              if (tooltipTimeoutRef.current) {
-                                clearTimeout(tooltipTimeoutRef.current)
-                                tooltipTimeoutRef.current = null
-                              }
-                              setModeTooltip(null)
-                            }}
+                            <span className="truncate">{modeLabel}</span>
+                            <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="start"
+                            sideOffset={6}
+                            className="!min-w-[116px] !w-[116px]"
+                            onCloseAutoFocus={(e) => e.preventDefault()}
                           >
-                            <div className="flex items-center gap-2">
-                              <PlanIcon className="w-4 h-4 text-muted-foreground" />
-                              <span>{t("chat.mode.plan")}</span>
-                            </div>
-                            {agentMode === "plan" && (
-                              <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                        {modeTooltip?.visible &&
-                          createPortal(
-                            <div
-                              className="fixed z-[100000]"
-                              style={{
-                                top: modeTooltip.position.top + 14,
-                                left: modeTooltip.position.left,
-                                transform: "translateY(-50%)",
+                            <DropdownMenuItem
+                              onClick={() => {
+                                // Clear tooltip before closing dropdown (onMouseLeave won't fire)
+                                if (tooltipTimeoutRef.current) {
+                                  clearTimeout(tooltipTimeoutRef.current)
+                                  tooltipTimeoutRef.current = null
+                                }
+                                setModeTooltip(null)
+                                setAgentMode("agent")
+                                setModeDropdownOpen(false)
+                              }}
+                              className="justify-between gap-2"
+                              onMouseEnter={(e) => {
+                                if (tooltipTimeoutRef.current) {
+                                  clearTimeout(tooltipTimeoutRef.current)
+                                  tooltipTimeoutRef.current = null
+                                }
+                                const rect =
+                                  e.currentTarget.getBoundingClientRect()
+                                const showTooltip = () => {
+                                  setModeTooltip({
+                                    visible: true,
+                                    position: {
+                                      top: rect.top,
+                                      left: rect.right + 8,
+                                    },
+                                    mode: "agent",
+                                  })
+                                  hasShownTooltipRef.current = true
+                                  tooltipTimeoutRef.current = null
+                                }
+                                if (hasShownTooltipRef.current) {
+                                  showTooltip()
+                                } else {
+                                  tooltipTimeoutRef.current = setTimeout(
+                                    showTooltip,
+                                    1000,
+                                  )
+                                }
+                              }}
+                              onMouseLeave={() => {
+                                if (tooltipTimeoutRef.current) {
+                                  clearTimeout(tooltipTimeoutRef.current)
+                                  tooltipTimeoutRef.current = null
+                                }
+                                setModeTooltip(null)
                               }}
                             >
-                              <div
-                                data-tooltip="true"
-                                className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
-                              >
-                                <span>
-                                  {modeTooltip.mode === "agent"
-                                    ? t("chat.mode.agentTooltip")
-                                    : t("chat.mode.planTooltip")}
-                                </span>
+                              <div className="flex items-center gap-2">
+                                <AgentIcon className="w-4 h-4 text-muted-foreground" />
+                                <span>{t("chat.mode.agent")}</span>
                               </div>
-                            </div>,
-                            document.body,
-                          )}
-                      </DropdownMenu>
+                              {agentMode !== "plan" && (
+                                <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                // Clear tooltip before closing dropdown (onMouseLeave won't fire)
+                                if (tooltipTimeoutRef.current) {
+                                  clearTimeout(tooltipTimeoutRef.current)
+                                  tooltipTimeoutRef.current = null
+                                }
+                                setModeTooltip(null)
+                                setAgentMode("plan")
+                                setModeDropdownOpen(false)
+                              }}
+                              className="justify-between gap-2"
+                              onMouseEnter={(e) => {
+                                if (tooltipTimeoutRef.current) {
+                                  clearTimeout(tooltipTimeoutRef.current)
+                                  tooltipTimeoutRef.current = null
+                                }
+                                const rect =
+                                  e.currentTarget.getBoundingClientRect()
+                                const showTooltip = () => {
+                                  setModeTooltip({
+                                    visible: true,
+                                    position: {
+                                      top: rect.top,
+                                      left: rect.right + 8,
+                                    },
+                                    mode: "plan",
+                                  })
+                                  hasShownTooltipRef.current = true
+                                  tooltipTimeoutRef.current = null
+                                }
+                                if (hasShownTooltipRef.current) {
+                                  showTooltip()
+                                } else {
+                                  tooltipTimeoutRef.current = setTimeout(
+                                    showTooltip,
+                                    1000,
+                                  )
+                                }
+                              }}
+                              onMouseLeave={() => {
+                                if (tooltipTimeoutRef.current) {
+                                  clearTimeout(tooltipTimeoutRef.current)
+                                  tooltipTimeoutRef.current = null
+                                }
+                                setModeTooltip(null)
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <PlanIcon className="w-4 h-4 text-muted-foreground" />
+                                <span>{t("chat.mode.plan")}</span>
+                              </div>
+                              {agentMode === "plan" && (
+                                <CheckIcon className="h-3.5 w-3.5 ml-auto shrink-0" />
+                              )}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                          {modeTooltip?.visible &&
+                            createPortal(
+                              <div
+                                className="fixed z-[100000]"
+                                style={{
+                                  top: modeTooltip.position.top + 14,
+                                  left: modeTooltip.position.left,
+                                  transform: "translateY(-50%)",
+                                }}
+                              >
+                                <div
+                                  data-tooltip="true"
+                                  className="relative rounded-[12px] bg-popover px-2.5 py-1.5 text-xs text-popover-foreground dark max-w-[150px]"
+                                >
+                                  <span>
+                                    {modeTooltip.mode === "agent"
+                                      ? t("chat.mode.agentTooltip")
+                                      : t("chat.mode.planTooltip")}
+                                  </span>
+                                </div>
+                              </div>,
+                              document.body,
+                            )}
+                        </DropdownMenu>
+                      ) : (
+                        <div
+                          className="flex max-w-[112px] min-w-0 items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground rounded-md"
+                          title={t("chat.mode.agent")}
+                        >
+                          <AgentIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{t("chat.mode.agent")}</span>
+                        </div>
+                      )}
 
                       <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
                         <AgentModelSelector
@@ -2162,7 +2116,7 @@ export function NewChatForm({
                             isTranscribing={isTranscribing}
                             disabled={isUploading}
                             hotkeyLabel={voiceInputHotkey}
-                            accent={agentMode === "plan" ? "plan" : "default"}
+                            accent={effectiveMode === "plan" ? "plan" : "default"}
                             onStart={handleVoiceMouseDown}
                             onStop={handleVoiceMouseUp}
                             onCancel={handleVoiceMouseLeave}
@@ -2175,12 +2129,11 @@ export function NewChatForm({
                             }
                             disabled={Boolean(
                               !hasSendableContent ||
-                                !projectForChat ||
                                 isUploading ||
                                 imageAttachmentBlocked,
                             )}
                             onClick={handleSend}
-                            mode={agentMode}
+                            mode={effectiveMode}
                             hasContent={hasSendableContent}
                           />
                         )}
@@ -2415,7 +2368,6 @@ export function NewChatForm({
                 />
               </div>
             </div>
-          )}
         </div>
       </div>
 

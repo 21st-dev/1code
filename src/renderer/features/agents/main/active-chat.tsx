@@ -273,6 +273,7 @@ import { utf8ToBase64, base64ToUtf8 } from "../utils/base64"
  *  Includes a 30s safety timeout — if the store never transitions to "ready",
  *  the promise resolves anyway to prevent hanging the UI indefinitely. */
 const STREAMING_READY_TIMEOUT_MS = 30_000
+const FOLDERLESS_RENDERER_CWD = "__locus_folderless_quick_chat__"
 
 function waitForStreamingReady(subChatId: string): Promise<void> {
   return new Promise((resolve) => {
@@ -1583,6 +1584,7 @@ const ChatViewInner = memo(function ChatViewInner({
   onRetrySetup,
   isSubChatsSidebarOpen = false,
   projectPath,
+  isFolderlessChat = false,
   isArchived = false,
   onRestoreWorkspace,
   existingPrUrl,
@@ -1613,6 +1615,7 @@ const ChatViewInner = memo(function ChatViewInner({
   onRetrySetup?: () => void
   isSubChatsSidebarOpen?: boolean
   projectPath?: string
+  isFolderlessChat?: boolean
   isArchived?: boolean
   onRestoreWorkspace?: () => void
   existingPrUrl?: string | null
@@ -2767,6 +2770,8 @@ const ChatViewInner = memo(function ChatViewInner({
   const detectedPrUrlRef = useRef<string | null>(existingPrUrl ?? null)
 
   useEffect(() => {
+    if (isFolderlessChat) return
+
     // Only check after streaming ends
     if (isStreaming) return
 
@@ -2812,7 +2817,7 @@ const ChatViewInner = memo(function ChatViewInner({
         break // Only process first PR URL found
       }
     }
-  }, [messages, isStreaming, parentChatId, existingPrUrl])
+  }, [messages, isStreaming, parentChatId, existingPrUrl, isFolderlessChat])
 
   // Track plan Edit completions to trigger sidebar refetch
   const triggerPlanEditRefetch = useSetAtom(
@@ -2845,11 +2850,11 @@ const ChatViewInner = memo(function ChatViewInner({
   }, [messages, triggerPlanEditRefetch])
 
   const { changedFiles: changedFilesForSubChat, recomputeChangedFiles } = useChangedFilesTracking(
-    messages,
+    isFolderlessChat ? [] : messages,
     subChatId,
     isStreaming,
     parentChatId,
-    projectPath,
+    isFolderlessChat ? undefined : projectPath,
   )
 
   // Rollback handler - triggered from user message bubble
@@ -4995,17 +5000,33 @@ export function ChatView({
 
   // Desktop: use worktreePath instead of sandbox
   const worktreePath = agentChat?.worktreePath as string | null
+  const agentChatProjectContext = agentChat as {
+    projectId?: string | null
+    project?: {
+      path?: string | null
+      gitRepo?: string | null
+      name?: string | null
+    }
+    branch?: string | null
+  } | null
+  const isFolderlessChat = agentChat ? !agentChatProjectContext?.projectId : false
   // Desktop: original project path for MCP config lookup
-  const originalProjectPath = (agentChat as any)?.project?.path as string | undefined
+  const originalProjectPath = isFolderlessChat
+    ? undefined
+    : (agentChatProjectContext?.project?.path ?? undefined)
+  const workspaceRepoName =
+    agentChatProjectContext?.project?.gitRepo ||
+    agentChatProjectContext?.project?.name ||
+    null
 
   // Terminal scope key: shared by project path (local mode) or isolated per workspace (worktree)
   const terminalScopeKey = useMemo(() => {
     return getTerminalScopeKey({
-      branch: (agentChat as any)?.branch ?? null,
+      branch: agentChatProjectContext?.branch ?? null,
       worktreePath: worktreePath,
       id: chatId,
     })
-  }, [(agentChat as any)?.branch, worktreePath, chatId])
+  }, [agentChatProjectContext?.branch, worktreePath, chatId])
   // Plugin MCP approval - disabled for now since official marketplace plugins
   // are trusted by default. Will re-enable when third-party plugin support is added.
 
@@ -5576,6 +5597,18 @@ Make sure to preserve all functionality from both branches when resolving confli
   }, [activeSubChatProvider, codexMcpConfig?.groups, originalProjectPath])
 
   useEffect(() => {
+    if (!isFolderlessChat) return
+
+    setSessionInfo((prev) => ({
+      tools: (prev?.tools || []).filter((tool) => !tool.startsWith("mcp__")),
+      mcpServers: [],
+      plugins: prev?.plugins || [],
+      skills: prev?.skills || [],
+    }))
+  }, [isFolderlessChat, setSessionInfo])
+
+  useEffect(() => {
+    if (isFolderlessChat) return
     if (activeSubChatProvider !== "codex" || !codexMcpSessionData) return
 
     setSessionInfo((prev) => {
@@ -5590,7 +5623,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         skills: prev?.skills || [],
       }
     })
-  }, [activeSubChatProvider, codexMcpSessionData, setSessionInfo])
+  }, [activeSubChatProvider, codexMcpSessionData, isFolderlessChat, setSessionInfo])
 
   const syncFinishedMessagesToChatCache = useCallback(
     (subChatId: string, chat: Chat<any>) => {
@@ -5629,14 +5662,20 @@ Make sure to preserve all functionality from both branches when resolving confli
   // Create or get Chat instance for a sub-chat
   const getOrCreateChat = useCallback(
     (subChatId: string): Chat<any> | null => {
-      if (!worktreePath || !agentChat) {
+      if (!agentChat) {
+        return null
+      }
+      if (!isFolderlessChat && !worktreePath) {
         return null
       }
 
       // Create transport for the local worktree.
       // Note: Extended thinking setting is read dynamically inside the transport
       // projectPath: original project path for MCP config lookup (worktreePath is the cwd)
-      const projectPath = (agentChat as any)?.project?.path as string | undefined
+      const projectPath = isFolderlessChat
+        ? undefined
+        : originalProjectPath
+      const runtimeCwd = worktreePath || FOLDERLESS_RENDERER_CWD
 
       // Fast path for existing chats. Only inspect messages when a local empty-chat provider override
       // might require transport recreation.
@@ -5697,6 +5736,7 @@ Make sure to preserve all functionality from both branches when resolving confli
       console.log("[getOrCreateChat] Transport selection", {
         subChatId: subChatId.slice(-8),
         worktreePath: worktreePath ? "exists" : "none",
+        workspaceKind: isFolderlessChat ? "folderless" : "project",
       })
 
       let transport: IPCChatTransport | ACPChatTransport | null = null
@@ -5706,7 +5746,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         transport = new ACPChatTransport({
           chatId,
           subChatId,
-          cwd: worktreePath,
+          cwd: runtimeCwd,
           projectPath,
           mode: subChatMode,
           provider: "codex",
@@ -5715,7 +5755,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         transport = new IPCChatTransport({
           chatId,
           subChatId,
-          cwd: worktreePath,
+          cwd: runtimeCwd,
           projectPath,
           mode: subChatMode,
         })
@@ -5813,6 +5853,8 @@ Make sure to preserve all functionality from both branches when resolving confli
     [
       agentChat,
       worktreePath,
+      isFolderlessChat,
+      originalProjectPath,
       chatId,
       currentMode,
       inferProviderFromMessages,
@@ -5868,7 +5910,7 @@ Make sure to preserve all functionality from both branches when resolving confli
     const store = useAgentSubChatStore.getState()
     const sourceSubChatId = activeSubChatId || ""
     // New sub-chats use the user's default mode preference
-    const newSubChatMode = defaultAgentMode
+    const newSubChatMode = isFolderlessChat ? "agent" : defaultAgentMode
     const newSubChatProvider = inferProviderFromMessages(activeSubChatId || undefined)
 
     const newSubChat = await trpcClient.chats.createSubChat.mutate({
@@ -5945,24 +5987,26 @@ Make sure to preserve all functionality from both branches when resolving confli
     store.setActiveSubChat(newId)
 
     // Create empty Chat instance for the new sub-chat
-    const projectPath = (agentChat as any)?.project?.path as string | undefined
+    const projectPath = originalProjectPath
+    const runtimeCwd = worktreePath || FOLDERLESS_RENDERER_CWD
 
     console.log("[createNewSubChat] Transport selection", {
       newId: newId.slice(-8),
       worktreePath: worktreePath ? "exists" : "none",
+      workspaceKind: isFolderlessChat ? "folderless" : "project",
     })
 
     const chatProvider = newSubChatProvider
     let newSubChatTransport: IPCChatTransport | ACPChatTransport | null = null
 
-    if (worktreePath) {
+    if (worktreePath || isFolderlessChat) {
       if (chatProvider === "codex") {
         console.log("[createNewSubChat] Using ACPChatTransport", { provider: chatProvider })
         newSubChatTransport = new ACPChatTransport({
           chatId,
           subChatId: newId,
-          cwd: worktreePath,
-          projectPath,
+          cwd: runtimeCwd,
+          projectPath: isFolderlessChat ? undefined : projectPath,
           mode: newSubChatMode,
           provider: "codex",
         })
@@ -5971,8 +6015,8 @@ Make sure to preserve all functionality from both branches when resolving confli
         newSubChatTransport = new IPCChatTransport({
           chatId,
           subChatId: newId,
-          cwd: worktreePath,
-          projectPath,
+          cwd: runtimeCwd,
+          projectPath: isFolderlessChat ? undefined : projectPath,
           mode: newSubChatMode,
         })
       }
@@ -6063,6 +6107,8 @@ Make sure to preserve all functionality from both branches when resolving confli
     }
   }, [
     worktreePath,
+    isFolderlessChat,
+    originalProjectPath,
     chatId,
     defaultAgentMode,
     activeSubChatId,
@@ -6677,6 +6723,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                             isMobile={isMobileFullscreen}
                             isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
                             projectPath={worktreePath || undefined}
+                            isFolderlessChat={isFolderlessChat}
                             isArchived={isArchived}
                             onRestoreWorkspace={stableHandleRestoreWorkspace}
                             existingPrUrl={agentChat?.prUrl}
@@ -6684,17 +6731,15 @@ Make sure to preserve all functionality from both branches when resolving confli
                             isSplitPane={true}
                             workspaceName={agentChat?.name ?? null}
                             workspaceBranch={agentChat?.branch ?? null}
-                            workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
+                            workspaceRepoName={workspaceRepoName}
                           />
                         </div>
                       )
                     }]
                   })}
-                  hiddenTabs={
-                    <>
-                      {tabsToRender
-                        .filter(id => !splitPaneIds.includes(id))
-                        .map(subChatId => {
+                  hiddenTabs={tabsToRender
+                    .filter(id => !splitPaneIds.includes(id))
+                    .map(subChatId => {
                           const chat = getOrCreateChat(subChatId)
                           const isFirstSubChat = getFirstSubChatId(agentSubChats) === subChatId
                           const belongsToWorkspace = agentSubChats.some(sc => sc.id === subChatId) ||
@@ -6726,6 +6771,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                                 isMobile={isMobileFullscreen}
                                 isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
                                 projectPath={worktreePath || undefined}
+                                isFolderlessChat={isFolderlessChat}
                                 isArchived={isArchived}
                                 onRestoreWorkspace={stableHandleRestoreWorkspace}
                                 existingPrUrl={agentChat?.prUrl}
@@ -6733,13 +6779,11 @@ Make sure to preserve all functionality from both branches when resolving confli
                                 isSplitPane={false}
                                 workspaceName={agentChat?.name ?? null}
                                 workspaceBranch={agentChat?.branch ?? null}
-                                workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
+                                workspaceRepoName={workspaceRepoName}
                               />
                             </div>
                           )
-                        })}
-                    </>
-                  }
+                      })}
                 />
               ) : (
                 tabsToRender.map(subChatId => {
@@ -6788,6 +6832,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                       isMobile={isMobileFullscreen}
                       isSubChatsSidebarOpen={subChatsSidebarMode === "sidebar"}
                       projectPath={worktreePath || undefined}
+                      isFolderlessChat={isFolderlessChat}
                       isArchived={isArchived}
                       onRestoreWorkspace={stableHandleRestoreWorkspace}
                       existingPrUrl={agentChat?.prUrl}
@@ -6795,7 +6840,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                       isSplitPane={false}
                       workspaceName={agentChat?.name ?? null}
                       workspaceBranch={agentChat?.branch ?? null}
-                      workspaceRepoName={(agentChat as any)?.project?.gitRepo || (agentChat as any)?.project?.name || null}
+                      workspaceRepoName={workspaceRepoName}
                     />
                   </div>
                 )

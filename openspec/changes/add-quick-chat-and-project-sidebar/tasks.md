@@ -30,10 +30,10 @@
 - [x] 4.6 Add or update runtime capability tests so the quick-chat assistant capability is not presented as runtime-neutral until Claude and Codex both report supported enforcement.
 
 ## 5. Folderless quick chat creation
-- [ ] 5.1 In `new-chat-form.tsx`, render an assistant composer when no project is selected: hide `WorkModeSelector` and the plan/agent toggle, show a static "助手" affordance, keep supported provider/model selection + send.
-- [ ] 5.2 Remove the hard `!projectForChat` send block for the folderless path; create with `projectId: null` and the selected supported provider metadata.
-- [ ] 5.3 Make the empty/first-run state land on the quick-chat composer; remove the `validatedProject` early-return no-op in `openProjectPickerForNewWorkspace`.
-- [ ] 5.4 Update active chat and input transports so folderless chats can stream without a project path while main-process preflight owns scratch cwd and assistant policy.
+- [x] 5.1 In `new-chat-form.tsx`, render an assistant composer when no project is selected: hide `WorkModeSelector` and the plan/agent toggle, show a static "助手" affordance, keep supported provider/model selection + send.
+- [x] 5.2 Remove the hard `!projectForChat` send block for the folderless path; create with `projectId: null` and the selected supported provider metadata.
+- [x] 5.3 Make the empty/first-run state land on the quick-chat composer; remove the `validatedProject` early-return no-op in `openProjectPickerForNewWorkspace`.
+- [x] 5.4 Update active chat and input transports so folderless chats can stream without a project path while main-process preflight owns scratch cwd and assistant policy.
 - [ ] 5.5 Update deferred repository onboarding so folderless quick-chat creation is available without a project while project-dependent repository workflows remain unavailable.
 
 ## 6. In-place upgrade (quick chat -> project)
@@ -45,12 +45,12 @@
 - [ ] 6.6 Add tests for failed attach during active stream, failed attach for non-quick chat, successful attach with fresh session, and history remaining visible.
 
 ## 7. Sidebar restructure
-- [ ] 7.1 Add a `groupByProject(unpinnedAgents, projectsMap)` memo for project-backed chats (groups ordered by most-recent activity).
-- [ ] 7.2 Render unpinned project-backed chats as collapsible project groups reusing `ChatListSection`/`ChatRow`; keep drafts and pinned flat at the top.
-- [ ] 7.3 Add a top "快速对话" group for `projectId = null` chats.
+- [x] 7.1 Add a `groupByProject(unpinnedAgents, projectsMap)` memo for project-backed chats (groups ordered by most-recent activity).
+- [x] 7.2 Render unpinned project-backed chats as collapsible project groups reusing `ChatListSection`/`ChatRow`; keep drafts and pinned flat at the top.
+- [x] 7.3 Add a top "快速对话" group for `projectId = null` chats.
 - [ ] 7.4 Add `collapsedProjects` state persisted to `localStorage`; add a per-project "+" and a "项目" section header with "+ 打开仓库".
 - [ ] 7.5 Add per-project "展开显示" beyond N rows.
-- [ ] 7.6 Rebuild flat `filteredChats` to match visual order (quick chat -> pinned -> groups) so keyboard up/down navigation stays consistent.
+- [x] 7.6 Rebuild flat `filteredChats` to match visual order (quick chat -> pinned -> groups) so keyboard up/down navigation stays consistent.
 - [ ] 7.7 Verify the layout works in mobile fullscreen.
 
 ## 8. Delete and archive
