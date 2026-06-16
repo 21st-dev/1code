@@ -1,24 +1,26 @@
 import { describe, expect, test } from "bun:test"
+import type { ValidatedAgentScopeContract } from "../src/main/lib/agent-guard"
 import {
   getCodexAppServerPermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
-import type { ValidatedAgentScopeContract } from "../src/main/lib/agent-guard"
 import {
+  type CodexAppServerPermissionsRequestApprovalParams,
   createCodexAppServerApprovalBridge,
   resolveCodexAppServerPermissionsApprovalDecision,
-  type CodexAppServerPermissionsRequestApprovalParams,
 } from "../src/main/lib/codex/app-server-approval"
 import type { CodexAskUserQuestionPending } from "../src/main/lib/codex/ask-user-question"
 
 function appServerPermission(
   mode: "plan" | "agent" = "agent",
   hasScopeContract = false,
+  workspaceKind: "project" | "folderless" = "project",
 ) {
   return getCodexAppServerPermissionMapping(
     resolveDesktopPermissionPolicy({
       runtimeId: "codex",
       mode,
+      workspaceKind,
       hasScopeContract,
       codexAdapterSource: "codex-app-server",
     }),
@@ -71,8 +73,88 @@ describe("Codex app-server approval policy", () => {
 
     expect(decision).toMatchObject({
       allowedByPolicy: false,
-      message: "Codex app-server runs do not grant network permission expansions.",
+      message:
+        "Codex app-server runs do not grant network permission expansions.",
     })
+  })
+
+  test("assistant app-server policy denies side-effect approvals before asking the user", async () => {
+    const chunks: Array<Record<string, unknown>> = []
+    const pending = new Map<string, CodexAskUserQuestionPending>()
+    const bridge = createCodexAppServerApprovalBridge({
+      subChatId: "sub-1",
+      permission: appServerPermission("agent", false, "folderless"),
+      emit: (chunk) => chunks.push(chunk),
+      registerPendingQuestion: (toolUseId, approval) => {
+        pending.set(toolUseId, approval)
+      },
+      unregisterPendingQuestion: (toolUseId) => {
+        pending.delete(toolUseId)
+      },
+    })
+
+    await expect(
+      bridge.handleCommandExecution({
+        requestId: "assistant-command-denied",
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: "item-command",
+          startedAtMs: Date.now(),
+          command: "echo hello",
+        },
+      }),
+    ).resolves.toEqual({ decision: "decline" })
+
+    await expect(
+      bridge.handleFileChange({
+        requestId: "assistant-file-denied",
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: "item-file",
+          startedAtMs: Date.now(),
+          grantRoot: "/repo/src/app.ts",
+        },
+      }),
+    ).resolves.toEqual({ decision: "decline" })
+
+    await expect(
+      bridge.handlePermissions({
+        requestId: "assistant-permissions-denied",
+        params: permissionsParams({
+          network: null,
+          fileSystem: {
+            read: ["/repo/src"],
+            write: null,
+          },
+        }),
+      }),
+    ).resolves.toEqual({
+      permissions: {},
+      scope: "turn",
+      strictAutoReview: true,
+    })
+
+    expect(chunks.map((chunk) => chunk.type)).not.toContain("ask-user-question")
+    expect(pending.size).toBe(0)
+
+    const bridgeWithoutApprovalHooks = createCodexAppServerApprovalBridge({
+      subChatId: "sub-1",
+      permission: appServerPermission("agent", false, "folderless"),
+    })
+    await expect(
+      bridgeWithoutApprovalHooks.handleCommandExecution({
+        requestId: "assistant-command-no-hooks",
+        params: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: "item-command-no-hooks",
+          startedAtMs: Date.now(),
+          command: "echo hello",
+        },
+      }),
+    ).resolves.toEqual({ decision: "decline" })
   })
 
   test("denies guarded permission paths that escape the workspace", () => {
@@ -90,7 +172,8 @@ describe("Codex app-server approval policy", () => {
 
     expect(decision).toMatchObject({
       allowedByPolicy: false,
-      message: "Codex app-server permission request escapes the guarded workspace.",
+      message:
+        "Codex app-server permission request escapes the guarded workspace.",
     })
   })
 
@@ -144,11 +227,13 @@ describe("Codex app-server approval policy", () => {
       },
     })
 
-    const askChunk = chunks.find(
-      (chunk) => chunk.type === "ask-user-question",
-    )
-    expect(askChunk?.questions[0].options.map((option: any) => option.label))
-      .toEqual(["Approve", "Deny"])
+    const askChunk = chunks.find((chunk) => chunk.type === "ask-user-question")
+    const askQuestion = askChunk?.questions?.[0] as
+      | { options: Array<{ label: string }> }
+      | undefined
+    expect(
+      askQuestion?.options.map((option) => option.label),
+    ).toEqual(["Approve", "Deny"])
 
     pending.get(askChunk!.toolUseId)?.resolve({
       approved: true,
@@ -186,7 +271,8 @@ describe("Codex app-server approval policy", () => {
         turnId: "turn-1",
         itemId: "item-command",
         startedAtMs: Date.now(),
-        command: "/bin/zsh -lc \"mkdir -p /repo/src && echo 'hello' > /repo/src/generated.txt\"",
+        command:
+          "/bin/zsh -lc \"mkdir -p /repo/src && echo 'hello' > /repo/src/generated.txt\"",
       },
     })
 
@@ -198,9 +284,7 @@ describe("Codex app-server approval policy", () => {
         paths: ["src", "src/generated.txt"],
       },
     })
-    const askChunk = chunks.find(
-      (chunk) => chunk.type === "ask-user-question",
-    )
+    const askChunk = chunks.find((chunk) => chunk.type === "ask-user-question")
     expect(askChunk?.toolUseId).toContain("command-approval")
 
     pending.get(askChunk!.toolUseId)?.resolve({
@@ -248,9 +332,7 @@ describe("Codex app-server approval policy", () => {
         paths: ["src", "src/generated.txt"],
       },
     })
-    const askChunk = chunks.find(
-      (chunk) => chunk.type === "ask-user-question",
-    )
+    const askChunk = chunks.find((chunk) => chunk.type === "ask-user-question")
     expect(askChunk?.toolUseId).toContain("command-approval")
 
     pending.get(askChunk!.toolUseId)?.resolve({
@@ -297,9 +379,7 @@ describe("Codex app-server approval policy", () => {
         paths: ["src/generated.txt"],
       },
     })
-    const askChunk = chunks.find(
-      (chunk) => chunk.type === "ask-user-question",
-    )
+    const askChunk = chunks.find((chunk) => chunk.type === "ask-user-question")
     expect(askChunk?.toolUseId).toContain("command-approval")
 
     pending.get(askChunk!.toolUseId)?.resolve({
@@ -349,16 +429,10 @@ describe("Codex app-server approval policy", () => {
     for (const [requestId, command] of [
       [
         "command-dollar-home-write",
-        "/bin/zsh -lc \"echo 'hello' > \\\"$HOME/.ssh/authorized_keys\\\"\"",
+        '/bin/zsh -lc "echo \'hello\' > \\"$HOME/.ssh/authorized_keys\\""',
       ],
-      [
-        "command-tilde-write",
-        "/bin/zsh -lc \"echo 'hello' > ~/secret.txt\"",
-      ],
-      [
-        "command-glob-write",
-        "/bin/zsh -lc \"echo 'hello' > /repo/src/*.txt\"",
-      ],
+      ["command-tilde-write", "/bin/zsh -lc \"echo 'hello' > ~/secret.txt\""],
+      ["command-glob-write", "/bin/zsh -lc \"echo 'hello' > /repo/src/*.txt\""],
       [
         "command-brace-write",
         "/bin/zsh -lc \"echo 'hello' > /repo/src/{a,b}.txt\"",
@@ -394,7 +468,9 @@ describe("Codex app-server approval policy", () => {
       ).resolves.toEqual({ decision: "decline" })
 
       expect(chunks.map((chunk) => chunk.type)).toContain("guard-event")
-      expect(chunks.map((chunk) => chunk.type)).not.toContain("ask-user-question")
+      expect(chunks.map((chunk) => chunk.type)).not.toContain(
+        "ask-user-question",
+      )
       expect(pending.size).toBe(0)
     }
   })

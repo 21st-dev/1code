@@ -16,18 +16,18 @@
 - [x] 2.6 Add tests proving project-backed preflight still rejects cwd mismatch and folderless preflight never starts from renderer-supplied cwd.
 
 ## 3. Assistant permission tier
-- [ ] 3.1 Add an `assistant` control level in `src/main/lib/agent-runtime/permission-policy.ts` selected from folderless preflight, not from `AgentJobMode`.
-- [ ] 3.2 Keep `AgentJobMode` and `sub_chats.mode` as `plan | agent`; do not persist `assistant` as a third mode.
-- [ ] 3.3 Assistant policy allows only web-search/fetch equivalents and Locus-owned persistence; it denies file, shell, terminal, MCP/project, runtime/plugin mutation, and unknown tools.
-- [ ] 3.4 Add targeted policy tests for assistant allow/deny categories and fail-closed unknown tools.
+- [x] 3.1 Add an `assistant` control level in `src/main/lib/agent-runtime/permission-policy.ts` selected from folderless preflight, not from `AgentJobMode`.
+- [x] 3.2 Keep `AgentJobMode` and `sub_chats.mode` as `plan | agent`; do not persist `assistant` as a third mode.
+- [x] 3.3 Assistant policy allows only web-search/fetch equivalents and Locus-owned persistence; it denies file, shell, terminal, MCP/project, runtime/plugin mutation, and unknown tools.
+- [x] 3.4 Add targeted policy tests for assistant allow/deny categories and fail-closed unknown tools.
 
 ## 4. Claude and Codex enforcement
-- [ ] 4.1 Claude: implement assistant allow-list enforcement in `src/main/lib/claude/agent-sdk-tool-permission.ts` before SDK query starts.
-- [ ] 4.2 Codex ACP: implement assistant fail-closed permission mapping/handler for side-effecting or unknown tool requests before execution.
-- [ ] 4.3 Codex app-server: implement assistant fail-closed approval gate for file, shell, MCP/project, runtime mutation, and unknown approval requests before execution.
+- [x] 4.1 Claude: implement assistant allow-list enforcement in `src/main/lib/claude/agent-sdk-tool-permission.ts` before SDK query starts.
+- [x] 4.2 Codex ACP: implement assistant fail-closed permission mapping/handler for side-effecting or unknown tool requests before execution.
+- [x] 4.3 Codex app-server: implement assistant fail-closed approval gate for file, shell, MCP/project, runtime mutation, and unknown approval requests before execution.
 - [ ] 4.4 Gate quick-chat provider/model choices to runtimes whose assistant enforcement is supported by capability truth.
-- [ ] 4.5 Add tests for Claude assistant tool allow-list, Codex ACP assistant denial, and Codex app-server assistant denial when approval hooks are unavailable or classify a side effect.
-- [ ] 4.6 Add or update runtime capability tests so the quick-chat assistant capability is not presented as runtime-neutral until Claude and Codex both report supported enforcement.
+- [x] 4.5 Add tests for Claude assistant tool allow-list, Codex ACP assistant denial, and Codex app-server assistant denial when approval hooks are unavailable or classify a side effect.
+- [x] 4.6 Add or update runtime capability tests so the quick-chat assistant capability is not presented as runtime-neutral until Claude and Codex both report supported enforcement.
 
 ## 5. Folderless quick chat creation
 - [ ] 5.1 In `new-chat-form.tsx`, render an assistant composer when no project is selected: hide `WorkModeSelector` and the plan/agent toggle, show a static "助手" affordance, keep supported provider/model selection + send.

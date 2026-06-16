@@ -113,6 +113,20 @@ describe("desktop run request contract", () => {
     expect(emitted).toEqual([event])
   })
 
+  test("folderless assistant requests declare quick-chat capability only", () => {
+    const permissionPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "claude-code",
+      mode: "plan",
+      workspaceKind: "folderless",
+      hasScopeContract: true,
+    })
+
+    expect(permissionPolicy.controlLevel).toBe("assistant")
+    expect(getDesktopRunRequestedCapabilities(permissionPolicy)).toEqual([
+      "quickChatAssistant",
+    ])
+  })
+
   test("adds sorted MCP readiness to a desktop request without mutating it", () => {
     const permissionPolicy = resolveDesktopPermissionPolicy({
       runtimeId: "claude-code",

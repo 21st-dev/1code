@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  prepareClaudeAgentSdkDesktopRunControls,
-} from "../src/main/lib/claude/agent-sdk-desktop-run-controls"
+import { prepareClaudeAgentSdkDesktopRunControls } from "../src/main/lib/claude/agent-sdk-desktop-run-controls"
 import type { UIMessageChunk } from "../src/main/lib/claude/types"
 
 function createBaseInput() {
@@ -42,6 +40,7 @@ describe("Claude Agent SDK desktop run controls", () => {
     const base = createBaseInput()
     const calls: any[] = []
     const preflight = {
+      kind: "project",
       cwd: "/repo",
       chat: { id: "chat-1" },
       subChat: { id: "sub-1" },
@@ -108,6 +107,7 @@ describe("Claude Agent SDK desktop run controls", () => {
         input: {
           runtimeId: "claude-code",
           mode: "agent",
+          workspaceKind: "project",
           hasScopeContract: true,
         },
       },
@@ -126,6 +126,7 @@ describe("Claude Agent SDK desktop run controls", () => {
       dependencies: {
         verifyPreflight: () =>
           ({
+            kind: "project",
             cwd: "/repo",
             chat: { id: "chat-1" },
             subChat: { id: "sub-1" },
@@ -148,9 +149,7 @@ describe("Claude Agent SDK desktop run controls", () => {
       error: "scope mismatch",
     })
     expect(base.emittedErrors).toHaveLength(1)
-    expect(base.emittedErrors[0].context).toBe(
-      "Guarded run contract rejected",
-    )
+    expect(base.emittedErrors[0].context).toBe("Guarded run contract rejected")
     expect(base.emittedErrors[0].error).toMatchObject({
       message: "scope mismatch",
     })

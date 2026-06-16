@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import {
   AGENT_RUNTIME_CAPABILITY_IDS,
+  type AgentRuntimeCapability,
   checkAgentRuntimeCapability,
   getAgentRunRequiredCapabilityIds,
   getAgentRuntimeCapability,
@@ -12,7 +13,6 @@ import {
   resolveAgentRuntimeCapabilityManifest,
   toAgentRuntimeId,
   validateAgentRuntimeCapability,
-  type AgentRuntimeCapability,
 } from "../src/shared/agent-runtime-capabilities"
 
 describe("agent runtime capability manifests", () => {
@@ -73,6 +73,7 @@ describe("agent runtime capability manifests", () => {
     for (const id of [
       "hardToolGuard",
       "planMode",
+      "quickChatAssistant",
       "scopeExpansion",
       "askUserQuestion",
       "mcpAuth",
@@ -166,6 +167,13 @@ describe("agent runtime capability manifests", () => {
         hasScopeContract: true,
       }),
     ).toEqual(["hardToolGuard", "planMode"])
+    expect(
+      getAgentRunRequiredCapabilityIds({
+        mode: "plan",
+        workspaceKind: "folderless",
+        hasScopeContract: true,
+      }),
+    ).toEqual(["quickChatAssistant"])
 
     expect(isRuntimeCapabilitySupported("claude-code", "rollback")).toBe(true)
     expect(isRuntimeCapabilitySupported("codex", "rollback")).toBe(false)

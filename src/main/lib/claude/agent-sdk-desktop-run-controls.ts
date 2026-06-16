@@ -1,17 +1,17 @@
 import type { AgentJobMode } from "../../../shared/agent-jobs"
 import {
-  prepareActiveGuardedRunContract,
   type GuardedGitStatusSnapshot,
+  prepareActiveGuardedRunContract,
   type ValidatedAgentScopeContract,
 } from "../agent-guard"
 import type { PrepareActiveGuardedRunContractInput } from "../agent-guard/active-contracts"
 import {
-  resolveDesktopPermissionPolicy,
   type DesktopPermissionPolicy,
+  resolveDesktopPermissionPolicy,
 } from "../agent-runtime/permission-policy"
 import {
-  verifyDesktopRunPreflight,
   type DesktopRunPreflightResult,
+  verifyDesktopRunPreflight,
 } from "../agent-runtime/preflight"
 import type { AgentJobDatabase } from "../headless/job-store"
 import type { UIMessageChunk } from "./types"
@@ -106,6 +106,7 @@ export async function prepareClaudeAgentSdkDesktopRunControls(
   const permissionPolicy = dependencies.resolvePermissionPolicy({
     runtimeId: "claude-code",
     mode: input.mode,
+    workspaceKind: preflight.kind,
     hasScopeContract: Boolean(activeGuardedRun.contract),
   })
 

@@ -1184,6 +1184,7 @@ export const codexRouter = router({
             const permissionPolicy = resolveDesktopPermissionPolicy({
               runtimeId: "codex",
               mode: input.mode,
+              workspaceKind: verifiedRunContext.kind,
               hasScopeContract: Boolean(guardedContract),
               codexAdapterSource: useCodexAppServerAdapter
                 ? "codex-app-server"

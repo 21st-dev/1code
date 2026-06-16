@@ -1,4 +1,5 @@
 export const DESKTOP_RUNTIME_CONTROL_LEVELS = [
+  "assistant",
   "plan",
   "observe",
   "guarded",
@@ -12,4 +13,3 @@ export type ResolvedDesktopRuntimeControlLevel = Exclude<
   DesktopRuntimeControlLevel,
   "strict"
 >
-

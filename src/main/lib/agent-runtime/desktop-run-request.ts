@@ -1,12 +1,11 @@
+import type { AgentJobMode } from "../../../shared/agent-jobs"
 import {
-  getAgentRunRequiredCapabilityIds,
   type AgentRuntimeCapabilityId,
   type AgentRuntimeId,
+  getAgentRunRequiredCapabilityIds,
 } from "../../../shared/agent-runtime-capabilities"
-import type { AgentJobMode } from "../../../shared/agent-jobs"
 import type { DesktopPermissionPolicy } from "./permission-policy"
 import type { DesktopRunPreflightResult } from "./preflight"
-import type { RunEvent } from "./runtime-events"
 import type {
   AgentRuntimeProviderAuthMode,
   AgentRuntimeProviderDiagnostic,
@@ -17,6 +16,7 @@ import type {
   AgentRuntimeRunResultBase,
   AgentRuntimeTraceObserver,
 } from "./run-contract"
+import type { RunEvent } from "./runtime-events"
 
 export type DesktopRunIdentity = AgentRuntimeRunIdentityBase & {
   runId: string
@@ -104,6 +104,8 @@ export function getDesktopRunRequestedCapabilities(
 ): AgentRuntimeCapabilityId[] {
   return getAgentRunRequiredCapabilityIds({
     mode: permissionPolicy.mode,
+    workspaceKind:
+      permissionPolicy.controlLevel === "assistant" ? "folderless" : "project",
     hasScopeContract: permissionPolicy.guarded,
   })
 }

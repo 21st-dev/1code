@@ -1,8 +1,6 @@
-import type { AgentRuntimeId } from "../../../shared/agent-runtime-capabilities"
 import type { AgentJobMode, AgentJobSource } from "../../../shared/agent-jobs"
-import type {
-  ResolvedDesktopRuntimeControlLevel,
-} from "../../../shared/agent-runtime-control"
+import type { AgentRuntimeId } from "../../../shared/agent-runtime-capabilities"
+import type { ResolvedDesktopRuntimeControlLevel } from "../../../shared/agent-runtime-control"
 import type {
   AgentRuntimeExecutionProfile,
   AgentRuntimePermissionPolicySummary,
@@ -14,11 +12,15 @@ export type DesktopPermissionRuntime = Extract<
 >
 
 export type PermissionPolicySideEffect =
+  | "workspace-file-read"
   | "workspace-file-write"
   | "side-effecting-shell"
+  | "terminal-execution"
+  | "project-mcp-tool"
   | "mcp-configuration"
   | "runtime-configuration"
   | "provider-configuration"
+  | "unknown-tool"
 
 export type ObservedCatastrophicAction =
   | "high-risk-shell"
@@ -88,12 +90,15 @@ export type DesktopPermissionPolicy = {
   requiresPreExecutionEnforcement: boolean
   observedToolPolicy: ObservedToolPolicy
   enforcement:
+    | "locus-assistant-tool-policy"
     | "native-plan-read-only"
     | "locus-agent-observed"
     | "locus-guarded-tool-policy"
+    | "codex-acp-assistant-handler"
     | "codex-acp-plan-handler"
     | "codex-acp-guarded-handler"
     | "codex-acp-agent-observed"
+    | "codex-app-server-assistant-approval-gate"
     | "codex-app-server-plan-approval-gate"
     | "codex-app-server-guarded-approval-gate"
     | "codex-app-server-agent-approval-gate"
@@ -104,8 +109,24 @@ export type DesktopPermissionPolicy = {
 export type ResolveDesktopPermissionPolicyInput = {
   runtimeId: DesktopPermissionRuntime
   mode: AgentJobMode
+  workspaceKind?: "project" | "folderless"
   hasScopeContract?: boolean
   codexAdapterSource?: CodexPermissionAdapterSource
+}
+
+export type AssistantToolPermissionCategory =
+  | "web-information"
+  | "filesystem"
+  | "shell"
+  | "terminal"
+  | "mcp-or-project"
+  | "runtime-mutation"
+  | "unknown"
+
+export type AssistantToolPermissionDecision = {
+  decision: "allow" | "deny"
+  category: AssistantToolPermissionCategory
+  message?: string
 }
 
 export type NonDesktopInteractiveRequirement =
@@ -136,6 +157,18 @@ const PLAN_BLOCKED_SIDE_EFFECTS: PermissionPolicySideEffect[] = [
   "provider-configuration",
 ]
 
+const ASSISTANT_BLOCKED_SIDE_EFFECTS: PermissionPolicySideEffect[] = [
+  "workspace-file-read",
+  "workspace-file-write",
+  "side-effecting-shell",
+  "terminal-execution",
+  "project-mcp-tool",
+  "mcp-configuration",
+  "runtime-configuration",
+  "provider-configuration",
+  "unknown-tool",
+]
+
 const OBSERVED_CATASTROPHIC_ACTIONS: ObservedCatastrophicAction[] = [
   "high-risk-shell",
   "sensitive-path-write",
@@ -149,8 +182,123 @@ const DISABLED_OBSERVATION: ObservedToolPolicy = {
   degradation: "not-applicable",
 }
 
+const ASSISTANT_ALLOWED_WEB_TOOL_NAMES = new Set(["websearch", "webfetch"])
+
+const ASSISTANT_FILESYSTEM_TOOL_NAMES = new Set([
+  "read",
+  "write",
+  "edit",
+  "multiedit",
+  "notebookedit",
+  "glob",
+  "grep",
+  "ls",
+  "list",
+])
+
+const ASSISTANT_SHELL_TOOL_NAMES = new Set([
+  "bash",
+  "run",
+  "shell",
+  "exec",
+  "execute",
+])
+
+const ASSISTANT_RUNTIME_MUTATION_TOOL_NAMES = new Set([
+  "exitplanmode",
+  "todowrite",
+  "task",
+  "planwrite",
+])
+
+const FILESYSTEM_TOOL_KINDS = new Set([
+  "read",
+  "edit",
+  "delete",
+  "move",
+  "search",
+])
+
+function normalizeAssistantToolName(toolName: string): string {
+  return toolName.replace(/[^A-Za-z0-9]/g, "").toLowerCase()
+}
+
+export function decideAssistantToolPermission(input: {
+  toolName: string
+  toolKind?: string | null
+}): AssistantToolPermissionDecision {
+  const rawName = input.toolName.trim()
+  const normalizedName = normalizeAssistantToolName(rawName)
+  const toolKind = input.toolKind?.trim().toLowerCase() || null
+
+  if (ASSISTANT_ALLOWED_WEB_TOOL_NAMES.has(normalizedName)) {
+    return {
+      decision: "allow",
+      category: "web-information",
+    }
+  }
+
+  if (
+    rawName.startsWith("mcp__") ||
+    normalizedName.startsWith("mcp") ||
+    normalizedName.includes("project")
+  ) {
+    return {
+      decision: "deny",
+      category: "mcp-or-project",
+      message: `Assistant mode blocked ${rawName || "unknown tool"}: project and MCP tools are unavailable in quick chat.`,
+    }
+  }
+
+  if (
+    ASSISTANT_FILESYSTEM_TOOL_NAMES.has(normalizedName) ||
+    (toolKind ? FILESYSTEM_TOOL_KINDS.has(toolKind) : false)
+  ) {
+    return {
+      decision: "deny",
+      category: "filesystem",
+      message: `Assistant mode blocked ${rawName || "unknown tool"}: filesystem tools are unavailable in quick chat.`,
+    }
+  }
+
+  if (
+    ASSISTANT_SHELL_TOOL_NAMES.has(normalizedName) ||
+    toolKind === "execute"
+  ) {
+    return {
+      decision: "deny",
+      category: "shell",
+      message: `Assistant mode blocked ${rawName || "unknown tool"}: shell and process tools are unavailable in quick chat.`,
+    }
+  }
+
+  if (normalizedName.includes("terminal")) {
+    return {
+      decision: "deny",
+      category: "terminal",
+      message: `Assistant mode blocked ${rawName || "unknown tool"}: terminal tools are unavailable in quick chat.`,
+    }
+  }
+
+  if (ASSISTANT_RUNTIME_MUTATION_TOOL_NAMES.has(normalizedName)) {
+    return {
+      decision: "deny",
+      category: "runtime-mutation",
+      message: `Assistant mode blocked ${rawName || "unknown tool"}: runtime mutation tools are unavailable in quick chat.`,
+    }
+  }
+
+  return {
+    decision: "deny",
+    category: "unknown",
+    message: `Assistant mode blocked ${rawName || "unknown tool"}: only web search and web fetch tools are allowed in quick chat.`,
+  }
+}
+
 function uniqueStrings(values: readonly string[] | undefined): string[] {
-  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))]
+  return [
+    ...new Set((values ?? []).map((value) => value.trim()).filter(Boolean)),
+  ]
 }
 
 function failClosedNonDesktopPolicy(input: {
@@ -283,7 +431,9 @@ function createCodexAppServerPermissionMapping({
     adapterSource: "codex-app-server",
     controlLevel,
     appServerApprovalPolicy:
-      controlLevel === "guarded" ? "untrusted" : "on-request",
+      controlLevel === "guarded" || controlLevel === "assistant"
+        ? "untrusted"
+        : "on-request",
     observedToolPolicy,
     requiresApprovalGate: true,
     approvalGateFailure: "fail-closed",
@@ -324,9 +474,50 @@ function createCodexPermissionMapping({
 export function resolveDesktopPermissionPolicy({
   runtimeId,
   mode,
+  workspaceKind = "project",
   hasScopeContract = false,
   codexAdapterSource = "acp-temporary-compat",
 }: ResolveDesktopPermissionPolicyInput): DesktopPermissionPolicy {
+  if (workspaceKind === "folderless") {
+    return {
+      runtimeId,
+      mode,
+      controlLevel: "assistant",
+      guarded: false,
+      planWorkspaceSideEffects: "deny",
+      allowedLocusPersistence: true,
+      blockedSideEffects: ASSISTANT_BLOCKED_SIDE_EFFECTS,
+      requiresPreExecutionEnforcement: true,
+      observedToolPolicy: DISABLED_OBSERVATION,
+      enforcement:
+        runtimeId === "claude-code"
+          ? "locus-assistant-tool-policy"
+          : codexAdapterSource === "codex-app-server"
+            ? "codex-app-server-assistant-approval-gate"
+            : "codex-acp-assistant-handler",
+      runtimeMapping:
+        runtimeId === "claude-code"
+          ? {
+              runtime: "claude-code",
+              sdkPermissionMode: "plan",
+              allowDangerouslySkipPermissions: false,
+              requiresToolPolicy: true,
+              bypassReason: null,
+            }
+          : createCodexPermissionMapping({
+              adapterSource: codexAdapterSource,
+              controlLevel: "assistant",
+              observedToolPolicy: DISABLED_OBSERVATION,
+              acpPermissionHandlerFailure: "fail-closed",
+            }),
+      diagnostics: [
+        runtimeId === "codex" && codexAdapterSource === "codex-app-server"
+          ? "Assistant quick chat allows only web search/fetch tools; Codex app-server must fail closed for file, shell, MCP, runtime, and unknown approval requests."
+          : "Assistant quick chat allows only web search/fetch tools and Locus-owned persistence; file, shell, terminal, MCP, runtime mutation, and unknown tools fail closed.",
+      ],
+    }
+  }
+
   if (mode === "plan") {
     return {
       runtimeId,
