@@ -29,7 +29,8 @@ export type DesktopRunContext = AgentRuntimeRunContextBase & {
   runtimeId: AgentRuntimeId
   mode: AgentJobMode
   source: "desktop"
-  projectId: string
+  workspaceKind: DesktopRunPreflightResult["kind"]
+  projectId: string | null
   chatId: string
   subChatId: string
   cwd: string
@@ -152,7 +153,8 @@ export function createDesktopRunContextFromPreflight(
     mode,
     source: "desktop",
     executionProfile: "interactive",
-    projectId: preflight.project.id,
+    workspaceKind: preflight.kind,
+    projectId: preflight.kind === "project" ? preflight.project.id : null,
     chatId: preflight.chat.id,
     subChatId: preflight.subChat.id,
     cwd: preflight.cwd,

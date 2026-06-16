@@ -1,19 +1,19 @@
 # Tasks: Folderless quick chat and project-grouped sidebar
 
 ## 1. Data model and CRUD
-- [ ] 1.1 Make `chats.projectId` nullable in `src/main/lib/db/schema/index.ts` (drop `.notNull()`, keep FK + `onDelete: cascade`).
-- [ ] 1.2 Generate a Drizzle migration (`bun run db:generate`) and confirm existing rows are unaffected.
-- [ ] 1.3 Confirm `sub_chats.chatId` has `onDelete: cascade`; if not, add it or explicitly delete sub-chats before chat deletion.
-- [ ] 1.4 Make `chats.create`, `chats.get`, `chats.list`, and `chats.listArchived` accept/tolerate null `projectId` without fabricating a project.
+- [x] 1.1 Make `chats.projectId` nullable in `src/main/lib/db/schema/index.ts` (drop `.notNull()`, keep FK + `onDelete: cascade`).
+- [x] 1.2 Generate a Drizzle migration (`bun run db:generate`) and confirm existing rows are unaffected.
+- [x] 1.3 Confirm `sub_chats.chatId` has `onDelete: cascade`; if not, add it or explicitly delete sub-chats before chat deletion.
+- [x] 1.4 Make `chats.create`, `chats.get`, `chats.list`, and `chats.listArchived` accept/tolerate null `projectId` without fabricating a project.
 - [ ] 1.5 Audit repo-only read paths (`getFileStats`, worktree/diff/terminal derivation, PR actions, workbench job queries, kanban, MCP/project lookup) and exclude or special-case null-project chats.
 
 ## 2. Runtime preflight and request contracts
-- [ ] 2.1 Change `DesktopRunPreflightResult` to a `kind: "project" | "folderless"` union with `project: null` only for folderless quick chats.
-- [ ] 2.2 Preserve existing project-backed cwd validation for `kind: "project"`.
-- [ ] 2.3 For `kind: "folderless"`, compute the app-managed scratch cwd in the main process and ignore/reject raw renderer cwd.
-- [ ] 2.4 Block folderless preflight when the chat has `worktreePath`, `branch`, PR metadata, archive state, mismatched sub-chat, or unsupported attachments.
-- [ ] 2.5 Update `DesktopRunContext` / desktop run request builders so project-backed runs carry `projectId: string` and folderless runs carry `projectId: null` or `workspaceKind: "folderless"` explicitly.
-- [ ] 2.6 Add tests proving project-backed preflight still rejects cwd mismatch and folderless preflight never starts from renderer-supplied cwd.
+- [x] 2.1 Change `DesktopRunPreflightResult` to a `kind: "project" | "folderless"` union with `project: null` only for folderless quick chats.
+- [x] 2.2 Preserve existing project-backed cwd validation for `kind: "project"`.
+- [x] 2.3 For `kind: "folderless"`, compute the app-managed scratch cwd in the main process and ignore/reject raw renderer cwd.
+- [x] 2.4 Block folderless preflight when the chat has `worktreePath`, `branch`, PR metadata, archive state, mismatched sub-chat, or unsupported attachments.
+- [x] 2.5 Update `DesktopRunContext` / desktop run request builders so project-backed runs carry `projectId: string` and folderless runs carry `projectId: null` or `workspaceKind: "folderless"` explicitly.
+- [x] 2.6 Add tests proving project-backed preflight still rejects cwd mismatch and folderless preflight never starts from renderer-supplied cwd.
 
 ## 3. Assistant permission tier
 - [ ] 3.1 Add an `assistant` control level in `src/main/lib/agent-runtime/permission-policy.ts` selected from folderless preflight, not from `AgentJobMode`.

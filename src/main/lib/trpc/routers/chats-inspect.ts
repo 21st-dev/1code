@@ -350,11 +350,13 @@ export const inspectProcedures = {
         throw new Error("Chat not found")
       }
 
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, chat.projectId))
-        .get()
+      const project = chat.projectId
+        ? db
+            .select()
+            .from(projects)
+            .where(eq(projects.id, chat.projectId))
+            .get()
+        : null
 
       // Query sub-chats: either a specific one or all for the chat
       let chatSubChats

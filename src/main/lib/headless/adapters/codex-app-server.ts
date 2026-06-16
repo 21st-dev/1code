@@ -110,6 +110,7 @@ function createDesktopRequestFromHeadless(
       // the outer headless request.
       source: "desktop",
       executionProfile: "interactive",
+      workspaceKind: "project",
       projectId:
         request.context.projectId ?? syntheticId("headless-project", request),
       chatId: request.context.chatId ?? syntheticId("headless-chat", request),

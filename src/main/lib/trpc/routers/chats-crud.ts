@@ -52,7 +52,7 @@ export const chatCrudProcedures = {
    * List all non-archived chats (optionally filter by project)
    */
   list: publicProcedure
-    .input(z.object({ projectId: z.string().optional() }))
+    .input(z.object({ projectId: z.string().nullable().optional() }))
     .query(({ input }) => {
       const db = getDatabase()
       const conditions = [isNull(chats.archivedAt)]
@@ -71,7 +71,7 @@ export const chatCrudProcedures = {
    * List archived chats (optionally filter by project)
    */
   listArchived: publicProcedure
-    .input(z.object({ projectId: z.string().optional() }))
+    .input(z.object({ projectId: z.string().nullable().optional() }))
     .query(({ input }) => {
       const db = getDatabase()
       const conditions = [isNotNull(chats.archivedAt)]
@@ -103,11 +103,13 @@ export const chatCrudProcedures = {
         .orderBy(subChats.createdAt)
         .all()
 
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, chat.projectId))
-        .get()
+      const project = chat.projectId
+        ? db
+            .select()
+            .from(projects)
+            .where(eq(projects.id, chat.projectId))
+            .get()
+        : null
 
       return { ...chat, subChats: chatSubChats, project }
     }),
@@ -118,7 +120,7 @@ export const chatCrudProcedures = {
   create: publicProcedure
     .input(
       z.object({
-        projectId: z.string(),
+        projectId: z.string().nullable().optional(),
         name: z.string().optional(),
         model: z.string().optional(),
         provider: z.enum(agentChatProviders).optional(),
@@ -187,21 +189,23 @@ export const chatCrudProcedures = {
       const db = getDatabase()
       const requestingWindowId = ctx.getWindow?.()?.id ?? null
 
-      // Get project path
-      const project = db
-        .select()
-        .from(projects)
-        .where(eq(projects.id, input.projectId))
-        .get()
+      // Get project path when creating a project-backed workspace.
+      const project = input.projectId
+        ? db
+            .select()
+            .from(projects)
+            .where(eq(projects.id, input.projectId))
+            .get()
+        : null
       console.log("[chats.create] found project:", project)
-      if (!project) throw new Error("Project not found")
+      if (input.projectId && !project) throw new Error("Project not found")
 
       // Create chat (fast path)
       const chat = db
         .insert(chats)
         .values({
           name: input.name,
-          projectId: input.projectId,
+          projectId: input.projectId ?? null,
         })
         .returning()
         .get()
@@ -257,8 +261,10 @@ export const chatCrudProcedures = {
         baseBranch?: string
       } = {}
 
-      // Only create worktree if useWorktree is true
-      if (input.useWorktree) {
+      // Only create worktree if this is a project-backed workspace.
+      if (!project) {
+        console.log("[chats.create] folderless quick chat - no worktree")
+      } else if (input.useWorktree) {
         console.log(
           "[chats.create] creating worktree with baseBranch:",
           input.baseBranch,
@@ -332,7 +338,8 @@ export const chatCrudProcedures = {
 
       const response = {
         ...chat,
-        worktreePath: worktreeResult.worktreePath || project.path,
+        projectId: input.projectId ?? null,
+        worktreePath: worktreeResult.worktreePath || project?.path || null,
         branch: worktreeResult.branch,
         baseBranch: worktreeResult.baseBranch,
         subChats: [subChat],
@@ -341,8 +348,8 @@ export const chatCrudProcedures = {
       // Track workspace created
       trackWorkspaceCreated({
         id: chat.id,
-        projectId: input.projectId,
-        useWorktree: input.useWorktree,
+        projectId: input.projectId ?? null,
+        useWorktree: Boolean(project && input.useWorktree),
       })
 
       console.log("[chats.create] returning:", response)
@@ -413,7 +420,7 @@ export const chatCrudProcedures = {
       }
 
       // Optionally delete worktree in background (don't await)
-      if (input.deleteWorktree && chat?.worktreePath && chat?.branch) {
+      if (input.deleteWorktree && chat?.worktreePath && chat?.branch && chat.projectId) {
         const project = db
           .select()
           .from(projects)
@@ -524,7 +531,7 @@ export const chatCrudProcedures = {
       const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
 
       // Cleanup worktree if it was created (has branch = was a real worktree, not just project path)
-      if (chat?.worktreePath && chat?.branch) {
+      if (chat?.worktreePath && chat?.branch && chat.projectId) {
         const project = db
           .select()
           .from(projects)

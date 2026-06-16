@@ -67,7 +67,7 @@ export const subChatProcedures = {
         .where(eq(chats.id, subChat.chatId))
         .get()
 
-      const project = chat
+      const project = chat?.projectId
         ? db
             .select()
             .from(projects)

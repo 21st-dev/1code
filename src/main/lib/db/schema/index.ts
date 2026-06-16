@@ -35,7 +35,6 @@ export const chats = sqliteTable("chats", {
     .$defaultFn(() => createId()),
   name: text("name"),
   projectId: text("project_id")
-    .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),

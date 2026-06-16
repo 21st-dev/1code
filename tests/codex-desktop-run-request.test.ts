@@ -17,6 +17,7 @@ describe("Codex desktop run request", () => {
       jobId: "job-1",
       mode: "plan",
       preflight: {
+        kind: "project",
         cwd: "/repo",
         chat: { id: "chat-1", projectId: "project-1" },
         subChat: { id: "sub-1", chatId: "chat-1" },
@@ -60,6 +61,7 @@ describe("Codex desktop run request", () => {
       runtimeId: "codex",
       mode: "plan",
       source: "desktop",
+      workspaceKind: "project",
       projectId: "project-1",
       chatId: "chat-1",
       subChatId: "sub-1",
