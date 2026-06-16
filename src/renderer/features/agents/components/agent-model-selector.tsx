@@ -153,6 +153,10 @@ type ActiveModelInfo = {
   left: number
 }
 
+function isDomNode(target: EventTarget | null): target is Node {
+  return typeof Node !== "undefined" && target instanceof Node
+}
+
 function CodexThinkingSubMenu({
   thinkings,
   selectedThinking,
@@ -197,8 +201,8 @@ function CodexThinkingSubMenu({
 
   const handleTriggerLeave = useCallback(
     (e: React.MouseEvent) => {
-      const related = e.relatedTarget as Node | null
-      if (subMenuRef.current?.contains(related)) return
+      const related = e.relatedTarget
+      if (isDomNode(related) && subMenuRef.current?.contains(related)) return
       scheduleClose()
     },
     [scheduleClose],
@@ -206,8 +210,8 @@ function CodexThinkingSubMenu({
 
   const handleSubLeave = useCallback(
     (e: React.MouseEvent) => {
-      const related = e.relatedTarget as Node | null
-      if (triggerRef.current?.contains(related)) return
+      const related = e.relatedTarget
+      if (isDomNode(related) && triggerRef.current?.contains(related)) return
       scheduleClose()
     },
     [scheduleClose],

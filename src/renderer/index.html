@@ -80,7 +80,10 @@
       console.log("[HTML] Inline script running - scripts work!");
       window.onerror = function(msg, url, line) {
         console.error("[HTML] Global error:", msg, "at", url, "line", line);
-        document.getElementById("root").innerHTML = "<pre style='color:red;padding:20px'>Error: " + msg + "</pre>";
+        const root = document.getElementById("root");
+        if (root && root.dataset.reactMounted !== "true") {
+          root.innerHTML = "<pre style='color:red;padding:20px'>Error: " + msg + "</pre>";
+        }
       };
     </script>
     <script type="module" src="./main.tsx"></script>
