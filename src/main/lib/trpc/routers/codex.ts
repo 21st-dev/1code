@@ -1,29 +1,59 @@
-import { observable } from "@trpc/server/observable"
-import { eq } from "drizzle-orm"
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { statSync } from "node:fs"
 import { basename, isAbsolute, join, resolve } from "node:path"
+import { observable } from "@trpc/server/observable"
+import { eq } from "drizzle-orm"
 import { z } from "zod"
-import {
-  normalizeCodexStreamChunk,
-} from "../../../../shared/codex-tool-normalizer"
 import {
   buildCodexCapabilityErrorChunk,
   buildCodexRuntimeStatusChunk,
   createCodexRuntimeBlocker,
 } from "../../../../shared/codex-runtime-status"
+import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import { sanitizeMcpConfigForRenderer } from "../../../../shared/mcp-import-preview"
 import {
   captureGuardedGitStatus,
   formatScopeValidationError,
-  validateAgentScopeContract,
   type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
+  validateAgentScopeContract,
 } from "../../agent-guard"
+import { resolveDesktopPermissionPolicy } from "../../agent-runtime/permission-policy"
 import {
-  codexChatInputSchema,
-} from "../../codex/chat-input-schema"
+  type DesktopRunPreflightBlocker,
+  DesktopRunPreflightError,
+  verifyDesktopRunPreflight,
+} from "../../agent-runtime/preflight"
+import {
+  appendRunEventsToAgentJob,
+  createDesktopStreamEventMapper,
+  redactRendererDiagnosticChunk,
+  redactRendererRuntimeChunk,
+} from "../../agent-runtime/stream-event-mapper"
+import { prepareChatImageAttachmentsForDesktopRun } from "../../chat-attachments"
+import { resolveProjectPathFromWorktree } from "../../claude-config"
+import {
+  cleanupAllCodexAcpProviders,
+  cleanupCodexAcpProvider,
+} from "../../codex/acp-adapter"
+import { createCodexAcpTemporaryCompatAdapter } from "../../codex/acp-temporary-compat-adapter"
+import {
+  getCodexApiKeyStatus,
+  readCodexApiKey,
+  removeCodexApiKey as removeStoredCodexApiKey,
+  saveCodexApiKey as saveStoredCodexApiKey,
+} from "../../codex/api-key-store"
+import {
+  CodexApiKeyValidationError,
+  validateCodexApiKey,
+} from "../../codex/api-key-validation"
+import { createCodexAppServerAdapter } from "../../codex/app-server-adapter"
+import { createCodexAppServerFinishGate } from "../../codex/app-server-finish-gate"
+import type {
+  CodexAskUserQuestionApproval,
+  CodexAskUserQuestionPending,
+} from "../../codex/ask-user-question"
 import {
   buildCodexUserParts,
   codexImageAttachmentSignatureFromInput,
@@ -34,15 +64,21 @@ import {
   getLastCodexSessionId,
   parseCodexStoredMessages,
 } from "../../codex/chat-history"
+import { codexChatInputSchema } from "../../codex/chat-input-schema"
+import { resolveBundledCodexCliPath } from "../../codex/cli-path"
+import { runCodexCli, runCodexCliChecked } from "../../codex/cli-runner"
+import { resolveCodexDesktopAdapterSelection } from "../../codex/desktop-adapter-selection"
+import { createCodexDesktopRunRequest } from "../../codex/desktop-run-request"
 import {
   extractCodexError as extractCodexErrorWithProviderRedaction,
   getCodexErrorDiagnostics,
   isCodexAuthError,
 } from "../../codex/errors"
 import {
-  normalizeCodexAppServerModelId,
-  resolveCodexSelectedModelId,
-} from "../../codex/model-selection"
+  getCodexIntegrationStatus,
+  isCodexIntegrationConnected,
+  normalizeCodexIntegrationState,
+} from "../../codex/integration-status"
 import {
   appendCodexLoginOutput,
   redactCodexLoginOutput,
@@ -55,75 +91,26 @@ import {
   toCodexLoginSessionResponse,
 } from "../../codex/login-session"
 import {
-  getCodexApiKeyStatus,
-  readCodexApiKey,
-  removeCodexApiKey as removeStoredCodexApiKey,
-  saveCodexApiKey as saveStoredCodexApiKey,
-} from "../../codex/api-key-store"
-import {
-  CodexApiKeyValidationError,
-  validateCodexApiKey,
-} from "../../codex/api-key-validation"
-import {
-  resolveBundledCodexCliPath,
-} from "../../codex/cli-path"
-import {
-  resolveCodexDesktopAdapterSelection,
-} from "../../codex/desktop-adapter-selection"
-import {
-  runCodexCli,
-  runCodexCliChecked,
-} from "../../codex/cli-runner"
-import {
-  getCodexIntegrationStatus,
-  isCodexIntegrationConnected,
-  normalizeCodexIntegrationState,
-} from "../../codex/integration-status"
-import { getCodexRuntimeStatus } from "../../codex/runtime-status"
+  normalizeCodexAppServerModelId,
+  resolveCodexSelectedModelId,
+} from "../../codex/model-selection"
 import type { CodexProviderProfileBinding } from "../../codex/provider-runtime-binding"
-import {
-  cleanupAllCodexAcpProviders,
-  cleanupCodexAcpProvider,
-} from "../../codex/acp-adapter"
-import { createCodexDesktopRunRequest } from "../../codex/desktop-run-request"
-import { createCodexAcpTemporaryCompatAdapter } from "../../codex/acp-temporary-compat-adapter"
-import { createCodexAppServerAdapter } from "../../codex/app-server-adapter"
-import { createCodexAppServerFinishGate } from "../../codex/app-server-finish-gate"
-import {
-  type CodexAskUserQuestionApproval,
-  type CodexAskUserQuestionPending,
-} from "../../codex/ask-user-question"
-import { resolveProjectPathFromWorktree } from "../../claude-config"
+import { getCodexRuntimeStatus } from "../../codex/runtime-status"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
-import { prepareChatImageAttachmentsForDesktopRun } from "../../chat-attachments"
-import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
-import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
-import { assertOfficialCloudAllowed } from "../../local-only"
-import {
-  DesktopRunPreflightError,
-  verifyDesktopRunPreflight,
-  type DesktopRunPreflightBlocker,
-} from "../../agent-runtime/preflight"
-import {
-  resolveDesktopPermissionPolicy,
-} from "../../agent-runtime/permission-policy"
-import {
-  appendRunEventsToAgentJob,
-  createDesktopStreamEventMapper,
-  redactRendererDiagnosticChunk,
-  redactRendererRuntimeChunk,
-} from "../../agent-runtime/stream-event-mapper"
-import {
-  fetchMcpTools,
-  fetchMcpToolsStdio,
-  type McpToolInfo,
-} from "../../mcp-auth"
-import { publicProcedure, router } from "../index"
 import {
   completeDesktopChatAgentJobSafely,
   createAndRegisterDesktopChatAgentJob,
   requestCancelDesktopChatAgentJobSafely,
 } from "../../desktop-agent-jobs"
+import { assertOfficialCloudAllowed } from "../../local-only"
+import {
+  fetchMcpTools,
+  fetchMcpToolsStdio,
+  type McpToolInfo,
+} from "../../mcp-auth"
+import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
+import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
+import { publicProcedure, router } from "../index"
 
 type CodexMcpServerForSession =
   | {
@@ -179,12 +166,11 @@ function buildCodexAppServerAssistantMessage(input: {
     .filter((chunk) => chunk?.type === "text-delta")
     .map((chunk) => (typeof chunk.delta === "string" ? chunk.delta : ""))
     .join("")
-  const metadataChunks = input.chunks
-    .flatMap((chunk) =>
-      chunk.type === "message-metadata" && isRecord(chunk.messageMetadata)
-        ? [chunk.messageMetadata]
-        : [],
-    )
+  const metadataChunks = input.chunks.flatMap((chunk) =>
+    chunk.type === "message-metadata" && isRecord(chunk.messageMetadata)
+      ? [chunk.messageMetadata]
+      : [],
+  )
   const finishMetadata = [...input.chunks]
     .reverse()
     .flatMap((chunk) =>
@@ -218,10 +204,7 @@ type ActiveCodexStream = {
 }
 
 const activeStreams = new Map<string, ActiveCodexStream>()
-const pendingCodexToolApprovals = new Map<
-  string,
-  CodexAskUserQuestionPending
->()
+const pendingCodexToolApprovals = new Map<string, CodexAskUserQuestionPending>()
 
 function clearPendingCodexApprovals(
   message = "Session cancelled.",
@@ -270,7 +253,10 @@ const codexMcpListEntrySchema = z
         url: z.string().nullable().optional(),
         bearer_token_env_var: z.string().nullable().optional(),
         http_headers: z.record(z.string(), z.string()).nullable().optional(),
-        env_http_headers: z.record(z.string(), z.string()).nullable().optional(),
+        env_http_headers: z
+          .record(z.string(), z.string())
+          .nullable()
+          .optional(),
       })
       .passthrough(),
     auth_status: z.string().nullable().optional(),
@@ -315,7 +301,9 @@ function objectToPairs(
 ): Array<{ name: string; value: string }> | undefined {
   if (!value) return undefined
   const pairs = Object.entries(value)
-    .filter(([name, val]) => typeof name === "string" && typeof val === "string")
+    .filter(
+      ([name, val]) => typeof name === "string" && typeof val === "string",
+    )
     .map(([name, val]) => ({ name, value: val }))
 
   return pairs.length > 0 ? pairs : undefined
@@ -360,8 +348,11 @@ function resolveCodexHttpHeaders(
   }
 
   if (transport.env_http_headers) {
-    for (const [headerName, envName] of Object.entries(transport.env_http_headers)) {
-      if (typeof headerName !== "string" || typeof envName !== "string") continue
+    for (const [headerName, envName] of Object.entries(
+      transport.env_http_headers,
+    )) {
+      if (typeof headerName !== "string" || typeof envName !== "string")
+        continue
       const value = process.env[envName]
       if (typeof value === "string" && value.length > 0) {
         merged[headerName] = value
@@ -399,9 +390,7 @@ function resolveCodexStdioCommand(
   }
 
   const isPathLike =
-    command.startsWith(".") ||
-    command.includes("/") ||
-    command.includes("\\")
+    command.startsWith(".") || command.includes("/") || command.includes("\\")
 
   return isPathLike ? resolve(cwd, command) : command
 }
@@ -420,10 +409,15 @@ function normalizeCodexTools(tools: McpToolInfo[]): McpToolInfo[] {
   return [...unique.values()]
 }
 
-async function fetchCodexMcpTools(entry: CodexMcpListEntry): Promise<McpToolInfo[]> {
+async function fetchCodexMcpTools(
+  entry: CodexMcpListEntry,
+): Promise<McpToolInfo[]> {
   const transportType = entry.transport.type.trim().toLowerCase()
   const timeoutPromise = new Promise<McpToolInfo[]>((_, reject) =>
-    setTimeout(() => reject(new Error("Timeout")), CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS),
+    setTimeout(
+      () => reject(new Error("Timeout")),
+      CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS,
+    ),
   )
 
   const fetchPromise = (async (): Promise<McpToolInfo[]> => {
@@ -459,8 +453,12 @@ async function fetchCodexMcpTools(entry: CodexMcpListEntry): Promise<McpToolInfo
   }
 }
 
-function resolveCodexLookupPath(pathCandidate: string | null | undefined): string {
-  return pathCandidate && pathCandidate.trim() ? pathCandidate.trim() : "__global__"
+function resolveCodexLookupPath(
+  pathCandidate: string | null | undefined,
+): string {
+  return pathCandidate && pathCandidate.trim()
+    ? pathCandidate.trim()
+    : "__global__"
 }
 
 function isExistingCodexMcpCwd(pathCandidate: string): boolean {
@@ -580,7 +578,8 @@ async function resolveCodexMcpSnapshot(params: {
 
         settingsConfig.url = url
         settingsConfig.headers = entry.transport.http_headers || undefined
-        settingsConfig.envHttpHeaders = entry.transport.env_http_headers || undefined
+        settingsConfig.envHttpHeaders =
+          entry.transport.env_http_headers || undefined
         settingsConfig.bearerTokenEnvVar =
           entry.transport.bearer_token_env_var || undefined
       }
@@ -590,13 +589,11 @@ async function resolveCodexMcpSnapshot(params: {
         includeInSession &&
         !authState.needsAuth &&
         transportType !== "stdio" &&
-        (
-          // Probe unauthenticated/public HTTP servers. Avoid probing stdio
-          // servers during startup because they can launch GUI/permission flows.
-          !authState.supportsAuth ||
+        // Probe unauthenticated/public HTTP servers. Avoid probing stdio
+        // servers during startup because they can launch GUI/permission flows.
+        (!authState.supportsAuth ||
           // For auth-capable HTTP, only probe if explicit auth header is available.
-          Boolean(resolvedHttpHeaders?.Authorization)
-        )
+          Boolean(resolvedHttpHeaders?.Authorization))
       const tools = shouldProbeTools ? await fetchCodexMcpTools(entry) : []
       if (shouldProbeTools && tools.length === 0) {
         status = "failed"
@@ -644,9 +641,7 @@ function clearCodexMcpCache(): void {
   codexMcpCache.clear()
 }
 
-function getCodexServerIdentity(
-  server: CodexMcpServerForSettings,
-): string {
+function getCodexServerIdentity(server: CodexMcpServerForSettings): string {
   const config = server.config as Record<string, unknown>
   return JSON.stringify({
     enabled: config.enabled ?? null,
@@ -669,7 +664,10 @@ export async function getAllCodexMcpConfigHandler() {
   const globalSnapshot = await resolveCodexMcpSnapshot({ includeTools: true })
   const globalServers = globalSnapshot.groups[0]?.mcpServers || []
   const globalByName = new Map(
-    globalServers.map((server) => [server.name, getCodexServerIdentity(server)]),
+    globalServers.map((server) => [
+      server.name,
+      getCodexServerIdentity(server),
+    ]),
   )
 
   const groups: CodexMcpSnapshot["groups"] = [...globalSnapshot.groups]
@@ -680,14 +678,20 @@ export async function getAllCodexMcpConfigHandler() {
 
   try {
     const db = getDatabase()
-    const dbProjects = db.select({ path: projectsTable.path }).from(projectsTable).all()
+    const dbProjects = db
+      .select({ path: projectsTable.path })
+      .from(projectsTable)
+      .all()
     for (const project of dbProjects) {
       if (typeof project.path === "string" && project.path.trim().length > 0) {
         projectPathSet.add(project.path)
       }
     }
   } catch (error) {
-    console.error("[codex.getAllMcpConfig] Failed to read projects from DB:", error)
+    console.error(
+      "[codex.getAllMcpConfig] Failed to read projects from DB:",
+      error,
+    )
   }
 
   const projectPaths = [...projectPathSet].sort((a, b) => a.localeCompare(b))
@@ -722,7 +726,10 @@ export async function getAllCodexMcpConfigHandler() {
       continue
     }
     if (result.status === "rejected") {
-      console.error("[codex.getAllMcpConfig] Failed to resolve project MCP snapshot:", result.reason)
+      console.error(
+        "[codex.getAllMcpConfig] Failed to resolve project MCP snapshot:",
+        result.reason,
+      )
     }
   }
 
@@ -872,7 +879,9 @@ export const codexRouter = router({
         session.error = null
       } else {
         session.state = "error"
-        session.error = session.error || `Codex login exited with code ${exitCode ?? "unknown"}`
+        session.error =
+          session.error ||
+          `Codex login exited with code ${exitCode ?? "unknown"}`
       }
     })
 
@@ -1107,7 +1116,10 @@ export const codexRouter = router({
               const events = desktopStreamEventMapper.map(chunk)
               appendRunEventsToAgentJob(desktopJobDb, events)
             } catch (eventError) {
-              console.warn("[codex] Failed to persist desktop run events:", eventError)
+              console.warn(
+                "[codex] Failed to persist desktop run events:",
+                eventError,
+              )
             }
           }
           appServerFinishGate.emit(chunk)
@@ -1140,13 +1152,16 @@ export const codexRouter = router({
 
             if (input.scopeContract) {
               try {
-                const validated = await validateAgentScopeContract(input.scopeContract, {
-                  cwd: runtimeCwd,
-                  projectPath: input.projectPath,
-                  chatId: input.chatId,
-                  subChatId: input.subChatId,
-                  runId: input.runId,
-                })
+                const validated = await validateAgentScopeContract(
+                  input.scopeContract,
+                  {
+                    cwd: runtimeCwd,
+                    projectPath: input.projectPath,
+                    chatId: input.chatId,
+                    subChatId: input.subChatId,
+                    runId: input.runId,
+                  },
+                )
                 guardedContract = {
                   ...validated,
                   runId: validated.runId ?? input.runId,
@@ -1162,8 +1177,9 @@ export const codexRouter = router({
                 return
               }
             }
-            const codexAdapterSelection =
-              resolveCodexDesktopAdapterSelection(process.env)
+            const codexAdapterSelection = resolveCodexDesktopAdapterSelection(
+              process.env,
+            )
             useCodexAppServerAdapter = codexAdapterSelection.useAppServer
             const permissionPolicy = resolveDesktopPermissionPolicy({
               runtimeId: "codex",
@@ -1299,7 +1315,9 @@ export const codexRouter = router({
               input.codexAuthMethod === "api_key" && !input.providerProfileId
 
             if (input.providerProfileId) {
-              const profile = getProviderProfileRuntimeConfig(input.providerProfileId)
+              const profile = getProviderProfileRuntimeConfig(
+                input.providerProfileId,
+              )
               if (!profile || !profile.targetRuntimes.includes("codex")) {
                 const blocker = createCodexRuntimeBlocker({
                   id: "provider-profile",
@@ -1331,7 +1349,10 @@ export const codexRouter = router({
               ) {
                 return
               }
-              const gateway = await getProviderGatewayEndpoint(profile.id, "responses")
+              const gateway = await getProviderGatewayEndpoint(
+                profile.id,
+                "responses",
+              )
               codexProviderProfile = {
                 id: profile.id,
                 name: profile.name,
@@ -1444,9 +1465,12 @@ export const codexRouter = router({
             const lastMessage = existingMessages[existingMessages.length - 1]
             const isDuplicatePrompt =
               lastMessage?.role === "user" &&
-              extractCodexPromptFromStoredMessage(lastMessage) === input.prompt &&
+              extractCodexPromptFromStoredMessage(lastMessage) ===
+                input.prompt &&
               codexLongTextAttachmentSignatureFromParts(lastMessage?.parts) ===
-                codexLongTextAttachmentSignatureFromInput(input.longTextAttachments) &&
+                codexLongTextAttachmentSignatureFromInput(
+                  input.longTextAttachments,
+                ) &&
               codexImageAttachmentSignatureFromParts(lastMessage?.parts) ===
                 codexImageAttachmentSignatureFromInput(input.images)
 
@@ -1507,9 +1531,8 @@ export const codexRouter = router({
               toolsResolved: false,
             }
             try {
-              const resolvedProjectPathFromCwd = resolveProjectPathFromWorktree(
-                runtimeCwd,
-              )
+              const resolvedProjectPathFromCwd =
+                resolveProjectPathFromWorktree(runtimeCwd)
               const mcpLookupPath =
                 input.projectPath || resolvedProjectPathFromCwd || runtimeCwd
               mcpSnapshot = await resolveCodexMcpSnapshot({
@@ -1543,7 +1566,9 @@ export const codexRouter = router({
 
             const needsAuthMcpServer = mcpSnapshot.groups
               .flatMap((group) => group.mcpServers)
-              .find((server) => server.needsAuth || server.status === "needs-auth")
+              .find(
+                (server) => server.needsAuth || server.status === "needs-auth",
+              )
             if (needsAuthMcpServer) {
               const blocker = createCodexRuntimeBlocker({
                 id: "mcp",
@@ -1582,7 +1607,10 @@ export const codexRouter = router({
                 if (activeStream?.runId !== input.runId) return
                 activeStream.cancelRequested = true
                 activeStream.controller.abort()
-                clearPendingCodexApprovals("Session cancelled.", input.subChatId)
+                clearPendingCodexApprovals(
+                  "Session cancelled.",
+                  input.subChatId,
+                )
               },
             })
             desktopJobId = desktopJob.job.id
@@ -1616,7 +1644,9 @@ export const codexRouter = router({
               signal: abortController.signal,
               resumeSessionId: input.forceNewSession
                 ? null
-                : input.sessionId ?? getLastCodexSessionId(existingMessages) ?? null,
+                : (input.sessionId ??
+                  getLastCodexSessionId(existingMessages) ??
+                  null),
               parentSessionId: input.sessionId ?? null,
               emitTrace: (event) => {
                 appendRunEventsToAgentJob(db, [event])
@@ -1629,17 +1659,18 @@ export const codexRouter = router({
                   experimentalApi:
                     process.env.LOCUS_CODEX_APP_SERVER_EXPERIMENTAL_API ===
                       "1" ||
-                    process.env.LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR ===
-                      "1",
+                    process.env
+                      .LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR === "1",
                   // Smoke-only diagnostic hook for the 6.8 apply_patch
                   // enablement probe. Product app-server runs leave this
                   // unset unless a developer explicitly opts into the env gate.
                   configOverrides:
-                    process.env.LOCUS_CODEX_APP_SERVER_APPLY_PATCH_EXPERIMENT === "1"
+                    process.env
+                      .LOCUS_CODEX_APP_SERVER_APPLY_PATCH_EXPERIMENT === "1"
                       ? {
                           "features.apply_patch_freeform": true,
                           "features.apply_patch_streaming_events": true,
-                          "include_apply_patch_tool": true,
+                          include_apply_patch_tool: true,
                           "tools.apply_patch.enabled": true,
                           "tools.apply_patch.approval_mode": "prompt",
                           "model_providers.locus_profile.apply_patch_tool_type":
@@ -1653,8 +1684,8 @@ export const codexRouter = router({
                     ? null
                     : appManagedCodexApiKey,
                   controlledEditEnabled:
-                    process.env.LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR ===
-                    "1",
+                    process.env
+                      .LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR === "1",
                   resolvedImages,
                   guardedContract,
                   emit: safeEmit,
@@ -1704,9 +1735,13 @@ export const codexRouter = router({
                 if (desktopJobAdapterFailed) {
                   desktopJobSawError = true
                   const adapterAlreadyEmittedError =
-                    appServerPersistenceChunks.some((chunk) => chunk?.type === "error")
+                    appServerPersistenceChunks.some(
+                      (chunk) => chunk?.type === "error",
+                    )
                   const adapterAlreadyEmittedFinish =
-                    appServerPersistenceChunks.some((chunk) => chunk?.type === "finish")
+                    appServerPersistenceChunks.some(
+                      (chunk) => chunk?.type === "finish",
+                    )
                   if (!adapterAlreadyEmittedError) {
                     safeEmit({
                       type: "error",
@@ -1721,7 +1756,10 @@ export const codexRouter = router({
                 }
                 desktopJobReachedNaturalFinish =
                   adapterResult.status === "succeeded" && !desktopJobSawError
-                if (useCodexAppServerAdapter && desktopJobReachedNaturalFinish) {
+                if (
+                  useCodexAppServerAdapter &&
+                  desktopJobReachedNaturalFinish
+                ) {
                   const appServerAssistantMessage =
                     buildCodexAppServerAssistantMessage({
                       chunks: appServerPersistenceChunks,
@@ -1786,12 +1824,15 @@ export const codexRouter = router({
 
         return () => {
           isActive = false
-          requestCancelDesktopChatAgentJobSafely(desktopJobDb ?? getDatabase(), {
-            jobId: desktopJobId,
-            sawError: desktopJobSawError,
-            reachedNaturalFinish: desktopJobReachedNaturalFinish,
-            requestedBy: "desktop-chat",
-          })
+          requestCancelDesktopChatAgentJobSafely(
+            desktopJobDb ?? getDatabase(),
+            {
+              jobId: desktopJobId,
+              sawError: desktopJobSawError,
+              reachedNaturalFinish: desktopJobReachedNaturalFinish,
+              requestedBy: "desktop-chat",
+            },
+          )
           abortController.abort()
 
           const activeStream = activeStreams.get(input.subChatId)
