@@ -141,6 +141,7 @@ import {
   selectedAgentChatIdAtom,
   selectedCommitAtom,
   selectedDiffFilePathAtom,
+  selectedProjectAtom,
   setLoading,
   subChatFilesAtom,
   agentsSidebarOpenAtom,
@@ -4370,6 +4371,7 @@ export function ChatView({
   const isFullscreen = useAtomValue(isFullscreenAtom)
   const sidebarOpen = useAtomValue(agentsSidebarOpenAtom)
   const selectedOllamaModel = useAtomValue(selectedOllamaModelAtom)
+  const setSelectedProject = useSetAtom(selectedProjectAtom)
   const { data: providerConfigData } =
     trpc.claudeProviderConfig.get.useQuery()
   const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
@@ -5018,6 +5020,81 @@ export function ChatView({
     agentChatProjectContext?.project?.gitRepo ||
     agentChatProjectContext?.project?.name ||
     null
+
+  const openFolderForAttachMutation = trpc.projects.openFolder.useMutation({
+    onSuccess: (project) => {
+      if (!project) return
+
+      trpcUtils.projects.list.setData(undefined, (oldData) => {
+        if (!oldData) return [project]
+        const exists = oldData.some((p) => p.id === project.id)
+        if (exists) {
+          return oldData.map((p) =>
+            p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
+          )
+        }
+        return [project, ...oldData]
+      })
+
+      setSelectedProject({
+        id: project.id,
+        name: project.name,
+        path: project.path,
+        gitRemoteUrl: project.gitRemoteUrl,
+        gitProvider: project.gitProvider as
+          | "github"
+          | "gitlab"
+          | "bitbucket"
+          | null,
+        gitOwner: project.gitOwner,
+        gitRepo: project.gitRepo,
+      })
+    },
+  })
+
+  const attachProjectMutation = trpc.chats.attachProject.useMutation({
+    onSuccess: () => {
+      toast.success(t("quickChat.attachSuccess"), { position: "top-center" })
+      trpcUtils.chats.list.invalidate()
+      trpcUtils.chats.listArchived.invalidate()
+      trpcUtils.projects.list.invalidate()
+      utils.agents.getAgentChat.invalidate({ chatId })
+    },
+  })
+
+  const handleAttachProject = useCallback(async () => {
+    if (!isFolderlessChat) return
+    if (openFolderForAttachMutation.isPending || attachProjectMutation.isPending) {
+      return
+    }
+
+    try {
+      const project = await openFolderForAttachMutation.mutateAsync()
+      if (!project) {
+        toast.info(t("chat.selectRepoCancelled"))
+        return
+      }
+
+      await attachProjectMutation.mutateAsync({
+        chatId,
+        projectId: project.id,
+        useWorktree: false,
+        targetMode: defaultAgentMode,
+      })
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t("quickChat.attachFailed"),
+        { position: "top-center" },
+      )
+    }
+  }, [
+    attachProjectMutation,
+    chatId,
+    defaultAgentMode,
+    isFolderlessChat,
+    openFolderForAttachMutation,
+    t,
+  ])
 
   // Terminal scope key: shared by project path (local mode) or isolated per workspace (worktree)
   const terminalScopeKey = useMemo(() => {
@@ -6602,6 +6679,35 @@ Make sure to preserve all functionality from both branches when resolving confli
                       </TooltipContent>
                     </Tooltip>
                   )}
+                {!isMobileFullscreen && isFolderlessChat && !isArchived && (
+                  <Tooltip delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        onClick={handleAttachProject}
+                        disabled={
+                          openFolderForAttachMutation.isPending ||
+                          attachProjectMutation.isPending
+                        }
+                        className="h-6 px-2 gap-1.5 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2 flex items-center"
+                        aria-label={t("quickChat.attachFolder")}
+                      >
+                        {openFolderForAttachMutation.isPending ||
+                        attachProjectMutation.isPending ? (
+                          <IconSpinner className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <AttachIcon className="h-3.5 w-3.5" />
+                        )}
+                        <span className="text-xs">
+                          {t("quickChat.attachFolder")}
+                        </span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {t("quickChat.attachFolderTooltip")}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {/* Overview/Terminal Button - shows when sidebar is closed and worktree/sandbox exists (desktop only) */}
                 {!isMobileFullscreen &&
                   worktreePath && (
