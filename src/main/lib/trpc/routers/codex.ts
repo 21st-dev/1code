@@ -2,6 +2,7 @@ import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
+import { statSync } from "node:fs"
 import { basename, isAbsolute, join, resolve } from "node:path"
 import { z } from "zod"
 import {
@@ -462,8 +463,28 @@ function resolveCodexLookupPath(pathCandidate: string | null | undefined): strin
   return pathCandidate && pathCandidate.trim() ? pathCandidate.trim() : "__global__"
 }
 
+function isExistingCodexMcpCwd(pathCandidate: string): boolean {
+  try {
+    return statSync(pathCandidate).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 function getCodexMcpFingerprint(servers: CodexMcpServerForSession[]): string {
   return createHash("sha256").update(JSON.stringify(servers)).digest("hex")
+}
+
+function createEmptyCodexMcpSnapshot(input: {
+  toolsResolved: boolean
+}): CodexMcpSnapshot {
+  return {
+    mcpServersForSession: [],
+    groups: [],
+    fingerprint: getCodexMcpFingerprint([]),
+    fetchedAt: Date.now(),
+    toolsResolved: input.toolsResolved,
+  }
 }
 
 async function resolveCodexMcpSnapshot(params: {
@@ -472,8 +493,12 @@ async function resolveCodexMcpSnapshot(params: {
   includeTools?: boolean
 }): Promise<CodexMcpSnapshot> {
   const lookupPath = resolveCodexLookupPath(params.lookupPath)
-  const cached = codexMcpCache.get(lookupPath)
   const shouldIncludeTools = Boolean(params.includeTools)
+  if (lookupPath !== "__global__" && !isExistingCodexMcpCwd(lookupPath)) {
+    return createEmptyCodexMcpSnapshot({ toolsResolved: shouldIncludeTools })
+  }
+
+  const cached = codexMcpCache.get(lookupPath)
   if (
     cached &&
     !params.forceRefresh &&
@@ -719,6 +744,10 @@ function resolveCodexMcpProjectPathForCli(
 
   if (!registeredProject) {
     throw new Error("Codex MCP project path must match a registered project.")
+  }
+
+  if (!isExistingCodexMcpCwd(registeredProject.path)) {
+    throw new Error("Codex MCP project path no longer exists.")
   }
 
   return registeredProject.path
