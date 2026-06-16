@@ -38,8 +38,6 @@ interface ExpandedWidgetSidebarProps {
   /** Active sub-chat ID for plan */
   activeSubChatId?: string | null
   /** Diff-related props */
-  isDiffSidebarOpen: boolean
-  setIsDiffSidebarOpen: (open: boolean) => void
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
   parsedFileDiffs?: ParsedDiffFile[] | null
 }
@@ -51,8 +49,6 @@ export function ExpandedWidgetSidebar({
   planPath,
   planRefetchTrigger,
   activeSubChatId,
-  isDiffSidebarOpen,
-  setIsDiffSidebarOpen,
   diffStats,
   parsedFileDiffs,
 }: ExpandedWidgetSidebarProps) {
@@ -122,12 +118,8 @@ export function ExpandedWidgetSidebar({
       case "diff":
         return (
           <DiffSection
-            chatId={chatId}
-            isDiffSidebarOpen={isDiffSidebarOpen}
-            setIsDiffSidebarOpen={setIsDiffSidebarOpen}
             diffStats={diffStats}
             parsedFileDiffs={parsedFileDiffs ?? undefined}
-            isExpanded
           />
         )
       default:

@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button"
 import { GitCommit } from "lucide-react"
 import { IconSpinner, DiffIcon } from "@/components/ui/icons"
-import { cn } from "@/lib/utils"
 import { getFileIconByExtension } from "@/features/agents/mentions/agents-file-mention"
 import { useI18n } from "@/lib/i18n"
 
@@ -19,15 +18,10 @@ interface ParsedDiffFile {
 }
 
 interface DiffSectionProps {
-  chatId: string
-  isDiffSidebarOpen: boolean
-  setIsDiffSidebarOpen: (open: boolean) => void
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
   parsedFileDiffs?: ParsedDiffFile[]
   onCommit?: () => void
   isCommitting?: boolean
-  isExpanded?: boolean
-  onOpenFullDiff?: () => void
 }
 
 /**
@@ -48,26 +42,15 @@ function getFileDir(path: string): string {
 }
 
 export function DiffSection({
-  chatId,
-  isDiffSidebarOpen,
-  setIsDiffSidebarOpen,
   diffStats,
   parsedFileDiffs,
   onCommit,
   isCommitting = false,
-  isExpanded = false,
-  onOpenFullDiff,
 }: DiffSectionProps) {
   const { t } = useI18n()
   const hasChanges = diffStats && diffStats.fileCount > 0
   const files = parsedFileDiffs || []
-  const handleOpenFullDiff =
-    onOpenFullDiff ?? (() => setIsDiffSidebarOpen(true))
-
-  // Compact widgets show a preview; expanded unified diff owns the full list.
-  const maxFilesToShow = isExpanded ? files.length : 5
-  const visibleFiles = files.slice(0, maxFilesToShow)
-  const remainingCount = isExpanded ? 0 : files.length - maxFilesToShow
+  const visibleFiles = files
 
   return (
     <div className="px-3 py-2">
@@ -102,15 +85,11 @@ export function DiffSection({
                 const isNewFile = file.isNewFile
                 const isDeletedFile = file.isDeletedFile
                 const FileIcon = getFileIconByExtension(fileName)
-                const rowClassName = cn(
-                  "group flex items-center gap-2 font-mono text-xs",
-                  "py-1 px-1.5 rounded w-full text-left",
-                  isExpanded
-                    ? "cursor-default"
-                    : "cursor-pointer hover:bg-accent/50 transition-colors",
-                )
-                const rowContent = (
-                  <>
+                return (
+                  <div
+                    key={file.key}
+                    className="group flex items-center gap-2 font-mono text-xs py-1 px-1.5 rounded w-full text-left"
+                  >
                     {/* File icon */}
                     <div className="relative w-3.5 h-3.5 shrink-0">
                       {FileIcon && (
@@ -153,40 +132,9 @@ export function DiffSection({
                         </span>
                       )}
                     </span>
-                  </>
-                )
-
-                if (isExpanded) {
-                  return (
-                    <div key={file.key} className={rowClassName}>
-                      {rowContent}
-                    </div>
-                  )
-                }
-
-                return (
-                  <button
-                    type="button"
-                    key={file.key}
-                    className={rowClassName}
-                    onClick={handleOpenFullDiff}
-                  >
-                    {rowContent}
-                  </button>
+                  </div>
                 )
               })}
-
-              {/* Show more indicator */}
-              {remainingCount > 0 && (
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground hover:text-foreground py-1 px-1.5 w-full text-left font-mono"
-                  onClick={handleOpenFullDiff}
-                >
-                  +{remainingCount} more file{remainingCount !== 1 ? "s" : ""}
-                  ...
-                </button>
-              )}
             </div>
           )}
 
@@ -207,18 +155,6 @@ export function DiffSection({
                   <GitCommit className="h-3 w-3 mr-1.5" />
                 )}
                 Commit
-              </Button>
-            )}
-
-            {!isExpanded && (
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn("h-7 text-xs", onCommit ? "flex-1" : "w-full")}
-                onClick={handleOpenFullDiff}
-              >
-                <DiffIcon className="h-3 w-3 mr-1.5" />
-                {t("changes.viewAll")}
               </Button>
             )}
           </div>

@@ -206,7 +206,8 @@ export const expandedWidgetSidebarWidthAtom = atomWithStorage<number>(
 
 // Temporary rollback gate for the DetailsSidebar migration, not a product mode.
 // Deletion follow-up: remove the `overview:unifiedEnabled=false` fallback after
-// Plan, Diff, and Terminal expanded entrypoints have one stable desktop release.
+// Plan, Diff, and Terminal expanded entrypoints and legacy sidebar gates have
+// one stable desktop release.
 export const unifiedSidebarEnabledAtom = atomWithStorage<boolean>(
   "overview:unifiedEnabled",
   true,

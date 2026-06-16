@@ -6906,7 +6906,7 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* Plan Sidebar - shows plan files on the right (leftmost right sidebar) */}
         {/* Only show when we have an active sub-chat with a plan */}
-        {!isMobileFullscreen && activeSubChatIdForPlan && (
+        {!isUnifiedSidebarEnabled && !isMobileFullscreen && activeSubChatIdForPlan && (
           <ResizableSidebar
             isOpen={isPlanSidebarOpen && !!currentPlanPath}
             onClose={() => setIsPlanSidebarOpen(false)}
@@ -6935,7 +6935,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         {/* Diff View - hidden on mobile fullscreen and when diff is not available */}
         {/* Supports three display modes: side-peek (sidebar), center-peek (dialog), full-page */}
         {/* Wrapped in DiffStateProvider to isolate diff state and prevent ChatView re-renders */}
-        {canOpenDiff && !isMobileFullscreen && (
+        {!isUnifiedSidebarEnabled && canOpenDiff && !isMobileFullscreen && (
           <DiffStateProvider
             isDiffSidebarOpen={isDiffSidebarOpen}
             parsedFileDiffs={parsedFileDiffs}
@@ -7044,7 +7044,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         )}
 
         {/* Terminal Sidebar - shows when worktree exists (desktop only) */}
-        {worktreePath && (
+        {!isUnifiedSidebarEnabled && worktreePath && (
           <TerminalSidebar
             chatId={chatId}
             scopeKey={terminalScopeKey}
@@ -7063,8 +7063,6 @@ Make sure to preserve all functionality from both branches when resolving confli
               planPath={currentPlanPath}
               planRefetchTrigger={planEditRefetchTrigger}
               activeSubChatId={activeSubChatIdForPlan}
-              isDiffSidebarOpen={isDiffSidebarOpen}
-              setIsDiffSidebarOpen={setIsDiffSidebarOpen}
               diffStats={diffStats}
               parsedFileDiffs={parsedFileDiffs}
             />
@@ -7083,9 +7081,9 @@ Make sure to preserve all functionality from both branches when resolving confli
             onBuildPlan={handleApprovePlanFromSidebar}
             planRefetchTrigger={planEditRefetchTrigger}
             activeSubChatId={activeSubChatIdForPlan}
-            isPlanSidebarOpen={isPlanSidebarOpen && !!currentPlanPath}
-            isTerminalSidebarOpen={isTerminalSidebarOpen}
-            isDiffSidebarOpen={isDiffSidebarOpen}
+            isPlanSidebarOpen={!isUnifiedSidebarEnabled && isPlanSidebarOpen && !!currentPlanPath}
+            isTerminalSidebarOpen={!isUnifiedSidebarEnabled && isTerminalSidebarOpen}
+            isDiffSidebarOpen={!isUnifiedSidebarEnabled && isDiffSidebarOpen}
             diffDisplayMode={diffDisplayMode}
             canOpenDiff={canOpenDiff}
             setIsDiffSidebarOpen={setIsDiffSidebarOpen}
@@ -7107,7 +7105,7 @@ Make sure to preserve all functionality from both branches when resolving confli
       </div>
 
       {/* Terminal Bottom Panel — renders below the main row when displayMode is "bottom" */}
-      {terminalDisplayMode === "bottom" && worktreePath && !isMobileFullscreen && (
+      {terminalDisplayMode === "bottom" && !isUnifiedSidebarEnabled && worktreePath && !isMobileFullscreen && (
         <ResizableBottomPanel
           isOpen={isTerminalSidebarOpen}
           onClose={() => setIsTerminalSidebarOpen(false)}

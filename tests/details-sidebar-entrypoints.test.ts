@@ -38,12 +38,10 @@ describe("details sidebar entrypoints", () => {
       "src/renderer/features/details-sidebar/expanded-widget-sidebar.tsx",
     )
 
-    expect(diffSection).toContain("onOpenFullDiff?: () => void")
-    expect(diffSection).toContain(
-      "const maxFilesToShow = isExpanded ? files.length : 5",
-    )
-    expect(diffSection).toContain("onClick={handleOpenFullDiff}")
-    expect(diffSection).toContain("{!isExpanded && (")
+    expect(diffSection).toContain("const visibleFiles = files")
+    expect(diffSection).not.toContain("onOpenFullDiff")
+    expect(diffSection).not.toContain("setIsDiffSidebarOpen")
+    expect(diffSection).not.toContain("isExpanded")
     expect(diffSection).not.toContain(
       "onClick={() => setIsDiffSidebarOpen(true)}",
     )
@@ -51,5 +49,22 @@ describe("details sidebar entrypoints", () => {
       "parsedFileDiffs={parsedFileDiffs ?? undefined}",
     )
     expect(expandedSidebar).not.toContain("onOpenFullDiff={")
+  })
+
+  test("mounts legacy Plan, Diff, and Terminal sidebars only behind the rollback flag", () => {
+    const source = read("src/renderer/features/agents/main/active-chat.tsx")
+
+    expect(source).toMatch(
+      /Plan Sidebar[\s\S]*\{!isUnifiedSidebarEnabled && !isMobileFullscreen && activeSubChatIdForPlan &&/,
+    )
+    expect(source).toMatch(
+      /Diff View[\s\S]*\{!isUnifiedSidebarEnabled && canOpenDiff && !isMobileFullscreen &&/,
+    )
+    expect(source).toMatch(
+      /Terminal Sidebar[\s\S]*\{!isUnifiedSidebarEnabled && worktreePath &&/,
+    )
+    expect(source).toMatch(
+      /Terminal Bottom Panel[\s\S]*terminalDisplayMode === "bottom" && !isUnifiedSidebarEnabled &&/,
+    )
   })
 })
