@@ -1820,6 +1820,20 @@ export const en = {
   "sidebar.archiveWorkspace": "Archive workspace",
   "sidebar.archiveAllBelow": "Archive all below",
   "sidebar.archiveOthers": "Archive others",
+  "sidebar.deleteQuickChat": "Delete quick chat",
+  "sidebar.permanentDelete": "Delete permanently",
+  "sidebar.deleting": "Deleting...",
+  "sidebar.deleteFailed": "Failed to delete",
+  "sidebar.clearArchive": "Clear archive",
+  "sidebar.archivedCount": "{count} archived",
+  "sidebar.confirmClearArchive":
+    "Delete all {count} archived chats permanently? This cannot be undone.",
+  "sidebar.confirmDeleteWorkspace":
+    "Delete this workspace permanently? This removes its chat history and local worktree. This cannot be undone.",
+  "sidebar.confirmDeleteWorkspaceWithChanges":
+    "Delete this workspace permanently? It has {fileCount} changed files (+{additions}/-{deletions}). Its chat history and local worktree will be removed. This cannot be undone.",
+  "sidebar.confirmDeleteWorkspaceWithPr":
+    "Delete this workspace permanently? It is linked to a pull request. The chat history and local worktree will be removed, but the remote pull request will not be deleted. This cannot be undone.",
   "sidebar.deleteDraft": "Delete draft",
   "sidebar.toast.failedRestoreWorkspace": "Failed to restore workspace",
   "sidebar.toast.failedRenameAgent": "Failed to rename agent",
@@ -5031,6 +5045,20 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "sidebar.archiveWorkspace": "归档工作区",
   "sidebar.archiveAllBelow": "归档下面所有工作区",
   "sidebar.archiveOthers": "归档其他工作区",
+  "sidebar.deleteQuickChat": "删除快速对话",
+  "sidebar.permanentDelete": "永久删除",
+  "sidebar.deleting": "删除中...",
+  "sidebar.deleteFailed": "删除失败",
+  "sidebar.clearArchive": "清空归档",
+  "sidebar.archivedCount": "已归档 {count} 个",
+  "sidebar.confirmClearArchive":
+    "要永久删除全部 {count} 个已归档对话吗？此操作无法撤销。",
+  "sidebar.confirmDeleteWorkspace":
+    "要永久删除这个工作区吗？这会删除聊天历史和本地 worktree，且无法撤销。",
+  "sidebar.confirmDeleteWorkspaceWithChanges":
+    "要永久删除这个工作区吗？它还有 {fileCount} 个改动文件（+{additions}/-{deletions}）。聊天历史和本地 worktree 会被删除，且无法撤销。",
+  "sidebar.confirmDeleteWorkspaceWithPr":
+    "要永久删除这个工作区吗？它已关联 Pull Request。聊天历史和本地 worktree 会被删除，但远端 PR 不会被删除。此操作无法撤销。",
   "sidebar.deleteDraft": "删除草稿",
   "sidebar.toast.failedRestoreWorkspace": "恢复工作区失败",
   "sidebar.toast.failedRenameAgent": "重命名智能体失败",

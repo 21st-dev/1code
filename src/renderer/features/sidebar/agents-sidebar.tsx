@@ -446,6 +446,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   onMouseEnter,
   onMouseLeave,
   onArchive,
+  onDelete,
   onTogglePin,
   onRenameClick,
   onCopyBranch,
@@ -456,6 +457,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   onBulkArchive,
   archivePending,
   archiveBatchPending,
+  deletePending,
   nameRefCallback,
   formatTime,
   isJustCreated,
@@ -464,7 +466,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   chatName: string | null
   chatBranch: string | null
   chatUpdatedAt: Date | null
-  chatProjectId: string
+  chatProjectId: string | null
   globalIndex: number
   isSelected: boolean
   isLoading: boolean
@@ -501,6 +503,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   ) => void
   onMouseLeave: () => void
   onArchive: (chatId: string) => void
+  onDelete: (chatId: string) => void
   onTogglePin: (chatId: string) => void
   onRenameClick: (chat: { id: string; name: string | null }) => void
   onCopyBranch: (branch: string) => void
@@ -511,6 +514,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   onBulkArchive: () => void
   archivePending: boolean
   archiveBatchPending: boolean
+  deletePending: boolean
   nameRefCallback: (chatId: string, el: HTMLSpanElement | null) => void
   formatTime: (dateStr: string) => string
   isJustCreated: boolean
@@ -522,6 +526,11 @@ const AgentChatItem = React.memo(function AgentChatItem({
     selectedChatIdsSize === 1
       ? t("sidebar.workspaceSingular")
       : t("sidebar.workspacePlural")
+  const isQuickChat = !chatProjectId
+  const rowActionPending = isQuickChat ? deletePending : archivePending
+  const rowActionLabel = isQuickChat
+    ? t("sidebar.deleteQuickChat")
+    : t("sidebar.archiveWorkspace")
 
   return (
     <ContextMenu>
@@ -667,17 +676,27 @@ const AgentChatItem = React.memo(function AgentChatItem({
                           </AnimatePresence>
                         </div>
                       )}
-                    {/* Archive button - appears on hover */}
+                    {/* Primary row action - quick chats delete, project workspaces archive. */}
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        onArchive(chatId)
+                        if (isQuickChat) {
+                          onDelete(chatId)
+                        } else {
+                          onArchive(chatId)
+                        }
                       }}
+                      disabled={rowActionPending}
                       tabIndex={-1}
                       className="absolute inset-0 flex items-center justify-center text-muted-foreground hover:text-foreground active:text-foreground transition-[opacity,transform,color] duration-150 ease-out opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto active:scale-[0.97]"
-                      aria-label={t("sidebar.archiveWorkspace")}
+                      aria-label={rowActionLabel}
                     >
-                      <ArchiveIcon className="h-3.5 w-3.5" />
+                      {isQuickChat ? (
+                        <TrashIcon className="h-3.5 w-3.5" />
+                      ) : (
+                        <ArchiveIcon className="h-3.5 w-3.5" />
+                      )}
                     </button>
                   </div>
                 )}
@@ -811,25 +830,47 @@ const AgentChatItem = React.memo(function AgentChatItem({
               </ContextMenuItem>
             )}
             <ContextMenuSeparator />
-            <ContextMenuItem
-              onClick={() => onArchive(chatId)}
-              className="justify-between"
-            >
-              {t("sidebar.archiveWorkspace")}
-              {archiveWorkspaceHotkey && <Kbd>{archiveWorkspaceHotkey}</Kbd>}
-            </ContextMenuItem>
-            <ContextMenuItem
-              onClick={() => onArchiveAllBelow(chatId)}
-              disabled={isLastInFilteredChats}
-            >
-              {t("sidebar.archiveAllBelow")}
-            </ContextMenuItem>
-            <ContextMenuItem
-              onClick={() => onArchiveOthers(chatId)}
-              disabled={filteredChatsLength === 1}
-            >
-              {t("sidebar.archiveOthers")}
-            </ContextMenuItem>
+            {isQuickChat ? (
+              <ContextMenuItem
+                onClick={() => onDelete(chatId)}
+                disabled={deletePending}
+                className="text-destructive focus:text-destructive"
+              >
+                {t("sidebar.deleteQuickChat")}
+              </ContextMenuItem>
+            ) : (
+              <>
+                <ContextMenuItem
+                  onClick={() => onArchive(chatId)}
+                  className="justify-between"
+                >
+                  {t("sidebar.archiveWorkspace")}
+                  {archiveWorkspaceHotkey && (
+                    <Kbd>{archiveWorkspaceHotkey}</Kbd>
+                  )}
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onClick={() => onArchiveAllBelow(chatId)}
+                  disabled={isLastInFilteredChats}
+                >
+                  {t("sidebar.archiveAllBelow")}
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onClick={() => onArchiveOthers(chatId)}
+                  disabled={filteredChatsLength === 1}
+                >
+                  {t("sidebar.archiveOthers")}
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  onClick={() => onDelete(chatId)}
+                  disabled={deletePending}
+                  className="text-destructive focus:text-destructive"
+                >
+                  {t("sidebar.permanentDelete")}
+                </ContextMenuItem>
+              </>
+            )}
           </>
         )}
       </ContextMenuContent>
@@ -854,6 +895,7 @@ function chatListSectionPropsAreEqual(
   if (prevProps.archivePending !== nextProps.archivePending) return false
   if (prevProps.archiveBatchPending !== nextProps.archiveBatchPending)
     return false
+  if (prevProps.deletePending !== nextProps.deletePending) return false
   if (prevProps.title !== nextProps.title) return false
   if (prevProps.collapsed !== nextProps.collapsed) return false
   if (prevProps.collapsible !== nextProps.collapsible) return false
@@ -944,6 +986,7 @@ interface ChatListSectionProps {
   ) => void
   onMouseLeave: () => void
   onArchive: (chatId: string) => void
+  onDelete: (chatId: string) => void
   onTogglePin: (chatId: string) => void
   onRenameClick: (chat: { id: string; name: string | null }) => void
   onCopyBranch: (branch: string) => void
@@ -954,6 +997,7 @@ interface ChatListSectionProps {
   onBulkArchive: () => void
   archivePending: boolean
   archiveBatchPending: boolean
+  deletePending: boolean
   nameRefCallback: (chatId: string, el: HTMLSpanElement | null) => void
   formatTime: (dateStr: string) => string
   justCreatedIds: Set<string>
@@ -988,6 +1032,7 @@ const ChatListSection = React.memo(function ChatListSection({
   onMouseEnter,
   onMouseLeave,
   onArchive,
+  onDelete,
   onTogglePin,
   onRenameClick,
   onCopyBranch,
@@ -998,6 +1043,7 @@ const ChatListSection = React.memo(function ChatListSection({
   onBulkArchive,
   archivePending,
   archiveBatchPending,
+  deletePending,
   nameRefCallback,
   formatTime,
   justCreatedIds,
@@ -1084,7 +1130,7 @@ const ChatListSection = React.memo(function ChatListSection({
                 chatName={chat.name}
                 chatBranch={chat.branch}
                 chatUpdatedAt={chat.updatedAt}
-                chatProjectId={chat.projectId ?? ""}
+                chatProjectId={chat.projectId}
                 globalIndex={globalIndex}
                 isSelected={isSelected}
                 isLoading={isLoading}
@@ -1112,6 +1158,7 @@ const ChatListSection = React.memo(function ChatListSection({
                 onMouseEnter={onMouseEnter}
                 onMouseLeave={onMouseLeave}
                 onArchive={onArchive}
+                onDelete={onDelete}
                 onTogglePin={onTogglePin}
                 onRenameClick={onRenameClick}
                 onCopyBranch={onCopyBranch}
@@ -1122,6 +1169,7 @@ const ChatListSection = React.memo(function ChatListSection({
                 onBulkArchive={onBulkArchive}
                 archivePending={archivePending}
                 archiveBatchPending={archiveBatchPending}
+                deletePending={deletePending}
                 nameRefCallback={nameRefCallback}
                 formatTime={formatTime}
                 isJustCreated={isJustCreated}
@@ -1859,6 +1907,42 @@ export function AgentsSidebar({
     [setUndoStack],
   )
 
+  const advanceAfterRemovedChat = useCallback(
+    (removedChatId: string) => {
+      if (selectedChatId !== removedChatId) return
+
+      const currentIndex =
+        agentChats?.findIndex((c) => c.id === removedChatId) ?? -1
+
+      if (autoAdvanceTarget === "next") {
+        const nextChat = agentChats?.find(
+          (c, i) => i > currentIndex && c.id !== removedChatId,
+        )
+        setSelectedChatId(nextChat?.id ?? null)
+        return
+      }
+
+      if (autoAdvanceTarget === "previous") {
+        const isPreviousAvailable =
+          previousChatId &&
+          agentChats?.some(
+            (c) => c.id === previousChatId && c.id !== removedChatId,
+          )
+        setSelectedChatId(isPreviousAvailable ? previousChatId : null)
+        return
+      }
+
+      setSelectedChatId(null)
+    },
+    [
+      agentChats,
+      autoAdvanceTarget,
+      previousChatId,
+      selectedChatId,
+      setSelectedChatId,
+    ],
+  )
+
   // Archive chat mutation
   const archiveChatMutation = trpc.chats.archive.useMutation({
     onSuccess: (_, variables) => {
@@ -1976,6 +2060,37 @@ export function AgentsSidebar({
         return { type: "workspace" as const, chatId, timeoutId }
       })
       setUndoStack((prev) => [...prev, ...newItems])
+    },
+  })
+
+  const deleteChatMutation = trpc.chats.delete.useMutation({
+    onSuccess: (_, variables) => {
+      if (agentTooltipTimerRef.current) {
+        clearTimeout(agentTooltipTimerRef.current)
+        agentTooltipTimerRef.current = null
+      }
+      if (agentTooltipRef.current) {
+        agentTooltipRef.current.style.display = "none"
+      }
+
+      utils.chats.list.setData({}, (oldData) =>
+        oldData?.filter((chat) => chat.id !== variables.id),
+      )
+      utils.chats.listArchived.setData({}, (oldData) =>
+        oldData?.filter((chat) => chat.id !== variables.id),
+      )
+      utils.chats.list.invalidate()
+      utils.chats.listArchived.invalidate()
+      setPinnedChatIds((prev) => {
+        if (!prev.has(variables.id)) return prev
+        const next = new Set(prev)
+        next.delete(variables.id)
+        return next
+      })
+      advanceAfterRemovedChat(variables.id)
+    },
+    onError: (error) => {
+      toast.error(error.message || t("sidebar.deleteFailed"))
     },
   })
 
@@ -2377,6 +2492,42 @@ export function AgentsSidebar({
 
     return statsMap
   }, [fileStatsData])
+
+  const handleDeleteSingle = useCallback(
+    (chatId: string) => {
+      if (deleteChatMutation.isPending) return
+
+      const chat = agentChats.find((c) => c.id === chatId)
+      if (!chat) return
+
+      if (!chat.projectId) {
+        deleteChatMutation.mutate({ id: chatId })
+        return
+      }
+
+      const stats = workspaceFileStats.get(chatId)
+      const hasChanges = !!(
+        stats &&
+        (stats.fileCount > 0 || stats.additions > 0 || stats.deletions > 0)
+      )
+      const hasPr = !!(chat.prUrl || chat.prNumber)
+      const confirmed = window.confirm(
+        hasPr
+          ? t("sidebar.confirmDeleteWorkspaceWithPr")
+          : hasChanges
+            ? t("sidebar.confirmDeleteWorkspaceWithChanges", {
+                fileCount: stats.fileCount,
+                additions: stats.additions,
+                deletions: stats.deletions,
+              })
+            : t("sidebar.confirmDeleteWorkspace"),
+      )
+      if (!confirmed) return
+
+      deleteChatMutation.mutate({ id: chatId })
+    },
+    [agentChats, deleteChatMutation, t, workspaceFileStats],
+  )
 
   // Aggregate pending plan approvals by workspace (chatId) from DB
   const workspacePendingPlans = useMemo(() => {
@@ -3074,6 +3225,7 @@ export function AgentsSidebar({
                 onMouseEnter={handleAgentMouseEnter}
                 onMouseLeave={handleAgentMouseLeave}
                 onArchive={handleArchiveSingle}
+                onDelete={handleDeleteSingle}
                 onTogglePin={handleTogglePin}
                 onRenameClick={handleRenameClick}
                 onCopyBranch={handleCopyBranch}
@@ -3084,6 +3236,7 @@ export function AgentsSidebar({
                 onBulkArchive={handleBulkArchive}
                 archivePending={archiveChatMutation.isPending}
                 archiveBatchPending={archiveChatsBatchMutation.isPending}
+                deletePending={deleteChatMutation.isPending}
                 nameRefCallback={nameRefCallback}
                 formatTime={formatTime}
                 justCreatedIds={justCreatedIds}
@@ -3115,6 +3268,7 @@ export function AgentsSidebar({
                 onMouseEnter={handleAgentMouseEnter}
                 onMouseLeave={handleAgentMouseLeave}
                 onArchive={handleArchiveSingle}
+                onDelete={handleDeleteSingle}
                 onTogglePin={handleTogglePin}
                 onRenameClick={handleRenameClick}
                 onCopyBranch={handleCopyBranch}
@@ -3125,6 +3279,7 @@ export function AgentsSidebar({
                 onBulkArchive={handleBulkArchive}
                 archivePending={archiveChatMutation.isPending}
                 archiveBatchPending={archiveChatsBatchMutation.isPending}
+                deletePending={deleteChatMutation.isPending}
                 nameRefCallback={nameRefCallback}
                 formatTime={formatTime}
                 justCreatedIds={justCreatedIds}
@@ -3163,6 +3318,7 @@ export function AgentsSidebar({
                   onMouseEnter={handleAgentMouseEnter}
                   onMouseLeave={handleAgentMouseLeave}
                   onArchive={handleArchiveSingle}
+                  onDelete={handleDeleteSingle}
                   onTogglePin={handleTogglePin}
                   onRenameClick={handleRenameClick}
                   onCopyBranch={handleCopyBranch}
@@ -3173,6 +3329,7 @@ export function AgentsSidebar({
                   onBulkArchive={handleBulkArchive}
                   archivePending={archiveChatMutation.isPending}
                   archiveBatchPending={archiveChatsBatchMutation.isPending}
+                  deletePending={deleteChatMutation.isPending}
                   nameRefCallback={nameRefCallback}
                   formatTime={formatTime}
                   justCreatedIds={justCreatedIds}
