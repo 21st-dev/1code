@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: Preserve legacy import grouping for this focused sidebar migration.
 "use client"
 
 import { useAtom, useSetAtom } from "jotai"
@@ -18,6 +19,7 @@ import {
 } from "../atoms"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
 import { useI18n } from "@/lib/i18n"
+import { useOpenDetailsWidget } from "../../details-sidebar/use-open-details-widget"
 
 // Animated dots component that cycles through ., .., ...
 function AnimatedDots() {
@@ -68,6 +70,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   const setFilteredSubChatId = useSetAtom(filteredSubChatIdAtom)
   const setFocusedDiffFile = useSetAtom(agentsFocusedDiffFileAtom)
   const setSelectedFilePath = useSetAtom(selectedDiffFilePathAtom)
+  const openDetailsWidget = useOpenDetailsWidget(chatId)
 
   // Listen for file changes from Claude Write/Edit tools
   useFileChangeListener(worktreePath)
@@ -139,6 +142,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
     setFilteredDiffFiles(filePaths.length > 0 ? filePaths : null)
     // Also set subchat ID filter for ChangesPanel - use the prop, not activeSubChatId from store
     setFilteredSubChatId(subChatId)
+    if (openDetailsWidget("diff")) return
     setDiffSidebarOpen(true)
   }
 
@@ -268,7 +272,7 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
                   setFilteredDiffFiles([file.displayPath])
                   // Set focus on this specific file (for scroll-to)
                   setFocusedDiffFile(file.displayPath)
-                  // Open diff sidebar
+                  if (openDetailsWidget("diff")) return
                   setDiffSidebarOpen(true)
                 }
 

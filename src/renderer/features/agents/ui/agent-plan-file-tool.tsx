@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: Preserve legacy import grouping for this focused sidebar migration.
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
@@ -19,6 +20,7 @@ import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { getToolStatus } from "./agent-tool-registry"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { useI18n } from "@/lib/i18n"
+import { useOpenDetailsWidget } from "../../details-sidebar/use-open-details-widget"
 
 interface AgentPlanFileToolProps {
   part: {
@@ -55,6 +57,8 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   const subChatModeAtom = useMemo(() => subChatModeAtomFamily(subChatId), [subChatId])
   const subChatMode = useAtomValue(subChatModeAtom)
   const setPendingBuildPlanSubChatId = useSetAtom(pendingBuildPlanSubChatIdAtom)
+  const parentChatId = useAgentSubChatStore((state) => state.chatId)
+  const openDetailsWidget = useOpenDetailsWidget(parentChatId)
 
   // Refs for scroll gradients (avoid re-renders)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -144,9 +148,10 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   const handleOpenSidebar = useCallback(() => {
     if (filePath) {
       setCurrentPlanPath(filePath)
+      if (openDetailsWidget("plan")) return
       setIsPlanSidebarOpen(true)
     }
-  }, [filePath, setCurrentPlanPath, setIsPlanSidebarOpen])
+  }, [filePath, openDetailsWidget, setCurrentPlanPath, setIsPlanSidebarOpen])
 
   // Handle build plan - triggers via atom, consumed by ChatViewInner
   const handleBuildPlan = useCallback(() => {

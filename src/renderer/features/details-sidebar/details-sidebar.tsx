@@ -168,6 +168,8 @@ interface DetailsSidebarProps {
   chatId: string
   /** Worktree path for terminal */
   worktreePath: string | null
+  /** Terminal scope key shared with the full terminal renderer */
+  terminalScopeKey?: string
   /** Plan path for plan section */
   planPath: string | null
   /** Current agent mode (plan or agent) */
@@ -219,6 +221,7 @@ interface DetailsSidebarProps {
 export function DetailsSidebar({
   chatId,
   worktreePath,
+  terminalScopeKey,
   planPath,
   mode,
   onBuildPlan,
@@ -524,6 +527,7 @@ export function DetailsSidebar({
                   <TerminalWidget
                     key="terminal"
                     chatId={chatId}
+                    scopeKey={terminalScopeKey}
                     cwd={worktreePath}
                     workspaceId={chatId}
                     onExpand={onExpandTerminal}

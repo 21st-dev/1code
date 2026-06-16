@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: Preserve legacy import grouping for this focused sidebar migration.
 "use client"
 
 import { memo, useState, useCallback, useEffect, useMemo } from "react"
@@ -50,6 +51,7 @@ import { EDITOR_ICONS } from "@/lib/editor-icons"
 import { useI18n } from "@/lib/i18n"
 import { pendingGitHubContextMessageAtom } from "../../agents/atoms"
 import { useAgentSubChatStore } from "../../agents/stores/sub-chat-store"
+import { useOpenDetailsWidget } from "../use-open-details-widget"
 import {
   activeTerminalIdAtom,
   terminalSidebarOpenAtomFamily,
@@ -320,6 +322,7 @@ export const InfoSection = memo(function InfoSection({
     [chatId],
   )
   const setTerminalSidebarOpen = useSetAtom(terminalSidebarAtom)
+  const openDetailsWidget = useOpenDetailsWidget(chatId)
   const setAllTerminals = useSetAtom(terminalsAtom)
   const setActiveTerminalIds = useSetAtom(activeTerminalIdAtom)
   const [githubTaskUrl, setGithubTaskUrl] = useState("")
@@ -851,7 +854,9 @@ export const InfoSection = memo(function InfoSection({
       ...prev,
       [terminalScopeKey]: terminalId,
     }))
-    setTerminalSidebarOpen(true)
+    if (!openDetailsWidget("terminal")) {
+      setTerminalSidebarOpen(true)
+    }
 
     runGhAuthLoginMutation.mutate(
       {
@@ -878,6 +883,7 @@ export const InfoSection = memo(function InfoSection({
     setActiveTerminalIds,
     setAllTerminals,
     setTerminalSidebarOpen,
+    openDetailsWidget,
     t,
     terminalScopeKey,
     worktreePath,

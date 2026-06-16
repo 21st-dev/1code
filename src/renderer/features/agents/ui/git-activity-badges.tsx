@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: Preserve legacy import grouping for this focused sidebar migration.
 "use client"
 
 import { memo, useCallback, useMemo, useState } from "react"
@@ -27,6 +28,7 @@ import { cn } from "../../../lib/utils"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
 import { useFileOpen } from "../mentions"
 import { useI18n } from "../../../lib/i18n"
+import { useOpenDetailsWidget } from "../../details-sidebar/use-open-details-widget"
 
 interface GitActivityBadgesProps {
   parts: any[]
@@ -49,6 +51,7 @@ export const GitActivityBadges = memo(function GitActivityBadges({
   const setSelectedFilePath = useSetAtom(selectedDiffFilePathAtom)
   const setFocusedDiffFile = useSetAtom(agentsFocusedDiffFileAtom)
   const onOpenFile = useFileOpen()
+  const openDetailsWidget = useOpenDetailsWidget(chatId)
 
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -89,8 +92,9 @@ export const GitActivityBadges = memo(function GitActivityBadges({
     setFilteredDiffFiles(null)
     setFilteredSubChatId(subChatId)
     setDiffActiveTab("history")
+    if (openDetailsWidget("diff")) return
     setDiffSidebarOpen(true)
-  }, [activity, subChatId, selectedProject, setSelectedCommit, setFilteredDiffFiles, setFilteredSubChatId, setDiffActiveTab, setDiffSidebarOpen])
+  }, [activity, subChatId, selectedProject, setSelectedCommit, setFilteredDiffFiles, setFilteredSubChatId, setDiffActiveTab, openDetailsWidget, setDiffSidebarOpen])
 
   const filesCommitted = activity?.type === "commit" || activity?.type === "pr"
 
@@ -105,9 +109,10 @@ export const GitActivityBadges = memo(function GitActivityBadges({
       setFocusedDiffFile(file.displayPath)
       setFilteredSubChatId(subChatId)
       setDiffActiveTab("changes")
+      if (openDetailsWidget("diff")) return
       setDiffSidebarOpen(true)
     }
-  }, [filesCommitted, onOpenFile, subChatId, setSelectedFilePath, setFilteredDiffFiles, setFocusedDiffFile, setFilteredSubChatId, setDiffActiveTab, setDiffSidebarOpen])
+  }, [filesCommitted, onOpenFile, subChatId, setSelectedFilePath, setFilteredDiffFiles, setFocusedDiffFile, setFilteredSubChatId, setDiffActiveTab, openDetailsWidget, setDiffSidebarOpen])
 
   if (!activity && changedFiles.length === 0) return null
 

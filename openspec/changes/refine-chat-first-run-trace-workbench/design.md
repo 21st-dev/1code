@@ -119,11 +119,11 @@ kept behind an explicit temporary migration gate with a deletion follow-up.
    change is marked complete.
 
 Implementation note: this change adds the DetailsSidebar trace, usage, and
-error widgets, reuses the existing Plan/Diff/Terminal expanded renderer
-callbacks, and documents `unifiedSidebarEnabledAtom=false` as a temporary
-rollback gate. It does not complete the remaining `active-chat.tsx` right-sidebar
-migration; that work stays as a follow-up to avoid a broad ActiveChat rewrite in
-this slice.
+error widgets, routes the remaining Plan/Diff/Terminal product entry points
+through DetailsSidebar-owned widget actions, and keeps
+`unifiedSidebarEnabledAtom=false` as a temporary rollback gate. The expanded
+Plan/Diff/Terminal renderers remain available behind those widget actions
+instead of becoming separate product owners.
 
 ## Open Questions
 - Should the Runs/History surface keep the internal component name

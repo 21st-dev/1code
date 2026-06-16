@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: Preserve legacy import grouping for this focused sidebar migration.
 "use client"
 
 import { memo, useState, useEffect, useMemo, useCallback, useRef } from "react"
@@ -20,8 +21,15 @@ import { AgentToolInterrupted } from "./agent-tool-interrupted"
 import { areToolPropsEqual } from "./agent-tool-utils"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
 import { useFileOpen } from "../mentions"
-import { agentsDiffSidebarOpenAtom, agentsFocusedDiffFileAtom, selectedProjectAtom } from "../atoms"
+import {
+  agentsDiffSidebarOpenAtom,
+  agentsFocusedDiffFileAtom,
+  diffSidebarOpenAtomFamily,
+  selectedAgentChatIdAtom,
+  selectedProjectAtom,
+} from "../atoms"
 import { cn } from "../../../lib/utils"
+import { useOpenDetailsWidget } from "../../details-sidebar/use-open-details-widget"
 
 interface AgentEditToolProps {
   part: any
@@ -224,11 +232,18 @@ export const AgentEditTool = memo(function AgentEditTool({
   const codeTheme = useCodeTheme()
 
   // Atoms for opening diff sidebar and focusing on file
-  const setDiffSidebarOpen = useSetAtom(agentsDiffSidebarOpenAtom)
+  const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+  const diffSidebarAtom = useMemo(
+    () => diffSidebarOpenAtomFamily(selectedChatId || ""),
+    [selectedChatId],
+  )
+  const setScopedDiffSidebarOpen = useSetAtom(diffSidebarAtom)
+  const setLegacyDiffSidebarOpen = useSetAtom(agentsDiffSidebarOpenAtom)
   const setFocusedDiffFile = useSetAtom(agentsFocusedDiffFileAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
   const onOpenFile = useFileOpen()
+  const openDetailsWidget = useOpenDetailsWidget(selectedChatId)
 
   // Determine tool type
   const isWriteMode = part.type === "tool-Write"
@@ -260,9 +275,21 @@ export const AgentEditTool = memo(function AgentEditTool({
   // Handler to open diff sidebar and focus on this file
   const handleOpenInDiff = useCallback(() => {
     if (!displayPath) return
-    setDiffSidebarOpen(true)
     setFocusedDiffFile(displayPath)
-  }, [displayPath, setDiffSidebarOpen, setFocusedDiffFile])
+    if (openDetailsWidget("diff")) return
+    if (selectedChatId) {
+      setScopedDiffSidebarOpen(true)
+    } else {
+      setLegacyDiffSidebarOpen(true)
+    }
+  }, [
+    displayPath,
+    openDetailsWidget,
+    selectedChatId,
+    setFocusedDiffFile,
+    setLegacyDiffSidebarOpen,
+    setScopedDiffSidebarOpen,
+  ])
 
   // Memoized click handlers to prevent inline function re-creation
   const handleHeaderClick = useCallback(() => {

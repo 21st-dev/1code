@@ -28,6 +28,8 @@ interface ExpandedWidgetSidebarProps {
   chatId: string
   /** Worktree path for terminal */
   worktreePath: string | null
+  /** Terminal scope key shared with the full terminal renderer */
+  terminalScopeKey?: string
   /** Plan path for plan section */
   planPath: string | null
   /** Plan refetch trigger */
@@ -35,7 +37,6 @@ interface ExpandedWidgetSidebarProps {
   /** Active sub-chat ID for plan */
   activeSubChatId?: string | null
   /** Diff-related props */
-  canOpenDiff: boolean
   isDiffSidebarOpen: boolean
   setIsDiffSidebarOpen: (open: boolean) => void
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
@@ -44,10 +45,10 @@ interface ExpandedWidgetSidebarProps {
 export function ExpandedWidgetSidebar({
   chatId,
   worktreePath,
+  terminalScopeKey,
   planPath,
   planRefetchTrigger,
   activeSubChatId,
-  canOpenDiff,
   isDiffSidebarOpen,
   setIsDiffSidebarOpen,
   diffStats,
@@ -109,6 +110,7 @@ export function ExpandedWidgetSidebar({
         return worktreePath ? (
           <TerminalSection
             chatId={chatId}
+            scopeKey={terminalScopeKey}
             cwd={worktreePath}
             workspaceId={chatId}
             isExpanded
