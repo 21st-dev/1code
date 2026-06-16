@@ -22,6 +22,7 @@ import { PlanSection } from "./sections/plan-section"
 import { TerminalSection } from "./sections/terminal-section"
 import { DiffSection } from "./sections/diff-section"
 import { useI18n } from "@/lib/i18n"
+import type { ParsedDiffFile } from "./types"
 
 interface ExpandedWidgetSidebarProps {
   /** Workspace/chat ID */
@@ -40,6 +41,7 @@ interface ExpandedWidgetSidebarProps {
   isDiffSidebarOpen: boolean
   setIsDiffSidebarOpen: (open: boolean) => void
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
+  parsedFileDiffs?: ParsedDiffFile[] | null
 }
 
 export function ExpandedWidgetSidebar({
@@ -52,6 +54,7 @@ export function ExpandedWidgetSidebar({
   isDiffSidebarOpen,
   setIsDiffSidebarOpen,
   diffStats,
+  parsedFileDiffs,
 }: ExpandedWidgetSidebarProps) {
   const { t } = useI18n()
   // Per-workspace expanded widget state
@@ -123,6 +126,7 @@ export function ExpandedWidgetSidebar({
             isDiffSidebarOpen={isDiffSidebarOpen}
             setIsDiffSidebarOpen={setIsDiffSidebarOpen}
             diffStats={diffStats}
+            parsedFileDiffs={parsedFileDiffs ?? undefined}
             isExpanded
           />
         )

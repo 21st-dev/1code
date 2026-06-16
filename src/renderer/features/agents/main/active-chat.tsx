@@ -4487,10 +4487,20 @@ export function ChatView({
     setIsTerminalSidebarOpen(true)
   }, [openDetailsWidget, setIsTerminalSidebarOpen])
 
+  const handleToggleTerminalProductEntry = useCallback(() => {
+    if (openDetailsWidget("terminal", { toggle: true })) return
+    setIsTerminalSidebarOpen(!isTerminalSidebarOpen)
+  }, [isTerminalSidebarOpen, openDetailsWidget, setIsTerminalSidebarOpen])
+
   const handleOpenDiffProductEntry = useCallback(() => {
     if (openDetailsWidget("diff")) return
     setIsDiffSidebarOpen(true)
   }, [openDetailsWidget, setIsDiffSidebarOpen])
+
+  const handleToggleDiffProductEntry = useCallback(() => {
+    if (openDetailsWidget("diff", { toggle: true })) return
+    setIsDiffSidebarOpen(!isDiffSidebarOpen)
+  }, [isDiffSidebarOpen, openDetailsWidget, setIsDiffSidebarOpen])
 
   const handleOpenDiffFileProductEntry = useCallback(
     (filePath: string) => {
@@ -4519,21 +4529,14 @@ export function ChatView({
       ) {
         e.preventDefault()
         e.stopPropagation()
-        if (isUnifiedSidebarEnabled) {
-          handleOpenTerminalProductEntry()
-          return
-        }
-        setIsTerminalSidebarOpen(!isTerminalSidebarOpen)
+        handleToggleTerminalProductEntry()
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
   }, [
-    handleOpenTerminalProductEntry,
-    isTerminalSidebarOpen,
-    isUnifiedSidebarEnabled,
-    setIsTerminalSidebarOpen,
+    handleToggleTerminalProductEntry,
   ])
 
   // Diff data cache - stored in atoms to persist across workspace switches
@@ -6298,14 +6301,13 @@ Make sure to preserve all functionality from both branches when resolving confli
         e.preventDefault()
         e.stopPropagation()
 
-        // Toggle diff sidebar
-        setIsDiffSidebarOpen(!isDiffSidebarOpen)
+        handleToggleDiffProductEntry()
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [isDiffSidebarOpen])
+  }, [handleToggleDiffProductEntry])
 
 
   // Keyboard shortcut: Cmd + Shift + E to restore archived workspace
@@ -7064,6 +7066,7 @@ Make sure to preserve all functionality from both branches when resolving confli
               isDiffSidebarOpen={isDiffSidebarOpen}
               setIsDiffSidebarOpen={setIsDiffSidebarOpen}
               diffStats={diffStats}
+              parsedFileDiffs={parsedFileDiffs}
             />
           )}
 
