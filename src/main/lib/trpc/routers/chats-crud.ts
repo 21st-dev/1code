@@ -1,51 +1,22 @@
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm"
-import { BrowserWindow } from "electron"
-import * as fs from "fs/promises"
-import * as path from "path"
-import simpleGit from "simple-git"
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm"
 import { z } from "zod"
-import { buildAgentRuntimeCapabilityDiagnostic } from "../../../../shared/agent-runtime-capabilities"
 import {
   agentChatProviders,
   buildAgentChatMessageMetadata,
 } from "../../../../shared/agent-chat-provider"
 import {
-  trackPRCreated,
   trackWorkspaceArchived,
   trackWorkspaceCreated,
   trackWorkspaceDeleted,
 } from "../../analytics"
+import { attachProjectToChat } from "../../chat-project-attach"
 import { chats, getDatabase, projects, subChats } from "../../db"
-import {
-  createWorktreeForChat,
-  fetchGitHubPRStatus,
-  getWorktreeDiff,
-  removeWorktree,
-  sanitizeProjectName,
-} from "../../git"
-import type { WorktreeSetupResult } from "../../git/worktree-config"
-import { computeContentHash, gitCache } from "../../git/cache"
-import { splitUnifiedDiffByFile } from "../../git/diff-parser"
-import { execWithShellEnv } from "../../git/shell-env"
-import { applyRollbackStash } from "../../git/stash"
-import { assertOfficialCloudAllowed } from "../../local-only"
-import { checkOllamaStatus } from "../../ollama"
+import { removeWorktree } from "../../git"
+import { gitCache } from "../../git/cache"
+import { resolveProjectChatWorktree } from "../../project-chat-worktree"
 import { terminalManager } from "../../terminal/manager"
-import { publicProcedure, router } from "../index"
-import {
-  getActiveLocalApiProviderConfig,
-  type LocalApiProviderPurpose,
-} from "./local-api-provider-config"
-import { getProviderDefaultRuntimeConfig } from "../../provider-profiles/storage"
-import {
-  buildCommitFileSummary,
-  buildCommitMessagePrompt,
-  cleanGeneratedCommitMessage,
-} from "./commit-message-utils"
-
-import {
-  sendWorktreeSetupFailure,
-} from "./chats-helpers"
+import { publicProcedure } from "../index"
+import { sendWorktreeSetupFailure } from "./chats-helpers"
 
 export const chatCrudProcedures = {
   /**
@@ -254,86 +225,36 @@ export const chatCrudProcedures = {
         .get()
       console.log("[chats.create] created subChat:", subChat)
 
-      // Worktree creation result (will be set if useWorktree is true)
+      // Only create worktree if this is a project-backed workspace.
       let worktreeResult: {
         worktreePath?: string
         branch?: string
         baseBranch?: string
       } = {}
-
-      // Only create worktree if this is a project-backed workspace.
       if (!project) {
         console.log("[chats.create] folderless quick chat - no worktree")
-      } else if (input.useWorktree) {
-        console.log(
-          "[chats.create] creating worktree with baseBranch:",
-          input.baseBranch,
-          "type:",
-          input.branchType,
-        )
-        const result = await createWorktreeForChat(
-          project.path,
-          sanitizeProjectName(project.name),
-          chat.id,
-          input.baseBranch,
-          input.branchType,
-          {
-            onSetupComplete: (setupResult: WorktreeSetupResult) => {
-              if (setupResult.success) return
-              const message =
-                setupResult.errors[0] ||
-                "Worktree setup failed. Check your setup commands."
-              sendWorktreeSetupFailure(requestingWindowId, {
-                kind: "setup-failed",
-                message,
-                projectId: project.id,
-              })
-            },
-          },
-        )
-        console.log("[chats.create] worktree result:", result)
-
-        if (result.success && result.worktreePath) {
-          db.update(chats)
-            .set({
-              worktreePath: result.worktreePath,
-              branch: result.branch,
-              baseBranch: result.baseBranch,
-            })
-            .where(eq(chats.id, chat.id))
-            .run()
-          worktreeResult = {
-            worktreePath: result.worktreePath,
-            branch: result.branch,
-            baseBranch: result.baseBranch,
-          }
-        } else {
-          console.warn(`[Worktree] Failed: ${result.error}`)
-          const isTimeout = result.failureReason === "checkout-timeout"
-          sendWorktreeSetupFailure(requestingWindowId, {
-            kind: isTimeout ? "create-timeout" : "create-failed",
-            message: result.error || "Worktree creation failed.",
-            projectId: project.id,
-            fallback: {
-              mode: "project-directory",
-              path: project.path,
-            },
-          })
-          // Fallback to project path
-          db.update(chats)
-            .set({ worktreePath: project.path })
-            .where(eq(chats.id, chat.id))
-            .run()
-          worktreeResult = { worktreePath: project.path }
-        }
       } else {
-        // Local mode: use project path directly, no branch info
-        console.log("[chats.create] local mode - using project path directly")
-        db.update(chats)
-          .set({ worktreePath: project.path })
-          .where(eq(chats.id, chat.id))
-          .run()
-        worktreeResult = { worktreePath: project.path }
+        if (input.useWorktree) {
+          console.log(
+            "[chats.create] creating worktree with baseBranch:",
+            input.baseBranch,
+            "type:",
+            input.branchType,
+          )
+        } else {
+          console.log("[chats.create] local mode - using project path directly")
+        }
+        worktreeResult = await resolveProjectChatWorktree({
+          chatId: chat.id,
+          project,
+          useWorktree: input.useWorktree,
+          baseBranch: input.baseBranch,
+          branchType: input.branchType,
+          onWorktreeFailure: (payload) =>
+            sendWorktreeSetupFailure(requestingWindowId, payload),
+        })
+        console.log("[chats.create] worktree result:", worktreeResult)
+        db.update(chats).set(worktreeResult).where(eq(chats.id, chat.id)).run()
       }
 
       const response = {
@@ -354,6 +275,36 @@ export const chatCrudProcedures = {
 
       console.log("[chats.create] returning:", response)
       return response
+    }),
+
+  /**
+   * Attach a folderless quick chat to a project in place.
+   */
+  attachProject: publicProcedure
+    .input(
+      z.object({
+        chatId: z.string(),
+        projectId: z.string(),
+        useWorktree: z.boolean().default(true),
+        baseBranch: z.string().optional(),
+        branchType: z.enum(["local", "remote"]).optional(),
+        targetMode: z.enum(["plan", "agent"]).default("agent"),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = getDatabase()
+      const requestingWindowId = ctx.getWindow?.()?.id ?? null
+
+      return attachProjectToChat(db, {
+        chatId: input.chatId,
+        projectId: input.projectId,
+        useWorktree: input.useWorktree,
+        baseBranch: input.baseBranch,
+        branchType: input.branchType,
+        targetMode: input.targetMode,
+        onWorktreeFailure: (payload) =>
+          sendWorktreeSetupFailure(requestingWindowId, payload),
+      })
     }),
 
   /**
@@ -386,11 +337,7 @@ export const chatCrudProcedures = {
       const db = getDatabase()
 
       // Get chat to check for worktree (before archiving)
-      const chat = db
-        .select()
-        .from(chats)
-        .where(eq(chats.id, input.id))
-        .get()
+      const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
 
       // Archive immediately (optimistic)
       const result = db
@@ -408,19 +355,27 @@ export const chatCrudProcedures = {
       // so they should not be killed when a single workspace is archived.
       const isLocalMode = !chat?.branch
       if (!isLocalMode) {
-        terminalManager.killByWorkspaceId(input.id).then((killResult) => {
-          if (killResult.killed > 0) {
-            console.log(
-              `[chats.archive] Killed ${killResult.killed} terminal session(s) for workspace ${input.id}`,
-            )
-          }
-        }).catch((error) => {
-          console.error(`[chats.archive] Error killing processes:`, error)
-        })
+        terminalManager
+          .killByWorkspaceId(input.id)
+          .then((killResult) => {
+            if (killResult.killed > 0) {
+              console.log(
+                `[chats.archive] Killed ${killResult.killed} terminal session(s) for workspace ${input.id}`,
+              )
+            }
+          })
+          .catch((error) => {
+            console.error(`[chats.archive] Error killing processes:`, error)
+          })
       }
 
       // Optionally delete worktree in background (don't await)
-      if (input.deleteWorktree && chat?.worktreePath && chat?.branch && chat.projectId) {
+      if (
+        input.deleteWorktree &&
+        chat?.worktreePath &&
+        chat?.branch &&
+        chat.projectId
+      ) {
         const project = db
           .select()
           .from(projects)
@@ -428,24 +383,26 @@ export const chatCrudProcedures = {
           .get()
 
         if (project) {
-          removeWorktree(project.path, chat.worktreePath).then((worktreeResult) => {
-            if (worktreeResult.success) {
-              console.log(
-                `[chats.archive] Deleted worktree for workspace ${input.id}`,
-              )
-              // Clear worktreePath since it's deleted (keep branch for reference)
-              db.update(chats)
-                .set({ worktreePath: null })
-                .where(eq(chats.id, input.id))
-                .run()
-            } else {
-              console.warn(
-                `[chats.archive] Failed to delete worktree: ${worktreeResult.error}`,
-              )
-            }
-          }).catch((error) => {
-            console.error(`[chats.archive] Error removing worktree:`, error)
-          })
+          removeWorktree(project.path, chat.worktreePath)
+            .then((worktreeResult) => {
+              if (worktreeResult.success) {
+                console.log(
+                  `[chats.archive] Deleted worktree for workspace ${input.id}`,
+                )
+                // Clear worktreePath since it's deleted (keep branch for reference)
+                db.update(chats)
+                  .set({ worktreePath: null })
+                  .where(eq(chats.id, input.id))
+                  .run()
+              } else {
+                console.warn(
+                  `[chats.archive] Failed to delete worktree: ${worktreeResult.error}`,
+                )
+              }
+            })
+            .catch((error) => {
+              console.error(`[chats.archive] Error removing worktree:`, error)
+            })
         }
       }
 
@@ -504,16 +461,24 @@ export const chatCrudProcedures = {
       if (worktreeChats.length > 0) {
         Promise.all(
           worktreeChats.map((c) => terminalManager.killByWorkspaceId(c.id)),
-        ).then((killResults) => {
-          const totalKilled = killResults.reduce((sum, r) => sum + r.killed, 0)
-          if (totalKilled > 0) {
-            console.log(
-              `[chats.archiveBatch] Killed ${totalKilled} terminal session(s) for ${worktreeChats.length} worktree workspace(s)`,
+        )
+          .then((killResults) => {
+            const totalKilled = killResults.reduce(
+              (sum, r) => sum + r.killed,
+              0,
             )
-          }
-        }).catch((error) => {
-          console.error(`[chats.archiveBatch] Error killing processes:`, error)
-        })
+            if (totalKilled > 0) {
+              console.log(
+                `[chats.archiveBatch] Killed ${totalKilled} terminal session(s) for ${worktreeChats.length} worktree workspace(s)`,
+              )
+            }
+          })
+          .catch((error) => {
+            console.error(
+              `[chats.archiveBatch] Error killing processes:`,
+              error,
+            )
+          })
       }
 
       return result

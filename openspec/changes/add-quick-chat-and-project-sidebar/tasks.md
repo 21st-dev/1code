@@ -37,12 +37,12 @@
 - [ ] 5.5 Update deferred repository onboarding so folderless quick-chat creation is available without a project while project-dependent repository workflows remain unavailable.
 
 ## 6. In-place upgrade (quick chat -> project)
-- [ ] 6.1 Add `chats.attachProject({ chatId, projectId, useWorktree, baseBranch?, branchType?, targetMode })`.
-- [ ] 6.2 Enforce attach preconditions: chat is null-project, unarchived, no active stream/job, no worktree/branch/PR metadata, target project exists, targetMode is `plan | agent`.
-- [ ] 6.3 Optionally create the worktree using the same worktree owner as normal project chat creation.
-- [ ] 6.4 After attach, subsequent turns use project-backed preflight, real cwd, and plan/agent permissions; the sidebar moves the chat into the project group.
-- [ ] 6.5 Default to fresh runtime session after attach by clearing/ignoring folderless `sessionId`; only enable cross-cwd resume after dedicated end-to-end proof.
-- [ ] 6.6 Add tests for failed attach during active stream, failed attach for non-quick chat, successful attach with fresh session, and history remaining visible.
+- [x] 6.1 Add `chats.attachProject({ chatId, projectId, useWorktree, baseBranch?, branchType?, targetMode })`.
+- [x] 6.2 Enforce attach preconditions: chat is null-project, unarchived, no active stream/job, no worktree/branch/PR metadata, target project exists, targetMode is `plan | agent`.
+- [x] 6.3 Optionally create the worktree using the same worktree owner as normal project chat creation.
+- [x] 6.4 After attach, subsequent turns use project-backed preflight, real cwd, and plan/agent permissions; the sidebar moves the chat into the project group.
+- [x] 6.5 Default to fresh runtime session after attach by clearing/ignoring folderless `sessionId`; only enable cross-cwd resume after dedicated end-to-end proof.
+- [x] 6.6 Add tests for failed attach during active stream, failed attach for non-quick chat, successful attach with fresh session, and history remaining visible.
 
 ## 7. Sidebar restructure
 - [x] 7.1 Add a `groupByProject(unpinnedAgents, projectsMap)` memo for project-backed chats (groups ordered by most-recent activity).
