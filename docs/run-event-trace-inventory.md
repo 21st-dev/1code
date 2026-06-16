@@ -128,20 +128,33 @@ client secrets, and OAuth-like fields.
   - Guard events.
   - Guard audit.
   - Pending scope expansion requests derived from guard event payloads.
-- Agent Workbench can list jobs and open job logs via
-  `agentJobs.logs`.
-- Workbench job logs label event types with localized labels and show:
+- Runs & History (`AgentWorkbench`) can list jobs and open a job trace using
+  `agentJobs.show` for the selected job record and `agentJobs.logs` for
+  already-redacted persisted events.
+- The selected job trace shows a record header before the timeline:
+  - job ID
+  - source
+  - runtime
+  - mode
+  - status
+  - created/started/finished timing
+  - final error
+  - API consumer/artifact metadata when present
+- Workbench job trace rows use the shared `WorkbenchTraceRow` presenter and
+  show:
   - sequence
   - semantic event label
   - event type
   - semantic payload
   - secondary raw payload
-- Observed permission events get a small semantic summary in Workbench logs.
+- Observed permission events get a small semantic summary in trace rows.
+- DetailsSidebar can render compact current-run trace, usage, and error widgets
+  without making the historical Workbench page the primary chat surface.
 
 ### Visible But Still Log-Like
 
-- Workbench job logs show ordered events, but the UI is still mostly a log row
-  plus payload viewer.
+- Runs & History trace still shows ordered event rows. It is not yet a full
+  timeline debugger with filtering, grouping, or jump-to-source controls.
 - `file-change-diff`, `file-change-patch`, and `file-change-delta` are persisted
   under generic `status`, so the Workbench cannot filter them as first-class
   file-change events without reading `payload.chunkType`.
@@ -166,10 +179,11 @@ client secrets, and OAuth-like fields.
 
 These are actual next-step gaps. They do not require replacing the event system.
 
-1. **First-class Workbench timeline rows**
-   The Workbench should render semantic rows for runtime, provider, MCP, tool,
-   command, file change, guard, question, usage, error, and final state before
-   raw payloads.
+1. **Richer timeline filtering and grouping**
+   The shared presenter now renders semantic rows before raw payloads. The
+   remaining Workbench gap is filtering, grouping, and jump affordances across
+   runtime, provider, MCP, tool, command, file change, guard, question, usage,
+   error, and final-state rows.
 
 2. **File-change event semantics**
    File changes should become a first-class trace category or documented status
@@ -180,17 +194,20 @@ These are actual next-step gaps. They do not require replacing the event system.
    and fallback reason should be visible as trace rows, not only diagnostics or
    metadata.
 
-4. **Error semantics**
-   Errors need stable product codes and next actions. Current chunks often carry
-   `errorText`, blocker messages, or thrown error messages.
+4. **Error semantics coverage**
+   Error rows and the DetailsSidebar error widget use documented product fields
+   where possible. More chunks still need stable product codes and next actions;
+   current events can still carry `errorText`, blocker messages, or thrown error
+   messages.
 
 5. **MCP readiness detail**
    `mcp_needs_auth` is clear, but ready, unknown, partial, and degraded states
    need consistent semantic display.
 
 6. **Usage and cost schema**
-   `usage_update` exists, and Codex app-server maps token usage. The trace still
-   needs provider-agnostic display rules for missing, partial, cache, cost, and
+   `usage_update` exists, and Codex app-server maps token usage. The Details
+   sidebar and trace presenter can show unavailable or partial metadata, but the
+   trace still needs provider-agnostic source fields for cache, cost, and
    context-window metadata.
 
 7. **Artifact trace**
@@ -207,16 +224,17 @@ Do not spend time "creating RunEvent from scratch." Locus already has:
 - Desktop stream mapper.
 - Redaction before persistence/renderer emission.
 - Durable `agent_job_events`.
-- Workbench job log reader.
+- Workbench job trace reader.
+- Shared renderer `WorkbenchTraceRow` presenter.
 - Local Job API event envelope.
 - Renderer state owner for guard and ask-user-question chunks.
 
-The next improvement is productizing the trace, not replacing the plumbing.
+The next improvement is enriching the trace, not replacing the plumbing.
 
-## Suggested Next Slice
+## Implemented Trace Presenter
 
-Add a small Workbench trace presenter that consumes existing `agentJobs.logs`
-events and maps them to view models:
+The renderer has a shared Workbench trace presenter that consumes existing
+`agentJobs.logs` events and maps them to view models:
 
 ```ts
 type WorkbenchTraceRow =
@@ -231,7 +249,7 @@ type WorkbenchTraceRow =
   | { kind: "final"; status: "succeeded" | "failed" | "canceled" | "interrupted" }
 ```
 
-This should be a renderer view-model layer over existing events, not a new
+This is a renderer view-model layer over existing events, not a new
 durable event source.
 
 Error trace rows should use the product codes and field names defined in

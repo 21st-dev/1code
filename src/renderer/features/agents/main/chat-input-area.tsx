@@ -4,7 +4,15 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ChevronDown, RefreshCw } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-
+import { toast } from "sonner"
+import type { AgentScopeContract } from "../../../../shared/agent-scope-contracts"
+import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
+import type { ChatImageAttachmentSource } from "../../../../shared/chat-attachments"
+import {
+  isProviderProfileSource,
+  parseProviderProfileSource,
+} from "../../../../shared/provider-profile-types"
+import { McpStatusDot } from "../../../components/dialogs/settings-tabs/agents-mcp-tab"
 import { Button } from "../../../components/ui/button"
 import {
   DropdownMenu,
@@ -23,6 +31,11 @@ import {
 } from "../../../components/ui/icons"
 import { Kbd } from "../../../components/ui/kbd"
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../../components/ui/popover"
+import {
   PromptInput,
   PromptInputActions,
   PromptInputContextItems,
@@ -33,60 +46,62 @@ import {
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../../components/ui/popover"
-import {
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
+  customHotkeysAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   selectedOllamaModelAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
+import {
+  useVoiceInput,
+  useVoiceInputHotkey,
+} from "../../../lib/hooks/use-voice-input"
+import { getResolvedHotkey } from "../../../lib/hotkeys"
+import { useI18n } from "../../../lib/i18n"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
-import { useI18n } from "../../../lib/i18n"
+import { VoiceInputControl } from "../../../lib/voice/voice-input-control"
 import {
+  type AgentMode,
+  approvedGuardedRunContractsAtom,
+  getNextMode,
+  lastSelectedClaudeModelSourceAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexModelSourceAtom,
   lastSelectedCodexThinkingAtom,
-  lastSelectedClaudeModelSourceAtom,
   lastSelectedModelIdAtom,
-  approvedGuardedRunContractsAtom,
   pendingScopeExpansionRequestsAtom,
+  type SubChatFileChange,
   subChatClaudeModelSourceAtomFamily,
   subChatCodexModelIdAtomFamily,
   subChatCodexModelSourceAtomFamily,
   subChatCodexThinkingAtomFamily,
-  subChatModelIdAtomFamily,
   subChatModeAtomFamily,
-  getNextMode,
-  type AgentMode,
-  type SubChatFileChange,
+  subChatModelIdAtomFamily,
 } from "../atoms"
-import type { AgentScopeContract } from "../../../../shared/agent-scope-contracts"
-import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import { AgentsSlashCommand, type SlashCommandOption } from "../commands"
+import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import {
   AgentModelSelector,
   type ContinueWithProviderSelection,
 } from "../components/agent-model-selector"
-import {
-  isProviderProfileSource,
-  parseProviderProfileSource,
-} from "../../../../shared/provider-profile-types"
-import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
-import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { AgentSendButton } from "../components/agent-send-button"
-import { VoiceInputControl } from "../../../lib/voice/voice-input-control"
-import type { UploadedFile, UploadedImage } from "../hooks/use-agents-file-upload"
-import type { ChatImageAttachmentSource } from "../../../../shared/chat-attachments"
+import type {
+  UploadedFile,
+  UploadedImage,
+} from "../hooks/use-agents-file-upload"
+import type { PastedTextFile } from "../hooks/use-pasted-text-files"
+import {
+  buildGuardedRunDraftSeed,
+  parseScopePathLines,
+  serializeScopePaths,
+} from "../lib/agent-guard-draft"
 import {
   clearSubChatDraft,
   saveSubChatDraftWithAttachments,
@@ -94,17 +109,22 @@ import {
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
-  isCodexApiKeySupportedModel,
   type CodexThinkingLevel,
+  getCodexModelsForSource,
 } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
+import { useRuntimeCapabilitySupported } from "../lib/runtime-manifest-store"
 import {
   AgentsFileMention,
   AgentsMentionsEditor,
   type AgentsMentionsEditorHandle,
   type FileMentionOption,
 } from "../mentions"
-import { AgentContextIndicator, type MessageTokenData } from "../ui/agent-context-indicator"
+import { useAgentSubChatStore } from "../stores/sub-chat-store"
+import {
+  AgentContextIndicator,
+  type MessageTokenData,
+} from "../ui/agent-context-indicator"
 import { AgentDiffTextContextItem } from "../ui/agent-diff-text-context-item"
 import { AgentFileItem } from "../ui/agent-file-item"
 import { AgentGuardedRunCard } from "../ui/agent-guarded-run-card"
@@ -112,27 +132,15 @@ import { AgentImageItem } from "../ui/agent-image-item"
 import { AgentPastedTextItem } from "../ui/agent-pasted-text-item"
 import { AgentTextContextItem } from "../ui/agent-text-context-item"
 import { VoiceWaveIndicator } from "../ui/voice-wave-indicator"
-import { McpStatusDot } from "../../../components/dialogs/settings-tabs/agents-mcp-tab"
 import { handlePasteEvent } from "../utils/paste-text"
-import {
-  buildGuardedRunDraftSeed,
-  parseScopePathLines,
-  serializeScopePaths,
-} from "../lib/agent-guard-draft"
-import { useRuntimeCapabilitySupported } from "../lib/runtime-manifest-store"
-import type { PastedTextFile } from "../hooks/use-pasted-text-files"
-import {
-  useVoiceInput,
-  useVoiceInputHotkey,
-} from "../../../lib/hooks/use-voice-input"
-import { getResolvedHotkey } from "../../../lib/hotkeys"
-import { customHotkeysAtom } from "../../../lib/atoms"
-import { toast } from "sonner"
 
 function useStableCallback<T extends (...args: any[]) => any>(callback: T): T {
   const callbackRef = useRef(callback)
   callbackRef.current = callback
-  return useCallback(((...args: Parameters<T>) => callbackRef.current(...args)) as T, [])
+  return useCallback(
+    ((...args: Parameters<T>) => callbackRef.current(...args)) as T,
+    [],
+  )
 }
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
@@ -146,7 +154,9 @@ function useAvailableModels() {
   const baseModels = CLAUDE_MODELS
 
   const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
-  const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
+  const hasOllama =
+    ollamaStatus?.ollama.available &&
+    (ollamaStatus.ollama.models?.length ?? 0) > 0
   const ollamaModels = ollamaStatus?.ollama.models || []
   const recommendedModel = ollamaStatus?.ollama.recommendedModel
 
@@ -242,7 +252,10 @@ export interface ChatInputAreaProps {
  * Custom comparison for memo to prevent re-renders from unstable array references.
  * Compares messages by length and last message id, changedFiles by length and paths.
  */
-function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaProps): boolean {
+function arePropsEqual(
+  prevProps: ChatInputAreaProps,
+  nextProps: ChatInputAreaProps,
+): boolean {
   // Compare primitives and stable references first (fast path)
   if (
     prevProps.isStreaming !== nextProps.isStreaming ||
@@ -286,7 +299,8 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     prevProps.onRemovePastedText !== nextProps.onRemovePastedText ||
     prevProps.onCacheFileContent !== nextProps.onCacheFileContent ||
     prevProps.onInputContentChange !== nextProps.onInputContentChange ||
-    prevProps.onSubmitWithQuestionAnswer !== nextProps.onSubmitWithQuestionAnswer ||
+    prevProps.onSubmitWithQuestionAnswer !==
+      nextProps.onSubmitWithQuestionAnswer ||
     prevProps.onProviderChange !== nextProps.onProviderChange ||
     prevProps.onContinueWithProvider !== nextProps.onContinueWithProvider ||
     prevProps.onSendFromQueue !== nextProps.onSendFromQueue
@@ -360,10 +374,14 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
   // Compare messageTokenData - only re-render when token counts actually change
   // This is much more stable than comparing messages array reference
   if (
-    prevProps.messageTokenData.totalInputTokens !== nextProps.messageTokenData.totalInputTokens ||
-    prevProps.messageTokenData.totalOutputTokens !== nextProps.messageTokenData.totalOutputTokens ||
-    prevProps.messageTokenData.contextWindow !== nextProps.messageTokenData.contextWindow ||
-    prevProps.messageTokenData.messageCount !== nextProps.messageTokenData.messageCount
+    prevProps.messageTokenData.totalInputTokens !==
+      nextProps.messageTokenData.totalInputTokens ||
+    prevProps.messageTokenData.totalOutputTokens !==
+      nextProps.messageTokenData.totalOutputTokens ||
+    prevProps.messageTokenData.contextWindow !==
+      nextProps.messageTokenData.contextWindow ||
+    prevProps.messageTokenData.messageCount !==
+      nextProps.messageTokenData.messageCount
   ) {
     return false
   }
@@ -376,7 +394,10 @@ function arePropsEqual(prevProps: ChatInputAreaProps, nextProps: ChatInputAreaPr
     return false
   }
   for (let i = 0; i < prevProps.changedFiles.length; i++) {
-    if (prevProps.changedFiles[i]?.filePath !== nextProps.changedFiles[i]?.filePath) {
+    if (
+      prevProps.changedFiles[i]?.filePath !==
+      nextProps.changedFiles[i]?.filePath
+    ) {
       return false
     }
   }
@@ -506,9 +527,8 @@ export const ChatInputArea = memo(function ChatInputArea({
     () => subChatModelIdAtomFamily(subChatId),
     [subChatId],
   )
-  const [selectedSubChatModelId, setSelectedSubChatModelId] = useAtom(
-    subChatModelIdAtom,
-  )
+  const [selectedSubChatModelId, setSelectedSubChatModelId] =
+    useAtom(subChatModelIdAtom)
   const subChatCodexModelIdAtom = useMemo(
     () => subChatCodexModelIdAtomFamily(subChatId),
     [subChatId],
@@ -526,9 +546,8 @@ export const ChatInputArea = memo(function ChatInputArea({
     () => subChatCodexThinkingAtomFamily(subChatId),
     [subChatId],
   )
-  const [selectedSubChatCodexThinking, setSelectedSubChatCodexThinking] = useAtom(
-    subChatCodexThinkingAtom,
-  )
+  const [selectedSubChatCodexThinking, setSelectedSubChatCodexThinking] =
+    useAtom(subChatCodexThinkingAtom)
   const subChatClaudeModelSourceAtom = useMemo(
     () => subChatClaudeModelSourceAtomFamily(subChatId),
     [subChatId],
@@ -545,7 +564,9 @@ export const ChatInputArea = memo(function ChatInputArea({
     lastSelectedCodexModelSourceAtom,
   )
   const setLastSelectedCodexThinking = useSetAtom(lastSelectedCodexThinkingAtom)
-  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
+  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(
+    selectedOllamaModelAtom,
+  )
   const availableModels = useAvailableModels()
   const [selectedModel, setSelectedModel] = useState(
     () =>
@@ -555,7 +576,9 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Sync selectedModel when per-subChat atom value changes (e.g., after localStorage hydration)
   useEffect(() => {
-    const model = availableModels.models.find((m) => m.id === selectedSubChatModelId)
+    const model = availableModels.models.find(
+      (m) => m.id === selectedSubChatModelId,
+    )
     if (model && model.id !== selectedModel.id) {
       setSelectedModel(model)
     }
@@ -569,10 +592,12 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatModelId(selectedModel.id)
   }, [provider, selectedModel?.id, setSelectedSubChatModelId])
 
-  const { data: codexApiKeyStatus } =
-    trpc.codex.getCodexApiKeyStatus.useQuery(undefined, {
+  const { data: codexApiKeyStatus } = trpc.codex.getCodexApiKeyStatus.useQuery(
+    undefined,
+    {
       staleTime: 30_000,
-    })
+    },
+  )
   const hasAppCodexApiKey = Boolean(codexApiKeyStatus?.hasApiKey)
   const hiddenModels = useAtomValue(hiddenModelsAtom)
   const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
@@ -583,7 +608,9 @@ export const ChatInputArea = memo(function ChatInputArea({
   const providerProfiles = providerProfilesData?.profiles ?? []
 
   // Connection status for providers
-  const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
+  const anthropicOnboardingCompleted = useAtomValue(
+    anthropicOnboardingCompletedAtom,
+  )
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const { data: claudeCodeIntegration } =
@@ -594,20 +621,24 @@ export const ChatInputArea = memo(function ChatInputArea({
       codexOnboardingAuthMethod === "api_key" &&
       hasAppCodexApiKey)
   const codexUiModels = useMemo(
-    () => {
-      let models = shouldUseCodexApiKeyModels
-        ? CODEX_MODELS.filter((model) => isCodexApiKeySupportedModel(model.id))
-        : CODEX_MODELS
-      return models.filter((model) => !hiddenModels.includes(model.id))
-    },
-    [hiddenModels, shouldUseCodexApiKeyModels],
+    () => CODEX_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const compatibleCodexModels = useMemo(
+    () =>
+      shouldUseCodexApiKeyModels
+        ? getCodexModelsForSource(codexUiModels, "openai-api-key")
+        : codexUiModels,
+    [codexUiModels, shouldUseCodexApiKeyModels],
   )
   const selectedCodexModel = useMemo(
     () =>
-      codexUiModels.find((model) => model.id === selectedSubChatCodexModelId) ||
-      codexUiModels[0] ||
+      compatibleCodexModels.find(
+        (model) => model.id === selectedSubChatCodexModelId,
+      ) ||
+      compatibleCodexModels[0] ||
       CODEX_MODELS[0]!,
-    [codexUiModels, selectedSubChatCodexModelId],
+    [compatibleCodexModels, selectedSubChatCodexModelId],
   )
 
   const selectedCodexThinking = useMemo<CodexThinkingLevel>(() => {
@@ -628,14 +659,13 @@ export const ChatInputArea = memo(function ChatInputArea({
   const selectedCodexProfileId = parseProviderProfileSource(
     selectedSubChatCodexModelSource,
   )
-  const selectedCodexProviderProfile =
-    selectedCodexProfileId
-      ? providerProfiles.find(
-          (profile) =>
-            profile.id === selectedCodexProfileId &&
-            profile.targetRuntimes.includes("codex"),
-        )
-      : undefined
+  const selectedCodexProviderProfile = selectedCodexProfileId
+    ? providerProfiles.find(
+        (profile) =>
+          profile.id === selectedCodexProfileId &&
+          profile.targetRuntimes.includes("codex"),
+      )
+    : undefined
   const selectedCodexProfileIsPending =
     Boolean(selectedCodexProfileId) && !providerProfilesData
 
@@ -692,21 +722,19 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatCodexModelSource,
   ])
 
-  const { data: providerConfigData } =
-    trpc.claudeProviderConfig.get.useQuery()
+  const { data: providerConfigData } = trpc.claudeProviderConfig.get.useQuery()
   const providerConfigKnown = providerConfigData !== undefined
   const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
   const selectedClaudeProfileId = parseProviderProfileSource(
     selectedClaudeModelSource,
   )
-  const selectedClaudeProviderProfile =
-    selectedClaudeProfileId
-      ? providerProfiles.find(
-          (profile) =>
-            profile.id === selectedClaudeProfileId &&
-            profile.targetRuntimes.includes("claude"),
-        )
-      : undefined
+  const selectedClaudeProviderProfile = selectedClaudeProfileId
+    ? providerProfiles.find(
+        (profile) =>
+          profile.id === selectedClaudeProfileId &&
+          profile.targetRuntimes.includes("claude"),
+      )
+    : undefined
   const selectedClaudeProfileIsPending =
     Boolean(selectedClaudeProfileId) && !providerProfilesData
   const effectiveClaudeModelSource =
@@ -761,17 +789,24 @@ export const ChatInputArea = memo(function ChatInputArea({
   ])
 
   // Determine current Ollama model (selected or recommended)
-  const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
+  const currentOllamaModel =
+    selectedOllamaModel ||
+    availableModels.recommendedModel ||
+    availableModels.ollamaModels[0]
 
   // Debug: log selected Ollama model
   useEffect(() => {
     if (availableModels.isOffline) {
-      console.log(`[Ollama UI] selectedOllamaModel atom value: ${selectedOllamaModel || "(null)"}, currentOllamaModel: ${currentOllamaModel}`)
+      console.log(
+        `[Ollama UI] selectedOllamaModel atom value: ${selectedOllamaModel || "(null)"}, currentOllamaModel: ${currentOllamaModel}`,
+      )
     }
   }, [selectedOllamaModel, currentOllamaModel, availableModels.isOffline])
 
   // Extended thinking (reasoning) toggle
-  const [thinkingEnabled, setThinkingEnabled] = useAtom(extendedThinkingEnabledAtom)
+  const [thinkingEnabled, setThinkingEnabled] = useAtom(
+    extendedThinkingEnabledAtom,
+  )
 
   const selectedModelLabel = useMemo(() => {
     if (provider === "codex") {
@@ -783,9 +818,6 @@ export const ChatInputArea = memo(function ChatInputArea({
         : undefined
       if (selectedProfile) {
         return `${selectedProfile.name} · ${selectedProfile.defaultModel}`
-      }
-      if (selectedSubChatCodexModelSource === "openai-api-key") {
-        return `${t("agent.model.codexApiKey")} · ${selectedCodexModel.name}`
       }
       return selectedCodexModel.name
     }
@@ -809,7 +841,6 @@ export const ChatInputArea = memo(function ChatInputArea({
     return `${selectedModel.name} ${selectedModel.version}`
   }, [
     provider,
-    selectedSubChatCodexModelSource,
     providerProfiles,
     selectedCodexModel.name,
     availableModels.isOffline,
@@ -821,7 +852,8 @@ export const ChatInputArea = memo(function ChatInputArea({
     t,
   ])
   const readyImageCount = images.filter(
-    (image) => !image.isLoading && !image.error && (image.localRef || image.url),
+    (image) =>
+      !image.isLoading && !image.error && (image.localRef || image.url),
   ).length
   const imageAttachmentCapability = useMemo(
     () =>
@@ -879,7 +911,9 @@ export const ChatInputArea = memo(function ChatInputArea({
     setGuardEnabled(true)
     setGuardApproved(false)
     if (!editableScopeText.trim()) {
-      setEditableScopeText(serializeScopePaths(guardedRunDraftSeed.editableScope))
+      setEditableScopeText(
+        serializeScopePaths(guardedRunDraftSeed.editableScope),
+      )
     }
     if (!readOnlyEvidenceText.trim()) {
       setReadOnlyEvidenceText(
@@ -984,7 +1018,8 @@ export const ChatInputArea = memo(function ChatInputArea({
     if (!guardEnabled) return true
     if (guardApproved) return true
     toast.error("Approve the Guarded Run before sending.", {
-      description: "Use No guard to send this message without a scope contract.",
+      description:
+        "Use No guard to send this message without a scope contract.",
     })
     return false
   }, [guardApproved, guardEnabled])
@@ -1031,8 +1066,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     },
     [clearPendingScopeExpansion, respondScopeExpansionMutation],
   )
-  const canSwitchProvider =
-    messageTokenData.messageCount === 0 && !isStreaming
+  const canSwitchProvider = messageTokenData.messageCount === 0 && !isStreaming
 
   // MCP status - from getAllMcpConfig query (provides global/local grouping)
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
@@ -1062,7 +1096,9 @@ export const ChatInputArea = memo(function ChatInputArea({
   const mcpGroups = useMemo(() => {
     if (!allMcpConfig?.groups) return { global: [], local: [] }
 
-    const globalGroup = allMcpConfig.groups.find((g) => g.groupName === "Global")
+    const globalGroup = allMcpConfig.groups.find(
+      (g) => g.groupName === "Global",
+    )
     const localGroup = allMcpConfig.groups.find(
       (g) => g.projectPath && projectPath && g.projectPath === projectPath,
     )
@@ -1095,20 +1131,24 @@ export const ChatInputArea = memo(function ChatInputArea({
   const [subChatMode, setSubChatMode] = useAtom(subChatModeAtom)
 
   // Helper to update mode (atomFamily + Zustand store sync)
-  const updateMode = useCallback((newMode: AgentMode) => {
-    if (onModeChange) {
-      onModeChange(newMode)
-      return
-    }
-    setSubChatMode(newMode)
-    useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
-  }, [onModeChange, setSubChatMode, subChatId])
+  const updateMode = useCallback(
+    (newMode: AgentMode) => {
+      if (onModeChange) {
+        onModeChange(newMode)
+        return
+      }
+      setSubChatMode(newMode)
+      useAgentSubChatStore.getState().updateSubChatMode(subChatId, newMode)
+    },
+    [onModeChange, setSubChatMode, subChatId],
+  )
 
   // Toggle mode helper
   const toggleMode = useCallback(() => {
     updateMode(getNextMode(subChatMode))
   }, [subChatMode, updateMode])
-  const modeLabel = subChatMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")
+  const modeLabel =
+    subChatMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")
   const modePlaceholder = isStreaming
     ? t("chat.placeholder.queue")
     : subChatMode === "plan"
@@ -1126,18 +1166,23 @@ export const ChatInputArea = memo(function ChatInputArea({
   const customHotkeys = useAtomValue(customHotkeysAtom)
   const voiceInputHotkey = getResolvedHotkey("voice-input", customHotkeys)
 
-  const appendVoiceText = useCallback((text: string) => {
-    const current = (editorRef.current?.getValue() || "").trim()
-    const transcribed = text.trim()
-    const needsSpace = current.length > 0 && !/\s$/.test(current)
-    const newValue = current + (needsSpace ? " " : "") + transcribed
-    editorRef.current?.setValue(newValue)
-    editorRef.current?.focus()
-  }, [editorRef])
+  const appendVoiceText = useCallback(
+    (text: string) => {
+      const current = (editorRef.current?.getValue() || "").trim()
+      const transcribed = text.trim()
+      const needsSpace = current.length > 0 && !/\s$/.test(current)
+      const newValue = current + (needsSpace ? " " : "") + transcribed
+      editorRef.current?.setValue(newValue)
+      editorRef.current?.focus()
+    },
+    [editorRef],
+  )
 
   const transcribeVoiceAudio = useCallback(
-    (input: { audio: string; format: "webm" | "mp3" | "m4a" | "wav" | "ogg" }) =>
-      transcribeMutation.mutateAsync(input),
+    (input: {
+      audio: string
+      format: "webm" | "mp3" | "m4a" | "wav" | "ogg"
+    }) => transcribeMutation.mutateAsync(input),
     [transcribeMutation],
   )
 
@@ -1156,7 +1201,9 @@ export const ChatInputArea = memo(function ChatInputArea({
     onNoSpeech: () => toast.info(t("agent.voice.noSpeechDetected")),
     onError: (err, phase) => {
       if (phase === "start") {
-        toast.error(err instanceof Error ? err.message : "Failed to start recording")
+        toast.error(
+          err instanceof Error ? err.message : "Failed to start recording",
+        )
         return
       }
       toast.error(t("agent.voice.transcriptionFailed"))
@@ -1231,65 +1278,92 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [editorRef, images, files, textContexts, diffTextContexts, pastedTexts])
 
   // Content change handler
-  const handleContentChange = useCallback((newHasContent: boolean) => {
-    setHasContent(newHasContent)
-    onInputContentChange?.(newHasContent)
-    // Sync the draft text ref for unmount save
-    const draft = editorRef.current?.getValue() || ""
-    setDraftText(draft)
-    currentDraftTextRef.current = draft
-  }, [editorRef, onInputContentChange])
+  const handleContentChange = useCallback(
+    (newHasContent: boolean) => {
+      setHasContent(newHasContent)
+      onInputContentChange?.(newHasContent)
+      // Sync the draft text ref for unmount save
+      const draft = editorRef.current?.getValue() || ""
+      setDraftText(draft)
+      currentDraftTextRef.current = draft
+    },
+    [editorRef, onInputContentChange],
+  )
 
   // Editor submit handler - handles Enter key with queue logic
   // If input is empty and queue has items, stop stream and send first from queue
   const handleEditorSubmit = useCallback(async () => {
     const inputValue = editorRef.current?.getValue() || ""
     const hasText = inputValue.trim().length > 0
-    const hasAttachments = readyImageCount > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0
+    const hasAttachments =
+      readyImageCount > 0 ||
+      files.length > 0 ||
+      textContexts.length > 0 ||
+      (diffTextContexts?.length ?? 0) > 0
 
-    if (!hasText && !hasAttachments && queueLength > 0 && onSendFromQueue && firstQueueItemId) {
+    if (
+      !hasText &&
+      !hasAttachments &&
+      queueLength > 0 &&
+      onSendFromQueue &&
+      firstQueueItemId
+    ) {
       // Input empty, queue has items - stop stream and send from queue
       await onStop()
       onSendFromQueue(firstQueueItemId)
     } else {
       onSend()
     }
-  }, [editorRef, readyImageCount, files, textContexts, diffTextContexts, queueLength, onSendFromQueue, firstQueueItemId, onStop, onSend])
+  }, [
+    editorRef,
+    readyImageCount,
+    files,
+    textContexts,
+    diffTextContexts,
+    queueLength,
+    onSendFromQueue,
+    firstQueueItemId,
+    onStop,
+    onSend,
+  ])
 
   // Mention select handler
-  const handleMentionSelect = useCallback((mention: FileMentionOption) => {
-    // Category navigation - enter subpage instead of inserting mention
-    if (mention.type === "category") {
-      if (mention.id === "files") {
-        setShowingFilesList(true)
-        return
+  const handleMentionSelect = useCallback(
+    (mention: FileMentionOption) => {
+      // Category navigation - enter subpage instead of inserting mention
+      if (mention.type === "category") {
+        if (mention.id === "files") {
+          setShowingFilesList(true)
+          return
+        }
+        if (mention.id === "skills") {
+          setShowingSkillsList(true)
+          return
+        }
+        if (mention.id === "agents") {
+          setShowingAgentsList(true)
+          return
+        }
+        if (mention.id === "tools") {
+          setShowingToolsList(true)
+          return
+        }
       }
-      if (mention.id === "skills") {
-        setShowingSkillsList(true)
-        return
-      }
-      if (mention.id === "agents") {
-        setShowingAgentsList(true)
-        return
-      }
-      if (mention.id === "tools") {
-        setShowingToolsList(true)
-        return
-      }
-    }
 
-    // Otherwise: insert mention as normal
-    editorRef.current?.insertMention(mention)
-    const draft = editorRef.current?.getValue() || ""
-    setDraftText(draft)
-    currentDraftTextRef.current = draft
-    setShowMentionDropdown(false)
-    // Reset subpage state
-    setShowingFilesList(false)
-    setShowingSkillsList(false)
-    setShowingAgentsList(false)
-    setShowingToolsList(false)
-  }, [editorRef])
+      // Otherwise: insert mention as normal
+      editorRef.current?.insertMention(mention)
+      const draft = editorRef.current?.getValue() || ""
+      setDraftText(draft)
+      currentDraftTextRef.current = draft
+      setShowMentionDropdown(false)
+      // Reset subpage state
+      setShowingFilesList(false)
+      setShowingSkillsList(false)
+      setShowingAgentsList(false)
+      setShowingToolsList(false)
+    },
+    [editorRef],
+  )
 
   const resetMentionSubpages = useCallback(() => {
     setShowingFilesList(false)
@@ -1315,12 +1389,15 @@ export const ChatInputArea = memo(function ChatInputArea({
     resetMentionSubpages()
   }, [resetMentionSubpages])
 
-  const handleRecommendationSelect = useCallback((mention: FileMentionOption) => {
-    editorRef.current?.insertMention(mention)
-    const draft = editorRef.current?.getValue() || ""
-    setDraftText(draft)
-    currentDraftTextRef.current = draft
-  }, [editorRef])
+  const handleRecommendationSelect = useCallback(
+    (mention: FileMentionOption) => {
+      editorRef.current?.insertMention(mention)
+      const draft = editorRef.current?.getValue() || ""
+      setDraftText(draft)
+      currentDraftTextRef.current = draft
+    },
+    [editorRef],
+  )
 
   // Slash command handlers
   const handleSlashTrigger = useCallback(
@@ -1377,7 +1454,8 @@ export const ChatInputArea = memo(function ChatInputArea({
 
   // Paste handler for images, plain text, and large text (saved as files)
   const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => handlePasteEvent(e, onAddAttachments, onAddPastedText),
+    (e: React.ClipboardEvent) =>
+      handlePasteEvent(e, onAddAttachments, onAddPastedText),
     [onAddAttachments, onAddPastedText],
   )
 
@@ -1395,30 +1473,105 @@ export const ChatInputArea = memo(function ChatInputArea({
   // Text file extensions that should have content read and attached
   const TEXT_FILE_EXTENSIONS = new Set([
     // Code
-    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-    ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h", ".hpp",
-    ".cs", ".php", ".lua", ".r", ".m", ".mm", ".scala", ".clj", ".ex", ".exs",
-    ".hs", ".elm", ".erl", ".fs", ".fsx", ".ml", ".v", ".vhdl", ".zig",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".py",
+    ".rb",
+    ".go",
+    ".rs",
+    ".java",
+    ".kt",
+    ".swift",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".php",
+    ".lua",
+    ".r",
+    ".m",
+    ".mm",
+    ".scala",
+    ".clj",
+    ".ex",
+    ".exs",
+    ".hs",
+    ".elm",
+    ".erl",
+    ".fs",
+    ".fsx",
+    ".ml",
+    ".v",
+    ".vhdl",
+    ".zig",
     // Config/Data
-    ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".env", ".conf", ".cfg",
-    ".properties", ".plist",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".ini",
+    ".env",
+    ".conf",
+    ".cfg",
+    ".properties",
+    ".plist",
     // Web
-    ".html", ".htm", ".css", ".scss", ".sass", ".less", ".vue", ".svelte", ".astro",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".vue",
+    ".svelte",
+    ".astro",
     // Documentation
-    ".md", ".mdx", ".rst", ".txt", ".text",
+    ".md",
+    ".mdx",
+    ".rst",
+    ".txt",
+    ".text",
     // Graphics (text-based)
     ".svg",
     // Shell/Scripts
-    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".ps1",
+    ".bat",
+    ".cmd",
     // Other
-    ".sql", ".graphql", ".gql", ".prisma", ".dockerfile", ".makefile",
-    ".gitignore", ".gitattributes", ".editorconfig", ".eslintrc", ".prettierrc",
+    ".sql",
+    ".graphql",
+    ".gql",
+    ".prisma",
+    ".dockerfile",
+    ".makefile",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    ".eslintrc",
+    ".prettierrc",
   ])
 
   const MAX_FILE_SIZE_FOR_CONTENT = 100 * 1024 // 100KB - files larger than this only get path mention
 
   // Image extensions that should be handled as attachments (base64)
-  const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"])
+  const IMAGE_EXTENSIONS = new Set([
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+  ])
 
   const trpcUtils = trpc.useUtils()
 
@@ -1433,7 +1586,9 @@ export const ChatInputArea = memo(function ChatInputArea({
       const otherFiles: File[] = []
 
       for (const file of droppedFiles) {
-        const ext = file.name.includes(".") ? "." + file.name.split(".").pop()?.toLowerCase() : ""
+        const ext = file.name.includes(".")
+          ? "." + file.name.split(".").pop()?.toLowerCase()
+          : ""
         if (IMAGE_EXTENSIONS.has(ext)) {
           imageFiles.push(file)
         } else {
@@ -1443,20 +1598,24 @@ export const ChatInputArea = memo(function ChatInputArea({
 
       // Handle images via existing attachment system (base64)
       if (imageFiles.length > 0) {
-      onAddAttachments(imageFiles, "drag-drop")
+        onAddAttachments(imageFiles, "drag-drop")
       }
 
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
+        const filePath: string | undefined =
+          window.webUtils?.getPathForFile?.(file) ||
+          (file as File & { path?: string }).path
 
         let mentionId: string
         let mentionPath: string
 
         if (projectPath && filePath && filePath.startsWith(projectPath)) {
           // File is inside project - use relative path
-          const relativePath = filePath.slice(projectPath.length).replace(/^\//, "")
+          const relativePath = filePath
+            .slice(projectPath.length)
+            .replace(/^\//, "")
           mentionId = `file:local:${relativePath}`
           mentionPath = relativePath
         } else if (filePath) {
@@ -1470,7 +1629,9 @@ export const ChatInputArea = memo(function ChatInputArea({
         }
 
         const fileName = file.name
-        const ext = fileName.includes(".") ? "." + fileName.split(".").pop()?.toLowerCase() : ""
+        const ext = fileName.includes(".")
+          ? "." + fileName.split(".").pop()?.toLowerCase()
+          : ""
         // Files without extension are likely directories or special files - skip content reading
         const hasExtension = ext !== ""
         const isTextFile = hasExtension && TEXT_FILE_EXTENSIONS.has(ext)
@@ -1494,7 +1655,10 @@ export const ChatInputArea = memo(function ChatInputArea({
             onCacheFileContent?.(mentionId, content)
           } catch (err) {
             // If reading fails, chip is still there - agent can try to read via path
-            console.error(`[handleDrop] Failed to read file content ${filePath}:`, err)
+            console.error(
+              `[handleDrop] Failed to read file content ${filePath}:`,
+              err,
+            )
           }
         } else {
           // For binary files, large files - add as mention only
@@ -1539,7 +1703,12 @@ export const ChatInputArea = memo(function ChatInputArea({
     } else {
       void handleEditorSubmit()
     }
-  }, [blockUnsupportedImageSend, ensureGuardedRunReady, handleEditorSubmit, onSubmitWithQuestionAnswer])
+  }, [
+    blockUnsupportedImageSend,
+    ensureGuardedRunReady,
+    handleEditorSubmit,
+    onSubmitWithQuestionAnswer,
+  ])
   const guardedForceSend = useCallback(() => {
     if (blockUnsupportedImageSend()) return
     if (!ensureGuardedRunReady()) return
@@ -1567,7 +1736,17 @@ export const ChatInputArea = memo(function ChatInputArea({
     } else {
       onSend()
     }
-  }, [blockUnsupportedImageSend, ensureGuardedRunReady, firstQueueItemId, files.length, hasContent, onSend, onSendFromQueue, queueLength, readyImageCount])
+  }, [
+    blockUnsupportedImageSend,
+    ensureGuardedRunReady,
+    firstQueueItemId,
+    files.length,
+    hasContent,
+    onSend,
+    onSendFromQueue,
+    queueLength,
+    readyImageCount,
+  ])
 
   const hasSendButtonContent =
     hasContent ||
@@ -1620,12 +1799,19 @@ export const ChatInputArea = memo(function ChatInputArea({
               maxHeight={200}
               onSubmit={stablePromptSubmit}
               contextItems={
-                images.length > 0 || files.length > 0 || textContexts.length > 0 || (diffTextContexts?.length ?? 0) > 0 || pastedTexts.length > 0 ? (
+                images.length > 0 ||
+                files.length > 0 ||
+                textContexts.length > 0 ||
+                (diffTextContexts?.length ?? 0) > 0 ||
+                pastedTexts.length > 0 ? (
                   <div className="flex flex-wrap items-center gap-[6px]">
                     {(() => {
                       // Build allImages array for gallery navigation
                       const allImages = images
-                        .filter((img): img is typeof img & { url: string } => !!img.url && !img.isLoading)
+                        .filter(
+                          (img): img is typeof img & { url: string } =>
+                            !!img.url && !img.isLoading,
+                        )
                         .map((img) => ({
                           id: img.id,
                           filename: img.filename,
@@ -1673,7 +1859,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                         filePath={dtc.filePath}
                         lineNumber={dtc.lineNumber}
                         lineType={dtc.lineType}
-                        onRemove={onRemoveDiffTextContext ? () => onRemoveDiffTextContext(dtc.id) : undefined}
+                        onRemove={
+                          onRemoveDiffTextContext
+                            ? () => onRemoveDiffTextContext(dtc.id)
+                            : undefined
+                        }
                       />
                     ))}
                     {pastedTexts.map((pt) => (
@@ -1684,7 +1874,11 @@ export const ChatInputArea = memo(function ChatInputArea({
                         size={pt.size}
                         preview={pt.preview}
                         kind={pt.kind}
-                        onRemove={onRemovePastedText ? () => onRemovePastedText(pt.id) : undefined}
+                        onRemove={
+                          onRemovePastedText
+                            ? () => onRemovePastedText(pt.id)
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
@@ -1937,7 +2131,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                         onProviderChange?.(nextProvider)
                       }}
                       allowProviderSwitch={canSwitchProvider}
-                      onContinueWithProvider={!canSwitchProvider ? onContinueWithProvider : undefined}
+                      onContinueWithProvider={
+                        !canSwitchProvider ? onContinueWithProvider : undefined
+                      }
                       selectedModelLabel={selectedModelLabel}
                       triggerClassName="min-w-0 max-w-full"
                       providerProfiles={providerProfiles}
@@ -1946,12 +2142,15 @@ export const ChatInputArea = memo(function ChatInputArea({
                         setSettingsOpen(true)
                       }}
                       claude={{
-                        models: availableModels.models.filter((m) => !hiddenModels.includes(m.id)),
+                        models: availableModels.models.filter(
+                          (m) => !hiddenModels.includes(m.id),
+                        ),
                         selectedModelId: selectedModel?.id,
                         onSelectModel: (modelId) => {
                           const model =
-                            availableModels.models.find((item) => item.id === modelId) ||
-                            availableModels.models[0]
+                            availableModels.models.find(
+                              (item) => item.id === modelId,
+                            ) || availableModels.models[0]
                           if (!model) return
                           setSelectedModel(model)
                           setSelectedSubChatModelId(model.id)
@@ -1963,10 +2162,13 @@ export const ChatInputArea = memo(function ChatInputArea({
                           setLastSelectedClaudeModelSource(source)
                         },
                         hasCustomModelConfig: hasCustomClaudeConfig,
-                        isOffline: availableModels.isOffline && availableModels.hasOllama,
+                        isOffline:
+                          availableModels.isOffline &&
+                          availableModels.hasOllama,
                         ollamaModels: availableModels.ollamaModels,
                         selectedOllamaModel: currentOllamaModel,
-                        recommendedOllamaModel: availableModels.recommendedModel,
+                        recommendedOllamaModel:
+                          availableModels.recommendedModel,
                         onSelectOllamaModel: setSelectedOllamaModel,
                         isConnected: isClaudeConnected,
                         thinkingEnabled,
@@ -1976,15 +2178,17 @@ export const ChatInputArea = memo(function ChatInputArea({
                         models: codexUiModels,
                         selectedModelId: selectedCodexModel.id,
                         onSelectModel: (modelId) => {
-                          const model = codexUiModels.find((item) => item.id === modelId)
+                          const model = codexUiModels.find(
+                            (item) => item.id === modelId,
+                          )
                           if (!model) return
                           const nextThinking = model.thinkings.includes(
                             selectedSubChatCodexThinking as CodexThinkingLevel,
                           )
                             ? (selectedSubChatCodexThinking as CodexThinkingLevel)
-                            : (model.thinkings.includes("high")
+                            : model.thinkings.includes("high")
                               ? "high"
-                              : model.thinkings[0]!)
+                              : model.thinkings[0]!
 
                           setSelectedSubChatCodexModelId(model.id)
                           setSelectedSubChatCodexThinking(nextThinking)
@@ -2005,7 +2209,6 @@ export const ChatInputArea = memo(function ChatInputArea({
                       }}
                     />
                   </div>
-
                 </div>
 
                 <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
@@ -2024,7 +2227,10 @@ export const ChatInputArea = memo(function ChatInputArea({
 
                   {/* Voice wave indicator / transcribing state / normal toolbar */}
                   {isVoiceRecording ? (
-                    <VoiceWaveIndicator isRecording={isVoiceRecording} audioLevel={voiceAudioLevel} />
+                    <VoiceWaveIndicator
+                      isRecording={isVoiceRecording}
+                      audioLevel={voiceAudioLevel}
+                    />
                   ) : isTranscribing ? (
                     <div className="flex items-center px-2 h-5">
                       <IconSpinner className="size-3.5 text-muted-foreground" />
@@ -2095,10 +2301,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       {/* File mention dropdown */}
       {/* Desktop: use projectPath for local file search */}
       <AgentsFileMention
-        isOpen={
-          showMentionDropdown &&
-          (!!projectPath || !!repository)
-        }
+        isOpen={showMentionDropdown && (!!projectPath || !!repository)}
         onClose={handleMentionClose}
         onSelect={handleMentionSelect}
         searchText={mentionSearchText}

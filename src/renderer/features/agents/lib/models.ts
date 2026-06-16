@@ -9,6 +9,7 @@ export {
 export type ModelInfo = ClaudeModelInfo
 
 export type CodexThinkingLevel = "low" | "medium" | "high" | "xhigh"
+export type CodexFirstPartyModelSource = "chatgpt" | "openai-api-key"
 
 export const CODEX_MODELS = [
   {
@@ -72,12 +73,57 @@ export const CODEX_MODELS = [
   },
 ]
 
-const CODEX_CHATGPT_AUTH_ONLY_MODEL_IDS = new Set([
-  "gpt-5.3-codex-spark",
-])
+const CODEX_CHATGPT_AUTH_ONLY_MODEL_IDS = new Set(["gpt-5.3-codex-spark"])
 
 export function isCodexApiKeySupportedModel(modelId: string): boolean {
   return !CODEX_CHATGPT_AUTH_ONLY_MODEL_IDS.has(modelId)
+}
+
+export function isFirstPartyCodexModelSource(
+  source: string,
+): source is CodexFirstPartyModelSource {
+  return source === "chatgpt" || source === "openai-api-key"
+}
+
+export function isCodexModelSupportedBySource(
+  source: CodexFirstPartyModelSource,
+  modelId: string,
+): boolean {
+  return source === "chatgpt" || isCodexApiKeySupportedModel(modelId)
+}
+
+export function getCodexModelsForSource<TModel extends { id: string }>(
+  models: TModel[],
+  source: CodexFirstPartyModelSource,
+): TModel[] {
+  return models.filter((model) =>
+    isCodexModelSupportedBySource(source, model.id),
+  )
+}
+
+export function resolveCodexModelForSource<TModel extends { id: string }>({
+  models,
+  selectedModelId,
+  source,
+}: {
+  models: TModel[]
+  selectedModelId: string
+  source: CodexFirstPartyModelSource
+}): { model: TModel | undefined; changed: boolean } {
+  const selectedModel = models.find((model) => model.id === selectedModelId)
+  if (
+    selectedModel &&
+    isCodexModelSupportedBySource(source, selectedModel.id)
+  ) {
+    return { model: selectedModel, changed: false }
+  }
+
+  return {
+    model: models.find((model) =>
+      isCodexModelSupportedBySource(source, model.id),
+    ),
+    changed: true,
+  }
 }
 
 export function formatCodexThinkingLabel(thinking: CodexThinkingLevel): string {

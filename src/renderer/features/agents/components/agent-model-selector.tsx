@@ -1,9 +1,22 @@
 "use client"
 
 import { Brain, ChevronRight, Info, Zap } from "lucide-react"
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import { createPortal } from "react-dom"
+import {
+  isProviderProfileSource,
+  providerProfileSource,
+} from "../../../../shared/provider-profile-types"
+import { Button } from "../../../components/ui/button"
+import { Checkbox } from "../../../components/ui/checkbox"
 import {
   Command,
   CommandEmpty,
@@ -13,26 +26,35 @@ import {
   CommandList,
   CommandSeparator,
 } from "../../../components/ui/command"
-import { CheckIcon, ClaudeCodeIcon, IconChevronDown, ThinkingIcon } from "../../../components/ui/icons"
-import { Switch } from "../../../components/ui/switch"
-import { Checkbox } from "../../../components/ui/checkbox"
-import { Button } from "../../../components/ui/button"
+import {
+  CheckIcon,
+  ClaudeCodeIcon,
+  IconChevronDown,
+  ThinkingIcon,
+} from "../../../components/ui/icons"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "../../../components/ui/popover"
+import { Switch } from "../../../components/ui/switch"
+import { type TranslationKey, useI18n } from "../../../lib/i18n"
 import { cn } from "../../../lib/utils"
-import { useI18n, type TranslationKey } from "../../../lib/i18n"
-import {
-  isProviderProfileSource,
-  providerProfileSource,
-} from "../../../../shared/provider-profile-types"
 import type { ClaudeModelSource, CodexModelSource } from "../atoms"
-import type { CodexThinkingLevel, ModelInfo } from "../lib/models"
-import { formatCodexThinkingLabel } from "../lib/models"
+import type {
+  CodexFirstPartyModelSource,
+  CodexThinkingLevel,
+  ModelInfo,
+} from "../lib/models"
+import {
+  formatCodexThinkingLabel,
+  isCodexModelSupportedBySource,
+  isFirstPartyCodexModelSource,
+  resolveCodexModelForSource,
+} from "../lib/models"
 
-const CROSS_PROVIDER_DIALOG_DISMISSED_KEY = "agent-model-selector:skip-cross-provider-dialog"
+const CROSS_PROVIDER_DIALOG_DISMISSED_KEY =
+  "agent-model-selector:skip-cross-provider-dialog"
 
 const CodexIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -127,7 +149,6 @@ interface AgentModelSelectorProps {
 
 type FlatModelItem =
   | { type: "claude"; model: ClaudeModelOption }
-  | { type: "codex-source"; source: Extract<CodexModelSource, "chatgpt" | "openai-api-key"> }
   | { type: "codex"; model: CodexModelOption }
   | { type: "ollama"; modelName: string; isRecommended: boolean }
   | { type: "custom" }
@@ -150,6 +171,10 @@ type ActiveModelInfo = {
   modelLabel: string
   top: number
   left: number
+}
+
+function isDomNode(target: EventTarget | null): target is Node {
+  return typeof Node !== "undefined" && target instanceof Node
 }
 
 function CodexThinkingSubMenu({
@@ -196,8 +221,8 @@ function CodexThinkingSubMenu({
 
   const handleTriggerLeave = useCallback(
     (e: React.MouseEvent) => {
-      const related = e.relatedTarget as Node | null
-      if (subMenuRef.current?.contains(related)) return
+      const related = e.relatedTarget
+      if (isDomNode(related) && subMenuRef.current?.contains(related)) return
       scheduleClose()
     },
     [scheduleClose],
@@ -205,8 +230,8 @@ function CodexThinkingSubMenu({
 
   const handleSubLeave = useCallback(
     (e: React.MouseEvent) => {
-      const related = e.relatedTarget as Node | null
-      if (triggerRef.current?.contains(related)) return
+      const related = e.relatedTarget
+      if (isDomNode(related) && triggerRef.current?.contains(related)) return
       scheduleClose()
     },
     [scheduleClose],
@@ -263,9 +288,7 @@ function CodexThinkingSubMenu({
                   className="flex items-center justify-between gap-4 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
                 >
                   <span>{formatCodexThinkingLabel(thinking)}</span>
-                  {isSelected && (
-                    <CheckIcon className="h-3.5 w-3.5 shrink-0" />
-                  )}
+                  {isSelected && <CheckIcon className="h-3.5 w-3.5 shrink-0" />}
                 </button>
               )
             })}
@@ -273,6 +296,48 @@ function CodexThinkingSubMenu({
           document.body,
         )}
     </div>
+  )
+}
+
+function CodexAccountSourceControl({
+  selectedSource,
+  onSelectSource,
+}: {
+  selectedSource: CodexFirstPartyModelSource
+  onSelectSource: (source: CodexFirstPartyModelSource) => void
+}) {
+  const { t } = useI18n()
+  const sources: CodexFirstPartyModelSource[] = ["chatgpt", "openai-api-key"]
+
+  return (
+    <fieldset className="space-y-1.5 px-2 py-2">
+      <legend className="text-[11px] font-medium uppercase text-muted-foreground">
+        {t("agent.model.codexAccountSource")}
+      </legend>
+      <div className="grid grid-cols-2 gap-1 rounded-md bg-muted/50 p-1">
+        {sources.map((source) => {
+          const selected = selectedSource === source
+          return (
+            <button
+              key={source}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelectSource(source)}
+              className={cn(
+                "min-h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                selected
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {source === "chatgpt"
+                ? t("agent.model.codexChatGPTAccount")
+                : t("agent.model.codexOpenAIApiKey")}
+            </button>
+          )
+        })}
+      </div>
+    </fieldset>
   )
 }
 
@@ -331,8 +396,15 @@ function CrossProviderConfirmDialog({
         <>
           <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1, transition: { duration: 0.18, ease: DIALOG_EASING } }}
-            exit={{ opacity: 0, pointerEvents: "none" as const, transition: { duration: 0.15, ease: DIALOG_EASING } }}
+            animate={{
+              opacity: 1,
+              transition: { duration: 0.18, ease: DIALOG_EASING },
+            }}
+            exit={{
+              opacity: 0,
+              pointerEvents: "none" as const,
+              transition: { duration: 0.15, ease: DIALOG_EASING },
+            }}
             className="fixed inset-0 z-[45] bg-black/25"
             onClick={onClose}
             style={{ pointerEvents: "auto" }}
@@ -349,7 +421,9 @@ function CrossProviderConfirmDialog({
               <div className="bg-background rounded-2xl border shadow-2xl overflow-hidden">
                 <div className="p-6">
                   <h2 className="text-xl font-semibold mb-2">
-                    {t("agent.model.switchToProvider", { provider: providerName })}
+                    {t("agent.model.switchToProvider", {
+                      provider: providerName,
+                    })}
                   </h2>
                   <p className="text-sm text-muted-foreground">
                     {t("agent.model.crossProviderMessage")}
@@ -366,10 +440,18 @@ function CrossProviderConfirmDialog({
                     </span>
                   </label>
                   <div className="flex items-center gap-2">
-                    <Button onClick={onClose} variant="ghost" className="rounded-md">
+                    <Button
+                      onClick={onClose}
+                      variant="ghost"
+                      className="rounded-md"
+                    >
                       {t("common.cancel")}
                     </Button>
-                    <Button onClick={() => onConfirm(dontShowAgain)} variant="default" className="rounded-md">
+                    <Button
+                      onClick={() => onConfirm(dontShowAgain)}
+                      variant="default"
+                      className="rounded-md"
+                    >
                       {t("agent.model.newChat")}
                     </Button>
                   </div>
@@ -402,7 +484,9 @@ function ModelInfoButton({
   }
 
   const show = (
-    event: React.MouseEvent<HTMLButtonElement> | React.FocusEvent<HTMLButtonElement>,
+    event:
+      | React.MouseEvent<HTMLButtonElement>
+      | React.FocusEvent<HTMLButtonElement>,
   ) => {
     stopSelection(event)
     onShow(info, modelLabel, event.currentTarget)
@@ -430,11 +514,7 @@ function ModelInfoButton({
   )
 }
 
-function ModelInfoPanel({
-  activeInfo,
-}: {
-  activeInfo: ActiveModelInfo
-}) {
+function ModelInfoPanel({ activeInfo }: { activeInfo: ActiveModelInfo }) {
   const { t } = useI18n()
   const translate = (key: string) => t(key as TranslationKey)
   const { info, modelLabel, top, left } = activeInfo
@@ -458,7 +538,8 @@ function ModelInfoPanel({
     const updatePosition = () => {
       const viewportHeight = window.innerHeight
       const maxAvailableHeight = Math.max(180, viewportHeight - gap * 2)
-      const measuredHeight = panelRef.current?.scrollHeight ?? maxAvailableHeight
+      const measuredHeight =
+        panelRef.current?.scrollHeight ?? maxAvailableHeight
       const panelHeight = Math.min(measuredHeight, maxAvailableHeight)
       const nextTop = Math.min(
         Math.max(gap, top),
@@ -541,14 +622,27 @@ export function AgentModelSelector({
     provider: AgentProviderId
     selection?: ContinueWithProviderSelection
   } | null>(null)
-  const [activeModelInfo, setActiveModelInfo] = useState<ActiveModelInfo | null>(null)
+  const [activeModelInfo, setActiveModelInfo] =
+    useState<ActiveModelInfo | null>(null)
+  const [codexCompatibilityNotice, setCodexCompatibilityNotice] = useState<
+    string | null
+  >(null)
 
-  const canSelectProvider = (provider: AgentProviderId) =>
-    allowProviderSwitch || selectedAgentId === provider
+  const canSelectProvider = useCallback(
+    (provider: AgentProviderId) =>
+      allowProviderSwitch || selectedAgentId === provider,
+    [allowProviderSwitch, selectedAgentId],
+  )
   const selectedClaudeModelSource =
-    claude.selectedModelSource === "custom-provider" && !claude.hasCustomModelConfig
+    claude.selectedModelSource === "custom-provider" &&
+    !claude.hasCustomModelConfig
       ? "claude-oauth"
       : claude.selectedModelSource
+  const selectedFirstPartyCodexSource = isFirstPartyCodexModelSource(
+    codex.selectedModelSource,
+  )
+    ? codex.selectedModelSource
+    : null
 
   // Build flat list of all models (show all regardless of connection status)
   const allModels = useMemo<FlatModelItem[]>(() => {
@@ -581,8 +675,6 @@ export function AgentModelSelector({
       }
     }
 
-    items.push({ type: "codex-source", source: "chatgpt" })
-    items.push({ type: "codex-source", source: "openai-api-key" })
     for (const m of codex.models) {
       items.push({ type: "codex", model: m })
     }
@@ -611,12 +703,6 @@ export function AgentModelSelector({
           )
         case "codex":
           return item.model.name.toLowerCase().includes(q)
-        case "codex-source":
-          return (
-            (item.source === "chatgpt" ? "codex chatgpt" : "codex api key")
-              .toLowerCase()
-              .includes(q)
-          )
         case "ollama":
           return item.modelName.toLowerCase().includes(q)
         case "custom":
@@ -644,7 +730,6 @@ export function AgentModelSelector({
         if (item.runtime === "claude") return "claudeProfiles"
         if (item.runtime === "codex") return "codexProfiles"
         return "local"
-      case "codex-source":
       case "codex":
         return "codex"
       case "ollama":
@@ -652,22 +737,25 @@ export function AgentModelSelector({
     }
   }, [])
 
-  const getGroupHeading = useCallback((group: ModelGroupId): string => {
-    switch (group) {
-      case "custom":
-        return t("agent.model.group.customProvider")
-      case "claude":
-        return t("agent.model.group.claudeCodeOAuth")
-      case "claudeProfiles":
-        return t("agent.model.group.claudeProviderProfiles")
-      case "codex":
-        return t("agent.model.group.codexOfficial")
-      case "codexProfiles":
-        return t("agent.model.group.codexProviderProfiles")
-      case "local":
-        return t("agent.model.group.localProviderProfiles")
-    }
-  }, [t])
+  const getGroupHeading = useCallback(
+    (group: ModelGroupId): string => {
+      switch (group) {
+        case "custom":
+          return t("agent.model.group.customProvider")
+        case "claude":
+          return t("agent.model.group.claudeCodeOAuth")
+        case "claudeProfiles":
+          return t("agent.model.group.claudeProviderProfiles")
+        case "codex":
+          return t("agent.model.group.codexOfficial")
+        case "codexProfiles":
+          return t("agent.model.group.codexProviderProfiles")
+        case "local":
+          return t("agent.model.group.localProviderProfiles")
+      }
+    },
+    [t],
+  )
 
   const groupedFilteredModels = useMemo(() => {
     const groups: Record<ModelGroupId, FlatModelItem[]> = {
@@ -683,14 +771,16 @@ export function AgentModelSelector({
       groups[getItemGroup(item)].push(item)
     }
 
-    return ([
-      "custom",
-      "claude",
-      "claudeProfiles",
-      "codex",
-      "codexProfiles",
-      "local",
-    ] as ModelGroupId[])
+    return (
+      [
+        "custom",
+        "claude",
+        "claudeProfiles",
+        "codex",
+        "codexProfiles",
+        "local",
+      ] as ModelGroupId[]
+    )
       .map((id) => ({ id, heading: getGroupHeading(id), items: groups[id] }))
       .filter((group) => group.items.length > 0)
   }, [filteredModels, getGroupHeading, getItemGroup])
@@ -759,13 +849,11 @@ export function AgentModelSelector({
           !isProviderProfileSource(codex.selectedModelSource) &&
           codex.selectedModelId === item.model.id
         )
-      case "codex-source":
-        return (
-          selectedAgentId === "codex" &&
-          codex.selectedModelSource === item.source
-        )
       case "ollama":
-        return selectedAgentId === "claude-code" && claude.selectedOllamaModel === item.modelName
+        return (
+          selectedAgentId === "claude-code" &&
+          claude.selectedOllamaModel === item.modelName
+        )
       case "custom":
         return (
           selectedAgentId === "claude-code" &&
@@ -774,25 +862,45 @@ export function AgentModelSelector({
       case "provider-profile": {
         const source = providerProfileSource(item.profile.id)
         if (item.runtime === "claude") {
-          return selectedAgentId === "claude-code" && selectedClaudeModelSource === source
+          return (
+            selectedAgentId === "claude-code" &&
+            selectedClaudeModelSource === source
+          )
         }
-        return selectedAgentId === "codex" && codex.selectedModelSource === source
+        return (
+          selectedAgentId === "codex" && codex.selectedModelSource === source
+        )
       }
     }
   }
 
   const getItemProvider = (item: FlatModelItem): AgentProviderId => {
-    if (item.type === "codex" || item.type === "codex-source") return "codex"
+    if (item.type === "codex") return "codex"
     if (item.type === "provider-profile") {
       if (item.runtime === "claude") return "claude-code"
       if (item.runtime === "codex") return "codex"
-      return item.profile.targetRuntimes.includes("codex") ? "codex" : "claude-code"
+      return item.profile.targetRuntimes.includes("codex")
+        ? "codex"
+        : "claude-code"
     }
     return "claude-code"
   }
 
   const isItemDisabled = (item: FlatModelItem): boolean => {
-    if (item.type === "provider-profile" && item.profile.lastTestStatus?.ok === false) {
+    if (
+      item.type === "provider-profile" &&
+      item.profile.lastTestStatus?.ok === false
+    ) {
+      return true
+    }
+    if (
+      item.type === "codex" &&
+      selectedFirstPartyCodexSource &&
+      !isCodexModelSupportedBySource(
+        selectedFirstPartyCodexSource,
+        item.model.id,
+      )
+    ) {
       return true
     }
     const provider = getItemProvider(item)
@@ -800,6 +908,20 @@ export function AgentModelSelector({
     // When onContinueWithProvider is available, cross-provider items are clickable (not disabled)
     if (onContinueWithProvider) return false
     return true
+  }
+
+  const getItemDisabledReason = (item: FlatModelItem): string | null => {
+    if (
+      item.type === "codex" &&
+      selectedFirstPartyCodexSource === "openai-api-key" &&
+      !isCodexModelSupportedBySource(
+        selectedFirstPartyCodexSource,
+        item.model.id,
+      )
+    ) {
+      return t("agent.model.codexRequiresChatGPTAccount")
+    }
+    return null
   }
 
   const isItemCrossProvider = (item: FlatModelItem): boolean => {
@@ -818,8 +940,6 @@ export function AgentModelSelector({
         }
       case "custom":
         return { claudeModelSource: "custom-provider" }
-      case "codex-source":
-        return { codexModelSource: item.source }
       case "codex": {
         const thinking = item.model.thinkings.includes(codex.selectedThinking)
           ? codex.selectedThinking
@@ -875,7 +995,9 @@ export function AgentModelSelector({
       const selection = getCrossProviderSelection(item, provider)
       const dismissed = (() => {
         try {
-          return localStorage.getItem(CROSS_PROVIDER_DIALOG_DISMISSED_KEY) === "true"
+          return (
+            localStorage.getItem(CROSS_PROVIDER_DIALOG_DISMISSED_KEY) === "true"
+          )
         } catch {
           return false
         }
@@ -898,16 +1020,21 @@ export function AgentModelSelector({
         break
       case "codex":
         if (!canSelectProvider("codex")) return
+        if (
+          selectedFirstPartyCodexSource &&
+          !isCodexModelSupportedBySource(
+            selectedFirstPartyCodexSource,
+            item.model.id,
+          )
+        ) {
+          return
+        }
         onSelectedAgentIdChange("codex")
         if (isProviderProfileSource(codex.selectedModelSource)) {
           codex.onSelectModelSource("chatgpt")
         }
+        setCodexCompatibilityNotice(null)
         codex.onSelectModel(item.model.id)
-        break
-      case "codex-source":
-        if (!canSelectProvider("codex")) return
-        onSelectedAgentIdChange("codex")
-        codex.onSelectModelSource(item.source)
         break
       case "ollama":
         if (!canSelectProvider("claude-code")) return
@@ -927,6 +1054,7 @@ export function AgentModelSelector({
         if (targetProvider === "claude-code") {
           claude.onSelectModelSource(source as ClaudeModelSource)
         } else {
+          setCodexCompatibilityNotice(null)
           codex.onSelectModelSource(source as CodexModelSource)
         }
         break
@@ -935,17 +1063,48 @@ export function AgentModelSelector({
     handleOpenChange(false)
   }
 
+  const handleCodexAccountSourceSelect = useCallback(
+    (source: CodexFirstPartyModelSource) => {
+      if (!canSelectProvider("codex")) return
+      onSelectedAgentIdChange("codex")
+      const resolved = resolveCodexModelForSource({
+        models: codex.models,
+        selectedModelId: codex.selectedModelId,
+        source,
+      })
+
+      codex.onSelectModelSource(source)
+      if (resolved.model && resolved.changed) {
+        codex.onSelectModel(resolved.model.id)
+        setCodexCompatibilityNotice(
+          t("agent.model.codexSourceAutoSwitchedModel", {
+            model: resolved.model.name,
+          }),
+        )
+        return
+      }
+
+      setCodexCompatibilityNotice(null)
+    },
+    [canSelectProvider, codex, onSelectedAgentIdChange, t],
+  )
+
   const getItemIcon = (item: FlatModelItem) => {
     switch (item.type) {
       case "claude":
-        return <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        return (
+          <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        )
       case "codex":
-      case "codex-source":
-        return <CodexIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        return (
+          <CodexIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        )
       case "ollama":
         return <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
       case "custom":
-        return <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        return (
+          <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        )
       case "provider-profile":
         return item.runtime === "claude" ? (
           <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -961,12 +1120,11 @@ export function AgentModelSelector({
         return `${item.model.name} ${item.model.version}`
       case "codex":
         return item.model.name
-      case "codex-source":
-        return item.source === "chatgpt"
-          ? t("agent.model.codexChatGPT")
-          : t("agent.model.codexApiKey")
       case "ollama":
-        return item.modelName + (item.isRecommended ? ` ${t("agent.model.recommendedSuffix")}` : "")
+        return (
+          item.modelName +
+          (item.isRecommended ? ` ${t("agent.model.recommendedSuffix")}` : "")
+        )
       case "custom":
         return t("agent.model.customProvider")
       case "provider-profile":
@@ -979,7 +1137,6 @@ export function AgentModelSelector({
       case "claude":
       case "codex":
         return item.model.info ?? null
-      case "codex-source":
       case "ollama":
       case "custom":
       case "provider-profile":
@@ -991,8 +1148,6 @@ export function AgentModelSelector({
     switch (item.type) {
       case "claude":
         return `claude-${item.model.id}`
-      case "codex-source":
-        return `codex-source-${item.source}`
       case "codex":
         return `codex-${item.model.id}`
       case "ollama":
@@ -1032,44 +1187,64 @@ export function AgentModelSelector({
             onValueChange={setSearch}
           />
 
-          {/* Claude thinking toggle */}
-          {selectedAgentId === "claude-code" &&
-            !claude.isOffline &&
-            selectedClaudeModelSource === "claude-oauth" && (
+          {selectedAgentId === "codex" && selectedFirstPartyCodexSource && (
             <>
-              <div
-                className="flex items-center justify-between min-h-[32px] py-[5px] px-1.5 mx-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center gap-1.5">
-                  <ThinkingIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <span className="text-sm">{t("agent.model.thinking")}</span>
+              <CodexAccountSourceControl
+                selectedSource={selectedFirstPartyCodexSource}
+                onSelectSource={handleCodexAccountSourceSelect}
+              />
+              {codexCompatibilityNotice && (
+                <div className="mx-2 mb-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
+                  {codexCompatibilityNotice}
                 </div>
-                <Switch
-                  checked={claude.thinkingEnabled}
-                  onCheckedChange={claude.onThinkingChange}
-                  className="scale-75"
-                />
-              </div>
+              )}
+              {selectedFirstPartyCodexSource === "openai-api-key" && (
+                <div className="mx-2 mb-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
+                  {t("agent.model.codexApiKeyCompatibilityNotice")}
+                </div>
+              )}
               <CommandSeparator />
             </>
           )}
 
-          {/* Codex thinking level selector with hover sub-menu */}
-          {selectedAgentId === "codex" && (() => {
-            const selectedCodexModel = codex.models.find((m) => m.id === codex.selectedModelId) || codex.models[0]
-            if (!selectedCodexModel) return null
-            return (
+          {/* Claude thinking toggle */}
+          {selectedAgentId === "claude-code" &&
+            !claude.isOffline &&
+            selectedClaudeModelSource === "claude-oauth" && (
               <>
-                <CodexThinkingSubMenu
-                  thinkings={selectedCodexModel.thinkings}
-                  selectedThinking={codex.selectedThinking}
-                  onSelectThinking={codex.onSelectThinking}
-                />
+                <div className="flex items-center justify-between min-h-[32px] py-[5px] px-1.5 mx-1">
+                  <div className="flex items-center gap-1.5">
+                    <ThinkingIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm">{t("agent.model.thinking")}</span>
+                  </div>
+                  <Switch
+                    checked={claude.thinkingEnabled}
+                    onCheckedChange={claude.onThinkingChange}
+                    className="scale-75"
+                  />
+                </div>
                 <CommandSeparator />
               </>
-            )
-          })()}
+            )}
+
+          {/* Codex thinking level selector with hover sub-menu */}
+          {selectedAgentId === "codex" &&
+            (() => {
+              const selectedCodexModel =
+                codex.models.find((m) => m.id === codex.selectedModelId) ||
+                codex.models[0]
+              if (!selectedCodexModel) return null
+              return (
+                <>
+                  <CodexThinkingSubMenu
+                    thinkings={selectedCodexModel.thinkings}
+                    selectedThinking={codex.selectedThinking}
+                    onSelectThinking={codex.onSelectThinking}
+                  />
+                  <CommandSeparator />
+                </>
+              )
+            })()}
 
           <CommandList
             className="max-h-[300px] overflow-y-auto"
@@ -1084,6 +1259,9 @@ export function AgentModelSelector({
                     const crossProvider = isItemCrossProvider(item)
                     const label = getItemLabel(item)
                     const info = getItemInfo(item)
+                    const disabledReason = disabled
+                      ? getItemDisabledReason(item)
+                      : null
                     return (
                       <CommandItem
                         key={getItemKey(item)}
@@ -1109,9 +1287,12 @@ export function AgentModelSelector({
                             {t("agent.model.newChat")}
                           </span>
                         )}
-                        {selected && (
-                          <CheckIcon className="h-4 w-4 shrink-0" />
+                        {disabledReason && (
+                          <span className="max-w-[104px] truncate text-[10px] text-muted-foreground shrink-0">
+                            {disabledReason}
+                          </span>
                         )}
+                        {selected && <CheckIcon className="h-4 w-4 shrink-0" />}
                       </CommandItem>
                     )
                   })}
@@ -1131,12 +1312,14 @@ export function AgentModelSelector({
                 }}
                 className="flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
               >
-                <span className="flex-1 text-left">{t("agent.model.addModels")}</span>
+                <span className="flex-1 text-left">
+                  {t("agent.model.addModels")}
+                </span>
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               </button>
             </div>
-        )}
-      </Command>
+          )}
+        </Command>
       </PopoverContent>
 
       {activeModelInfo &&
@@ -1148,7 +1331,9 @@ export function AgentModelSelector({
 
       <CrossProviderConfirmDialog
         isOpen={confirmDialogOpen}
-        providerName={pendingAction?.provider === "codex" ? "Codex" : "Claude Code"}
+        providerName={
+          pendingAction?.provider === "codex" ? "Codex" : "Claude Code"
+        }
         onConfirm={handleConfirmCrossProvider}
         onClose={handleCloseConfirmDialog}
       />

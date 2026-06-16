@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: Preserve legacy import grouping for this focused sidebar migration.
 "use client"
 
 import {
@@ -90,6 +91,8 @@ import {
   unifiedSidebarEnabledAtom,
 } from "../../details-sidebar/atoms"
 import { DetailsSidebar } from "../../details-sidebar/details-sidebar"
+import { ExpandedWidgetSidebar } from "../../details-sidebar/expanded-widget-sidebar"
+import { useOpenDetailsWidget } from "../../details-sidebar/use-open-details-widget"
 import { FileViewerSidebar } from "../../file-viewer"
 import { FileSearchDialog } from "../../file-viewer/components/file-search-dialog"
 import { terminalBottomHeightAtom, terminalDisplayModeAtom, terminalSidebarOpenAtomFamily } from "../../terminal/atoms"
@@ -4472,6 +4475,47 @@ export function ChatView({
   )
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(terminalSidebarAtom)
   const terminalDisplayMode = useAtomValue(terminalDisplayModeAtom)
+  const openDetailsWidget = useOpenDetailsWidget(chatId)
+
+  const handleOpenPlanProductEntry = useCallback(() => {
+    if (openDetailsWidget("plan")) return
+    setIsPlanSidebarOpen(true)
+  }, [openDetailsWidget, setIsPlanSidebarOpen])
+
+  const handleOpenTerminalProductEntry = useCallback(() => {
+    if (openDetailsWidget("terminal")) return
+    setIsTerminalSidebarOpen(true)
+  }, [openDetailsWidget, setIsTerminalSidebarOpen])
+
+  const handleToggleTerminalProductEntry = useCallback(() => {
+    if (openDetailsWidget("terminal", { toggle: true })) return
+    setIsTerminalSidebarOpen(!isTerminalSidebarOpen)
+  }, [isTerminalSidebarOpen, openDetailsWidget, setIsTerminalSidebarOpen])
+
+  const handleOpenDiffProductEntry = useCallback(() => {
+    if (openDetailsWidget("diff")) return
+    setIsDiffSidebarOpen(true)
+  }, [openDetailsWidget, setIsDiffSidebarOpen])
+
+  const handleToggleDiffProductEntry = useCallback(() => {
+    if (openDetailsWidget("diff", { toggle: true })) return
+    setIsDiffSidebarOpen(!isDiffSidebarOpen)
+  }, [isDiffSidebarOpen, openDetailsWidget, setIsDiffSidebarOpen])
+
+  const handleOpenDiffFileProductEntry = useCallback(
+    (filePath: string) => {
+      setSelectedFilePath(filePath)
+      setFilteredDiffFiles([filePath])
+      if (openDetailsWidget("diff")) return
+      setIsDiffSidebarOpen(true)
+    },
+    [
+      openDetailsWidget,
+      setFilteredDiffFiles,
+      setIsDiffSidebarOpen,
+      setSelectedFilePath,
+    ],
+  )
 
   // Keyboard shortcut: Cmd+J to toggle terminal
   useEffect(() => {
@@ -4485,13 +4529,15 @@ export function ChatView({
       ) {
         e.preventDefault()
         e.stopPropagation()
-        setIsTerminalSidebarOpen(!isTerminalSidebarOpen)
+        handleToggleTerminalProductEntry()
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [isTerminalSidebarOpen, setIsTerminalSidebarOpen])
+  }, [
+    handleToggleTerminalProductEntry,
+  ])
 
   // Diff data cache - stored in atoms to persist across workspace switches
   const diffCacheAtom = useMemo(
@@ -6255,14 +6301,13 @@ Make sure to preserve all functionality from both branches when resolving confli
         e.preventDefault()
         e.stopPropagation()
 
-        // Toggle diff sidebar
-        setIsDiffSidebarOpen(!isDiffSidebarOpen)
+        handleToggleDiffProductEntry()
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [isDiffSidebarOpen])
+  }, [handleToggleDiffProductEntry])
 
 
   // Keyboard shortcut: Cmd + Shift + E to restore archived workspace
@@ -6476,11 +6521,13 @@ Make sure to preserve all functionality from both branches when resolving confli
                         onCreateNew={stableHandleCreateNewSubChat}
                         isMobile={false}
                         onBackToChats={onBackToChats}
-                        onOpenDiff={canOpenDiff ? () => setIsDiffSidebarOpen(true) : undefined}
+                        onOpenDiff={
+                          canOpenDiff ? handleOpenDiffProductEntry : undefined
+                        }
                         canOpenDiff={canShowDiffButton}
                         isDiffSidebarOpen={isDiffSidebarOpen}
                         diffStats={diffStats}
-                        onOpenTerminal={() => setIsTerminalSidebarOpen(true)}
+                        onOpenTerminal={handleOpenTerminalProductEntry}
                         canOpenTerminal={!!worktreePath}
                         isTerminalOpen={isTerminalSidebarOpen}
                         chatId={chatId}
@@ -6859,7 +6906,7 @@ Make sure to preserve all functionality from both branches when resolving confli
 
         {/* Plan Sidebar - shows plan files on the right (leftmost right sidebar) */}
         {/* Only show when we have an active sub-chat with a plan */}
-        {!isMobileFullscreen && activeSubChatIdForPlan && (
+        {!isUnifiedSidebarEnabled && !isMobileFullscreen && activeSubChatIdForPlan && (
           <ResizableSidebar
             isOpen={isPlanSidebarOpen && !!currentPlanPath}
             onClose={() => setIsPlanSidebarOpen(false)}
@@ -6888,7 +6935,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         {/* Diff View - hidden on mobile fullscreen and when diff is not available */}
         {/* Supports three display modes: side-peek (sidebar), center-peek (dialog), full-page */}
         {/* Wrapped in DiffStateProvider to isolate diff state and prevent ChatView re-renders */}
-        {canOpenDiff && !isMobileFullscreen && (
+        {!isUnifiedSidebarEnabled && canOpenDiff && !isMobileFullscreen && (
           <DiffStateProvider
             isDiffSidebarOpen={isDiffSidebarOpen}
             parsedFileDiffs={parsedFileDiffs}
@@ -6997,7 +7044,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         )}
 
         {/* Terminal Sidebar - shows when worktree exists (desktop only) */}
-        {worktreePath && (
+        {!isUnifiedSidebarEnabled && worktreePath && (
           <TerminalSidebar
             chatId={chatId}
             scopeKey={terminalScopeKey}
@@ -7006,6 +7053,21 @@ Make sure to preserve all functionality from both branches when resolving confli
           />
         )}
 
+        {isUnifiedSidebarEnabled &&
+          !isMobileFullscreen &&
+          worktreePath && (
+            <ExpandedWidgetSidebar
+              chatId={chatId}
+              worktreePath={worktreePath}
+              terminalScopeKey={terminalScopeKey}
+              planPath={currentPlanPath}
+              planRefetchTrigger={planEditRefetchTrigger}
+              activeSubChatId={activeSubChatIdForPlan}
+              diffStats={diffStats}
+              parsedFileDiffs={parsedFileDiffs}
+            />
+          )}
+
         {/* Unified Details Sidebar - combines all right sidebars into one (rightmost) */}
         {isUnifiedSidebarEnabled &&
           !isMobileFullscreen &&
@@ -7013,14 +7075,15 @@ Make sure to preserve all functionality from both branches when resolving confli
           <DetailsSidebar
             chatId={chatId}
             worktreePath={worktreePath}
+            terminalScopeKey={terminalScopeKey}
             planPath={currentPlanPath}
             mode={currentMode}
             onBuildPlan={handleApprovePlanFromSidebar}
             planRefetchTrigger={planEditRefetchTrigger}
             activeSubChatId={activeSubChatIdForPlan}
-            isPlanSidebarOpen={isPlanSidebarOpen && !!currentPlanPath}
-            isTerminalSidebarOpen={isTerminalSidebarOpen}
-            isDiffSidebarOpen={isDiffSidebarOpen}
+            isPlanSidebarOpen={!isUnifiedSidebarEnabled && isPlanSidebarOpen && !!currentPlanPath}
+            isTerminalSidebarOpen={!isUnifiedSidebarEnabled && isTerminalSidebarOpen}
+            isDiffSidebarOpen={!isUnifiedSidebarEnabled && isDiffSidebarOpen}
             diffDisplayMode={diffDisplayMode}
             canOpenDiff={canOpenDiff}
             setIsDiffSidebarOpen={setIsDiffSidebarOpen}
@@ -7032,24 +7095,17 @@ Make sure to preserve all functionality from both branches when resolving confli
             gitStatus={gitStatus}
             isGitStatusLoading={isGitStatusLoading}
             currentBranch={branchData?.current}
-            onExpandTerminal={() => setIsTerminalSidebarOpen(true)}
-            onExpandPlan={() => setIsPlanSidebarOpen(true)}
-            onExpandDiff={() => setIsDiffSidebarOpen(true)}
-            onFileSelect={(filePath) => {
-              // Set the selected file path
-              setSelectedFilePath(filePath)
-              // Set filtered files to just this file
-              setFilteredDiffFiles([filePath])
-              // Open the diff sidebar
-              setIsDiffSidebarOpen(true)
-            }}
+            onExpandTerminal={handleOpenTerminalProductEntry}
+            onExpandPlan={handleOpenPlanProductEntry}
+            onExpandDiff={handleOpenDiffProductEntry}
+            onFileSelect={handleOpenDiffFileProductEntry}
             onOpenFile={setFileViewerPath}
           />
         )}
       </div>
 
       {/* Terminal Bottom Panel — renders below the main row when displayMode is "bottom" */}
-      {terminalDisplayMode === "bottom" && worktreePath && !isMobileFullscreen && (
+      {terminalDisplayMode === "bottom" && !isUnifiedSidebarEnabled && worktreePath && !isMobileFullscreen && (
         <ResizableBottomPanel
           isOpen={isTerminalSidebarOpen}
           onClose={() => setIsTerminalSidebarOpen(false)}

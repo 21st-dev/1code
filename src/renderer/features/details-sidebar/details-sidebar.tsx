@@ -1,52 +1,62 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ArrowUpRight, TerminalSquare, Box, ListTodo } from "lucide-react"
-import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
+import {
+  Activity,
+  AlertCircle,
+  ArrowUpRight,
+  BarChart3,
+  Box,
+  ListTodo,
+  TerminalSquare,
+} from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
+import {
+  CollapseIcon,
+  DiffIcon,
+  ExpandIcon,
+  IconDoubleChevronRight,
+  OriginalMCPIcon,
+  PlanIcon,
+  SearchIcon,
+} from "@/components/ui/icons"
+import { Kbd } from "@/components/ui/kbd"
+import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
-  IconDoubleChevronRight,
-  PlanIcon,
-  DiffIcon,
-  OriginalMCPIcon,
-  SearchIcon,
-  ExpandIcon,
-  CollapseIcon,
-} from "@/components/ui/icons"
-import { Kbd } from "@/components/ui/kbd"
-import { cn } from "@/lib/utils"
+  agentsSettingsDialogActiveTabAtom,
+  agentsSettingsDialogOpenAtom,
+} from "@/lib/atoms"
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { useI18n } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
+import { type AgentMode, fileViewerOpenAtomFamily } from "../agents/atoms"
 import {
   detailsSidebarOpenAtom,
-  detailsSidebarWidthAtom,
   detailsSidebarTabAtom,
-  widgetVisibilityAtomFamily,
-  widgetOrderAtomFamily,
+  detailsSidebarWidthAtom,
   WIDGET_REGISTRY,
   type WidgetId,
-  type DetailsSidebarTab,
+  widgetOrderAtomFamily,
+  widgetVisibilityAtomFamily,
 } from "./atoms"
-import { WidgetSettingsPopup } from "./widget-settings-popup"
-import { InfoSection } from "./sections/info-section"
-import { TodoWidget } from "./sections/todo-widget"
-import { PlanWidget } from "./sections/plan-widget"
-import { TerminalWidget } from "./sections/terminal-widget"
 import { ChangesWidget } from "./sections/changes-widget"
-import { McpWidget } from "./sections/mcp-widget"
 import { FilesTab, type FilesTabHandle } from "./sections/files-tab"
+import { InfoSection } from "./sections/info-section"
+import { McpWidget } from "./sections/mcp-widget"
+import { PlanWidget } from "./sections/plan-widget"
+import { RunErrorWidget } from "./sections/run-error-widget"
+import { RunTraceWidget } from "./sections/run-trace-widget"
+import { RunUsageWidget } from "./sections/run-usage-widget"
+import { TerminalWidget } from "./sections/terminal-widget"
+import { TodoWidget } from "./sections/todo-widget"
 import type { ParsedDiffFile } from "./types"
-import { fileViewerOpenAtomFamily, type AgentMode } from "../agents/atoms"
-import {
-  agentsSettingsDialogOpenAtom,
-  agentsSettingsDialogActiveTabAtom,
-} from "@/lib/atoms"
-import { useI18n } from "@/lib/i18n"
+import { WidgetSettingsPopup } from "./widget-settings-popup"
 
 // ============================================================================
 // WidgetCard — extracted as a real component to avoid remounts
@@ -66,6 +76,12 @@ function getWidgetIcon(widgetId: WidgetId) {
       return DiffIcon
     case "mcp":
       return OriginalMCPIcon
+    case "trace":
+      return Activity
+    case "usage":
+      return BarChart3
+    case "error":
+      return AlertCircle
     default:
       return Box
   }
@@ -131,7 +147,9 @@ function WidgetCard({
                   <ArrowUpRight className="h-3 w-3" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="left">{t("details.expandToSidebar")}</TooltipContent>
+              <TooltipContent side="left">
+                {t("details.expandToSidebar")}
+              </TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -150,6 +168,8 @@ interface DetailsSidebarProps {
   chatId: string
   /** Worktree path for terminal */
   worktreePath: string | null
+  /** Terminal scope key shared with the full terminal renderer */
+  terminalScopeKey?: string
   /** Plan path for plan section */
   planPath: string | null
   /** Current agent mode (plan or agent) */
@@ -179,7 +199,11 @@ interface DetailsSidebarProps {
   /** Whether commit is in progress */
   isCommitting?: boolean
   /** Git sync status for push/pull actions */
-  gitStatus?: { pushCount?: number; pullCount?: number; hasUpstream?: boolean } | null
+  gitStatus?: {
+    pushCount?: number
+    pullCount?: number
+    hasUpstream?: boolean
+  } | null
   /** Whether git sync status is loading */
   isGitStatusLoading?: boolean
   /** Current branch name for header */
@@ -197,6 +221,7 @@ interface DetailsSidebarProps {
 export function DetailsSidebar({
   chatId,
   worktreePath,
+  terminalScopeKey,
   planPath,
   mode,
   onBuildPlan,
@@ -207,7 +232,6 @@ export function DetailsSidebar({
   isDiffSidebarOpen,
   diffDisplayMode,
   canOpenDiff,
-  setIsDiffSidebarOpen,
   diffStats,
   parsedFileDiffs,
   onCommit,
@@ -234,7 +258,10 @@ export function DetailsSidebar({
   const [filesAllExpanded, setFilesAllExpanded] = useState(false)
 
   // Current file open in file viewer (for tree highlight sync)
-  const fileViewerAtom = useMemo(() => fileViewerOpenAtomFamily(chatId), [chatId])
+  const fileViewerAtom = useMemo(
+    () => fileViewerOpenAtomFamily(chatId),
+    [chatId],
+  )
   const fileViewerPath = useAtomValue(fileViewerAtom)
 
   // Settings dialog atoms for MCP settings
@@ -254,10 +281,7 @@ export function DetailsSidebar({
   const visibleWidgets = useAtomValue(widgetVisibilityAtom)
 
   // Per-workspace widget order
-  const widgetOrderAtom = useMemo(
-    () => widgetOrderAtomFamily(chatId),
-    [chatId],
-  )
+  const widgetOrderAtom = useMemo(() => widgetOrderAtomFamily(chatId), [chatId])
   const widgetOrder = useAtomValue(widgetOrderAtom)
 
   // Close sidebar callback
@@ -401,7 +425,9 @@ export function DetailsSidebar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  {filesAllExpanded ? t("details.collapseAll") : t("details.expandAll")}
+                  {filesAllExpanded
+                    ? t("details.collapseAll")
+                    : t("details.expandAll")}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -409,7 +435,12 @@ export function DetailsSidebar({
         </div>
 
         {/* Tab content — both tabs always mounted to preserve state */}
-        <div className={cn("flex-1 overflow-y-auto py-2", activeTab !== "details" && "hidden")}>
+        <div
+          className={cn(
+            "flex-1 overflow-y-auto py-2",
+            activeTab !== "details" && "hidden",
+          )}
+        >
           {widgetOrder.map((widgetId) => {
             // Skip if widget is not visible
             if (!isWidgetVisible(widgetId)) return null
@@ -417,17 +448,60 @@ export function DetailsSidebar({
             switch (widgetId) {
               case "info":
                 return (
-                  <WidgetCard key="info" widgetId="info" title={t("details.workspace")}>
-                    <InfoSection
-                      chatId={chatId}
-                      worktreePath={worktreePath}
-                    />
+                  <WidgetCard
+                    key="info"
+                    widgetId="info"
+                    title={t("details.workspace")}
+                  >
+                    <InfoSection chatId={chatId} worktreePath={worktreePath} />
                   </WidgetCard>
                 )
 
               case "todo":
                 return (
                   <TodoWidget key="todo" subChatId={activeSubChatId || null} />
+                )
+
+              case "trace":
+                return (
+                  <WidgetCard
+                    key="trace"
+                    widgetId="trace"
+                    title={t("details.trace")}
+                  >
+                    <RunTraceWidget
+                      chatId={chatId}
+                      activeSubChatId={activeSubChatId}
+                    />
+                  </WidgetCard>
+                )
+
+              case "usage":
+                return (
+                  <WidgetCard
+                    key="usage"
+                    widgetId="usage"
+                    title={t("details.usage")}
+                  >
+                    <RunUsageWidget
+                      chatId={chatId}
+                      activeSubChatId={activeSubChatId}
+                    />
+                  </WidgetCard>
+                )
+
+              case "error":
+                return (
+                  <WidgetCard
+                    key="error"
+                    widgetId="error"
+                    title={t("details.error")}
+                  >
+                    <RunErrorWidget
+                      chatId={chatId}
+                      activeSubChatId={activeSubChatId}
+                    />
+                  </WidgetCard>
                 )
 
               case "plan":
@@ -453,6 +527,7 @@ export function DetailsSidebar({
                   <TerminalWidget
                     key="terminal"
                     chatId={chatId}
+                    scopeKey={terminalScopeKey}
                     cwd={worktreePath}
                     workspaceId={chatId}
                     onExpand={onExpandTerminal}
@@ -462,7 +537,11 @@ export function DetailsSidebar({
               case "diff":
                 // Show widget if we have local diff stats
                 // Hide only when Diff sidebar is open in side-peek mode
-                if (!canOpenDiff || (isDiffSidebarOpen && diffDisplayMode === "side-peek")) return null
+                if (
+                  !canOpenDiff ||
+                  (isDiffSidebarOpen && diffDisplayMode === "side-peek")
+                )
+                  return null
                 return (
                   <ChangesWidget
                     key="diff"
@@ -503,7 +582,9 @@ export function DetailsSidebar({
                             <ArrowUpRight className="h-3 w-3" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent side="left">{t("details.openSettings")}</TooltipContent>
+                        <TooltipContent side="left">
+                          {t("details.openSettings")}
+                        </TooltipContent>
                       </Tooltip>
                     }
                     hideExpand

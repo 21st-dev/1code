@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button"
 import { GitCommit } from "lucide-react"
 import { IconSpinner, DiffIcon } from "@/components/ui/icons"
-import { cn } from "@/lib/utils"
 import { getFileIconByExtension } from "@/features/agents/mentions/agents-file-mention"
 import { useI18n } from "@/lib/i18n"
 
@@ -19,14 +18,10 @@ interface ParsedDiffFile {
 }
 
 interface DiffSectionProps {
-  chatId: string
-  isDiffSidebarOpen: boolean
-  setIsDiffSidebarOpen: (open: boolean) => void
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
   parsedFileDiffs?: ParsedDiffFile[]
   onCommit?: () => void
   isCommitting?: boolean
-  isExpanded?: boolean
 }
 
 /**
@@ -47,23 +42,15 @@ function getFileDir(path: string): string {
 }
 
 export function DiffSection({
-  chatId,
-  isDiffSidebarOpen,
-  setIsDiffSidebarOpen,
   diffStats,
   parsedFileDiffs,
   onCommit,
   isCommitting = false,
-  isExpanded = false,
 }: DiffSectionProps) {
   const { t } = useI18n()
   const hasChanges = diffStats && diffStats.fileCount > 0
   const files = parsedFileDiffs || []
-
-  // Limit files shown in widget (show first 5)
-  const maxFilesToShow = 5
-  const visibleFiles = files.slice(0, maxFilesToShow)
-  const remainingCount = files.length - maxFilesToShow
+  const visibleFiles = files
 
   return (
     <div className="px-3 py-2">
@@ -98,16 +85,10 @@ export function DiffSection({
                 const isNewFile = file.isNewFile
                 const isDeletedFile = file.isDeletedFile
                 const FileIcon = getFileIconByExtension(fileName)
-
                 return (
                   <div
                     key={file.key}
-                    className={cn(
-                      "group flex items-center gap-2 font-mono text-xs",
-                      "py-1 px-1.5 rounded cursor-pointer",
-                      "hover:bg-accent/50 transition-colors",
-                    )}
-                    onClick={() => setIsDiffSidebarOpen(true)}
+                    className="group flex items-center gap-2 font-mono text-xs py-1 px-1.5 rounded w-full text-left"
                   >
                     {/* File icon */}
                     <div className="relative w-3.5 h-3.5 shrink-0">
@@ -154,16 +135,6 @@ export function DiffSection({
                   </div>
                 )
               })}
-
-              {/* Show more indicator */}
-              {remainingCount > 0 && (
-                <button
-                  className="text-xs text-muted-foreground hover:text-foreground py-1 px-1.5 w-full text-left font-mono"
-                  onClick={() => setIsDiffSidebarOpen(true)}
-                >
-                  +{remainingCount} more file{remainingCount !== 1 ? "s" : ""}...
-                </button>
-              )}
             </div>
           )}
 
@@ -186,17 +157,6 @@ export function DiffSection({
                 Commit
               </Button>
             )}
-
-            {/* View all button */}
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn("h-7 text-xs", onCommit ? "flex-1" : "w-full")}
-              onClick={() => setIsDiffSidebarOpen(true)}
-            >
-              <DiffIcon className="h-3 w-3 mr-1.5" />
-              {t("changes.viewAll")}
-            </Button>
           </div>
         </div>
       ) : (

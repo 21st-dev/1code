@@ -22,12 +22,15 @@ import { PlanSection } from "./sections/plan-section"
 import { TerminalSection } from "./sections/terminal-section"
 import { DiffSection } from "./sections/diff-section"
 import { useI18n } from "@/lib/i18n"
+import type { ParsedDiffFile } from "./types"
 
 interface ExpandedWidgetSidebarProps {
   /** Workspace/chat ID */
   chatId: string
   /** Worktree path for terminal */
   worktreePath: string | null
+  /** Terminal scope key shared with the full terminal renderer */
+  terminalScopeKey?: string
   /** Plan path for plan section */
   planPath: string | null
   /** Plan refetch trigger */
@@ -35,22 +38,19 @@ interface ExpandedWidgetSidebarProps {
   /** Active sub-chat ID for plan */
   activeSubChatId?: string | null
   /** Diff-related props */
-  canOpenDiff: boolean
-  isDiffSidebarOpen: boolean
-  setIsDiffSidebarOpen: (open: boolean) => void
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
+  parsedFileDiffs?: ParsedDiffFile[] | null
 }
 
 export function ExpandedWidgetSidebar({
   chatId,
   worktreePath,
+  terminalScopeKey,
   planPath,
   planRefetchTrigger,
   activeSubChatId,
-  canOpenDiff,
-  isDiffSidebarOpen,
-  setIsDiffSidebarOpen,
   diffStats,
+  parsedFileDiffs,
 }: ExpandedWidgetSidebarProps) {
   const { t } = useI18n()
   // Per-workspace expanded widget state
@@ -109,6 +109,7 @@ export function ExpandedWidgetSidebar({
         return worktreePath ? (
           <TerminalSection
             chatId={chatId}
+            scopeKey={terminalScopeKey}
             cwd={worktreePath}
             workspaceId={chatId}
             isExpanded
@@ -117,11 +118,8 @@ export function ExpandedWidgetSidebar({
       case "diff":
         return (
           <DiffSection
-            chatId={chatId}
-            isDiffSidebarOpen={isDiffSidebarOpen}
-            setIsDiffSidebarOpen={setIsDiffSidebarOpen}
             diffStats={diffStats}
-            isExpanded
+            parsedFileDiffs={parsedFileDiffs ?? undefined}
           />
         )
       default:

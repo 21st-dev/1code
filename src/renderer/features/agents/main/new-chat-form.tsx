@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: focused per-project runtime memory change; preserve existing import grouping.
 "use client"
 
 import { useVirtualizer } from "@tanstack/react-virtual"
@@ -30,7 +31,7 @@ import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
 import {
   justCreatedIdsAtom,
-  lastSelectedAgentIdAtom,
+  projectAgentIdAtomFamily,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexModelSourceAtom,
   lastSelectedCodexThinkingAtom,
@@ -129,7 +130,7 @@ import { buildAgentMessageParts } from "../lib/message-parts"
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
-  isCodexApiKeySupportedModel,
+  getCodexModelsForSource,
   type CodexThinkingLevel,
 } from "../lib/models"
 // import type { PlanType } from "@/lib/config/subscription-plans"
@@ -146,7 +147,9 @@ function useAvailableModels() {
   const baseModels = CLAUDE_MODELS
 
   const isOffline = ollamaStatus ? !ollamaStatus.internet.online : false
-  const hasOllama = ollamaStatus?.ollama.available && (ollamaStatus.ollama.models?.length ?? 0) > 0
+  const hasOllama =
+    ollamaStatus?.ollama.available &&
+    (ollamaStatus.ollama.models?.length ?? 0) > 0
   const ollamaModels = ollamaStatus?.ollama.models || []
   const recommendedModel = ollamaStatus?.ollama.recommendedModel
 
@@ -227,9 +230,14 @@ export function NewChatForm({
       setSelectedProject(null)
     }
   }, [selectedProject, projectsList, validatedProject, setSelectedProject])
-  const [lastSelectedAgentId, setLastSelectedAgentId] = useAtom(
-    lastSelectedAgentIdAtom,
+  // Remember the runtime per project: each project keeps its own last-used
+  // runtime, falling back to the global most-recent choice for new projects.
+  const projectAgentIdAtom = useMemo(
+    () => projectAgentIdAtomFamily(validatedProject?.id ?? ""),
+    [validatedProject?.id],
   )
+  const [lastSelectedAgentId, setLastSelectedAgentId] =
+    useAtom(projectAgentIdAtom)
   const [lastSelectedModelId, setLastSelectedModelId] = useAtom(
     lastSelectedModelIdAtom,
   )
@@ -241,7 +249,8 @@ export function NewChatForm({
   const toggleMode = useCallback(() => {
     setAgentMode(getNextMode)
   }, [])
-  const modeLabel = agentMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")
+  const modeLabel =
+    agentMode === "plan" ? t("chat.mode.plan") : t("chat.mode.agent")
   const modePlaceholder =
     agentMode === "plan"
       ? t("chat.placeholder.planMode")
@@ -251,8 +260,7 @@ export function NewChatForm({
   const [worktreeCreateState, setWorktreeCreateState] = useState<
     "idle" | "creating"
   >("idle")
-  const { data: providerConfigData } =
-    trpc.claudeProviderConfig.get.useQuery()
+  const { data: providerConfigData } = trpc.claudeProviderConfig.get.useQuery()
   const { data: providerProfilesData } =
     trpc.providerProfiles.listProfiles.useQuery(undefined, {
       staleTime: 30_000,
@@ -266,14 +274,13 @@ export function NewChatForm({
   const selectedClaudeProfileId = parseProviderProfileSource(
     selectedClaudeModelSource,
   )
-  const selectedClaudeProviderProfile =
-    selectedClaudeProfileId
-      ? providerProfiles.find(
-          (profile) =>
-            profile.id === selectedClaudeProfileId &&
-            profile.targetRuntimes.includes("claude"),
-        )
-      : undefined
+  const selectedClaudeProviderProfile = selectedClaudeProfileId
+    ? providerProfiles.find(
+        (profile) =>
+          profile.id === selectedClaudeProfileId &&
+          profile.targetRuntimes.includes("claude"),
+      )
+    : undefined
   const selectedClaudeProfileIsPending =
     Boolean(selectedClaudeProfileId) && !providerProfilesData
   const effectiveClaudeModelSource =
@@ -289,7 +296,9 @@ export function NewChatForm({
           ? "claude-oauth"
           : selectedClaudeModelSource
   // Connection status for providers
-  const anthropicOnboardingCompleted = useAtomValue(anthropicOnboardingCompletedAtom)
+  const anthropicOnboardingCompleted = useAtomValue(
+    anthropicOnboardingCompletedAtom,
+  )
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
   const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
@@ -323,7 +332,12 @@ export function NewChatForm({
   // Check if project has worktree config
   const { data: worktreeConfigData } = trpc.worktreeConfig.get.useQuery(
     { projectId: validatedProject?.id ?? "" },
-    { enabled: !!validatedProject?.id && workMode === "worktree" && !worktreeBannerDismissed },
+    {
+      enabled:
+        !!validatedProject?.id &&
+        workMode === "worktree" &&
+        !worktreeBannerDismissed,
+    },
   )
 
   const showWorktreeBanner =
@@ -347,7 +361,7 @@ export function NewChatForm({
   }
   // Parse owner/repo from GitHub URL
   const parseGitHubUrl = (url: string) => {
-    const match = url.match(/(?:github\.com\/)?([^\/]+)\/([^\/\s#?]+)/)
+    const match = url.match(/(?:github\.com\/)?([^/]+)\/([^/\s#?]+)/)
     if (!match) return null
     return `${match[1]}/${match[2].replace(/\.git$/, "")}`
   }
@@ -374,7 +388,9 @@ export function NewChatForm({
 
   // Get available models (with offline support)
   const availableModels = useAvailableModels()
-  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(selectedOllamaModelAtom)
+  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(
+    selectedOllamaModelAtom,
+  )
   const [lastSelectedCodexModelId, setLastSelectedCodexModelId] = useAtom(
     lastSelectedCodexModelIdAtom,
   )
@@ -389,21 +405,26 @@ export function NewChatForm({
 
   const [selectedModel, setSelectedModel] = useState(
     () =>
-      availableModels.models.find((m) => m.id === lastSelectedModelId) || availableModels.models[0],
+      availableModels.models.find((m) => m.id === lastSelectedModelId) ||
+      availableModels.models[0],
   )
 
   // Sync selectedModel when atom value changes (e.g., after localStorage hydration)
   useEffect(() => {
-    const model = availableModels.models.find((m) => m.id === lastSelectedModelId)
+    const model = availableModels.models.find(
+      (m) => m.id === lastSelectedModelId,
+    )
     if (model && model.id !== selectedModel.id) {
       setSelectedModel(model)
     }
   }, [lastSelectedModelId])
 
-  const { data: codexApiKeyStatus } =
-    trpc.codex.getCodexApiKeyStatus.useQuery(undefined, {
+  const { data: codexApiKeyStatus } = trpc.codex.getCodexApiKeyStatus.useQuery(
+    undefined,
+    {
       staleTime: 30_000,
-    })
+    },
+  )
   const hasAppCodexApiKey = Boolean(codexApiKeyStatus?.hasApiKey)
   const hiddenModels = useAtomValue(hiddenModelsAtom)
   const shouldUseCodexApiKeyModels =
@@ -412,20 +433,24 @@ export function NewChatForm({
       codexOnboardingAuthMethod === "api_key" &&
       hasAppCodexApiKey)
   const codexUiModels = useMemo(
-    () => {
-      let models = shouldUseCodexApiKeyModels
-        ? CODEX_MODELS.filter((model) => isCodexApiKeySupportedModel(model.id))
-        : CODEX_MODELS
-      return models.filter((model) => !hiddenModels.includes(model.id))
-    },
-    [hiddenModels, shouldUseCodexApiKeyModels],
+    () => CODEX_MODELS.filter((model) => !hiddenModels.includes(model.id)),
+    [hiddenModels],
+  )
+  const compatibleCodexModels = useMemo(
+    () =>
+      shouldUseCodexApiKeyModels
+        ? getCodexModelsForSource(codexUiModels, "openai-api-key")
+        : codexUiModels,
+    [codexUiModels, shouldUseCodexApiKeyModels],
   )
   const selectedCodexModel = useMemo(
     () =>
-      codexUiModels.find((model) => model.id === lastSelectedCodexModelId) ||
-      codexUiModels[0] ||
+      compatibleCodexModels.find(
+        (model) => model.id === lastSelectedCodexModelId,
+      ) ||
+      compatibleCodexModels[0] ||
       CODEX_MODELS[0]!,
-    [codexUiModels, lastSelectedCodexModelId],
+    [compatibleCodexModels, lastSelectedCodexModelId],
   )
 
   const selectedCodexThinking = useMemo<CodexThinkingLevel>(() => {
@@ -446,14 +471,13 @@ export function NewChatForm({
   const selectedCodexProfileId = parseProviderProfileSource(
     lastSelectedCodexModelSource,
   )
-  const selectedCodexProviderProfile =
-    selectedCodexProfileId
-      ? providerProfiles.find(
-          (profile) =>
-            profile.id === selectedCodexProfileId &&
-            profile.targetRuntimes.includes("codex"),
-        )
-      : undefined
+  const selectedCodexProviderProfile = selectedCodexProfileId
+    ? providerProfiles.find(
+        (profile) =>
+          profile.id === selectedCodexProfileId &&
+          profile.targetRuntimes.includes("codex"),
+      )
+    : undefined
   const selectedCodexProfileIsPending =
     Boolean(selectedCodexProfileId) && !providerProfilesData
 
@@ -491,7 +515,9 @@ export function NewChatForm({
 
   const selectedChatModel = useMemo(() => {
     if (selectedAgent.id === "codex") {
-      const selectedProfileId = parseProviderProfileSource(lastSelectedCodexModelSource)
+      const selectedProfileId = parseProviderProfileSource(
+        lastSelectedCodexModelSource,
+      )
       const selectedProfile = selectedProfileId
         ? providerProfiles.find((profile) => profile.id === selectedProfileId)
         : undefined
@@ -520,20 +546,22 @@ export function NewChatForm({
   ])
 
   // Determine current Ollama model (selected or recommended)
-  const currentOllamaModel = selectedOllamaModel || availableModels.recommendedModel || availableModels.ollamaModels[0]
+  const currentOllamaModel =
+    selectedOllamaModel ||
+    availableModels.recommendedModel ||
+    availableModels.ollamaModels[0]
   const claudeAgent =
     enabledAgents.find((agent) => agent.id === "claude-code") || fallbackAgent
   const selectedModelLabel = useMemo(() => {
     if (selectedAgent.id === "codex") {
-      const selectedProfileId = parseProviderProfileSource(lastSelectedCodexModelSource)
+      const selectedProfileId = parseProviderProfileSource(
+        lastSelectedCodexModelSource,
+      )
       const selectedProfile = selectedProfileId
         ? providerProfiles.find((profile) => profile.id === selectedProfileId)
         : undefined
       if (selectedProfile) {
         return `${selectedProfile.name} · ${selectedProfile.defaultModel}`
-      }
-      if (lastSelectedCodexModelSource === "openai-api-key") {
-        return `${t("agent.model.codexApiKey")} · ${selectedCodexModel.name}`
       }
       return selectedCodexModel.name
     }
@@ -557,7 +585,6 @@ export function NewChatForm({
     return `${selectedModel.name} ${selectedModel.version}`
   }, [
     selectedAgent.id,
-    lastSelectedCodexModelSource,
     providerProfiles,
     selectedCodexModel.name,
     availableModels.isOffline,
@@ -653,7 +680,8 @@ export function NewChatForm({
   } = useAgentsFileUpload({ subChatId: tempAttachmentScopeRef.current })
 
   const readyImageCount = images.filter(
-    (image) => !image.isLoading && !image.error && (image.localRef || image.url),
+    (image) =>
+      !image.isLoading && !image.error && (image.localRef || image.url),
   ).length
   const imageAttachmentCapability = useMemo(
     () =>
@@ -743,8 +771,10 @@ export function NewChatForm({
   }, [])
 
   const transcribeVoiceAudio = useCallback(
-    (input: { audio: string; format: "webm" | "mp3" | "m4a" | "wav" | "ogg" }) =>
-      transcribeMutation.mutateAsync(input),
+    (input: {
+      audio: string
+      format: "webm" | "mp3" | "m4a" | "wav" | "ogg"
+    }) => transcribeMutation.mutateAsync(input),
     [transcribeMutation],
   )
 
@@ -763,7 +793,9 @@ export function NewChatForm({
     onNoSpeech: () => toast.info(t("agent.voice.noSpeechDetected")),
     onError: (err, phase) => {
       if (phase === "start") {
-        toast.error(err instanceof Error ? err.message : "Failed to start recording")
+        toast.error(
+          err instanceof Error ? err.message : "Failed to start recording",
+        )
         return
       }
       toast.error(t("agent.voice.transcriptionFailed"))
@@ -915,17 +947,22 @@ export function NewChatForm({
     ) {
       // Find the default branch in the branches list to get its type
       // Prefer local over remote if both exist
-      const defaultBranchObj = branches.find(
-        (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault && b.type === "local",
-      ) || branches.find(
-        (b) => b.name === branchesQuery.data.defaultBranch && b.isDefault && b.type === "remote",
-      )
+      const defaultBranchObj =
+        branches.find(
+          (b) =>
+            b.name === branchesQuery.data.defaultBranch &&
+            b.isDefault &&
+            b.type === "local",
+        ) ||
+        branches.find(
+          (b) =>
+            b.name === branchesQuery.data.defaultBranch &&
+            b.isDefault &&
+            b.type === "remote",
+        )
       // Fallback to "local" if branch not found in list (shouldn't happen but prevents empty selector)
       const branchType = defaultBranchObj?.type || "local"
-      setSelectedBranch(
-        branchesQuery.data.defaultBranch,
-        branchType,
-      )
+      setSelectedBranch(branchesQuery.data.defaultBranch, branchType)
     }
   }, [
     branchesQuery.data?.defaultBranch,
@@ -1007,13 +1044,21 @@ export function NewChatForm({
       const draftImages =
         draft.images
           ?.map(fromDraftImage)
-          .filter((img): img is NonNullable<ReturnType<typeof fromDraftImage>> => img !== null) ?? []
+          .filter(
+            (img): img is NonNullable<ReturnType<typeof fromDraftImage>> =>
+              img !== null,
+          ) ?? []
       setImagesFromDraft(draftImages)
 
       const draftPastedTexts =
         draft.pastedTexts
           ?.map(fromDraftPastedText)
-          .filter((text): text is NonNullable<ReturnType<typeof fromDraftPastedText>> => text !== null) ?? []
+          .filter(
+            (
+              text,
+            ): text is NonNullable<ReturnType<typeof fromDraftPastedText>> =>
+              text !== null,
+          ) ?? []
       setPastedTextsFromDraft(draftPastedTexts)
     }
   }, [
@@ -1136,11 +1181,15 @@ export function NewChatForm({
     // Allow send if there's text, images, files, or pasted text files
     const hasText = message.trim().length > 0
     const hasImages =
-      images.filter((img) => !img.isLoading && (img.localRef || img.url)).length > 0
+      images.filter((img) => !img.isLoading && (img.localRef || img.url))
+        .length > 0
     const hasFiles = files.filter((f) => !f.isLoading).length > 0
     const hasPastedTexts = pastedTexts.length > 0
 
-    if ((!hasText && !hasImages && !hasFiles && !hasPastedTexts) || !projectForChat) {
+    if (
+      (!hasText && !hasImages && !hasFiles && !hasPastedTexts) ||
+      !projectForChat
+    ) {
       return
     }
     if (imageAttachmentBlocked) {
@@ -1152,7 +1201,7 @@ export function NewChatForm({
 
     message = await expandCustomSlashCommand(message, projectForChat.path)
 
-    let finalMessage = message.trim()
+    const finalMessage = message.trim()
     const parts = buildAgentMessageParts({
       text: finalMessage,
       images,
@@ -1177,8 +1226,7 @@ export function NewChatForm({
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
         workMode === "worktree" ? selectedBranch || undefined : undefined,
-      branchType:
-        workMode === "worktree" ? selectedBranchType : undefined,
+      branchType: workMode === "worktree" ? selectedBranchType : undefined,
       useWorktree: workMode === "worktree",
       mode: agentMode,
     })
@@ -1236,10 +1284,13 @@ export function NewChatForm({
     setShowingToolsList(false)
   }, [])
 
-  const handleRecommendationSelect = useCallback((mention: FileMentionOption) => {
-    editorRef.current?.insertMention(mention)
-    setDraftText(editorRef.current?.getValue() || "")
-  }, [])
+  const handleRecommendationSelect = useCallback(
+    (mention: FileMentionOption) => {
+      editorRef.current?.insertMention(mention)
+      setDraftText(editorRef.current?.getValue() || "")
+    },
+    [],
+  )
 
   // Save draft to localStorage when content changes
   const handleContentChange = useCallback(
@@ -1247,10 +1298,12 @@ export function NewChatForm({
       setHasContent(hasContent)
       const text = editorRef.current?.getValue() || ""
       setDraftText(text)
-      const draftImages =
-        images
-          .map(toDraftImage)
-          .filter((img): img is NonNullable<ReturnType<typeof toDraftImage>> => img !== null)
+      const draftImages = images
+        .map(toDraftImage)
+        .filter(
+          (img): img is NonNullable<ReturnType<typeof toDraftImage>> =>
+            img !== null,
+        )
       const draftPastedTexts = pastedTexts.map(toDraftPastedText)
       const snapshot = JSON.stringify({
         text,
@@ -1267,7 +1320,9 @@ export function NewChatForm({
       const globalDrafts = loadGlobalDrafts()
 
       if (
-        (text.trim() || draftImages.length > 0 || draftPastedTexts.length > 0) &&
+        (text.trim() ||
+          draftImages.length > 0 ||
+          draftPastedTexts.length > 0) &&
         validatedProject
       ) {
         // If no current draft ID, create a new one
@@ -1390,7 +1445,8 @@ export function NewChatForm({
 
   // Paste handler for images, plain text, and large text (saved as files)
   const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => handlePasteEvent(e, handleAddAttachments, addPastedText),
+    (e: React.ClipboardEvent) =>
+      handlePasteEvent(e, handleAddAttachments, addPastedText),
     [handleAddAttachments, addPastedText],
   )
 
@@ -1413,30 +1469,105 @@ export function NewChatForm({
   // Text file extensions that should have content read and attached
   const TEXT_FILE_EXTENSIONS = new Set([
     // Code
-    ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-    ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".cpp", ".h", ".hpp",
-    ".cs", ".php", ".lua", ".r", ".m", ".mm", ".scala", ".clj", ".ex", ".exs",
-    ".hs", ".elm", ".erl", ".fs", ".fsx", ".ml", ".v", ".vhdl", ".zig",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
+    ".py",
+    ".rb",
+    ".go",
+    ".rs",
+    ".java",
+    ".kt",
+    ".swift",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".php",
+    ".lua",
+    ".r",
+    ".m",
+    ".mm",
+    ".scala",
+    ".clj",
+    ".ex",
+    ".exs",
+    ".hs",
+    ".elm",
+    ".erl",
+    ".fs",
+    ".fsx",
+    ".ml",
+    ".v",
+    ".vhdl",
+    ".zig",
     // Config/Data
-    ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".env", ".conf", ".cfg",
-    ".properties", ".plist",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".xml",
+    ".ini",
+    ".env",
+    ".conf",
+    ".cfg",
+    ".properties",
+    ".plist",
     // Web
-    ".html", ".htm", ".css", ".scss", ".sass", ".less", ".vue", ".svelte", ".astro",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+    ".vue",
+    ".svelte",
+    ".astro",
     // Documentation
-    ".md", ".mdx", ".rst", ".txt", ".text",
+    ".md",
+    ".mdx",
+    ".rst",
+    ".txt",
+    ".text",
     // Graphics (text-based)
     ".svg",
     // Shell/Scripts
-    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".ps1",
+    ".bat",
+    ".cmd",
     // Other
-    ".sql", ".graphql", ".gql", ".prisma", ".dockerfile", ".makefile",
-    ".gitignore", ".gitattributes", ".editorconfig", ".eslintrc", ".prettierrc",
+    ".sql",
+    ".graphql",
+    ".gql",
+    ".prisma",
+    ".dockerfile",
+    ".makefile",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    ".eslintrc",
+    ".prettierrc",
   ])
 
   const MAX_FILE_SIZE_FOR_CONTENT = 100 * 1024 // 100KB - files larger than this only get path mention
 
   // Image extensions that should be handled as attachments (base64)
-  const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"])
+  const IMAGE_EXTENSIONS = new Set([
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+  ])
 
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
@@ -1449,7 +1580,9 @@ export function NewChatForm({
       const otherFiles: File[] = []
 
       for (const file of droppedFiles) {
-        const ext = file.name.includes(".") ? "." + file.name.split(".").pop()?.toLowerCase() : ""
+        const ext = file.name.includes(".")
+          ? "." + file.name.split(".").pop()?.toLowerCase()
+          : ""
         if (IMAGE_EXTENSIONS.has(ext)) {
           imageFiles.push(file)
         } else {
@@ -1465,7 +1598,9 @@ export function NewChatForm({
       // Process other files - for text files, read content and add as file mention
       for (const file of otherFiles) {
         // Get file path using Electron's webUtils API (more reliable than file.path)
-        const filePath: string | undefined = window.webUtils?.getPathForFile?.(file) || (file as File & { path?: string }).path
+        const filePath: string | undefined =
+          window.webUtils?.getPathForFile?.(file) ||
+          (file as File & { path?: string }).path
 
         let mentionId: string
         let mentionPath: string
@@ -1493,7 +1628,9 @@ export function NewChatForm({
         }
 
         const fileName = file.name
-        const ext = fileName.includes(".") ? "." + fileName.split(".").pop()?.toLowerCase() : ""
+        const ext = fileName.includes(".")
+          ? "." + fileName.split(".").pop()?.toLowerCase()
+          : ""
         // Files without extension are likely directories or special files - skip content reading
         const hasExtension = ext !== ""
         const isTextFile = hasExtension && TEXT_FILE_EXTENSIONS.has(ext)
@@ -1517,7 +1654,10 @@ export function NewChatForm({
             fileContentsRef.current.set(mentionId, content)
           } catch (err) {
             // If reading fails, chip is still there - agent can try to read via path
-            console.error(`[handleDrop] Failed to read file content ${filePath}:`, err)
+            console.error(
+              `[handleDrop] Failed to read file content ${filePath}:`,
+              err,
+            )
           }
         } else {
           // For binary files, large files - add as mention only
@@ -1659,7 +1799,9 @@ export function NewChatForm({
                 disabled={openFolder.isPending}
                 className="h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {openFolder.isPending ? t("chat.opening") : t("chat.selectRepo")}
+                {openFolder.isPending
+                  ? t("chat.opening")
+                  : t("chat.selectRepo")}
               </button>
             </div>
           ) : (
@@ -1833,7 +1975,8 @@ export function NewChatForm({
                                 clearTimeout(tooltipTimeoutRef.current)
                                 tooltipTimeoutRef.current = null
                               }
-                              const rect = e.currentTarget.getBoundingClientRect()
+                              const rect =
+                                e.currentTarget.getBoundingClientRect()
                               const showTooltip = () => {
                                 setModeTooltip({
                                   visible: true,
@@ -1901,12 +2044,18 @@ export function NewChatForm({
                         <AgentModelSelector
                           open={isModelDropdownOpen}
                           onOpenChange={setIsModelDropdownOpen}
-                          selectedAgentId={selectedAgent.id as "claude-code" | "codex"}
+                          selectedAgentId={
+                            selectedAgent.id as "claude-code" | "codex"
+                          }
                           onSelectedAgentIdChange={(provider) => {
                             if (provider === "claude-code") {
                               setSelectedAgent(claudeAgent)
                             } else {
-                              setSelectedAgent(enabledAgents.find((agent) => agent.id === "codex") || fallbackAgent)
+                              setSelectedAgent(
+                                enabledAgents.find(
+                                  (agent) => agent.id === "codex",
+                                ) || fallbackAgent,
+                              )
                             }
                             setLastSelectedAgentId(provider)
                           }}
@@ -1918,12 +2067,15 @@ export function NewChatForm({
                             setSettingsDialogOpen(true)
                           }}
                           claude={{
-                            models: availableModels.models.filter((m) => !hiddenModels.includes(m.id)),
+                            models: availableModels.models.filter(
+                              (m) => !hiddenModels.includes(m.id),
+                            ),
                             selectedModelId: selectedModel?.id,
                             onSelectModel: (modelId) => {
                               const model =
-                                availableModels.models.find((m) => m.id === modelId) ||
-                                availableModels.models[0]
+                                availableModels.models.find(
+                                  (m) => m.id === modelId,
+                                ) || availableModels.models[0]
                               if (!model) return
                               setSelectedModel(model)
                               setLastSelectedModelId(model.id)
@@ -1931,10 +2083,13 @@ export function NewChatForm({
                             selectedModelSource: effectiveClaudeModelSource,
                             onSelectModelSource: setSelectedClaudeModelSource,
                             hasCustomModelConfig: hasCustomClaudeConfig,
-                            isOffline: availableModels.isOffline && availableModels.hasOllama,
+                            isOffline:
+                              availableModels.isOffline &&
+                              availableModels.hasOllama,
                             ollamaModels: availableModels.ollamaModels,
                             selectedOllamaModel: currentOllamaModel,
-                            recommendedOllamaModel: availableModels.recommendedModel,
+                            recommendedOllamaModel:
+                              availableModels.recommendedModel,
                             onSelectOllamaModel: setSelectedOllamaModel,
                             isConnected: isClaudeConnected,
                             thinkingEnabled,
@@ -1944,21 +2099,24 @@ export function NewChatForm({
                             models: codexUiModels,
                             selectedModelId: selectedCodexModel.id,
                             onSelectModel: (modelId) => {
-                              const model = codexUiModels.find((item) => item.id === modelId)
+                              const model = codexUiModels.find(
+                                (item) => item.id === modelId,
+                              )
                               if (!model) return
                               const nextThinking = model.thinkings.includes(
                                 lastSelectedCodexThinking as CodexThinkingLevel,
                               )
                                 ? (lastSelectedCodexThinking as CodexThinkingLevel)
-                                : (model.thinkings.includes("high")
+                                : model.thinkings.includes("high")
                                   ? "high"
-                                  : model.thinkings[0]!)
+                                  : model.thinkings[0]!
 
                               setLastSelectedCodexModelId(model.id)
                               setLastSelectedCodexThinking(nextThinking)
                             },
                             selectedModelSource: lastSelectedCodexModelSource,
-                            onSelectModelSource: setLastSelectedCodexModelSource,
+                            onSelectModelSource:
+                              setLastSelectedCodexModelSource,
                             selectedThinking: selectedCodexThinking,
                             onSelectThinking: setLastSelectedCodexThinking,
                             isConnected: codexOnboardingCompleted,
@@ -1982,7 +2140,10 @@ export function NewChatForm({
                       />
                       {/* Voice wave indicator or Attachment button */}
                       {isVoiceRecording ? (
-                        <VoiceWaveIndicator isRecording={isVoiceRecording} audioLevel={voiceAudioLevel} />
+                        <VoiceWaveIndicator
+                          isRecording={isVoiceRecording}
+                          audioLevel={voiceAudioLevel}
+                        />
                       ) : (
                         <Button
                           variant="ghost"
@@ -2125,12 +2286,18 @@ export function NewChatForm({
                                   const isSelected =
                                     (selectedBranch === branch.name &&
                                       selectedBranchType === branch.type) ||
-                                    (!selectedBranch && branch.isDefault && branch.type === "local")
+                                    (!selectedBranch &&
+                                      branch.isDefault &&
+                                      branch.type === "local")
                                   return (
                                     <button
+                                      type="button"
                                       key={`${branch.type}-${branch.name}`}
                                       onClick={() => {
-                                        setSelectedBranch(branch.name, branch.type)
+                                        setSelectedBranch(
+                                          branch.name,
+                                          branch.type,
+                                        )
                                         setBranchPopoverOpen(false)
                                         setBranchSearch("")
                                       }}
@@ -2200,15 +2367,16 @@ export function NewChatForm({
                     />
                   )}
                 </div>
-                {worktreeCreateState === "creating" && createChatMutation.isPending && (
-                  <div
-                    className="mt-2 ml-[5px] flex items-center gap-2 text-xs text-muted-foreground"
-                    role="status"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                    <span>{t("chat.creatingWorktree")}</span>
-                  </div>
-                )}
+                {worktreeCreateState === "creating" &&
+                  createChatMutation.isPending && (
+                    <div
+                      className="mt-2 ml-[5px] flex items-center gap-2 text-xs text-muted-foreground"
+                      role="status"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                      <span>{t("chat.creatingWorktree")}</span>
+                    </div>
+                  )}
 
                 {/* Worktree config banner - moved to corner banner below */}
 
@@ -2274,9 +2442,7 @@ export function NewChatForm({
                     projectId: projectForChat.id,
                     name: t("chat.worktreeSetupBanner.chatName"),
                     model: selectedChatModel,
-                    initialMessageParts: [
-                      { type: "text", text: prompt },
-                    ],
+                    initialMessageParts: [{ type: "text", text: prompt }],
                     useWorktree: false,
                     mode: "agent",
                   })
