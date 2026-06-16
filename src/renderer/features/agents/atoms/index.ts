@@ -115,6 +115,37 @@ export const lastSelectedAgentIdAtom = atomWithStorage<string>(
   { getOnInit: true },
 )
 
+// Storage for per-project agent/runtime selection.
+// Falls back to lastSelectedAgentIdAtom (the global "most recent" choice) when a
+// project has no explicit runtime yet, so a brand-new project inherits whatever
+// runtime the user picked last, while each project then remembers its own.
+const projectAgentIdsStorageAtom = atomWithStorage<Record<string, string>>(
+  "agents:projectAgentIds",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+export const projectAgentIdAtomFamily = atomFamily((projectId: string) =>
+  atom(
+    (get) => {
+      if (!projectId) return get(lastSelectedAgentIdAtom)
+      return (
+        get(projectAgentIdsStorageAtom)[projectId] ??
+        get(lastSelectedAgentIdAtom)
+      )
+    },
+    (get, set, newAgentId: string) => {
+      // Always update the global "most recent" so new projects inherit it.
+      set(lastSelectedAgentIdAtom, newAgentId)
+      if (!projectId) return
+      const current = get(projectAgentIdsStorageAtom)
+      if (current[projectId] === newAgentId) return
+      set(projectAgentIdsStorageAtom, { ...current, [projectId]: newAgentId })
+    },
+  ),
+)
+
 export const lastSelectedModelIdAtom = atomWithStorage<string>(
   "agents:lastSelectedModelId",
   "fable",

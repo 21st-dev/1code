@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: focused per-project runtime memory change; preserve existing import grouping.
 "use client"
 
 import { useVirtualizer } from "@tanstack/react-virtual"
@@ -30,7 +31,7 @@ import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
 import {
   justCreatedIdsAtom,
-  lastSelectedAgentIdAtom,
+  projectAgentIdAtomFamily,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexModelSourceAtom,
   lastSelectedCodexThinkingAtom,
@@ -227,9 +228,14 @@ export function NewChatForm({
       setSelectedProject(null)
     }
   }, [selectedProject, projectsList, validatedProject, setSelectedProject])
-  const [lastSelectedAgentId, setLastSelectedAgentId] = useAtom(
-    lastSelectedAgentIdAtom,
+  // Remember the runtime per project: each project keeps its own last-used
+  // runtime, falling back to the global most-recent choice for new projects.
+  const projectAgentIdAtom = useMemo(
+    () => projectAgentIdAtomFamily(validatedProject?.id ?? ""),
+    [validatedProject?.id],
   )
+  const [lastSelectedAgentId, setLastSelectedAgentId] =
+    useAtom(projectAgentIdAtom)
   const [lastSelectedModelId, setLastSelectedModelId] = useAtom(
     lastSelectedModelIdAtom,
   )
