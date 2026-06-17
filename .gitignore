@@ -25,7 +25,9 @@ npm-debug.log*
 .tmp-app-server-smoke/
 .tmp-app-server-p3/
 .tmp-app-server-dogfood/
+.tmp-quick-chat-smoke/
 smoke-codex-app-server-desktop.cjs
+smoke-quick-chat-project-sidebar.cjs
 
 # Environment
 .env

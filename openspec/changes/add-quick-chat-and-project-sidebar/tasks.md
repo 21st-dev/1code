@@ -59,7 +59,7 @@
 - [x] 8.3 Add "永久删除" per row and "清空归档" to `archive-popover.tsx`.
 
 ## 9. Uploads, output, and repo-surface exclusions
-- [ ] 9.1 Confirm quick chat can read uploaded attachments and rewrite their content in its reply.
+- [x] 9.1 Confirm quick chat can read uploaded attachments and rewrite their content in its reply.
 - [x] 9.2 Add a save/download action for assistant output via a main-process save dialog chosen by the user.
 - [x] 9.3 Exclude `projectId = null` chats from workbench, kanban, terminal, diff, PR, worktree, and repo MCP surfaces; keep them in search.
 
@@ -68,4 +68,4 @@
 - [x] 10.2 Run `openspec validate add-quick-chat-and-project-sidebar --strict --no-interactive`.
 - [x] 10.3 Run targeted tests for preflight, permission policy, Claude tool policy, Codex ACP/app-server denial, CRUD null project, attachProject, sidebar order, and repo-surface exclusions.
 - [x] 10.4 Run `bun run lint`, `bun run ts:check`, and targeted tests.
-- [ ] 10.5 Manual smoke: create Claude quick chat -> verify web-only tools; create Codex ACP/app-server quick chat -> verify file/shell/MCP requests fail closed before execution; upload a file -> rewrite + download; attach a folder -> fresh project-backed session with full tools; sidebar groups by project with quick chat on top; delete a quick chat one-click; archive vs delete a code workspace.
+- [x] 10.5 Manual smoke: create Claude quick chat -> verify web-only tools; create Codex ACP/app-server quick chat -> verify file/shell/MCP requests fail closed before execution; upload a file -> rewrite + download; attach a folder -> fresh project-backed session with full tools; sidebar groups by project with quick chat on top; delete a quick chat one-click; archive vs delete a code workspace.
