@@ -51,7 +51,7 @@
 - [x] 7.4 Add `collapsedProjects` state persisted to `localStorage`; add a per-project "+" and a "项目" section header with "+ 打开仓库".
 - [x] 7.5 Add per-project "展开显示" beyond N rows.
 - [x] 7.6 Rebuild flat `filteredChats` to match visual order (quick chat -> pinned -> groups) so keyboard up/down navigation stays consistent.
-- [ ] 7.7 Verify the layout works in mobile fullscreen.
+- [x] 7.7 Verify the layout works in mobile fullscreen.
 
 ## 8. Delete and archive
 - [x] 8.1 Wire `chats.delete` into the UI; for quick chats make delete the primary one-click action.
