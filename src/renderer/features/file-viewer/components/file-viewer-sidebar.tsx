@@ -1,59 +1,56 @@
-import { Suspense, useCallback, useEffect } from "react"
-import { useAtom } from "jotai"
-import { useAtomValue } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import {
-  Loader2,
   AlertCircle,
-  FileWarning,
-  MoreHorizontal,
-  WrapText,
-  Map,
   Check,
+  FileWarning,
+  Loader2,
+  Map as MapIcon,
+  MoreHorizontal,
+  PanelRightOpen,
+  WrapText,
   X,
 } from "lucide-react"
-import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
+import { Suspense, useCallback, useEffect } from "react"
+import { Button } from "@/components/ui/button"
 import {
-  IconCloseSidebarRight,
-  IconSidePeek,
-  IconCenterPeek,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { ViewerErrorBoundary } from "@/components/ui/error-boundary"
+import {
   IconFullPage,
   IconLineNumbers,
 } from "@/components/ui/icons"
 import { Kbd } from "@/components/ui/kbd"
-import { Button } from "@/components/ui/button"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu"
-import { ViewerErrorBoundary } from "@/components/ui/error-boundary"
-import { trpc } from "@/lib/trpc"
 import { preferredEditorAtom } from "@/lib/atoms"
-import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { APP_META } from "../../../../shared/external-apps"
-import { CopyButton } from "../../agents/ui/message-action-buttons"
 import { EDITOR_ICONS } from "@/lib/editor-icons"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { type TranslationKey, useI18n } from "@/lib/i18n"
+import { trpc } from "@/lib/trpc"
+import { APP_META } from "../../../../shared/external-apps"
 import {
-  fileViewerWordWrapAtom,
-  fileViewerMinimapAtom,
-  fileViewerLineNumbersAtom,
-  fileViewerDisplayModeAtom,
   type FileViewerDisplayMode,
+  fileViewerDisplayModeAtom,
+  fileViewerLineNumbersAtom,
+  fileViewerMinimapAtom,
+  fileViewerWordWrapAtom,
 } from "../../agents/atoms"
-import { useFileContent, getErrorMessageKey } from "../hooks/use-file-content"
-import { getMonacoLanguage, getFileViewerType } from "../utils/language-map"
+import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
+import { CopyButton } from "../../agents/ui/message-action-buttons"
+import { getErrorMessageKey, useFileContent } from "../hooks/use-file-content"
 import { getFileName } from "../utils/file-utils"
+import { getFileViewerType, getMonacoLanguage } from "../utils/language-map"
+import { shouldUsePlainCodePreview } from "./code-viewer-limits"
 import { ImageViewer } from "./image-viewer"
 import { MarkdownViewer } from "./markdown-viewer"
-import { useI18n, type TranslationKey } from "@/lib/i18n"
-import { shouldUsePlainCodePreview } from "./code-viewer-limits"
 import {
   LazyMonacoCodeViewer,
   scheduleMonacoCodeViewerPreload,
@@ -72,8 +69,7 @@ function FileIcon({ filePath }: { filePath: string }) {
 }
 
 const FILE_VIEWER_MODES = [
-  { value: "side-peek" as const, labelKey: "changes.diff.sidebar" as TranslationKey, Icon: IconSidePeek },
-  { value: "center-peek" as const, labelKey: "changes.diff.dialog" as TranslationKey, Icon: IconCenterPeek },
+  { value: "details-expanded" as const, labelKey: "fileViewer.detailsExpanded" as TranslationKey, Icon: PanelRightOpen },
   { value: "full-page" as const, labelKey: "changes.diff.fullscreen" as TranslationKey, Icon: IconFullPage },
 ]
 
@@ -163,11 +159,7 @@ function UnsupportedViewer({
             className="h-6 w-6 p-0 flex-shrink-0 hover:bg-foreground/10"
             onClick={onClose}
           >
-            {displayMode === "side-peek" ? (
-              <IconCloseSidebarRight className="size-4 text-muted-foreground" />
-            ) : (
-              <X className="size-4 text-muted-foreground" />
-            )}
+            <X className="size-4 text-muted-foreground" />
           </Button>
           <FileViewerModeSwitcher
             mode={displayMode}
@@ -231,11 +223,7 @@ function CodeViewerHeader({
           className="h-6 w-6 p-0 flex-shrink-0 hover:bg-foreground/10"
           onClick={onClose}
         >
-          {displayMode === "side-peek" ? (
-            <IconCloseSidebarRight className="size-4 text-muted-foreground" />
-          ) : (
-            <X className="size-4 text-muted-foreground" />
-          )}
+          <X className="size-4 text-muted-foreground" />
         </Button>
         <FileViewerModeSwitcher
           mode={displayMode}
@@ -311,7 +299,7 @@ function CodeViewerHeader({
               checked={minimap}
               onCheckedChange={() => setMinimap(!minimap)}
             >
-              <Map className="mr-2 h-3.5 w-3.5" />
+              <MapIcon className="mr-2 h-3.5 w-3.5" />
               {t("fileViewer.minimap")}
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem

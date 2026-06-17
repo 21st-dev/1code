@@ -1,32 +1,11 @@
 "use client"
 
-import {
-  Component,
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  forwardRef,
-  useImperativeHandle,
-  startTransition,
-  useDeferredValue,
-  type ReactNode,
-  type ErrorInfo,
-} from "react"
+import { parseDiffFromFile } from "@pierre/diffs"
+import { FileDiff, PatchDiff } from "@pierre/diffs/react"
+import { useVirtualizer } from "@tanstack/react-virtual"
+import { applyPatch, parsePatch, reversePatch } from "diff"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
-import { agentsFocusedDiffFileAtom, filteredDiffFilesAtom, viewedFilesAtomFamily, fileViewerOpenAtomFamily, diffViewDisplayModeAtom, diffSidebarOpenAtomFamily, type ViewedFileState } from "../atoms"
-import { preferredEditorAtom } from "../../../lib/atoms"
-import { APP_META } from "../../../../shared/external-apps"
-import { PatchDiff, FileDiff } from "@pierre/diffs/react"
-import { parseDiffFromFile } from "@pierre/diffs"
-import { applyPatch, reversePatch, parsePatch } from "diff"
-import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
-import { getShikiTheme } from "../../../lib/themes/diff-view-highlighter"
-import { useTheme } from "next-themes"
-import { toast } from "sonner"
 import {
   AlertTriangle,
   Check,
@@ -34,14 +13,24 @@ import {
   Columns2,
   Rows2,
 } from "lucide-react"
+import { useTheme } from "next-themes"
 import {
-  ClipboardIcon,
-  ExternalLinkIcon,
-  FolderIcon,
-  UndoIcon,
-} from "../../../components/ui/icons"
-import { useVirtualizer } from "@tanstack/react-virtual"
-import { getFileIconByExtension } from "../mentions/agents-file-mention"
+  Component,
+  type ErrorInfo,
+  forwardRef,
+  memo,
+  type ReactNode,
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import { toast } from "sonner"
+import { APP_META } from "../../../../shared/external-apps"
 import {
   AlertDialog,
   AlertDialogContent,
@@ -52,32 +41,45 @@ import {
 } from "../../../components/ui/alert-dialog"
 import { Button } from "../../../components/ui/button"
 import {
-  IconSpinner,
-  PullRequestIcon,
-  IconChatBubble,
-  ExpandIcon,
-  CollapseIcon,
-} from "../../../components/ui/icons"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "../../../components/ui/tooltip"
-import { Kbd } from "../../../components/ui/kbd"
-import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu"
+import {
+  ClipboardIcon,
+  CollapseIcon,
+  ExpandIcon,
+  ExternalLinkIcon,
+  FolderIcon,
+  IconChatBubble,
+  IconSpinner,
+  PullRequestIcon,
+  UndoIcon,
+} from "../../../components/ui/icons"
+import { Kbd } from "../../../components/ui/kbd"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "../../../components/ui/tooltip"
+import { preferredEditorAtom } from "../../../lib/atoms"
+import { useCodeTheme } from "../../../lib/hooks/use-code-theme"
+import { getShikiTheme } from "../../../lib/themes/diff-view-highlighter"
+import { selectedFileAtomFamily } from "../../details-sidebar/atoms"
+import { useOpenDetailsWidget } from "../../details-sidebar/use-open-details-widget"
+import { agentsFocusedDiffFileAtom, diffSidebarOpenAtomFamily, diffViewDisplayModeAtom, filteredDiffFilesAtom, type ViewedFileState, viewedFilesAtomFamily } from "../atoms"
+import { getFileIconByExtension } from "../mentions/agents-file-mention"
+
 // e2b API routes are used instead of useSandboxManager for agents
 // import { useIsHydrated } from "@/hooks/use-is-hydrated"
 const useIsHydrated = () => true // Desktop is always hydrated
-import { cn } from "../../../lib/utils"
+
 import { useI18n } from "../../../lib/i18n"
 import { api } from "../../../lib/mock-api"
 import { trpcClient } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 export type DiffViewMode = "unified" | "split"
 
 const LARGE_DIFF_LINE_THRESHOLD = 2000
@@ -598,12 +600,13 @@ const FileDiffCard = memo(function FileDiffCard({
   const preferredEditor = useAtomValue(preferredEditorAtom)
   const editorMeta = APP_META[preferredEditor]
 
-  // File viewer (file preview sidebar)
-  const fileViewerAtom = useMemo(
-    () => fileViewerOpenAtomFamily(chatId || ""),
+  // Details-owned file viewer selection
+  const selectedFileAtom = useMemo(
+    () => selectedFileAtomFamily(chatId || ""),
     [chatId],
   )
-  const setFileViewerPath = useSetAtom(fileViewerAtom)
+  const setSelectedFilePath = useSetAtom(selectedFileAtom)
+  const openDetailsWidget = useOpenDetailsWidget(chatId)
 
   // Diff sidebar state (to close dialog/fullscreen when opening file preview)
   const diffDisplayMode = useAtomValue(diffViewDisplayModeAtom)
@@ -663,10 +666,11 @@ const FileDiffCard = memo(function FileDiffCard({
 
   const handleOpenInFilePreview = () => {
     if (absolutePath) {
-      setFileViewerPath(absolutePath)
+      setSelectedFilePath(absolutePath)
       if (diffDisplayMode === "full-page") {
         setDiffSidebarOpen(false)
       }
+      openDetailsWidget("file")
     }
   }
 

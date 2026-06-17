@@ -1,11 +1,14 @@
-import { useMemo, useCallback } from "react"
-import { Loader2, AlertCircle, Check, X } from "lucide-react"
 import { useAtom, useAtomValue } from "jotai"
+import { AlertCircle, Check, Loader2, PanelRightOpen, X } from "lucide-react"
+import { useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import {
-  IconCloseSidebarRight,
-  IconSidePeek,
-  IconCenterPeek,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   IconFullPage,
 } from "@/components/ui/icons"
 import { Kbd } from "@/components/ui/kbd"
@@ -14,25 +17,18 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { trpc } from "@/lib/trpc"
 import { preferredEditorAtom } from "@/lib/atoms"
-import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { APP_META } from "../../../../shared/external-apps"
 import { EDITOR_ICONS } from "@/lib/editor-icons"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { type TranslationKey, useI18n } from "@/lib/i18n"
+import { trpc } from "@/lib/trpc"
+import { APP_META } from "../../../../shared/external-apps"
 import { fileViewerDisplayModeAtom } from "../../agents/atoms"
 import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
 import { getFileName } from "../utils/file-utils"
-import { useI18n, type TranslationKey } from "@/lib/i18n"
 
 const FILE_VIEWER_MODES = [
-  { value: "side-peek" as const, labelKey: "changes.diff.sidebar" as TranslationKey, Icon: IconSidePeek },
-  { value: "center-peek" as const, labelKey: "changes.diff.dialog" as TranslationKey, Icon: IconCenterPeek },
+  { value: "details-expanded" as const, labelKey: "fileViewer.detailsExpanded" as TranslationKey, Icon: PanelRightOpen },
   { value: "full-page" as const, labelKey: "changes.diff.fullscreen" as TranslationKey, Icon: IconFullPage },
 ]
 
@@ -82,11 +78,7 @@ export function ImageViewer({
             className="h-6 w-6 p-0 flex-shrink-0 hover:bg-foreground/10"
             onClick={onClose}
           >
-            {displayMode === "side-peek" ? (
-              <IconCloseSidebarRight className="size-4 text-muted-foreground" />
-            ) : (
-              <X className="size-4 text-muted-foreground" />
-            )}
+            <X className="size-4 text-muted-foreground" />
           </Button>
           {/* Display mode switcher */}
           <DropdownMenu>
@@ -97,7 +89,7 @@ export function ImageViewer({
                 className="h-6 w-6 p-0 flex-shrink-0 hover:bg-foreground/10"
               >
                 {(() => {
-                  const CurrentIcon = FILE_VIEWER_MODES.find((m) => m.value === displayMode)?.Icon ?? IconSidePeek
+                  const CurrentIcon = FILE_VIEWER_MODES.find((m) => m.value === displayMode)?.Icon ?? PanelRightOpen
                   return <CurrentIcon className="size-4 text-muted-foreground" />
                 })()}
               </Button>

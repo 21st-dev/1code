@@ -50,6 +50,7 @@ interface ExpandedWidgetSidebarProps {
   parsedFileDiffs?: ParsedDiffFile[] | null
   renderDiffContent?: (options: { onClose: () => void }) => ReactNode
   renderBrowserContent?: (options: { onClose: () => void }) => ReactNode
+  renderFileContent?: (options: { onClose: () => void }) => ReactNode
 }
 
 export function ExpandedWidgetSidebar({
@@ -67,6 +68,7 @@ export function ExpandedWidgetSidebar({
   parsedFileDiffs,
   renderDiffContent,
   renderBrowserContent,
+  renderFileContent,
 }: ExpandedWidgetSidebarProps) {
   const { t } = useI18n()
   // Per-workspace expanded widget state
@@ -140,6 +142,8 @@ export function ExpandedWidgetSidebar({
             parsedFileDiffs={parsedFileDiffs ?? undefined}
           />
         )
+      case "file":
+        return renderFileContent?.({ onClose: closeSidebar }) ?? null
       case "browser":
         return renderBrowserContent?.({ onClose: closeSidebar }) ?? null
       default:
@@ -147,8 +151,8 @@ export function ExpandedWidgetSidebar({
     }
   }
 
-  const minWidth = expandedWidget === "browser" ? 620 : 400
-  const maxWidth = expandedWidget === "browser" ? 1100 : 800
+  const minWidth = expandedWidget === "browser" || expandedWidget === "file" ? 620 : 400
+  const maxWidth = expandedWidget === "browser" || expandedWidget === "file" ? 1100 : 800
 
   return (
     <ResizableSidebar

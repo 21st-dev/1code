@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { useAtom } from "jotai"
 import { X } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { trpc } from "@/lib/trpc"
-import { Input } from "@/components/ui/input"
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { SearchIcon } from "@/components/ui/icons"
+import { Input } from "@/components/ui/input"
 import { UnknownFileIcon } from "@/icons/framework-icons"
-import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
-import { recentlyOpenedFilesAtom } from "../../agents/atoms"
 import { useI18n } from "@/lib/i18n"
+import { trpc } from "@/lib/trpc"
+import { cn } from "@/lib/utils"
+import { getFileIconByExtension } from "../../agents/mentions/agents-file-mention"
+import { recentlyOpenedFilesAtom } from "../../details-sidebar/atoms"
 
 // ============================================================================
 // Highlight helper – splits text into segments with matching parts marked

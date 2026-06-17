@@ -188,4 +188,99 @@ describe("details sidebar entrypoints", () => {
     expect(agentsAtoms).not.toContain("localBrowserWorkbenchWidthAtom")
     expect(agentsAtoms).toContain("pendingLocalBrowserReportAtomFamily")
   })
+
+  test("folds file viewer through Details selected-file ownership", () => {
+    const source = read("src/renderer/features/agents/main/active-chat.tsx")
+    const agentsAtoms = read("src/renderer/features/agents/atoms/index.ts")
+    const detailsAtoms = read("src/renderer/features/details-sidebar/atoms/index.ts")
+    const detailsSidebar = read(
+      "src/renderer/features/details-sidebar/details-sidebar.tsx",
+    )
+    const expandedSidebar = read(
+      "src/renderer/features/details-sidebar/expanded-widget-sidebar.tsx",
+    )
+    const fileViewerSidebar = read(
+      "src/renderer/features/file-viewer/components/file-viewer-sidebar.tsx",
+    )
+    const markdownViewer = read(
+      "src/renderer/features/file-viewer/components/markdown-viewer.tsx",
+    )
+    const imageViewer = read(
+      "src/renderer/features/file-viewer/components/image-viewer.tsx",
+    )
+    const fileSearchDialog = read(
+      "src/renderer/features/file-viewer/components/file-search-dialog.tsx",
+    )
+    const changesWidget = read(
+      "src/renderer/features/details-sidebar/sections/changes-widget.tsx",
+    )
+    const changesView = read("src/renderer/features/changes/changes-view.tsx")
+    const agentDiffView = read(
+      "src/renderer/features/agents/ui/agent-diff-view.tsx",
+    )
+
+    expect(detailsAtoms).toContain('| "file"')
+    expect(detailsAtoms).toContain('id: "file"')
+    expect(detailsAtoms).toContain('labelKey: "fileViewer.title"')
+    expect(detailsAtoms).toContain("selectedFileAtomFamily")
+    expect(detailsAtoms).toContain("recentlyOpenedFilesAtom")
+    expect(detailsSidebar).toContain("selectedFileAtomFamily")
+    expect(detailsSidebar).toContain("currentViewerFilePath={selectedFilePath}")
+    expect(expandedSidebar).toContain("renderFileContent")
+    expect(expandedSidebar).toContain('case "file":')
+
+    expect(agentsAtoms).toContain(
+      'export type FileViewerDisplayMode = "details-expanded" | "full-page"',
+    )
+    expect(agentsAtoms).toContain(
+      'type LegacyFileViewerDisplayMode = "side-peek" | "center-peek"',
+    )
+    expect(agentsAtoms).toContain("normalizeFileViewerDisplayMode")
+    expect(agentsAtoms).not.toContain("fileViewerOpenAtomFamily")
+    expect(agentsAtoms).not.toContain("fileViewerSidebarWidthAtom")
+    expect(agentsAtoms).not.toContain("recentlyOpenedFilesAtom")
+
+    expect(source).toContain("selectedFileAtomFamily")
+    expect(source).toContain("handleOpenDetailsFile")
+    expect(source).toContain("<FileOpenProvider onOpenFile={handleOpenDetailsFile}>")
+    expect(source).toContain("onSelectFile={handleOpenDetailsFile}")
+    expect(source).toMatch(/<ExpandedWidgetSidebar[\s\S]*renderFileContent=/)
+    expect(source).toContain('openDetailsWidget("file")')
+    expect(source).toContain('fileViewerDisplayMode === "full-page"')
+    expect(source).not.toContain('fileViewerDisplayMode === "side-peek"')
+    expect(source).not.toContain('fileViewerDisplayMode === "center-peek"')
+
+    for (const content of [
+      fileViewerSidebar,
+      markdownViewer,
+      imageViewer,
+    ]) {
+      expect(content).toContain('value: "details-expanded" as const')
+      expect(content).toContain('value: "full-page" as const')
+      expect(content).not.toContain('value: "side-peek" as const')
+      expect(content).not.toContain('value: "center-peek" as const')
+    }
+
+    expect(fileSearchDialog).toContain(
+      'from "../../details-sidebar/atoms"',
+    )
+
+    for (const content of [
+      source,
+      detailsSidebar,
+      changesWidget,
+      changesView,
+      agentDiffView,
+    ]) {
+      expect(content).not.toContain("fileViewerOpenAtomFamily")
+      expect(content).not.toContain("setFileViewerPath")
+    }
+
+    expect(changesWidget).toContain("selectedFileAtomFamily")
+    expect(changesWidget).toContain('openDetailsWidget("file")')
+    expect(changesView).toContain("selectedFileAtomFamily")
+    expect(changesView).toContain('openDetailsWidget("file")')
+    expect(agentDiffView).toContain("selectedFileAtomFamily")
+    expect(agentDiffView).toContain('openDetailsWidget("file")')
+  })
 })

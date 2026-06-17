@@ -1028,22 +1028,30 @@ export const settingsPluginsSidebarWidthAtom = atom(240)
 export const settingsKeyboardSidebarWidthAtom = atom(240)
 export const settingsProjectsSidebarWidthAtom = atom(240)
 
-// File viewer display mode - sidebar (side peek), center dialog, or fullscreen
-export type FileViewerDisplayMode = "side-peek" | "center-peek" | "full-page"
+// File viewer display mode: Details-owned expanded file preview or full-page view.
+export type FileViewerDisplayMode = "details-expanded" | "full-page"
+type LegacyFileViewerDisplayMode = "side-peek" | "center-peek"
 
-export const fileViewerDisplayModeAtom = atomWithStorage<FileViewerDisplayMode>(
+export function normalizeFileViewerDisplayMode(
+  mode: FileViewerDisplayMode | LegacyFileViewerDisplayMode | string | null | undefined,
+): FileViewerDisplayMode {
+  return mode === "full-page" ? "full-page" : "details-expanded"
+}
+
+const fileViewerDisplayModeStorageAtom = atomWithStorage<
+  FileViewerDisplayMode | LegacyFileViewerDisplayMode
+>(
   "agents:fileViewerDisplayMode",
-  "side-peek",
+  "details-expanded",
   undefined,
   { getOnInit: true },
 )
 
-// File viewer sidebar width (persisted)
-export const fileViewerSidebarWidthAtom = atomWithStorage<number>(
-  "agents:fileViewerSidebarWidth",
-  500,
-  undefined,
-  { getOnInit: true },
+export const fileViewerDisplayModeAtom = atom(
+  (get) => normalizeFileViewerDisplayMode(get(fileViewerDisplayModeStorageAtom)),
+  (_get, set, mode: FileViewerDisplayMode) => {
+    set(fileViewerDisplayModeStorageAtom, normalizeFileViewerDisplayMode(mode))
+  },
 )
 
 // File viewer word wrap preference (persisted)
@@ -1097,29 +1105,3 @@ export const fileViewerBracketPairsAtom = atomWithStorage<boolean>(
 
 // File search dialog open state (Cmd+P)
 export const fileSearchDialogOpenAtom = atom<boolean>(false)
-
-// File viewer open state - stores the currently open file path per chatId
-const fileViewerOpenStorageAtom = atom<Record<string, string | null>>({})
-
-// Recently opened files - ordered list (most recent first), max 50
-const MAX_RECENT_FILES = 50
-export const recentlyOpenedFilesAtom = atom<string[]>([])
-
-export const fileViewerOpenAtomFamily = atomFamily((chatId: string) =>
-  atom(
-    (get) => get(fileViewerOpenStorageAtom)[chatId] ?? null,
-    (get, set, filePath: string | null) => {
-      const current = get(fileViewerOpenStorageAtom)
-      set(fileViewerOpenStorageAtom, { ...current, [chatId]: filePath })
-      // Track in recently opened files
-      if (filePath) {
-        const recent = get(recentlyOpenedFilesAtom)
-        const filtered = recent.filter((p) => p !== filePath)
-        set(
-          recentlyOpenedFilesAtom,
-          [filePath, ...filtered].slice(0, MAX_RECENT_FILES),
-        )
-      }
-    },
-  ),
-)

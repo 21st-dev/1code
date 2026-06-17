@@ -1,11 +1,8 @@
 "use client"
 
-import { memo, useCallback, useMemo, useState, useEffect, useRef } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { ArrowUpRight, GitPullRequest } from "lucide-react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,30 +13,35 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ArrowUpRight, GitPullRequest } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { DiffIcon } from "@/components/ui/icons"
+import { Input } from "@/components/ui/input"
+import { Kbd } from "@/components/ui/kbd"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Kbd } from "@/components/ui/kbd"
-import { cn } from "@/lib/utils"
-import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { viewedFilesAtomFamily, fileViewerOpenAtomFamily, diffSidebarOpenAtomFamily } from "@/features/agents/atoms"
-import { getSyncActionKind } from "@/features/changes/utils"
+import { diffSidebarOpenAtomFamily, viewedFilesAtomFamily } from "@/features/agents/atoms"
 import {
   FileListItem,
-  getFileName,
   getFileDir,
+  getFileName,
 } from "@/features/changes/components/file-list-item"
-import { trpc } from "@/lib/trpc"
+import { getSyncActionKind } from "@/features/changes/utils"
+import { selectedFileAtomFamily } from "@/features/details-sidebar/atoms"
+import { useOpenDetailsWidget } from "@/features/details-sidebar/use-open-details-widget"
 import { preferredEditorAtom } from "@/lib/atoms"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { useI18n } from "@/lib/i18n"
+import { trpc } from "@/lib/trpc"
+import { cn } from "@/lib/utils"
 import { APP_META } from "../../../../shared/external-apps"
 import type { GitHubDraftPullRequestUnavailableReason } from "../../../../shared/github-workflow-context"
 import { getGitHubDraftPrUnavailableMessageKey } from "../../../../shared/github-workflow-ui-state"
 import type { ParsedDiffFile } from "../types"
-import { useI18n } from "@/lib/i18n"
 
 interface ChangesWidgetProps {
   chatId: string
@@ -170,12 +172,13 @@ export const ChangesWidget = memo(function ChangesWidget({
   // Preferred editor
   const preferredEditor = useAtomValue(preferredEditorAtom)
   const editorMeta = APP_META[preferredEditor]
-  // File viewer (file preview sidebar)
-  const fileViewerAtom = useMemo(
-    () => fileViewerOpenAtomFamily(chatId),
+  // Details-owned file viewer selection
+  const selectedFileAtom = useMemo(
+    () => selectedFileAtomFamily(chatId),
     [chatId],
   )
-  const setFileViewerPath = useSetAtom(fileViewerAtom)
+  const setSelectedFilePath = useSetAtom(selectedFileAtom)
+  const openDetailsWidget = useOpenDetailsWidget(chatId)
 
   // Diff sidebar state (to close dialog/fullscreen when opening file preview)
   const diffSidebarAtom = useMemo(
@@ -712,10 +715,11 @@ export const ChangesWidget = memo(function ChangesWidget({
                       openInFinderMutation.mutate(absolutePath)
                     } : undefined}
                     onOpenInFilePreview={absolutePath ? () => {
-                      setFileViewerPath(absolutePath)
+                      setSelectedFilePath(absolutePath)
                       if (diffDisplayMode === "full-page") {
                         setDiffSidebarOpen(false)
                       }
+                      openDetailsWidget("file")
                     } : undefined}
                     onOpenInEditor={absolutePath ? () => {
                       openInAppMutation.mutate({ path: absolutePath, app: preferredEditor })

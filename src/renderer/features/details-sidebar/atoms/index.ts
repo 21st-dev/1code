@@ -7,6 +7,7 @@ import {
   BarChart3,
   Box,
   FileDiff,
+  FileSearch,
   FileText,
   Globe2,
   ListTodo,
@@ -26,6 +27,7 @@ export type WidgetId =
   | "plan"
   | "terminal"
   | "diff"
+  | "file"
   | "browser"
   | "mcp"
   | "trace"
@@ -105,6 +107,14 @@ export const WIDGET_REGISTRY: WidgetConfig[] = [
     icon: FileDiff,
     canExpand: true,
     defaultVisible: true,
+  },
+  {
+    id: "file",
+    label: "File Viewer",
+    labelKey: "fileViewer.title",
+    icon: FileSearch,
+    canExpand: true,
+    defaultVisible: false,
   },
   {
     id: "browser",
@@ -208,6 +218,35 @@ export const expandedWidgetSidebarWidthAtom = atomWithStorage<number>(
   500,
   undefined,
   { getOnInit: true },
+)
+
+// ============================================================================
+// Details-owned File Viewer Selection (per workspace)
+// ============================================================================
+
+const selectedFileStorageAtom = atom<Record<string, string | null>>({})
+
+// Recently opened files - ordered list (most recent first), max 50
+const MAX_RECENT_FILES = 50
+export const recentlyOpenedFilesAtom = atom<string[]>([])
+
+export const selectedFileAtomFamily = atomFamily((workspaceId: string) =>
+  atom(
+    (get) => get(selectedFileStorageAtom)[workspaceId] ?? null,
+    (get, set, filePath: string | null) => {
+      const current = get(selectedFileStorageAtom)
+      set(selectedFileStorageAtom, { ...current, [workspaceId]: filePath })
+
+      if (filePath) {
+        const recent = get(recentlyOpenedFilesAtom)
+        const filtered = recent.filter((p) => p !== filePath)
+        set(
+          recentlyOpenedFilesAtom,
+          [filePath, ...filtered].slice(0, MAX_RECENT_FILES),
+        )
+      }
+    },
+  ),
 )
 
 // ============================================================================

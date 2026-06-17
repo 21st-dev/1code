@@ -1,12 +1,9 @@
-import { Checkbox } from "../../components/ui/checkbox";
-import { Button } from "../../components/ui/button";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuTrigger,
-} from "../../components/ui/context-menu";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { Eye, GitPullRequest } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import type { ChangeCategory, ChangedFile, ChangedFile as HistoryChangedFile } from "../../../shared/changes-types";
+import { APP_META } from "../../../shared/external-apps";
 import {
 	AlertDialog,
 	AlertDialogContent,
@@ -15,29 +12,32 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "../../components/ui/alert-dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/tabs";
-import { toast } from "sonner";
-import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { trpc } from "../../lib/trpc";
-import { preferredEditorAtom } from "../../lib/atoms";
-import { useI18n } from "../../lib/i18n";
-import { APP_META } from "../../../shared/external-apps";
-import { fileViewerOpenAtomFamily, diffViewDisplayModeAtom, diffSidebarOpenAtomFamily, diffActiveTabAtom } from "../agents/atoms";
-import { useChangesStore } from "../../lib/stores/changes-store";
+import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "../../components/ui/context-menu";
+import { Kbd } from "../../components/ui/kbd";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 import { usePRStatus } from "../../hooks/usePRStatus";
+import { preferredEditorAtom } from "../../lib/atoms";
 import { useFileChangeListener } from "../../lib/hooks/use-file-change-listener";
-import type { ChangeCategory, ChangedFile } from "../../../shared/changes-types";
+import { useI18n } from "../../lib/i18n";
+import { useChangesStore } from "../../lib/stores/changes-store";
+import { trpc } from "../../lib/trpc";
 import { cn } from "../../lib/utils";
+import { diffActiveTabAtom, diffSidebarOpenAtomFamily, diffViewDisplayModeAtom, type ViewedFileState, viewedFilesAtomFamily } from "../agents/atoms";
+import { selectedFileAtomFamily } from "../details-sidebar/atoms";
+import { useOpenDetailsWidget } from "../details-sidebar/use-open-details-widget";
 import { ChangesFileFilter, type SubChatFilterItem } from "./components/changes-file-filter";
 import { CommitInput } from "./components/commit-input";
-import { HistoryView, type CommitInfo } from "./components/history-view";
+import { type CommitInfo, HistoryView } from "./components/history-view";
 import { getStatusIndicator } from "./utils/status";
-import { GitPullRequest, Eye } from "lucide-react";
-import type { ChangedFile as HistoryChangedFile } from "../../../shared/changes-types";
-import { viewedFilesAtomFamily, type ViewedFileState } from "../agents/atoms";
-import { Kbd } from "../../components/ui/kbd";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 
 // Memoized file item component with context menu to prevent re-renders
 const ChangesFileItemWithContext = memo(function ChangesFileItemWithContext({
@@ -341,12 +341,13 @@ export function ChangesView({
 	const preferredEditor = useAtomValue(preferredEditorAtom);
 	const editorMeta = APP_META[preferredEditor];
 
-	// File viewer (file preview sidebar)
-	const fileViewerAtom = useMemo(
-		() => fileViewerOpenAtomFamily(chatId || ""),
+	// Details-owned file viewer selection
+	const selectedFileAtom = useMemo(
+		() => selectedFileAtomFamily(chatId || ""),
 		[chatId],
 	);
-	const setFileViewerPath = useSetAtom(fileViewerAtom);
+	const setSelectedFilePath = useSetAtom(selectedFileAtom);
+	const openDetailsWidget = useOpenDetailsWidget(chatId);
 
 	// Diff sidebar state (to close dialog/fullscreen when opening file preview)
 	const diffDisplayMode = useAtomValue(diffViewDisplayModeAtom);
@@ -890,10 +891,11 @@ export function ChangesView({
 
 	const handleOpenInFilePreview = (filePath: string) => {
 		const absolutePath = `${worktreePath}/${filePath}`;
-		setFileViewerPath(absolutePath);
+		setSelectedFilePath(absolutePath);
 		if (diffDisplayMode === "full-page") {
 			setDiffSidebarOpen(false);
 		}
+		openDetailsWidget("file");
 	};
 
 	return (

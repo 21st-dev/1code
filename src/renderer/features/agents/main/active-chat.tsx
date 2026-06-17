@@ -14,7 +14,6 @@ import {
   CopyIcon,
   CursorIcon,
   ExpandIcon,
-  IconCloseSidebarRight,
   IconOpenSidebarRight,
   IconSpinner,
   UnarchiveIcon,
@@ -24,7 +23,6 @@ import {
   PromptInput,
   PromptInputActions
 } from "../../../components/ui/prompt-input"
-import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
 import {
   Tooltip,
   TooltipContent,
@@ -80,7 +78,6 @@ import { cn } from "../../../lib/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
 import { ChangesPanel } from "../../changes"
 import { useCommitActions } from "../../changes/components/commit-input"
-import { DiffCenterPeekDialog } from "../../changes/components/diff-center-peek-dialog"
 import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
 import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { usePushAction } from "../../changes/hooks/use-push-action"
@@ -89,6 +86,7 @@ import {
   detailsSidebarOpenAtom,
   expandedWidgetAtomFamily,
   expandedWidgetSidebarWidthAtom,
+  selectedFileAtomFamily,
 } from "../../details-sidebar/atoms"
 import { DetailsSidebar } from "../../details-sidebar/details-sidebar"
 import { ExpandedWidgetSidebar } from "../../details-sidebar/expanded-widget-sidebar"
@@ -114,8 +112,6 @@ import {
   expiredUserQuestionsAtom,
   fileSearchDialogOpenAtom,
   fileViewerDisplayModeAtom,
-  fileViewerOpenAtomFamily,
-  fileViewerSidebarWidthAtom,
   filteredDiffFilesAtom,
   filteredSubChatIdAtom,
   isCreatingPrAtom,
@@ -4370,13 +4366,14 @@ export function ChatView({
   )
   const [currentPlanPath, setCurrentPlanPath] = useAtom(currentPlanPathAtom)
 
-  // File viewer sidebar state - per-chat open file path
-  const fileViewerAtom = useMemo(
-    () => fileViewerOpenAtomFamily(chatId),
+  // Details-owned file viewer selection - per-chat selected file path
+  const selectedFileAtom = useMemo(
+    () => selectedFileAtomFamily(chatId),
     [chatId],
   )
-  const [fileViewerPath, setFileViewerPath] = useAtom(fileViewerAtom)
-  const [fileViewerDisplayMode] = useAtom(fileViewerDisplayModeAtom)
+  const [detailsSelectedFilePath, setDetailsSelectedFilePath] =
+    useAtom(selectedFileAtom)
+  const fileViewerDisplayMode = useAtomValue(fileViewerDisplayModeAtom)
 
   // File search dialog (Cmd+P)
   const [fileSearchOpen, setFileSearchOpen] = useAtom(fileSearchDialogOpenAtom)
@@ -4433,6 +4430,67 @@ export function ChatView({
     [chatId],
   )
   const [expandedWidget, setExpandedWidget] = useAtom(expandedWidgetAtom)
+  const handleOpenDetailsFile = useCallback((filePath: string | null) => {
+    setDetailsSelectedFilePath(filePath)
+
+    if (!filePath) {
+      if (expandedWidget === "file") {
+        setExpandedWidget(null)
+      }
+      return
+    }
+
+    if (fileViewerDisplayMode === "full-page") {
+      setExpandedWidget(null)
+      return
+    }
+
+    openDetailsWidget("file")
+  }, [
+    expandedWidget,
+    fileViewerDisplayMode,
+    openDetailsWidget,
+    setExpandedWidget,
+    setDetailsSelectedFilePath,
+  ])
+
+  const previousFileViewerDisplayModeRef = useRef(fileViewerDisplayMode)
+  useEffect(() => {
+    const previousMode = previousFileViewerDisplayModeRef.current
+    previousFileViewerDisplayModeRef.current = fileViewerDisplayMode
+
+    if (!detailsSelectedFilePath) return
+
+    if (fileViewerDisplayMode === "full-page") {
+      if (expandedWidget === "file") {
+        setExpandedWidget(null)
+      }
+      return
+    }
+
+    if (previousMode === "full-page") {
+      openDetailsWidget("file")
+    }
+  }, [
+    expandedWidget,
+    fileViewerDisplayMode,
+    openDetailsWidget,
+    detailsSelectedFilePath,
+    setExpandedWidget,
+  ])
+  const previousExpandedWidgetRef = useRef(expandedWidget)
+  useEffect(() => {
+    const previousWidget = previousExpandedWidgetRef.current
+    previousExpandedWidgetRef.current = expandedWidget
+
+    if (
+      previousWidget === "file" &&
+      expandedWidget !== "file" &&
+      fileViewerDisplayMode !== "full-page"
+    ) {
+      setDetailsSelectedFilePath(null)
+    }
+  }, [expandedWidget, fileViewerDisplayMode, setDetailsSelectedFilePath])
   const handleDiffDisplayModeChange = useCallback((mode: DiffViewDisplayMode) => {
     setDiffDisplayMode(mode)
     if (mode === "full-page") {
@@ -4571,10 +4629,10 @@ export function ChatView({
     if (typeof window === "undefined" || !window.desktopApi?.setTrafficLightVisibility) return
 
     const isFullPageDiff = isDiffSidebarOpen && diffDisplayMode === "full-page"
-    const isFullPageFileViewer = !!fileViewerPath && fileViewerDisplayMode === "full-page"
+    const isFullPageFileViewer = !!detailsSelectedFilePath && fileViewerDisplayMode === "full-page"
     const shouldHide = isFullPageDiff || isFullPageFileViewer
     window.desktopApi.setTrafficLightVisibility(shouldHide ? false : sidebarOpen)
-  }, [isDiffSidebarOpen, diffDisplayMode, fileViewerPath, fileViewerDisplayMode, isDesktop, isFullscreen, sidebarOpen])
+  }, [isDiffSidebarOpen, diffDisplayMode, detailsSelectedFilePath, fileViewerDisplayMode, isDesktop, isFullscreen, sidebarOpen])
 
   // Track active diff surface width for responsive header
   const storedDiffSidebarWidth = useAtomValue(expandedWidgetSidebarWidthAtom)
@@ -6531,7 +6589,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   // No early return - let the UI render with loading state handled by activeChat check below
 
   return (
-    <FileOpenProvider onOpenFile={setFileViewerPath}>
+    <FileOpenProvider onOpenFile={handleOpenDetailsFile}>
     <TextSelectionProvider>
     {/* File Search Dialog (Cmd+P) */}
     {worktreePath && (
@@ -6539,7 +6597,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         open={fileSearchOpen}
         onOpenChange={setFileSearchOpen}
         projectPath={worktreePath}
-        onSelectFile={setFileViewerPath}
+        onSelectFile={handleOpenDetailsFile}
       />
     )}
     <div className="flex h-full flex-col">
@@ -6957,50 +7015,18 @@ Make sure to preserve all functionality from both branches when resolving confli
           )}
         </div>
 
-        {/* File Viewer - opens when a file is clicked */}
-        {!isMobileFullscreen && fileViewerPath && worktreePath && fileViewerDisplayMode === "side-peek" && (
-          <ResizableSidebar
-            isOpen={!!fileViewerPath}
-            onClose={() => setFileViewerPath(null)}
-            widthAtom={fileViewerSidebarWidthAtom}
-            minWidth={350}
-            maxWidth={900}
-            side="right"
-            animationDuration={0}
-            initialWidth={0}
-            exitWidth={0}
-            showResizeTooltip={true}
-            className="bg-tl-background border-l"
-            style={{ borderLeftWidth: "0.5px" }}
-          >
-            <FileViewerSidebar
-              filePath={fileViewerPath}
-              projectPath={worktreePath}
-              onClose={() => setFileViewerPath(null)}
-            />
-          </ResizableSidebar>
-        )}
-        {fileViewerPath && worktreePath && fileViewerDisplayMode === "center-peek" && (
-          <DiffCenterPeekDialog
-            isOpen={!!fileViewerPath}
-            onClose={() => setFileViewerPath(null)}
-          >
-            <FileViewerSidebar
-              filePath={fileViewerPath}
-              projectPath={worktreePath}
-              onClose={() => setFileViewerPath(null)}
-            />
-          </DiffCenterPeekDialog>
-        )}
-        {fileViewerPath && worktreePath && fileViewerDisplayMode === "full-page" && (
+        {/* File Viewer full-page surface. Details-expanded is rendered by ExpandedWidgetSidebar. */}
+        {detailsSelectedFilePath &&
+          worktreePath &&
+          fileViewerDisplayMode === "full-page" && (
           <DiffFullPageView
-            isOpen={!!fileViewerPath}
-            onClose={() => setFileViewerPath(null)}
+            isOpen={!!detailsSelectedFilePath}
+            onClose={() => handleOpenDetailsFile(null)}
           >
             <FileViewerSidebar
-              filePath={fileViewerPath}
+              filePath={detailsSelectedFilePath}
               projectPath={worktreePath}
-              onClose={() => setFileViewerPath(null)}
+              onClose={() => handleOpenDetailsFile(null)}
             />
           </DiffFullPageView>
         )}
@@ -7152,6 +7178,18 @@ Make sure to preserve all functionality from both branches when resolving confli
                   />
                 ) : null
               )}
+              renderFileContent={({ onClose }) => (
+                detailsSelectedFilePath && worktreePath ? (
+                  <FileViewerSidebar
+                    filePath={detailsSelectedFilePath}
+                    projectPath={worktreePath}
+                    onClose={() => {
+                      handleOpenDetailsFile(null)
+                      onClose()
+                    }}
+                  />
+                ) : null
+              )}
             />
         )}
 
@@ -7183,7 +7221,7 @@ Make sure to preserve all functionality from both branches when resolving confli
             onExpandDiff={handleOpenDiffProductEntry}
             onExpandBrowser={() => openDetailsWidget("browser")}
             onFileSelect={handleOpenDiffFileProductEntry}
-            onOpenFile={setFileViewerPath}
+            onOpenFile={handleOpenDetailsFile}
           />
         )}
       </div>

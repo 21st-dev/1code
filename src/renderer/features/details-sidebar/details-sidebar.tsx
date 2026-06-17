@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   BarChart3,
   Box,
+  FileSearch,
   Globe2,
   ListTodo,
   TerminalSquare,
@@ -36,11 +37,12 @@ import {
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
-import { type AgentMode, fileViewerOpenAtomFamily } from "../agents/atoms"
+import type { AgentMode } from "../agents/atoms"
 import {
   detailsSidebarOpenAtom,
   detailsSidebarTabAtom,
   detailsSidebarWidthAtom,
+  selectedFileAtomFamily,
   WIDGET_REGISTRY,
   type WidgetId,
   widgetOrderAtomFamily,
@@ -76,6 +78,8 @@ function getWidgetIcon(widgetId: WidgetId) {
       return TerminalSquare
     case "diff":
       return DiffIcon
+    case "file":
+      return FileSearch
     case "browser":
       return Globe2
     case "mcp":
@@ -260,12 +264,12 @@ export function DetailsSidebar({
   const filesTabRef = useRef<FilesTabHandle>(null)
   const [filesAllExpanded, setFilesAllExpanded] = useState(false)
 
-  // Current file open in file viewer (for tree highlight sync)
-  const fileViewerAtom = useMemo(
-    () => fileViewerOpenAtomFamily(chatId),
+  // Current Details-owned file preview selection (for tree highlight sync)
+  const selectedFileAtom = useMemo(
+    () => selectedFileAtomFamily(chatId),
     [chatId],
   )
-  const fileViewerPath = useAtomValue(fileViewerAtom)
+  const selectedFilePath = useAtomValue(selectedFileAtom)
 
   // Settings dialog atoms for MCP settings
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
@@ -614,7 +618,7 @@ export function DetailsSidebar({
           worktreePath={worktreePath}
           onSelectFile={onOpenFile ?? noopSelectFile}
           onExpandedStateChange={setFilesAllExpanded}
-          currentViewerFilePath={fileViewerPath}
+          currentViewerFilePath={selectedFilePath}
           className={cn("flex-1", activeTab !== "files" && "hidden")}
         />
       </div>
