@@ -50,7 +50,7 @@ export const ALL_SHORTCUT_ACTIONS: ShortcutAction[] = [
   },
   {
     id: "new-workspace",
-    label: "New workspace",
+    label: "New chat",
     category: "workspaces",
     defaultKeys: ["cmd", "N"],
     altKeys: ["C"],

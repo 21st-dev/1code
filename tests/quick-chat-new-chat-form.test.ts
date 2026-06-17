@@ -27,6 +27,43 @@ describe("quick chat new chat form", () => {
     expect(selector).toContain('providerIsAllowed("codex")')
   })
 
+  test("drives new-chat project state from explicit target instead of selected project", () => {
+    const atoms = readFileSync(
+      "src/renderer/features/agents/atoms/index.ts",
+      "utf8",
+    )
+    const form = readFileSync(
+      "src/renderer/features/agents/main/new-chat-form.tsx",
+      "utf8",
+    )
+    const projectSelector = readFileSync(
+      "src/renderer/features/agents/components/project-selector.tsx",
+      "utf8",
+    )
+
+    expect(atoms).toContain("export type NewChatTarget")
+    expect(atoms).toContain('atom<NewChatTarget>({ type: "quick" })')
+
+    expect(form).toContain(
+      "const [newChatTarget, setNewChatTarget] = useAtom(newChatTargetAtom)",
+    )
+    expect(form).toContain('if (newChatTarget.type !== "project") return null')
+    expect(form).toContain(
+      "projectsList.find((p) => p.id === newChatTarget.projectId)",
+    )
+    expect(form).toContain("const projectForChat = validatedProject")
+    expect(form).toContain("const isFolderlessQuickChat = !validatedProject")
+    expect(form).toContain('setNewChatTarget({ type: "quick" })')
+
+    expect(projectSelector).toContain("newChatTargetAtom")
+    expect(projectSelector).toContain(
+      'if (newChatTarget.type !== "project") return null',
+    )
+    expect(projectSelector).toContain(
+      'setNewChatTarget({ type: "project", projectId: project.id })',
+    )
+  })
+
   test("keeps project onboarding deferred while preserving upload-to-prompt paths", () => {
     const form = readFileSync(
       "src/renderer/features/agents/main/new-chat-form.tsx",

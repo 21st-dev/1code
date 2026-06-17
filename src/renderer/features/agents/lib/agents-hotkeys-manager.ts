@@ -5,15 +5,16 @@
 
 import * as React from "react"
 import { useCallback, useMemo } from "react"
+import type { CustomHotkeysConfig, SettingsTab } from "../../../lib/atoms"
+import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
+import { getResolvedHotkey, type ShortcutActionId } from "../../../lib/hotkeys"
+import type { NewChatTarget } from "../atoms"
 import {
-  AgentActionContext,
   AGENT_ACTIONS,
+  type AgentActionContext,
   executeAgentAction,
   getAvailableAgentActions,
 } from "./agents-actions"
-import type { SettingsTab, CustomHotkeysConfig } from "../../../lib/atoms"
-import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
-import { getResolvedHotkey, type ShortcutActionId } from "../../../lib/hotkeys"
 
 // ============================================================================
 // ACTION ID MAPPING
@@ -56,9 +57,13 @@ const SHORTCUT_TO_ACTION_MAP: Record<ShortcutActionId, string> = {
 }
 
 // Reverse mapping: action ID -> shortcut ID
-const ACTION_TO_SHORTCUT_MAP: Record<string, ShortcutActionId> = Object.fromEntries(
-  Object.entries(SHORTCUT_TO_ACTION_MAP).map(([k, v]) => [v, k as ShortcutActionId])
-) as Record<string, ShortcutActionId>
+const ACTION_TO_SHORTCUT_MAP: Record<string, ShortcutActionId> =
+  Object.fromEntries(
+    Object.entries(SHORTCUT_TO_ACTION_MAP).map(([k, v]) => [
+      v,
+      k as ShortcutActionId,
+    ]),
+  ) as Record<string, ShortcutActionId>
 
 // ============================================================================
 // HOTKEY MATCHING
@@ -94,7 +99,8 @@ function matchesHotkey(e: KeyboardEvent, hotkey: string): boolean {
   if (eventKey === key) return true
   if (key === "?" && eventKey === "?") return true
   if (key === "/" && (eventKey === "/" || eventCode === "slash")) return true
-  if (key === "\\" && (eventKey === "\\" || eventCode === "backslash")) return true
+  if (key === "\\" && (eventKey === "\\" || eventCode === "backslash"))
+    return true
   if (key === "," && (eventKey === "," || eventCode === "comma")) return true
   if (key.length === 1 && eventCode === `key${key}`) return true
 
@@ -110,6 +116,7 @@ export interface AgentsHotkeysManagerConfig {
   setSelectedDraftId?: (id: string | null) => void
   setShowNewChatForm?: (show: boolean) => void
   setDesktopView?: (view: import("../atoms").DesktopView) => void
+  setNewChatTarget?: (target: NewChatTarget) => void
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
   setSettingsActiveTab?: (tab: SettingsTab) => void
   setFileSearchDialogOpen?: (open: boolean) => void
@@ -134,20 +141,23 @@ function dispatchFileViewerFind(): void {
   window.dispatchEvent(new Event("file-viewer:find"))
 }
 
-function isFileViewerEditorFocused(activeElement: Element | null, eventTarget: EventTarget | null): boolean {
+function isFileViewerEditorFocused(
+  activeElement: Element | null,
+  eventTarget: EventTarget | null,
+): boolean {
   const targetElement = eventTarget instanceof Element ? eventTarget : null
 
   return Boolean(
     activeElement?.closest?.("[data-file-viewer-path]") ||
-    targetElement?.closest?.("[data-file-viewer-path]") ||
-    document.querySelector('[data-file-viewer-active="true"]') ||
-    document.querySelector(
-      [
-        "[data-file-viewer-path] .monaco-editor.focused",
-        "[data-file-viewer-path] .monaco-editor textarea:focus",
-        "[data-file-viewer-path] .monaco-editor .inputarea:focus",
-      ].join(", "),
-    ),
+      targetElement?.closest?.("[data-file-viewer-path]") ||
+      document.querySelector('[data-file-viewer-active="true"]') ||
+      document.querySelector(
+        [
+          "[data-file-viewer-path] .monaco-editor.focused",
+          "[data-file-viewer-path] .monaco-editor textarea:focus",
+          "[data-file-viewer-path] .monaco-editor .inputarea:focus",
+        ].join(", "),
+      ),
   )
 }
 
@@ -168,6 +178,7 @@ export function useAgentsHotkeys(
       setSelectedDraftId: config.setSelectedDraftId,
       setShowNewChatForm: config.setShowNewChatForm,
       setDesktopView: config.setDesktopView,
+      setNewChatTarget: config.setNewChatTarget,
       setSidebarOpen: config.setSidebarOpen,
       setSettingsActiveTab: config.setSettingsActiveTab,
       setFileSearchDialogOpen: config.setFileSearchDialogOpen,
@@ -182,6 +193,7 @@ export function useAgentsHotkeys(
       config.setSelectedDraftId,
       config.setShowNewChatForm,
       config.setDesktopView,
+      config.setNewChatTarget,
       config.setSidebarOpen,
       config.setSettingsActiveTab,
       config.setFileSearchDialogOpen,
@@ -256,10 +268,13 @@ export function useAgentsHotkeys(
   // Get the resolved hotkey for a shortcut, respecting custom bindings
   const getHotkeyForAction = useCallback(
     (shortcutId: ShortcutActionId): string | null => {
-      const customConfig = config.customHotkeysConfig || { version: 1, bindings: {} }
+      const customConfig = config.customHotkeysConfig || {
+        version: 1,
+        bindings: {},
+      }
       return getResolvedHotkey(shortcutId, customConfig)
     },
-    [config.customHotkeysConfig]
+    [config.customHotkeysConfig],
   )
 
   // Unified hotkey listener that respects custom configurations
@@ -348,7 +363,12 @@ export function useAgentsHotkeys(
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [enabled, handleHotkeyAction, getHotkeyForAction, config.betaKanbanEnabled])
+  }, [
+    enabled,
+    handleHotkeyAction,
+    getHotkeyForAction,
+    config.betaKanbanEnabled,
+  ])
 
   // General hotkey handler for remaining actions
   const actionsWithHotkeys = useMemo(

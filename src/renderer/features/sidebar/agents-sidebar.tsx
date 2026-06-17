@@ -84,6 +84,7 @@ import {
   desktopViewAtom,
   justCreatedIdsAtom,
   loadingSubChatsAtom,
+  newChatTargetAtom,
   pendingUserQuestionsAtom,
   previousAgentChatIdAtom,
   selectedAgentChatIdAtom,
@@ -1794,6 +1795,7 @@ export function AgentsSidebar({
 
   // Desktop: use selectedProject instead of teams
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
+  const setNewChatTarget = useSetAtom(newChatTargetAtom)
   const activeSubChatId = useAgentSubChatStore((state) =>
     state.chatId === selectedChatId ? state.activeSubChatId : null,
   )
@@ -2654,6 +2656,7 @@ export function AgentsSidebar({
 
   const handleNewAgent = async () => {
     triggerHaptic("light")
+    setNewChatTarget({ type: "quick" })
     setSelectedChatId(null)
     setSelectedDraftId(null) // Clear selected draft so form starts empty
     setShowNewChatForm(true) // Explicitly show new chat form
@@ -2675,6 +2678,7 @@ export function AgentsSidebar({
       if (!project) return
 
       triggerHaptic("light")
+      setNewChatTarget({ type: "project", projectId: project.id })
       setSelectedProject({
         id: project.id,
         name: project.name,
@@ -2704,6 +2708,7 @@ export function AgentsSidebar({
       setDesktopView,
       setSelectedChatId,
       setSelectedDraftId,
+      setNewChatTarget,
       setSelectedProject,
       setShowNewChatForm,
       triggerHaptic,
@@ -3271,7 +3276,7 @@ export function AgentsSidebar({
                 )}
               >
                 <span className="text-sm font-medium">
-                  {t("sidebar.newWorkspace")}
+                  {t("sidebar.newChat")}
                 </span>
               </ButtonCustom>
             </TooltipTrigger>
@@ -3279,7 +3284,7 @@ export function AgentsSidebar({
               side="right"
               className="flex flex-col items-start gap-1"
             >
-              <span>{t("sidebar.startNewWorkspace")}</span>
+              <span>{t("sidebar.startNewChat")}</span>
               {newWorkspaceHotkey && (
                 <span className="flex items-center gap-1.5">
                   <Kbd>{newWorkspaceHotkey}</Kbd>

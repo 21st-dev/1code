@@ -108,6 +108,12 @@ export const selectedProjectAtom = atomWithWindowStorage<SelectedProject>(
   { getOnInit: true },
 )
 
+export type NewChatTarget =
+  | { type: "quick" }
+  | { type: "project"; projectId: string }
+
+export const newChatTargetAtom = atom<NewChatTarget>({ type: "quick" })
+
 export const lastSelectedAgentIdAtom = atomWithStorage<string>(
   "agents:lastSelectedAgentId",
   "claude-code",

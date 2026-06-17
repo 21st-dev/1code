@@ -47,6 +47,7 @@ This change has two coupled parts: a runtime/data capability (folderless quick c
 
 ### 5. Composer and transport
 - `new-chat-form.tsx` already branches on `validatedProject`. When there is no project (quick chat): hide `WorkModeSelector` and the plan/agent toggle, show a static "助手" affordance, keep runtime/provider model selection only for runtimes with supported assistant enforcement, and keep send.
+- New-chat entrypoints must set an explicit target (`quick` or `project(id)`) and `validatedProject` must derive from that target, not from the global `selectedProject`; the top-level new-chat button defaults to quick chat even if a project remains selected elsewhere.
 - Remove the hard `!projectForChat` block in `handleSend` for the folderless path; `chats.create` accepts optional/null `projectId`.
 - Renderer transports (`IPCChatTransport`, `ACPChatTransport`) must not mint their own assistant semantics. They pass the selected provider/runtime and current sub-chat mode as before; the main-process preflight and permission policy derive assistant controls from the null-project chat.
 

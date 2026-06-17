@@ -1,38 +1,45 @@
-import { useCallback, useEffect, useState, useMemo, useRef } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { isDesktopApp } from "../../lib/utils/platform"
-import { useIsMobile } from "../../lib/hooks/use-mobile"
-
+import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
+import { CodexLoginModal } from "../../components/dialogs/codex-login-modal"
+import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
+import { TooltipProvider } from "../../components/ui/tooltip"
+import { WindowsTitleBar } from "../../components/windows-title-bar"
 import {
-  agentsSidebarOpenAtom,
-  agentsSidebarWidthAtom,
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
+  agentsSidebarOpenAtom,
+  agentsSidebarWidthAtom,
+  betaKanbanEnabledAtom,
   claudeLoginModalConfigAtom,
+  customHotkeysAtom,
   helperApisSetupPromptDismissedAtom,
   helperApisSetupPromptPendingAtom,
   isDesktopAtom,
   isFullscreenAtom,
   modelsSettingsTargetAtom,
-  customHotkeysAtom,
-  betaKanbanEnabledAtom,
 } from "../../lib/atoms"
+import { useIsMobile } from "../../lib/hooks/use-mobile"
 import { useI18n } from "../../lib/i18n"
-import { selectedAgentChatIdAtom, selectedProjectAtom, selectedDraftIdAtom, showNewChatFormAtom, desktopViewAtom, fileSearchDialogOpenAtom } from "../agents/atoms"
 import { trpc } from "../../lib/trpc"
+import { isDesktopApp } from "../../lib/utils/platform"
+import {
+  desktopViewAtom,
+  fileSearchDialogOpenAtom,
+  newChatTargetAtom,
+  selectedAgentChatIdAtom,
+  selectedDraftIdAtom,
+  selectedProjectAtom,
+  showNewChatFormAtom,
+} from "../agents/atoms"
+import { QueueProcessor } from "../agents/components/queue-processor"
 import { useAgentsHotkeys } from "../agents/lib/agents-hotkeys-manager"
 import { toggleSearchAtom } from "../agents/search"
-import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
-import { CodexLoginModal } from "../../components/dialogs/codex-login-modal"
-import { TooltipProvider } from "../../components/ui/tooltip"
-import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
-import { AgentsSidebar } from "../sidebar/agents-sidebar"
-import { AgentsContent } from "../agents/ui/agents-content"
-import { WindowsTitleBar } from "../../components/windows-title-bar"
 import { useAgentSubChatStore } from "../agents/stores/sub-chat-store"
-import { QueueProcessor } from "../agents/components/queue-processor"
+import { AgentsContent } from "../agents/ui/agents-content"
 import { SettingsSidebar } from "../settings/settings-sidebar"
+import { AgentsSidebar } from "../sidebar/agents-sidebar"
 
 // ============================================================================
 // Constants
@@ -114,6 +121,7 @@ export function AgentsLayout() {
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
+  const setNewChatTarget = useSetAtom(newChatTargetAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
   const claudeLoginModalConfig = useAtomValue(claudeLoginModalConfigAtom)
@@ -303,54 +311,64 @@ export function AgentsLayout() {
     const desktopApi = window.desktopApi as any
     if (!desktopApi?.onWorktreeSetupFailed) return
 
-    const unsubscribe = desktopApi.onWorktreeSetupFailed((payload: WorktreeSetupEvent) => {
-      const errorMessage = payload.message.replace(/\s+/g, " ").trim()
-      const hasProjectDirectoryFallback =
-        payload.fallback?.mode === "project-directory"
-      const fallbackDescription = hasProjectDirectoryFallback
-        ? t("toast.worktree.runningInProjectDirectory", {
-          path: payload.fallback?.path ?? "",
-        })
-        : null
-      const description = [errorMessage, fallbackDescription]
-        .filter(Boolean)
-        .join(" ")
+    const unsubscribe = desktopApi.onWorktreeSetupFailed(
+      (payload: WorktreeSetupEvent) => {
+        const errorMessage = payload.message.replace(/\s+/g, " ").trim()
+        const hasProjectDirectoryFallback =
+          payload.fallback?.mode === "project-directory"
+        const fallbackDescription = hasProjectDirectoryFallback
+          ? t("toast.worktree.runningInProjectDirectory", {
+              path: payload.fallback?.path ?? "",
+            })
+          : null
+        const description = [errorMessage, fallbackDescription]
+          .filter(Boolean)
+          .join(" ")
 
-      if (payload.kind === "create-timeout") {
-        toast.warning(t("toast.worktree.checkoutTimedOut"), {
-          description: description || fallbackDescription || undefined,
-          duration: 12000,
-        })
-        return
-      }
+        if (payload.kind === "create-timeout") {
+          toast.warning(t("toast.worktree.checkoutTimedOut"), {
+            description: description || fallbackDescription || undefined,
+            duration: 12000,
+          })
+          return
+        }
 
-      if (payload.kind === "create-failed") {
-        toast.error(t("toast.worktree.creationFailed"), {
-          description: description || fallbackDescription || undefined,
-          duration: 12000,
-        })
-        return
-      }
+        if (payload.kind === "create-failed") {
+          toast.error(t("toast.worktree.creationFailed"), {
+            description: description || fallbackDescription || undefined,
+            duration: 12000,
+          })
+          return
+        }
 
-      toast.error(t("toast.worktree.setupFailed"), {
-        description: errorMessage || undefined,
-        duration: 10000,
-        action: {
-          label: t("toast.worktree.openSettings"),
-          onClick: () => {
-            const projectMatch = projects?.find((project) => project.id === payload.projectId)
-            if (projectMatch) {
-              setSelectedProject(projectMatch as any)
-            }
-            setSettingsActiveTab("projects")
-            setSettingsDialogOpen(true)
+        toast.error(t("toast.worktree.setupFailed"), {
+          description: errorMessage || undefined,
+          duration: 10000,
+          action: {
+            label: t("toast.worktree.openSettings"),
+            onClick: () => {
+              const projectMatch = projects?.find(
+                (project) => project.id === payload.projectId,
+              )
+              if (projectMatch) {
+                setSelectedProject(projectMatch as any)
+              }
+              setSettingsActiveTab("projects")
+              setSettingsDialogOpen(true)
+            },
           },
-        },
-      })
-    })
+        })
+      },
+    )
 
     return unsubscribe
-  }, [projects, setSelectedProject, setSettingsActiveTab, setSettingsDialogOpen, t])
+  }, [
+    projects,
+    setSelectedProject,
+    setSettingsActiveTab,
+    setSettingsDialogOpen,
+    t,
+  ])
 
   // Clear sub-chat store when no chat is selected
   useEffect(() => {
@@ -371,6 +389,7 @@ export function AgentsLayout() {
     setSelectedDraftId,
     setShowNewChatForm,
     setDesktopView,
+    setNewChatTarget,
     setSidebarOpen,
     setSettingsActiveTab,
     setFileSearchDialogOpen,
@@ -403,30 +422,30 @@ export function AgentsLayout() {
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar - switches between chat list and settings nav */}
           <ResizableSidebar
-          isOpen={!isMobile && sidebarOpen}
-          onClose={handleCloseSidebar}
-          widthAtom={agentsSidebarWidthAtom}
-          minWidth={SIDEBAR_MIN_WIDTH}
-          maxWidth={SIDEBAR_MAX_WIDTH}
-          side="left"
-          closeHotkey={SIDEBAR_CLOSE_HOTKEY}
-          animationDuration={SIDEBAR_ANIMATION_DURATION}
-          initialWidth={0}
-          exitWidth={0}
-          showResizeTooltip={!isSettingsView}
-          className="overflow-hidden bg-background border-r"
-          style={{ borderRightWidth: "0.5px" }}
-        >
-          {isSettingsView ? (
-            <SettingsSidebar />
-          ) : (
-            <AgentsSidebar
-              onToggleSidebar={handleCloseSidebar}
-              onNewWorkspaceProjectPicker={openProjectPickerForNewWorkspace}
-              isNewWorkspaceProjectPickerPending={openFolder.isPending}
-            />
-          )}
-        </ResizableSidebar>
+            isOpen={!isMobile && sidebarOpen}
+            onClose={handleCloseSidebar}
+            widthAtom={agentsSidebarWidthAtom}
+            minWidth={SIDEBAR_MIN_WIDTH}
+            maxWidth={SIDEBAR_MAX_WIDTH}
+            side="left"
+            closeHotkey={SIDEBAR_CLOSE_HOTKEY}
+            animationDuration={SIDEBAR_ANIMATION_DURATION}
+            initialWidth={0}
+            exitWidth={0}
+            showResizeTooltip={!isSettingsView}
+            className="overflow-hidden bg-background border-r"
+            style={{ borderRightWidth: "0.5px" }}
+          >
+            {isSettingsView ? (
+              <SettingsSidebar />
+            ) : (
+              <AgentsSidebar
+                onToggleSidebar={handleCloseSidebar}
+                onNewWorkspaceProjectPicker={openProjectPickerForNewWorkspace}
+                isNewWorkspaceProjectPickerPending={openFolder.isPending}
+              />
+            )}
+          </ResizableSidebar>
 
           {/* Main Content */}
           <div className="flex-1 overflow-hidden flex flex-col min-w-0">

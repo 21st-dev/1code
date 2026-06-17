@@ -56,4 +56,39 @@ describe("quick chat sidebar grouping", () => {
     expect(archivePopover).toContain('t("sidebar.clearArchive")')
     expect(archivePopover).toContain('t("sidebar.permanentDelete")')
   })
+
+  test("uses explicit new-chat targets for top-level quick chat and project group actions", () => {
+    const sidebar = read("src/renderer/features/sidebar/agents-sidebar.tsx")
+    const actions = read("src/renderer/features/agents/lib/agents-actions.ts")
+    const layout = read("src/renderer/features/layout/agents-layout.tsx")
+    const hotkeys = read(
+      "src/renderer/features/agents/lib/agents-hotkeys-manager.ts",
+    )
+
+    expect(sidebar).toContain(
+      "const setNewChatTarget = useSetAtom(newChatTargetAtom)",
+    )
+    expect(sidebar).toContain('setNewChatTarget({ type: "quick" })')
+    expect(sidebar).toContain(
+      'setNewChatTarget({ type: "project", projectId: project.id })',
+    )
+    expect(sidebar).toContain('t("sidebar.newChat")')
+    expect(sidebar).toContain('t("sidebar.startNewChat")')
+
+    expect(actions).toContain(
+      "setNewChatTarget?: (target: NewChatTarget) => void",
+    )
+    expect(actions).toContain('context.setNewChatTarget?.({ type: "quick" })')
+    expect(actions).not.toContain(
+      "await context.openProjectPickerForNewWorkspace?.()",
+    )
+    expect(layout).toContain(
+      "const setNewChatTarget = useSetAtom(newChatTargetAtom)",
+    )
+    expect(layout).toContain("setNewChatTarget,")
+    expect(hotkeys).toContain(
+      "setNewChatTarget?: (target: NewChatTarget) => void",
+    )
+    expect(hotkeys).toContain("setNewChatTarget: config.setNewChatTarget")
+  })
 })

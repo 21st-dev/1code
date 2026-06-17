@@ -4,7 +4,7 @@
  */
 
 import type { SettingsTab } from "../../../lib/atoms"
-import type { DesktopView } from "../atoms"
+import type { DesktopView, NewChatTarget } from "../atoms"
 
 // ============================================================================
 // TYPES
@@ -20,6 +20,7 @@ export interface AgentActionContext {
   setSelectedDraftId?: (id: string | null) => void
   setShowNewChatForm?: (show: boolean) => void
   setDesktopView?: (view: DesktopView) => void
+  setNewChatTarget?: (target: NewChatTarget) => void
 
   // UI states
   setSidebarOpen?: (open: boolean | ((prev: boolean) => boolean)) => void
@@ -75,12 +76,13 @@ const openShortcutsAction: AgentActionDefinition = {
 
 const createNewAgentAction: AgentActionDefinition = {
   id: "create-new-agent",
-  label: "New workspace",
-  description: "Create a new workspace",
+  label: "New chat",
+  description: "Create a new quick chat",
   category: "general",
   hotkey: "cmd+n",
   handler: async (context) => {
     console.log("[Action] create-new-agent handler called")
+    context.setNewChatTarget?.({ type: "quick" })
     // Clear selected chat
     context.setSelectedChatId?.(null)
     // Clear selected draft so form starts empty
@@ -89,9 +91,6 @@ const createNewAgentAction: AgentActionDefinition = {
     context.setShowNewChatForm?.(true)
     // Clear secondary desktop view
     context.setDesktopView?.(null)
-    if (!context.hasSelectedProject) {
-      await context.openProjectPickerForNewWorkspace?.()
-    }
     return { success: true }
   },
 }

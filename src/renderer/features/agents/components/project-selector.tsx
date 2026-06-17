@@ -1,11 +1,7 @@
-import { useState, useMemo } from "react"
 import { useAtom, useSetAtom } from "jotai"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "../../../components/ui/popover"
+import { Button } from "../../../components/ui/button"
 import {
   Command,
   CommandEmpty,
@@ -20,18 +16,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../components/ui/dialog"
+import {
+  CheckIcon,
+  FolderPlusIcon,
+  GitHubIcon,
+  IconChevronDown,
+} from "../../../components/ui/icons"
 import { Input } from "../../../components/ui/input"
-import { Button } from "../../../components/ui/button"
-import { IconChevronDown, CheckIcon, FolderPlusIcon, GitHubIcon } from "../../../components/ui/icons"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../../../components/ui/popover"
 import { ProjectIcon } from "../../../components/ui/project-icon"
-import { trpc } from "../../../lib/trpc"
 import { repoOnboardingSkippedAtom } from "../../../lib/atoms"
-import { selectedProjectAtom } from "../atoms"
 import { useI18n } from "../../../lib/i18n"
+import { trpc } from "../../../lib/trpc"
+import { newChatTargetAtom, selectedProjectAtom } from "../atoms"
 
 export function ProjectSelector() {
   const { t } = useI18n()
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
+  const [newChatTarget, setNewChatTarget] = useAtom(newChatTargetAtom)
   const setRepoOnboardingSkipped = useSetAtom(repoOnboardingSkippedAtom)
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -39,7 +45,8 @@ export function ProjectSelector() {
   const [githubUrl, setGithubUrl] = useState("")
 
   // Fetch projects from DB
-  const { data: projects, isLoading: isLoadingProjects } = trpc.projects.list.useQuery()
+  const { data: projects, isLoading: isLoadingProjects } =
+    trpc.projects.list.useQuery()
 
   // Filter projects by search query
   const filteredProjects = useMemo(() => {
@@ -85,6 +92,7 @@ export function ProjectSelector() {
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
+        setNewChatTarget({ type: "project", projectId: project.id })
         setRepoOnboardingSkipped(false)
       }
     },
@@ -118,6 +126,7 @@ export function ProjectSelector() {
           gitOwner: project.gitOwner,
           gitRepo: project.gitRepo,
         })
+        setNewChatTarget({ type: "project", projectId: project.id })
         setRepoOnboardingSkipped(false)
         setGithubDialogOpen(false)
         setGithubUrl("")
@@ -160,6 +169,7 @@ export function ProjectSelector() {
         gitOwner: project.gitOwner,
         gitRepo: project.gitRepo,
       })
+      setNewChatTarget({ type: "project", projectId: project.id })
       setRepoOnboardingSkipped(false)
       setOpen(false)
     }
@@ -168,21 +178,32 @@ export function ProjectSelector() {
   // Validate selected project still exists and use latest DB data (e.g. renamed project)
   // While loading, trust localStorage value to prevent showing "Select repo" on app restart
   const validSelection = useMemo(() => {
-    if (!selectedProject) return null
-    // While loading, trust localStorage value
-    if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB and use fresh data
+    if (newChatTarget.type !== "project") return null
+    if (isLoadingProjects) {
+      return selectedProject?.id === newChatTarget.projectId
+        ? selectedProject
+        : null
+    }
     if (!projects) return null
-    const dbProject = projects.find((p) => p.id === selectedProject.id)
+    const dbProject = projects.find((p) => p.id === newChatTarget.projectId)
     if (!dbProject) return null
     return {
-      ...selectedProject,
+      id: dbProject.id,
       name: dbProject.name,
+      path: dbProject.path,
+      gitRemoteUrl: dbProject.gitRemoteUrl,
+      gitProvider: dbProject.gitProvider,
+      gitOwner: dbProject.gitOwner,
+      gitRepo: dbProject.gitRepo,
     }
-  }, [selectedProject, projects, isLoadingProjects])
+  }, [newChatTarget, selectedProject, projects, isLoadingProjects])
 
   // If no projects exist and none selected - show direct "Add repository" button
-  if (!validSelection && (!projects || projects.length === 0) && !isLoadingProjects) {
+  if (
+    !validSelection &&
+    (!projects || projects.length === 0) &&
+    !isLoadingProjects
+  ) {
     return (
       <button
         type="button"
@@ -202,140 +223,136 @@ export function ProjectSelector() {
 
   return (
     <>
-    <Popover
-      open={open}
-      onOpenChange={(isOpen) => {
-        setOpen(isOpen)
-        if (!isOpen) setSearchQuery("")
-      }}
-    >
-      <PopoverTrigger asChild>
-        <button
-          className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-          type="button"
-        >
-          <ProjectIcon
-            project={validSelection}
-            className="h-4 w-4"
-          />
-          <span className="truncate max-w-[120px]">
-            {validSelection?.name || t("chat.selectRepo")}
-          </span>
-          <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder={t("agent.project.searchRepos")}
-            value={searchQuery}
-            onValueChange={setSearchQuery}
-          />
-          <CommandList className="max-h-[300px] overflow-y-auto">
-            {isLoadingProjects ? (
-              <div className="px-2.5 py-4 text-center text-sm text-muted-foreground">
-                {t("agent.project.loading")}
-              </div>
-            ) : filteredProjects.length > 0 ? (
-              <CommandGroup>
-                {filteredProjects.map((project) => {
-                  const isSelected = validSelection?.id === project.id
-                  return (
-                    <CommandItem
-                      key={project.id}
-                      value={`${project.name} ${project.path}`}
-                      onSelect={() => handleSelectProject(project.id)}
-                      className="gap-2"
-                    >
-                      <ProjectIcon
-                        project={project}
-                        className="h-4 w-4"
-                      />
-                      <span className="truncate flex-1">{project.name}</span>
-                      {isSelected && (
-                        <CheckIcon className="h-4 w-4 shrink-0" />
-                      )}
-                    </CommandItem>
-                  )
-                })}
-              </CommandGroup>
-            ) : (
-              <CommandEmpty>{t("agent.project.noProjectsFound")}</CommandEmpty>
-            )}
-          </CommandList>
-          <div className="border-t border-border/50 py-1">
-            <button
-              type="button"
-              onClick={handleOpenFolder}
-              disabled={openFolder.isPending}
-              className="flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
-            >
-              <FolderPlusIcon className="h-4 w-4 text-muted-foreground" />
-              <span>
-                {openFolder.isPending
-                  ? t("agent.project.adding")
-                  : t("agent.project.addRepository")}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false)
-                setGithubDialogOpen(true)
-              }}
-              className="flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
-            >
-              <GitHubIcon className="h-4 w-4 text-muted-foreground" />
-              <span>{t("agent.project.addFromGitHub")}</span>
-            </button>
-          </div>
-        </Command>
-      </PopoverContent>
-    </Popover>
-
-    <Dialog open={githubDialogOpen} onOpenChange={setGithubDialogOpen}>
-      <DialogContent className="w-[400px] p-0 gap-0 overflow-hidden">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            handleCloneFromGitHub()
-          }}
-        >
-          <div className="p-6">
-            <h2 className="text-xl font-semibold mb-4">
-              {t("agent.project.cloneFromGitHub")}
-            </h2>
-            <Input
-              placeholder={t("agent.project.clonePlaceholder")}
-              value={githubUrl}
-              onChange={(e) => setGithubUrl(e.target.value)}
-              className="w-full h-11 text-sm"
-              autoFocus
+      <Popover
+        open={open}
+        onOpenChange={(isOpen) => {
+          setOpen(isOpen)
+          if (!isOpen) setSearchQuery("")
+        }}
+      >
+        <PopoverTrigger asChild>
+          <button
+            className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+            type="button"
+          >
+            <ProjectIcon project={validSelection} className="h-4 w-4" />
+            <span className="truncate max-w-[120px]">
+              {validSelection?.name || t("chat.selectRepo")}
+            </span>
+            <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-64 p-0" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder={t("agent.project.searchRepos")}
+              value={searchQuery}
+              onValueChange={setSearchQuery}
             />
-          </div>
-          <div className="bg-muted p-4 flex justify-between border-t border-border">
-            <Button
-              type="button"
-              onClick={() => setGithubDialogOpen(false)}
-              variant="ghost"
-              className="rounded-md"
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              type="submit"
-              disabled={!githubUrl.trim() || cloneFromGitHub.isPending}
-              variant="default"
-              className="rounded-md"
-            >
-              {cloneFromGitHub.isPending
-                ? t("agent.project.cloning")
-                : t("agent.project.clone")}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <CommandList className="max-h-[300px] overflow-y-auto">
+              {isLoadingProjects ? (
+                <div className="px-2.5 py-4 text-center text-sm text-muted-foreground">
+                  {t("agent.project.loading")}
+                </div>
+              ) : filteredProjects.length > 0 ? (
+                <CommandGroup>
+                  {filteredProjects.map((project) => {
+                    const isSelected = validSelection?.id === project.id
+                    return (
+                      <CommandItem
+                        key={project.id}
+                        value={`${project.name} ${project.path}`}
+                        onSelect={() => handleSelectProject(project.id)}
+                        className="gap-2"
+                      >
+                        <ProjectIcon project={project} className="h-4 w-4" />
+                        <span className="truncate flex-1">{project.name}</span>
+                        {isSelected && (
+                          <CheckIcon className="h-4 w-4 shrink-0" />
+                        )}
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              ) : (
+                <CommandEmpty>
+                  {t("agent.project.noProjectsFound")}
+                </CommandEmpty>
+              )}
+            </CommandList>
+            <div className="border-t border-border/50 py-1">
+              <button
+                type="button"
+                onClick={handleOpenFolder}
+                disabled={openFolder.isPending}
+                className="flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
+              >
+                <FolderPlusIcon className="h-4 w-4 text-muted-foreground" />
+                <span>
+                  {openFolder.isPending
+                    ? t("agent.project.adding")
+                    : t("agent.project.addRepository")}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  setGithubDialogOpen(true)
+                }}
+                className="flex items-center gap-1.5 min-h-[32px] py-[5px] px-1.5 mx-1 w-[calc(100%-8px)] rounded-md text-sm cursor-default select-none outline-none dark:hover:bg-neutral-800 hover:text-foreground transition-colors"
+              >
+                <GitHubIcon className="h-4 w-4 text-muted-foreground" />
+                <span>{t("agent.project.addFromGitHub")}</span>
+              </button>
+            </div>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      <Dialog open={githubDialogOpen} onOpenChange={setGithubDialogOpen}>
+        <DialogContent className="w-[400px] p-0 gap-0 overflow-hidden">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleCloneFromGitHub()
+            }}
+          >
+            <div className="p-6">
+              <h2 className="text-xl font-semibold mb-4">
+                {t("agent.project.cloneFromGitHub")}
+              </h2>
+              <Input
+                placeholder={t("agent.project.clonePlaceholder")}
+                value={githubUrl}
+                onChange={(e) => setGithubUrl(e.target.value)}
+                className="w-full h-11 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="bg-muted p-4 flex justify-between border-t border-border">
+              <Button
+                type="button"
+                onClick={() => setGithubDialogOpen(false)}
+                variant="ghost"
+                className="rounded-md"
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                type="submit"
+                disabled={!githubUrl.trim() || cloneFromGitHub.isPending}
+                variant="default"
+                className="rounded-md"
+              >
+                {cloneFromGitHub.isPending
+                  ? t("agent.project.cloning")
+                  : t("agent.project.clone")}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

@@ -31,6 +31,7 @@ import { cn } from "../../../lib/utils"
 import { useI18n } from "../../../lib/i18n"
 import {
   justCreatedIdsAtom,
+  newChatTargetAtom,
   projectAgentIdAtomFamily,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexModelSourceAtom,
@@ -44,6 +45,7 @@ import {
   selectedProjectAtom,
   getNextMode,
   type AgentMode,
+  type SelectedProject,
   subChatClaudeModelSourceAtomFamily,
   subChatCodexModelSourceAtomFamily,
 } from "../atoms"
@@ -214,23 +216,40 @@ export function NewChatForm({
   // Check if any chat has unseen changes
   const hasAnyUnseenChanges = unseenChanges.size > 0
   const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
+  const [newChatTarget, setNewChatTarget] = useAtom(newChatTargetAtom)
 
   // Fetch projects to validate selectedProject exists
   const { data: projectsList, isLoading: isLoadingProjects } =
     trpc.projects.list.useQuery()
 
-  // Validate selected project exists in DB
-  // While loading, trust the stored value to prevent flicker
+  // New-chat composer state is driven by an explicit target, not by the
+  // globally selected project. Top-level new chat stays folderless even when a
+  // previous project remains selected elsewhere in the app.
   const validatedProject = useMemo(() => {
-    if (!selectedProject) return null
-    // While loading, trust localStorage value to prevent flicker
-    if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB
+    if (newChatTarget.type !== "project") return null
+    if (isLoadingProjects) {
+      return selectedProject?.id === newChatTarget.projectId
+        ? selectedProject
+        : null
+    }
     if (!projectsList) return null
-    const exists = projectsList.some((p) => p.id === selectedProject.id)
-    return exists ? selectedProject : null
-  }, [selectedProject, projectsList, isLoadingProjects])
-  const projectForChat = isLoadingProjects ? null : validatedProject
+    const project = projectsList.find((p) => p.id === newChatTarget.projectId)
+    if (!project) return null
+    return {
+      id: project.id,
+      name: project.name,
+      path: project.path,
+      gitRemoteUrl: project.gitRemoteUrl,
+      gitProvider: project.gitProvider as
+        | "github"
+        | "gitlab"
+        | "bitbucket"
+        | null,
+      gitOwner: project.gitOwner,
+      gitRepo: project.gitRepo,
+    } satisfies NonNullable<SelectedProject>
+  }, [newChatTarget, selectedProject, projectsList, isLoadingProjects])
+  const projectForChat = validatedProject
   const isFolderlessQuickChat = !validatedProject
   const { data: runtimeCapabilityManifests } =
     useRuntimeCapabilityManifestStore()
@@ -251,12 +270,24 @@ export function NewChatForm({
   const quickChatRuntimeGateLoaded =
     !isFolderlessQuickChat || runtimeCapabilityManifests !== undefined
 
-  // Clear invalid project from storage
+  // Clear invalid project from storage without letting it drive new-chat mode.
   useEffect(() => {
-    if (selectedProject && projectsList && !validatedProject) {
+    if (
+      selectedProject &&
+      projectsList &&
+      !projectsList.some((project) => project.id === selectedProject.id)
+    ) {
       setSelectedProject(null)
     }
-  }, [selectedProject, projectsList, validatedProject, setSelectedProject])
+  }, [selectedProject, projectsList, setSelectedProject])
+
+  useEffect(() => {
+    if (newChatTarget.type !== "project" || !projectsList) return
+    if (projectsList.some((project) => project.id === newChatTarget.projectId)) {
+      return
+    }
+    setNewChatTarget({ type: "quick" })
+  }, [newChatTarget, projectsList, setNewChatTarget])
   // Remember the runtime per project: each project keeps its own last-used
   // runtime, falling back to the global most-recent choice for new projects.
   const projectAgentIdAtom = useMemo(
@@ -1065,6 +1096,25 @@ export function NewChatForm({
     const draft = globalDrafts[selectedDraftId]
     if (draft) {
       currentDraftIdRef.current = selectedDraftId
+      if ("project" in draft && draft.project) {
+        const draftProject = {
+          id: draft.project.id,
+          name: draft.project.name,
+          path: draft.project.path,
+          gitOwner: draft.project.gitOwner,
+          gitRepo: draft.project.gitRepo,
+          gitProvider: draft.project.gitProvider as
+            | "github"
+            | "gitlab"
+            | "bitbucket"
+            | null
+            | undefined,
+        } satisfies NonNullable<SelectedProject>
+        setSelectedProject(draftProject)
+        setNewChatTarget({ type: "project", projectId: draft.project.id })
+      } else {
+        setNewChatTarget({ type: "quick" })
+      }
       lastSavedTextRef.current = JSON.stringify({
         text: draft.text || "",
         images: draft.images ?? [],
@@ -1109,7 +1159,9 @@ export function NewChatForm({
     clearPastedTexts,
     selectedDraftId,
     setImagesFromDraft,
+    setNewChatTarget,
     setPastedTextsFromDraft,
+    setSelectedProject,
     validatedProject?.path,
   ])
 
