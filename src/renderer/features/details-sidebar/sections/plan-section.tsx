@@ -56,7 +56,7 @@ export const PlanSection = memo(function PlanSection({
     error,
     refetch,
   } = trpc.files.readFile.useQuery(
-    { filePath: planPath! },
+    { filePath: planPath ?? "" },
     { enabled: !!planPath },
   )
 

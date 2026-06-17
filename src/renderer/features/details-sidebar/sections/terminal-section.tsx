@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import {
   activeTerminalIdAtom,
   terminalCwdAtom,
-  terminalSidebarOpenAtomFamily,
   terminalsAtom,
 } from "@/features/terminal/atoms"
 import { getDefaultTerminalBg } from "@/features/terminal/helpers"

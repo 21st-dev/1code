@@ -15,7 +15,7 @@ import {
   Upload,
   X,
 } from "lucide-react"
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { memo, useEffect, useRef, useState } from "react"
 import { HiArrowPath, HiChevronDown } from "react-icons/hi2"
 import { LuGitBranch } from "react-icons/lu"
 import { toast } from "sonner"
@@ -39,8 +39,6 @@ import {
   DropdownMenuTrigger,
 } from "../../../../components/ui/dropdown-menu"
 import {
-  AgentIcon,
-  CircleFilterIcon,
   ExternalLinkIcon,
   IconCloseSidebarRight,
   IconFetch,
@@ -174,7 +172,6 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 }: DiffSidebarHeaderProps) {
   const { t } = useI18n()
   // Responsive breakpoints - progressive disclosure
-  const isCompact = sidebarWidth < 350
   const showViewModeToggle = sidebarWidth >= 450 // Show Split/Unified toggle
   const showReviewButton = sidebarWidth >= 550 // Show Review button
 
@@ -601,6 +598,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                type="button"
                 onClick={displayAction.handler}
                 disabled={displayAction.isPending || displayAction.disabled}
                 className={cn(
@@ -655,6 +653,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  type="button"
                   onClick={displayAction.handler}
                   disabled={displayAction.isPending || displayAction.disabled}
                   className={cn(
