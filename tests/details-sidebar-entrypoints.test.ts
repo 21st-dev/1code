@@ -209,6 +209,42 @@ describe("details sidebar entrypoints", () => {
     expect(source).toContain('openDetailsWidget("terminal", { toggle: true })')
   })
 
+  test("promotes Details changes commit and push without duplicating git owners", () => {
+    const source = read("src/renderer/features/agents/main/active-chat.tsx")
+    const detailsSidebar = read(
+      "src/renderer/features/details-sidebar/details-sidebar.tsx",
+    )
+    const changesWidget = read(
+      "src/renderer/features/details-sidebar/sections/changes-widget.tsx",
+    )
+
+    expect(changesWidget).toContain("import { CommitInput }")
+    expect(changesWidget).toContain("import { usePushAction }")
+    expect(changesWidget).toContain("<CommitInput")
+    expect(changesWidget).toContain("selectedFilePaths={selectedFilePaths}")
+    expect(changesWidget).toContain("onRefresh={onRefresh ?? (() => {})}")
+    expect(changesWidget).toContain("const pushActionButton")
+    expect(changesWidget).toContain('syncActionKind === "publish"')
+    expect(changesWidget).toContain('syncActionKind === "push"')
+    expect(changesWidget).toContain("onSuccess: onRefresh")
+    expect(detailsSidebar).toContain("onChangesRefresh?: () => void")
+    expect(detailsSidebar).toContain("onRefresh={onChangesRefresh}")
+    expect(source).toContain("onChangesRefresh={handleCommitChangesRefresh}")
+
+    for (const content of [source, detailsSidebar, changesWidget]) {
+      expect(content).not.toContain("onCommitAndPush")
+      expect(content).not.toContain("handleCommitAndPush")
+      expect(content).not.toContain("shouldCommitAndPush")
+    }
+
+    expect(source).not.toContain("usePushAction")
+    expect(changesWidget).not.toContain("trpc.changes.pull")
+    expect(changesWidget).not.toContain("forcePush")
+    expect(changesWidget).not.toContain("mergeFromDefault")
+    expect(changesWidget).toContain("setIsCreateDraftPrDialogOpen(true)")
+    expect(changesWidget).toContain("createDraftPrMutation.mutateAsync")
+  })
+
   test("keeps in-chat git readouts as message-level provenance", () => {
     const gitActivityBadges = read(
       "src/renderer/features/agents/ui/git-activity-badges.tsx",

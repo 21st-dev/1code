@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ArrowUpRight, GitPullRequest } from "lucide-react"
+import { ArrowUp, ArrowUpRight, GitPullRequest, Upload } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertDialog,
@@ -30,6 +30,8 @@ import {
   getFileDir,
   getFileName,
 } from "@/features/changes/components/file-list-item"
+import { CommitInput } from "@/features/changes/components/commit-input"
+import { usePushAction } from "@/features/changes/hooks/use-push-action"
 import { getSyncActionKind } from "@/features/changes/utils"
 import { selectedFileAtomFamily } from "@/features/details-sidebar/atoms"
 import { useOpenDetailsWidget } from "@/features/details-sidebar/use-open-details-widget"
@@ -48,9 +50,7 @@ interface ChangesWidgetProps {
   worktreePath?: string | null
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
   parsedFileDiffs?: ParsedDiffFile[] | null
-  onCommit?: (selectedPaths: string[]) => void
-  onCommitAndPush?: (selectedPaths: string[]) => void
-  isCommitting?: boolean
+  onRefresh?: () => void
   pushCount?: number
   pullCount?: number
   hasUpstream?: boolean
@@ -116,9 +116,7 @@ export const ChangesWidget = memo(function ChangesWidget({
   worktreePath,
   diffStats,
   parsedFileDiffs,
-  onCommit,
-  onCommitAndPush,
-  isCommitting = false,
+  onRefresh,
   pushCount = 0,
   pullCount = 0,
   hasUpstream = true,
@@ -157,8 +155,31 @@ export const ChangesWidget = memo(function ChangesWidget({
     pushCount,
     isSyncStatusLoading,
   })
-
-  const shouldCommitAndPush = !!worktreePath && !!onCommitAndPush && !isSyncStatusLoading && syncActionKind !== "pull" && syncActionKind !== "loading"
+  const showPushAction =
+    !!worktreePath &&
+    (syncActionKind === "publish" || syncActionKind === "push")
+  const pushActionLabel =
+    syncActionKind === "publish"
+      ? t("changes.diff.publish")
+      : t("changes.diff.push")
+  const pushPendingLabel =
+    syncActionKind === "publish"
+      ? t("changes.diff.publishing")
+      : t("changes.diff.pushing")
+  const pushTooltip =
+    syncActionKind === "publish"
+      ? t("changes.diff.publishTooltip")
+      : t("changes.diff.pushTooltip", {
+          count: pushCount,
+          plural: pushCount !== 1 ? "s" : "",
+        })
+  const pushBadge =
+    syncActionKind === "push" && pushCount > 0 ? `↑${pushCount}` : null
+  const { push: pushBranch, isPending: isPushPending } = usePushAction({
+    worktreePath,
+    hasUpstream,
+    onSuccess: onRefresh,
+  })
   const isLikelyDefaultBranch =
     currentBranch === "main" ||
     currentBranch === "master" ||
@@ -283,9 +304,13 @@ export const ChangesWidget = memo(function ChangesWidget({
   ).length
   const allSelected = displayFiles.length > 0 && selectedCount === displayFiles.length
   const someSelected = selectedCount > 0 && selectedCount < displayFiles.length
-  const commitLabelSuffix = selectedCount > 0
-    ? ` ${selectedCount} file${selectedCount !== 1 ? "s" : ""}`
-    : ""
+  const selectedFilePaths = useMemo(
+    () =>
+      displayFiles
+        .filter((f) => selectedForCommit.has(getDisplayPath(f)))
+        .map((f) => getDisplayPath(f)),
+    [displayFiles, selectedForCommit, getDisplayPath],
+  )
   const canCreateDraftPr =
     !!draftPrForm?.title.trim() &&
     !!draftPrForm.body.trim() &&
@@ -302,17 +327,9 @@ export const ChangesWidget = memo(function ChangesWidget({
     }
   }, [allSelected, displayFiles, getDisplayPath])
 
-  // Handle commit
-  const handleCommit = useCallback(() => {
-    const selectedPaths = displayFiles
-      .filter((f) => selectedForCommit.has(getDisplayPath(f)))
-      .map((f) => getDisplayPath(f))
-    if (shouldCommitAndPush && onCommitAndPush) {
-      onCommitAndPush(selectedPaths)
-    } else {
-      onCommit?.(selectedPaths)
-    }
-  }, [displayFiles, selectedForCommit, onCommit, onCommitAndPush, getDisplayPath, shouldCommitAndPush])
+  const handleCommitSuccess = useCallback(() => {
+    setSelectedForCommit(new Set())
+  }, [])
 
   const handlePrepareDraftPr = useCallback(async () => {
     if (!canPrepareDraftPr) return
@@ -436,6 +453,39 @@ export const ChangesWidget = memo(function ChangesWidget({
         : t("githubWorkflow.draftPr.prepare")}
     </Button>
   )
+
+  const pushActionButton = showPushAction ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="default"
+          size="sm"
+          className="h-7 flex-1 min-w-24 text-xs"
+          onClick={pushBranch}
+          disabled={isPushPending}
+        >
+          {isPushPending ? (
+            <span className="truncate">{pushPendingLabel}</span>
+          ) : (
+            <>
+              {syncActionKind === "publish" ? (
+                <Upload className="mr-1.5 h-3.5 w-3.5" />
+              ) : (
+                <ArrowUp className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              <span className="truncate">{pushActionLabel}</span>
+              {pushBadge && (
+                <span className="ml-1 rounded bg-primary-foreground/20 px-1 text-[10px]">
+                  {pushBadge}
+                </span>
+              )}
+            </>
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{pushTooltip}</TooltipContent>
+    </Tooltip>
+  ) : null
 
   const draftPrPanel = (
     <>
@@ -730,34 +780,30 @@ export const ChangesWidget = memo(function ChangesWidget({
               })}
             </div>
 
-            {/* Action buttons */}
-            <div className="flex gap-2 p-2 border-t border-border/50">
-              {/* Commit button */}
-              {onCommit && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="flex-1 h-7 text-xs"
-                  onClick={handleCommit}
-                  disabled={isCommitting || selectedCount === 0}
-                >
-                  {isCommitting
-                    ? (shouldCommitAndPush
-                      ? t("changes.commit.committingAndPushing")
-                      : t("changes.commit.committing"))
-                    : (shouldCommitAndPush
-                      ? t("changes.commit.commitAndPush", { suffix: commitLabelSuffix })
-                      : t("changes.commit.commitWithSuffix", { suffix: commitLabelSuffix }))}
-                </Button>
-              )}
+            {/* First-class commit controls - shared with the expanded Changes surface */}
+            {worktreePath && (
+              <CommitInput
+                worktreePath={worktreePath}
+                hasStagedChanges={selectedCount > 0}
+                onRefresh={onRefresh ?? (() => {})}
+                onCommitSuccess={handleCommitSuccess}
+                stagedCount={selectedCount}
+                currentBranch={currentBranch}
+                selectedFilePaths={selectedFilePaths}
+                chatId={chatId}
+              />
+            )}
 
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2 p-2 border-t border-border/50">
+              {pushActionButton}
               {draftPrButton}
 
               {/* View diff button */}
               <Button
                 variant="outline"
                 size="sm"
-                className={cn("h-7 text-xs", onCommit ? "w-24" : "w-full")}
+                className={cn("h-7 text-xs", showPushAction ? "w-24" : "flex-1")}
                 onClick={() => onExpand?.()}
               >
                 {t("changes.viewDiff")}
@@ -771,9 +817,10 @@ export const ChangesWidget = memo(function ChangesWidget({
             <div className="text-xs text-muted-foreground px-2 py-2">
               {t("changes.noChanges")}
             </div>
-            {canPrepareDraftPr && (
-              <div className="flex gap-2 p-2 border-t border-border/50">
-                {draftPrButton}
+            {(showPushAction || canPrepareDraftPr) && (
+              <div className="flex flex-wrap gap-2 p-2 border-t border-border/50">
+                {pushActionButton}
+                {canPrepareDraftPr && draftPrButton}
               </div>
             )}
             {draftPrPanel}

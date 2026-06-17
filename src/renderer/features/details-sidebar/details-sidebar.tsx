@@ -199,12 +199,8 @@ interface DetailsSidebarProps {
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
   /** Parsed diff files for file list */
   parsedFileDiffs?: ParsedDiffFile[] | null
-  /** Callback to commit selected changes */
-  onCommit?: (selectedPaths: string[]) => void
-  /** Callback to commit and push selected changes */
-  onCommitAndPush?: (selectedPaths: string[]) => void
-  /** Whether commit is in progress */
-  isCommitting?: boolean
+  /** Callback to refresh diff and git status after local git actions */
+  onChangesRefresh?: () => void
   /** Git sync status for push/pull actions */
   gitStatus?: {
     pushCount?: number
@@ -241,9 +237,7 @@ export function DetailsSidebar({
   canOpenDiff,
   diffStats,
   parsedFileDiffs,
-  onCommit,
-  onCommitAndPush,
-  isCommitting,
+  onChangesRefresh,
   gitStatus,
   isGitStatusLoading,
   currentBranch,
@@ -558,9 +552,7 @@ export function DetailsSidebar({
                     worktreePath={worktreePath}
                     diffStats={diffStats}
                     parsedFileDiffs={parsedFileDiffs}
-                    onCommit={onCommit}
-                    onCommitAndPush={onCommitAndPush}
-                    isCommitting={isCommitting}
+                    onRefresh={onChangesRefresh}
                     pushCount={gitStatus?.pushCount ?? 0}
                     pullCount={gitStatus?.pullCount ?? 0}
                     hasUpstream={gitStatus?.hasUpstream ?? true}

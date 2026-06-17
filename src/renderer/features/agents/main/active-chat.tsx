@@ -77,10 +77,8 @@ import { trpc, trpcClient } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
 import { ChangesPanel } from "../../changes"
-import { useCommitActions } from "../../changes/components/commit-input"
 import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
 import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
-import { usePushAction } from "../../changes/hooks/use-push-action"
 import { getStatusIndicator } from "../../changes/utils/status"
 import {
   detailsSidebarAutoOpenSuppressedAtom,
@@ -5366,34 +5364,6 @@ Make sure to preserve all functionality from both branches when resolving confli
     scheduleDiffRefresh()
   }, [refetchGitStatus, scheduleDiffRefresh])
 
-  const {
-    commit: commitChanges,
-    isPending: isCommittingChanges,
-  } = useCommitActions({
-    worktreePath,
-    chatId,
-    onRefresh: handleCommitChangesRefresh,
-  })
-
-  const { push: pushBranch, isPending: isPushing } = usePushAction({
-    worktreePath,
-    hasUpstream: gitStatus?.hasUpstream ?? true,
-    onSuccess: handleCommitChangesRefresh,
-  })
-
-  const handleCommitChanges = useCallback((selectedPaths: string[]) => {
-    commitChanges({ filePaths: selectedPaths })
-  }, [commitChanges])
-
-  const handleCommitAndPush = useCallback(async (selectedPaths: string[]) => {
-    const didCommit = await commitChanges({ filePaths: selectedPaths })
-    if (didCommit) {
-      pushBranch()
-    }
-  }, [commitChanges, pushBranch])
-
-  const isCommittingCombined = isCommittingChanges || isPushing
-
   // Refetch git status and diff stats when window gains focus
   useEffect(() => {
     if (!worktreePath || !isDiffSidebarOpen) return
@@ -7219,9 +7189,7 @@ Make sure to preserve all functionality from both branches when resolving confli
             setIsDiffSidebarOpen={setIsDiffSidebarOpen}
             diffStats={diffStats}
             parsedFileDiffs={parsedFileDiffs}
-            onCommit={worktreePath ? handleCommitChanges : undefined}
-            onCommitAndPush={worktreePath ? handleCommitAndPush : undefined}
-            isCommitting={isCommittingCombined}
+            onChangesRefresh={handleCommitChangesRefresh}
             gitStatus={gitStatus}
             isGitStatusLoading={isGitStatusLoading}
             currentBranch={branchData?.current}
