@@ -3,35 +3,34 @@
 import { useSetAtom } from "jotai"
 import { Check } from "lucide-react"
 import { useMemo, useState } from "react"
-
+import { LanguageSwitcher } from "../../components/language-switcher"
 import {
   ClaudeCodeIcon,
   CodexIcon,
   KeyFilledIcon,
   SettingsFilledIcon,
 } from "../../components/ui/icons"
-import { LanguageSwitcher } from "../../components/language-switcher"
 import {
-  billingMethodAtom,
   codexOnboardingCompletedAtom,
-  type BillingMethod,
+  type OnboardingProviderMode,
+  onboardingProviderModeAtom,
 } from "../../lib/atoms"
-import { useI18n, type TranslationKey } from "../../lib/i18n"
+import { type TranslationKey, useI18n } from "../../lib/i18n"
 import { cn } from "../../lib/utils"
 
-type BillingOptionGroup = "claude-code" | "codex"
+type ProviderOptionGroup = "claude-code" | "codex"
 
-type BillingOption = {
+type ProviderOption = {
   id: string
-  method: Exclude<BillingMethod, null>
-  group: BillingOptionGroup
+  method: Exclude<OnboardingProviderMode, null>
+  group: ProviderOptionGroup
   titleKey: TranslationKey
   subtitleKey: TranslationKey
   recommended?: boolean
   icon: React.ReactNode
 }
 
-const billingOptions: BillingOption[] = [
+const providerOptions: ProviderOption[] = [
   {
     id: "claude-subscription",
     method: "claude-subscription",
@@ -76,24 +75,26 @@ const billingOptions: BillingOption[] = [
   },
 ]
 
-export function BillingMethodPage() {
+export function OnboardingProviderPage() {
   const { t } = useI18n()
-  const setBillingMethod = useSetAtom(billingMethodAtom)
+  const setOnboardingProviderMode = useSetAtom(onboardingProviderModeAtom)
   const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const [selectedGroup, setSelectedGroup] =
-    useState<BillingOptionGroup>("claude-code")
-  const [selectedOptionId, setSelectedOptionId] =
-    useState<string>("claude-subscription")
+    useState<ProviderOptionGroup>("claude-code")
+  const [selectedOptionId, setSelectedOptionId] = useState<string>(
+    "claude-subscription",
+  )
 
   const visibleOptions = useMemo(
-    () =>
-      billingOptions.filter((option) => option.group === selectedGroup),
+    () => providerOptions.filter((option) => option.group === selectedGroup),
     [selectedGroup],
   )
 
   const selectedOption = useMemo(() => {
-    const found = visibleOptions.find((option) => option.id === selectedOptionId)
-    return found || visibleOptions[0] || billingOptions[0]
+    const found = visibleOptions.find(
+      (option) => option.id === selectedOptionId,
+    )
+    return found || visibleOptions[0] || providerOptions[0]
   }, [selectedOptionId, visibleOptions])
 
   const handleContinue = () => {
@@ -105,12 +106,12 @@ export function BillingMethodPage() {
       setCodexOnboardingCompleted(false)
     }
 
-    setBillingMethod(selectedOption.method)
+    setOnboardingProviderMode(selectedOption.method)
   }
 
-  const getOptionTitle = (option: BillingOption) => t(option.titleKey)
+  const getOptionTitle = (option: ProviderOption) => t(option.titleKey)
 
-  const getOptionSubtitle = (option: BillingOption) => t(option.subtitleKey)
+  const getOptionSubtitle = (option: ProviderOption) => t(option.subtitleKey)
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background select-none">
@@ -166,10 +167,11 @@ export function BillingMethodPage() {
           </button>
         </div>
 
-        {/* Billing Options */}
+        {/* Provider Options */}
         <div className="space-y-3">
           {visibleOptions.map((option) => (
             <button
+              type="button"
               key={option.id}
               onClick={() => setSelectedOptionId(option.id)}
               className={cn(
@@ -179,7 +181,7 @@ export function BillingMethodPage() {
                 "active:scale-[0.99]",
                 selectedOptionId === option.id
                   ? "bg-primary/5"
-                  : "bg-background"
+                  : "bg-background",
               )}
             >
               {/* Checkmark in top right corner */}
@@ -196,9 +198,9 @@ export function BillingMethodPage() {
                       ? "bg-[#D97757] text-white"
                       : option.id === "codex-subscription"
                         ? "bg-white text-black"
-                      : selectedOptionId === option.id
-                        ? "bg-foreground text-background"
-                        : "bg-muted text-muted-foreground"
+                        : selectedOptionId === option.id
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-muted-foreground",
                   )}
                 >
                   {option.icon}
@@ -225,6 +227,7 @@ export function BillingMethodPage() {
 
         {/* Continue Button */}
         <button
+          type="button"
           onClick={handleContinue}
           className="w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] flex items-center justify-center"
         >

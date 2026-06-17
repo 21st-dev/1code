@@ -1,25 +1,34 @@
-import { Provider as JotaiProvider, useAtom, useAtomValue, useSetAtom } from "jotai"
+import {
+  Provider as JotaiProvider,
+  useAtom,
+  useAtomValue,
+  useSetAtom,
+} from "jotai"
 import { ThemeProvider, useTheme } from "next-themes"
 import { useEffect, useMemo, useRef } from "react"
 import { Toaster, toast } from "sonner"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
-import { WindowProvider, getInitialWindowParams } from "./contexts/WindowContext"
-import { selectedProjectAtom, selectedAgentChatIdAtom } from "./features/agents/atoms"
+import {
+  getInitialWindowParams,
+  WindowProvider,
+} from "./contexts/WindowContext"
+import {
+  selectedAgentChatIdAtom,
+  selectedProjectAtom,
+} from "./features/agents/atoms"
 import { useAgentSubChatStore } from "./features/agents/stores/sub-chat-store"
 import { AgentsLayout } from "./features/layout/agents-layout"
 import {
   AnthropicOnboardingPage,
   ApiKeyOnboardingPage,
-  BillingMethodPage,
   CodexOnboardingPage,
+  OnboardingProviderPage,
   SelectRepoPage,
 } from "./features/onboarding"
-import { useLocalOnlyModeState } from "./lib/hooks/use-local-only-mode"
 import {
   anthropicOnboardingCompletedAtom,
   apiKeyOnboardingCompletedAtom,
-  billingMethodAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
   customClaudeConfigAtom,
@@ -27,8 +36,10 @@ import {
   LEGACY_OPENAI_API_KEY_STORAGE_KEY,
   normalizeCodexApiKey,
   normalizeCustomClaudeConfig,
+  onboardingProviderModeAtom,
   repoOnboardingSkippedAtom,
 } from "./lib/atoms"
+import { useLocalOnlyModeState } from "./lib/hooks/use-local-only-mode"
 import { I18nProvider, useI18n } from "./lib/i18n"
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
@@ -54,17 +65,19 @@ function ThemedToaster() {
  */
 function AppContent() {
   const { t } = useI18n()
-  const billingMethod = useAtomValue(billingMethodAtom)
-  const setBillingMethod = useSetAtom(billingMethodAtom)
+  const onboardingProviderMode = useAtomValue(onboardingProviderModeAtom)
+  const setOnboardingProviderMode = useSetAtom(onboardingProviderModeAtom)
   const { isLocalOnly, isResolved: isLocalOnlyResolved } =
     useLocalOnlyModeState()
   const [legacyCustomClaudeConfig, setLegacyCustomClaudeConfig] = useAtom(
-    customClaudeConfigAtom
+    customClaudeConfigAtom,
   )
   const anthropicOnboardingCompleted = useAtomValue(
-    anthropicOnboardingCompletedAtom
+    anthropicOnboardingCompletedAtom,
   )
-  const setAnthropicOnboardingCompleted = useSetAtom(anthropicOnboardingCompletedAtom)
+  const setAnthropicOnboardingCompleted = useSetAtom(
+    anthropicOnboardingCompletedAtom,
+  )
   const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
   const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
@@ -73,7 +86,8 @@ function AppContent() {
   const repoOnboardingSkipped = useAtomValue(repoOnboardingSkippedAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
-  const { setActiveSubChat, addToOpenSubChats, setChatId } = useAgentSubChatStore()
+  const { setActiveSubChat, addToOpenSubChats, setChatId } =
+    useAgentSubChatStore()
   const legacyProviderMigrationAttemptedRef = useRef(false)
   const legacyCodexApiKeyMigrationAttemptedRef = useRef(false)
   const legacyVoiceApiKeyMigrationAttemptedRef = useRef(false)
@@ -86,7 +100,11 @@ function AppContent() {
   useEffect(() => {
     const params = getInitialWindowParams()
     if (params.chatId) {
-      console.log("[App] Opening chat from window params:", params.chatId, params.subChatId)
+      console.log(
+        "[App] Opening chat from window params:",
+        params.chatId,
+        params.subChatId,
+      )
       setSelectedChatId(params.chatId)
       setChatId(params.chatId)
       if (params.subChatId) {
@@ -126,15 +144,24 @@ function AppContent() {
   // Migration: If user already completed Anthropic onboarding but has no billing method set,
   // automatically set it to "claude-subscription" (legacy users before billing method was added)
   useEffect(() => {
-    if (!billingMethod && anthropicOnboardingCompleted && !isLocalOnly) {
-      setBillingMethod("claude-subscription")
+    if (
+      !onboardingProviderMode &&
+      anthropicOnboardingCompleted &&
+      !isLocalOnly
+    ) {
+      setOnboardingProviderMode("claude-subscription")
     }
-  }, [billingMethod, anthropicOnboardingCompleted, isLocalOnly, setBillingMethod])
+  }, [
+    onboardingProviderMode,
+    anthropicOnboardingCompleted,
+    isLocalOnly,
+    setOnboardingProviderMode,
+  ])
 
   useEffect(() => {
     if (!isLocalOnlyResolved || !isLocalOnly) return
     if (
-      billingMethod === "claude-subscription" &&
+      onboardingProviderMode === "claude-subscription" &&
       anthropicOnboardingCompleted &&
       claudeCodeIntegration &&
       !claudeCodeIntegration.isConnected
@@ -143,7 +170,7 @@ function AppContent() {
     }
   }, [
     anthropicOnboardingCompleted,
-    billingMethod,
+    onboardingProviderMode,
     claudeCodeIntegration,
     isLocalOnly,
     isLocalOnlyResolved,
@@ -153,28 +180,35 @@ function AppContent() {
   // Auto-skip onboarding if user has existing CLI config (API key or proxy)
   // This allows users with ANTHROPIC_API_KEY to use the app without OAuth
   useEffect(() => {
-    if (cliConfig?.hasConfig && !billingMethod) {
-      console.log("[App] Detected existing CLI config, auto-completing onboarding")
-      setBillingMethod("api-key")
+    if (cliConfig?.hasConfig && !onboardingProviderMode) {
+      console.log(
+        "[App] Detected existing CLI config, auto-completing onboarding",
+      )
+      setOnboardingProviderMode("api-key")
       setApiKeyOnboardingCompleted(true)
     }
-  }, [cliConfig?.hasConfig, billingMethod, setBillingMethod, setApiKeyOnboardingCompleted])
+  }, [
+    cliConfig?.hasConfig,
+    onboardingProviderMode,
+    setOnboardingProviderMode,
+    setApiKeyOnboardingCompleted,
+  ])
 
   useEffect(() => {
     const config = secureProviderConfig?.config
     if (!config?.hasToken) return
 
-    if (!billingMethod) {
-      setBillingMethod(
-        config.baseUrl.includes("anthropic.com") ? "api-key" : "custom-model"
+    if (!onboardingProviderMode) {
+      setOnboardingProviderMode(
+        config.baseUrl.includes("anthropic.com") ? "api-key" : "custom-model",
       )
     }
     setApiKeyOnboardingCompleted(true)
   }, [
-    billingMethod,
+    onboardingProviderMode,
     secureProviderConfig?.config,
     setApiKeyOnboardingCompleted,
-    setBillingMethod,
+    setOnboardingProviderMode,
   ])
 
   useEffect(() => {
@@ -243,28 +277,31 @@ function AppContent() {
       {
         onSuccess: () => {
           setLegacyCustomClaudeConfig({ model: "", token: "", baseUrl: "" })
-          if (!billingMethod) {
-            setBillingMethod(
+          if (!onboardingProviderMode) {
+            setOnboardingProviderMode(
               normalized.baseUrl.includes("anthropic.com")
                 ? "api-key"
-                : "custom-model"
+                : "custom-model",
             )
           }
           setApiKeyOnboardingCompleted(true)
         },
         onError: (error) => {
-          console.warn("[App] Failed to migrate legacy Claude provider config:", error)
+          console.warn(
+            "[App] Failed to migrate legacy Claude provider config:",
+            error,
+          )
           setLegacyCustomClaudeConfig({ model: "", token: "", baseUrl: "" })
           toast.error(t("toast.models.failedToMigrateLegacyClaudeProvider"))
         },
-      }
+      },
     )
   }, [
     importLegacyProviderConfig,
-    billingMethod,
+    onboardingProviderMode,
     legacyCustomClaudeConfig,
     setApiKeyOnboardingCompleted,
-    setBillingMethod,
+    setOnboardingProviderMode,
     setLegacyCustomClaudeConfig,
     t,
   ])
@@ -285,30 +322,34 @@ function AppContent() {
   }, [selectedProject, projects, isLoadingProjects])
 
   // Determine which page to show:
-  // 1. No billing method selected -> BillingMethodPage
+  // 1. No provider/auth mode selected -> OnboardingProviderPage
   // 2. Claude subscription selected but not completed -> AnthropicOnboardingPage
   // 3. Codex selected but not completed -> CodexOnboardingPage
   // 4. API key or custom model selected but not completed -> ApiKeyOnboardingPage
   // 5. No valid project selected and repository onboarding not deferred -> SelectRepoPage
   // 6. Otherwise -> AgentsLayout
-  if (!billingMethod) {
-    return <BillingMethodPage />
+  if (!onboardingProviderMode) {
+    return <OnboardingProviderPage />
   }
 
-  if (billingMethod === "claude-subscription" && !anthropicOnboardingCompleted) {
+  if (
+    onboardingProviderMode === "claude-subscription" &&
+    !anthropicOnboardingCompleted
+  ) {
     return <AnthropicOnboardingPage />
   }
 
   if (
-    (billingMethod === "codex-subscription" ||
-      billingMethod === "codex-api-key") &&
+    (onboardingProviderMode === "codex-subscription" ||
+      onboardingProviderMode === "codex-api-key") &&
     !codexOnboardingCompleted
   ) {
     return <CodexOnboardingPage />
   }
 
   if (
-    (billingMethod === "api-key" || billingMethod === "custom-model") &&
+    (onboardingProviderMode === "api-key" ||
+      onboardingProviderMode === "custom-model") &&
     !apiKeyOnboardingCompleted
   ) {
     return <ApiKeyOnboardingPage />

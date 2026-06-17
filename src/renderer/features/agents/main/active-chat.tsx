@@ -290,8 +290,6 @@ function isAnsweredAskUserQuestionPart(
       part.state === "result")
   )
 }
-// import { selectedTeamIdAtom } from "@/lib/atoms/team"
-const selectedTeamIdAtom = atom<string | null>(null)
 // import type { PlanType } from "@/lib/config/subscription-plans"
 type PlanType = string
 
@@ -1589,7 +1587,6 @@ const ChatViewInner = memo(function ChatViewInner({
   onCreateNewSubChat,
   onProviderChange,
   refreshDiff,
-  teamId,
   repository,
   streamId,
   isMobile = false,
@@ -1620,7 +1617,6 @@ const ChatViewInner = memo(function ChatViewInner({
     provider: "claude-code" | "codex",
   ) => void
   refreshDiff?: () => void
-  teamId?: string
   repository?: string
   streamId?: string | null
   isMobile?: boolean
@@ -3595,22 +3591,6 @@ const ChatViewInner = memo(function ChatViewInner({
     clearPastedTexts()
     clearFileContents()
 
-    // Optimistic update: immediately update chat's updated_at and resort array for instant sidebar resorting
-    if (teamId) {
-      const now = new Date()
-      utils.agents.getAgentChats.setData({ teamId }, (old: any) => {
-        if (!old) return old
-        // Update the timestamp and sort by updated_at descending
-        const updated = old.map((c: any) =>
-          c.id === parentChatId ? { ...c, updated_at: now } : c,
-        )
-        return updated.sort(
-          (a: any, b: any) =>
-            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-        )
-      })
-    }
-
     // Desktop app: Optimistic update for chats.list to update sidebar immediately
     const queryClient = getQueryClient()
     if (queryClient) {
@@ -3656,7 +3636,6 @@ const ChatViewInner = memo(function ChatViewInner({
     clearAll,
     clearTextContexts,
     clearPastedTexts,
-    teamId,
     addToQueue,
     setExpiredQuestionsMap,
   ])
@@ -4312,7 +4291,6 @@ const ChatViewInner = memo(function ChatViewInner({
         subChatId={subChatId}
         parentChatId={parentChatId}
         provider={provider}
-        teamId={teamId}
         repository={repository}
         projectPath={projectPath}
         changedFiles={changedFilesForSubChat}
@@ -4366,7 +4344,6 @@ export function ChatView({
   hideHeader?: boolean
 }) {
   const { t } = useI18n()
-  const [selectedTeamId] = useAtom(selectedTeamIdAtom)
 
   // Get active sub-chat ID from store for mode tracking (reactive)
   const activeSubChatIdForMode = useAgentSubChatStore((state) => state.activeSubChatId)
@@ -6558,9 +6535,7 @@ Make sure to preserve all functionality from both branches when resolving confli
         },
         updateChatName: (chatIdToUpdate, name) => {
           // Optimistic update for sidebar (list query)
-          // On desktop, selectedTeamId is always null, so we update unconditionally
           utilsRef.current.agents.getAgentChats.setData(
-            { teamId: selectedTeamId },
             (old: Array<{ id: string; name: string | null }> | undefined) => {
               if (!old) return old
               return old.map((c: { id: string; name: string | null }) =>
@@ -6581,7 +6556,6 @@ Make sure to preserve all functionality from both branches when resolving confli
     },
     [
       chatId,
-      selectedTeamId,
       selectedOllamaModel,
     ],
   )
@@ -6835,7 +6809,6 @@ Make sure to preserve all functionality from both branches when resolving confli
                             onAutoRename={stableHandleAutoRename}
                             onCreateNewSubChat={stableHandleCreateNewSubChat}
                             onProviderChange={stableHandleProviderChange}
-                            teamId={selectedTeamId || undefined}
                             repository={repository}
                             streamId={agentChatStore.getStreamId(paneId)}
                             isMobile={isMobileFullscreen}
@@ -6883,7 +6856,6 @@ Make sure to preserve all functionality from both branches when resolving confli
                                 onAutoRename={stableHandleAutoRename}
                                 onCreateNewSubChat={stableHandleCreateNewSubChat}
                                 onProviderChange={stableHandleProviderChange}
-                                teamId={selectedTeamId || undefined}
                                 repository={repository}
                                 streamId={agentChatStore.getStreamId(subChatId)}
                                 isMobile={isMobileFullscreen}
@@ -6944,7 +6916,6 @@ Make sure to preserve all functionality from both branches when resolving confli
                       onAutoRename={stableHandleAutoRename}
                       onCreateNewSubChat={stableHandleCreateNewSubChat}
                       onProviderChange={stableHandleProviderChange}
-                      teamId={selectedTeamId || undefined}
                       repository={repository}
                       streamId={agentChatStore.getStreamId(subChatId)}
                       isMobile={isMobileFullscreen}

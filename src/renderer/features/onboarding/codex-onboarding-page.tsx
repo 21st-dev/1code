@@ -4,26 +4,26 @@ import { useAtomValue, useSetAtom } from "jotai"
 import { ChevronLeft } from "lucide-react"
 import { useEffect, useMemo, useRef } from "react"
 import { LanguageSwitcher } from "../../components/language-switcher"
-import { CodexLoginContent } from "../agents/components/codex-login-content"
-import { useCodexLoginFlow } from "../agents/hooks/use-codex-login-flow"
 import {
-  billingMethodAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
+  onboardingProviderModeAtom,
 } from "../../lib/atoms"
 import { trpc } from "../../lib/trpc"
+import { CodexLoginContent } from "../agents/components/codex-login-content"
+import { useCodexLoginFlow } from "../agents/hooks/use-codex-login-flow"
 
 export function CodexOnboardingPage() {
-  const billingMethod = useAtomValue(billingMethodAtom)
-  const setBillingMethod = useSetAtom(billingMethodAtom)
+  const onboardingProviderMode = useAtomValue(onboardingProviderModeAtom)
+  const setOnboardingProviderMode = useSetAtom(onboardingProviderModeAtom)
   const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const setCodexOnboardingAuthMethod = useSetAtom(codexOnboardingAuthMethodAtom)
   const didAutoStartRef = useRef(false)
   const runtimeStatusQuery = trpc.codex.getRuntimeStatus.useQuery()
   const onboardingMethod = useMemo(() => {
-    if (billingMethod === "codex-api-key") return "api_key"
+    if (onboardingProviderMode === "codex-api-key") return "api_key"
     return "chatgpt"
-  }, [billingMethod])
+  }, [onboardingProviderMode])
   const runtimeStatus = runtimeStatusQuery.data
   const runtimeUnavailable =
     runtimeStatusQuery.isFetched && runtimeStatus?.ok !== true
@@ -91,7 +91,7 @@ export function CodexOnboardingPage() {
     if (isRunning) {
       await cancel()
     }
-    setBillingMethod(null)
+    setOnboardingProviderMode(null)
   }
 
   return (

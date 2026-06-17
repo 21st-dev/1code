@@ -70,10 +70,7 @@ function toDesktopAgentChatWithSubChats(chat: AnyObj): DesktopAgentChat {
   }
 }
 
-function useAgentChats(
-  _args?: AnyObj,
-  _opts?: AnyObj,
-): { data: DesktopAgentChat[]; isLoading: boolean } {
+function useAgentChats(): { data: DesktopAgentChat[]; isLoading: boolean } {
   const result = trpc.chats.list.useQuery({})
   const data = useMemo(
     () => (result.data ?? []).map((chat: AnyObj) => toDesktopAgentChat(chat)),
@@ -238,12 +235,8 @@ function useAgentChatUtils() {
       getAgentChats: {
         cancel: async () => utils.chats.list.cancel(),
         getData: () => utils.chats.list.getData({}),
-        setData: (keyOrUpdater?: unknown, updater?: unknown) => {
-          if (typeof keyOrUpdater === "function") {
-            utils.chats.list.setData({}, keyOrUpdater as AnyFn)
-          } else if (updater) {
-            utils.chats.list.setData({}, updater as AnyFn)
-          }
+        setData: (updater: AnyFn) => {
+          utils.chats.list.setData({}, updater)
         },
         invalidate: async () => utils.chats.list.invalidate(),
       },

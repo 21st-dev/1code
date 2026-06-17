@@ -106,7 +106,6 @@ interface AgentsFileMentionProps {
   onSelect: (mention: FileMentionOption) => void
   searchText: string
   position: { top: number; left: number }
-  teamId?: string
   repository?: string
   branch?: string // Legacy repository metadata; local desktop search uses projectPath.
   projectPath?: string // For fetching files from local project directory.

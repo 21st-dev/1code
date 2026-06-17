@@ -21,7 +21,6 @@ import {
   desktopViewAtom,
 } from "../atoms"
 import {
-  selectedTeamIdAtom,
   agentsQuickSwitchOpenAtom,
   agentsQuickSwitchSelectedIndexAtom,
   subChatsQuickSwitchOpenAtom,
@@ -63,7 +62,6 @@ export function AgentsContent() {
   const selectedDraftId = useAtomValue(selectedDraftIdAtom)
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
   const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
-  const [selectedTeamId] = useAtom(selectedTeamIdAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [mobileViewMode, setMobileViewMode] = useAtom(agentsMobileViewModeAtom)
   const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(
@@ -149,10 +147,7 @@ export function AgentsContent() {
   const selectedTeamImageUrl: string | undefined = undefined
 
   // Fetch agent chats for keyboard navigation and mobile view
-  const { data: agentChats } = agentChatApi.agents.getAgentChats.useQuery(
-    { teamId: selectedTeamId! },
-    { enabled: !!selectedTeamId },
-  )
+  const { data: agentChats } = agentChatApi.agents.getAgentChats.useQuery()
 
   // Fetch all projects for git info (like sidebar does)
   const { data: projects } = trpc.projects.list.useQuery()

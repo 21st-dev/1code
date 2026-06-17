@@ -9,24 +9,24 @@ import { ClaudeCodeIcon, IconSpinner } from "../../components/ui/icons"
 import { Logo } from "../../components/ui/logo"
 import {
   anthropicOnboardingCompletedAtom,
-  billingMethodAtom,
   helperApisSetupPromptPendingAtom,
+  onboardingProviderModeAtom,
 } from "../../lib/atoms"
 import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
 import { ClaudeCodeAuthCodeForm } from "../agents/components/claude-code-auth-code-form"
 import { useClaudeCodeLoginFlow } from "../agents/hooks/use-claude-code-login-flow"
 
-type AuthFlowState =
-  | { step: "idle" }
-  | { step: "error"; message: string }
+type AuthFlowState = { step: "idle" } | { step: "error"; message: string }
 
 export function AnthropicOnboardingPage() {
   const { t } = useI18n()
   const [flowState, setFlowState] = useState<AuthFlowState>({ step: "idle" })
   const [ignoredExistingToken, setIgnoredExistingToken] = useState(false)
   const [isUsingExistingToken, setIsUsingExistingToken] = useState(false)
-  const [existingTokenError, setExistingTokenError] = useState<string | null>(null)
+  const [existingTokenError, setExistingTokenError] = useState<string | null>(
+    null,
+  )
   const didAutoStartRef = useRef(false)
   const {
     state: localLoginState,
@@ -47,9 +47,10 @@ export function AnthropicOnboardingPage() {
   const setHelperApisSetupPromptPending = useSetAtom(
     helperApisSetupPromptPendingAtom,
   )
-  const setBillingMethod = useSetAtom(billingMethodAtom)
+  const setOnboardingProviderMode = useSetAtom(onboardingProviderModeAtom)
 
-  const importSystemTokenMutation = trpc.claudeCode.importSystemToken.useMutation()
+  const importSystemTokenMutation =
+    trpc.claudeCode.importSystemToken.useMutation()
   const existingTokenQuery = trpc.claudeCode.getSystemToken.useQuery()
   const runtimeStatusQuery = trpc.claudeCode.getRuntimeStatus.useQuery()
   const existingCredential = existingTokenQuery.data
@@ -80,7 +81,9 @@ export function AnthropicOnboardingPage() {
       ) {
         return t("onboarding.claude.localLoginOpening")
       }
-      if (trimmed === "Authentication code submitted; exchanging token locally...") {
+      if (
+        trimmed === "Authentication code submitted; exchanging token locally..."
+      ) {
         return t("onboarding.claude.localLoginCodeSubmitted")
       }
       if (trimmed === "Local Claude Code credentials imported.") {
@@ -95,7 +98,7 @@ export function AnthropicOnboardingPage() {
     .join("\n")
 
   const handleBack = () => {
-    setBillingMethod(null)
+    setOnboardingProviderMode(null)
   }
 
   const handleConnectClick = async () => {
@@ -319,21 +322,20 @@ export function AnthropicOnboardingPage() {
             </div>
           )}
 
-          {checkedExistingToken &&
-            !shouldOfferExistingToken &&
-            !hasError && (
-              <button
-                onClick={handleConnectClick}
-                disabled={isLocalLoginRunning || !runtimeReady}
-                className="h-8 px-4 min-w-[85px] bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                {isLocalLoginRunning ? (
-                  <IconSpinner className="h-4 w-4" />
-                ) : (
-                  t("onboarding.claude.signInWithClaudeCode")
-                )}
-              </button>
-            )}
+          {checkedExistingToken && !shouldOfferExistingToken && !hasError && (
+            <button
+              type="button"
+              onClick={handleConnectClick}
+              disabled={isLocalLoginRunning || !runtimeReady}
+              className="h-8 px-4 min-w-[85px] bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              {isLocalLoginRunning ? (
+                <IconSpinner className="h-4 w-4" />
+              ) : (
+                t("onboarding.claude.signInWithClaudeCode")
+              )}
+            </button>
+          )}
 
           {hasError && (
             <div className="space-y-4">

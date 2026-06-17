@@ -86,11 +86,11 @@ leftover · 🟢 live & ok · ⚪ app-state (not a user setting)
 | `autoOfflineModeAtom` | (offline) | beta | 1 | 🟡 misplaced | same — move to Models/Workspace |
 | `showOfflineModeFeaturesAtom` | (offline) | beta | 5 | 🟡 misplaced | gate for offline; reconsider home |
 | `ctrlTabTargetAtom` | (quick switch) | keyboard, **preferences** | 1 | 🟡 dup | exposed in two tabs — pick one |
-| `selectedTeamIdAtom` | (team) | — | 3 (chat surface) | 🔵 fork | "team" concept from web SaaS — see §3 |
-| `billingMethodAtom` | (billing) | — | 5 (onboarding) | 🔵 fork | "billing" from web SaaS — see §3 |
-| `customClaudeConfigAtom` | (legacy config) | — | 1 (`App.tsx`) | 🔵 fork/legacy | feeds legacy profile path; tied to modelProfiles |
-| `helperApisSetupPromptPendingAtom` | (prompt state) | — | 3 | 🔵 fork | helper-APIs onboarding prompt — likely web leftover |
-| `helperApisSetupPromptDismissedAtom` | (prompt state) | — | 1 | 🔵 fork | same |
+| `selectedTeamIdAtom` | (team) | — | 3 (chat surface) | ✅ removed | Phase 2 — inert team scaffolding deleted |
+| `billingMethodAtom` | (billing) | — | 5 (onboarding) | ✅ renamed | Phase 2 → `onboardingProviderModeAtom` (misnamed, not payment; key/values kept) |
+| `customClaudeConfigAtom` | (legacy config) | — | 1 (`App.tsx`) | 🟢 kept | live legacy provider-config migration in `App.tsx` — not residue |
+| `helperApisSetupPromptPendingAtom` | (prompt state) | — | 3 | 🟢 kept | real, wired helper-API setup prompt — not residue |
+| `helperApisSetupPromptDismissedAtom` | (prompt state) | — | 1 | 🟢 kept | same |
 | `anthropicOnboardingCompletedAtom` | `onboarding:anthropic-completed` | — | 5 | ⚪ app-state | onboarding flag, not a user setting (ok) |
 | `apiKeyOnboardingCompletedAtom` | `onboarding:...` | — | 4 | ⚪ app-state | ok |
 | `codexOnboardingCompletedAtom` | `onboarding:...` | models | 7 | ⚪ app-state | ok |
@@ -119,28 +119,37 @@ atoms + the 2-atom dead profile chain + the `enableTasks` orphan (plus the
 non-persisted `networkOnlineAtom` and the `ModelProfile`/`getOfflineProfile`/
 `OFFLINE_PROFILE` helpers, not table rows). **Remaining:** ~3 orphan (code-theme
 ×2, usage-budget — these have live readers, so they need a UI decision, not
-deletion) · ~5 misplaced/dup · ~5 fork-leftover · rest live/app-state — out of ~44,
-in *one* file. Per-tab internal state (MCP servers, skills, plugins, etc.) is not
-counted here and is backed by tRPC/DB (see §5).
+deletion) · ~5 misplaced/dup · rest live/app-state — out of ~44, in *one* file.
+The ~5 fork-leftover rows were resolved by **Phase 2** (`refactor-fork-saas-residue`,
+§3): team scaffolding removed, `billingMethod` renamed, helper-API/legacy-config
+kept. Per-tab internal state (MCP servers, skills, plugins, etc.) is not counted
+here and is backed by tRPC/DB (see §5).
 
 ---
 
-## 3. Fork leftovers — circled, NOT removed (product call pending)
+## 3. Fork leftovers — resolved by Phase 2 (`refactor-fork-saas-residue`)
 
-These come from the upstream web SaaS and are questionable in a local-first
-desktop tool. Listed for a product-identity decision (keep teams/billing or not):
+These came from the upstream web SaaS. Pressure-testing against code showed they
+were not uniform "ghosts," so Phase 2 treated each by what it actually was:
 
-- **`selectedTeamIdAtom`** — "team" concept, read in the chat surface
-  (`active-chat.tsx`, `agents-content.tsx`, `agents-subchats-sidebar.tsx`).
-- **`billingMethodAtom`** — "billing method", read across all onboarding pages.
-- **`helperApisSetupPrompt{Pending,Dismissed}Atom`** — helper-APIs onboarding prompt.
-- **`customClaudeConfigAtom`** — legacy config feeding the (vestigial) model-profile path.
-- Onboarding flow itself (`billing-method-page.tsx`, helper-API prompts) carries
-  SaaS assumptions worth reviewing alongside the above.
+- **`selectedTeamIdAtom`** (+ `createTeamDialogOpenAtom`) — **✅ removed.** Inert
+  multi-tenant scaffolding: never set, and the team-keyed `getAgentChats` calls
+  were already no-ops (the adapter queried `trpc.chats.list` unconditionally). The
+  inert `teamId` prop plumbing through `ChatViewInner` / `ChatInputArea` /
+  `AgentsFileMention` was removed too. Behavior-preserving.
+- **`billingMethodAtom`** — **✅ renamed** to `onboardingProviderModeAtom`
+  (`BillingMethod` → `OnboardingProviderMode`, `BillingMethodPage` →
+  `OnboardingProviderPage`). It is the onboarding provider/auth selector with **no
+  payment logic** — misnamed, not residue. Storage key `"onboarding:billing-method"`
+  and values kept → no migration.
+- **`helperApisSetupPrompt{Pending,Dismissed}Atom`** — **kept.** A real, wired
+  helper-API setup prompt, not residue.
+- **`customClaudeConfigAtom`** — **kept.** Live legacy provider-config migration in
+  `App.tsx` (the dead model-profile chain it once fed was already removed in Phase 1).
 
-> Open question for the product owner: *does this app ever have teams/billing?*
-> If firmly local-first solo → these are ghosts to remove. If maybe later → keep,
-> but mark explicitly.
+> Product gate (resolved at approval): the current model has **no real teams and no
+> billing** — only SaaS-named scaffolding. Phase 2 removes/renames that without
+> foreclosing a future real teams/billing feature, which would be built deliberately.
 
 ---
 

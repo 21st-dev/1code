@@ -77,19 +77,6 @@ export {
 } from "../../features/agents/atoms"
 
 // ============================================
-// TEAM ATOMS (unique to lib/atoms)
-// ============================================
-
-export const selectedTeamIdAtom = atomWithStorage<string | null>(
-  "agents:selectedTeamId",
-  null,
-  undefined,
-  { getOnInit: true },
-)
-
-export const createTeamDialogOpenAtom = atom<boolean>(false)
-
-// ============================================
 // MULTI-SELECT ATOMS - Chats (unique to lib/atoms)
 // ============================================
 
@@ -569,8 +556,8 @@ export const isFullscreenAtom = atom<boolean | null>(null)
 // "custom-model" = use custom base URL and model (e.g. for proxies or alternative providers)
 // "codex-subscription" = use Codex via ChatGPT subscription login
 // "codex-api-key" = use Codex via app-managed API key
-// null = not yet selected (show billing method selection screen)
-export type BillingMethod =
+// null = not yet selected (show provider/auth selection screen)
+export type OnboardingProviderMode =
   | "claude-subscription"
   | "api-key"
   | "custom-model"
@@ -578,7 +565,10 @@ export type BillingMethod =
   | "codex-api-key"
   | null
 
-export const billingMethodAtom = atomWithStorage<BillingMethod>(
+// Onboarding provider/auth selection. Named for what it does (not billing — there
+// is no payment system). Storage key kept as the legacy "onboarding:billing-method"
+// for back-compat so existing users do not re-onboard.
+export const onboardingProviderModeAtom = atomWithStorage<OnboardingProviderMode>(
   "onboarding:billing-method",
   null,
   undefined,
@@ -595,7 +585,7 @@ export const anthropicOnboardingCompletedAtom = atomWithStorage<boolean>(
 )
 
 // Whether user has completed API key configuration during onboarding
-// Only relevant when billingMethod is "api-key"
+// Only relevant when onboardingProviderMode is "api-key"
 export const apiKeyOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:api-key-completed",
   false,
@@ -604,7 +594,7 @@ export const apiKeyOnboardingCompletedAtom = atomWithStorage<boolean>(
 )
 
 // Whether user has completed Codex auth during onboarding
-// Only relevant when billingMethod is a Codex method
+// Only relevant when onboardingProviderMode is a Codex method
 export const codexOnboardingCompletedAtom = atomWithStorage<boolean>(
   "onboarding:codex-completed",
   false,

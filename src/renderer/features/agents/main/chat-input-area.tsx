@@ -223,7 +223,6 @@ export interface ChatInputAreaProps {
   subChatId: string
   parentChatId: string
   provider?: "claude-code" | "codex"
-  teamId?: string
   repository?: string
   projectPath?: string
   changedFiles: SubChatFileChange[]
@@ -264,7 +263,6 @@ function arePropsEqual(
     prevProps.subChatId !== nextProps.subChatId ||
     prevProps.parentChatId !== nextProps.parentChatId ||
     prevProps.provider !== nextProps.provider ||
-    prevProps.teamId !== nextProps.teamId ||
     prevProps.repository !== nextProps.repository ||
     prevProps.projectPath !== nextProps.projectPath ||
     prevProps.isMobile !== nextProps.isMobile ||
@@ -448,7 +446,6 @@ export const ChatInputArea = memo(function ChatInputArea({
   subChatId,
   parentChatId,
   provider = "claude-code",
-  teamId,
   repository,
   projectPath,
   changedFiles,
@@ -2306,7 +2303,6 @@ export const ChatInputArea = memo(function ChatInputArea({
         onSelect={handleMentionSelect}
         searchText={mentionSearchText}
         position={mentionPosition}
-        teamId={teamId}
         repository={repository}
         projectPath={projectPath}
         changedFiles={changedFiles}

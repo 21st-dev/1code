@@ -21,7 +21,6 @@ import {
   type UndoItem,
 } from "../agents/atoms"
 import {
-  selectedTeamIdAtom,
   selectedSubChatIdsAtom,
   isSubChatMultiSelectModeAtom,
   toggleSubChatSelectionAtom,
@@ -234,15 +233,11 @@ export function AgentsSubChatsSidebar({
   )
   const [loadingSubChats] = useAtom(loadingSubChatsAtom)
   const subChatFiles = useAtomValue(subChatFilesAtom)
-  const selectedTeamId = useAtomValue(selectedTeamIdAtom)
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
 
   // Fetch agent chats for navigation after archive
-  const { data: agentChats } = agentChatApi.agents.getAgentChats.useQuery(
-    { teamId: selectedTeamId! },
-    { enabled: !!selectedTeamId },
-  )
+  const { data: agentChats } = agentChatApi.agents.getAgentChats.useQuery()
 
   const utils = trpc.useUtils()
 

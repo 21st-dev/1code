@@ -1,24 +1,27 @@
 "use client"
 
 import { useAtomValue, useSetAtom } from "jotai"
-import { useState, useEffect } from "react"
 import { ChevronLeft, Info } from "lucide-react"
-
-import { IconSpinner, KeyFilledIcon, SettingsFilledIcon } from "../../components/ui/icons"
-import { Input } from "../../components/ui/input"
+import { useEffect, useState } from "react"
 import { LanguageSwitcher } from "../../components/language-switcher"
+import {
+  IconSpinner,
+  KeyFilledIcon,
+  SettingsFilledIcon,
+} from "../../components/ui/icons"
+import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { Logo } from "../../components/ui/logo"
 import { Switch } from "../../components/ui/switch"
 import {
   apiKeyOnboardingCompletedAtom,
-  billingMethodAtom,
   type ClaudeProviderAuthMode,
+  onboardingProviderModeAtom,
 } from "../../lib/atoms"
-import { lastSelectedClaudeModelSourceAtom } from "../agents/atoms"
 import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
+import { lastSelectedClaudeModelSourceAtom } from "../agents/atoms"
 
 // Check if the key looks like a valid Anthropic API key
 const isValidApiKey = (key: string) => {
@@ -28,8 +31,8 @@ const isValidApiKey = (key: string) => {
 
 export function ApiKeyOnboardingPage() {
   const { t } = useI18n()
-  const billingMethod = useAtomValue(billingMethodAtom)
-  const setBillingMethod = useSetAtom(billingMethodAtom)
+  const onboardingProviderMode = useAtomValue(onboardingProviderModeAtom)
+  const setOnboardingProviderMode = useSetAtom(onboardingProviderModeAtom)
   const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
   const setLastSelectedClaudeModelSource = useSetAtom(
     lastSelectedClaudeModelSourceAtom,
@@ -40,7 +43,7 @@ export function ApiKeyOnboardingPage() {
   const saveLocalApiProviderConfig =
     trpc.localApiProviderConfig.save.useMutation()
 
-  const isCustomModel = billingMethod === "custom-model"
+  const isCustomModel = onboardingProviderMode === "custom-model"
 
   // Default values for API key mode (not custom model)
   const defaultModel = "claude-sonnet-4-6"
@@ -50,8 +53,7 @@ export function ApiKeyOnboardingPage() {
   const [model, setModel] = useState("")
   const [token, setToken] = useState("")
   const [baseUrl, setBaseUrl] = useState("")
-  const [authMode, setAuthMode] =
-    useState<ClaudeProviderAuthMode>("auth_token")
+  const [authMode, setAuthMode] = useState<ClaudeProviderAuthMode>("auth_token")
   const [useForUtilityApis, setUseForUtilityApis] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -66,7 +68,7 @@ export function ApiKeyOnboardingPage() {
   }, [providerConfigData?.config])
 
   const handleBack = () => {
-    setBillingMethod(null)
+    setOnboardingProviderMode(null)
   }
 
   // Submit for API key mode (simple - just the key)
@@ -154,7 +156,7 @@ export function ApiKeyOnboardingPage() {
   }
 
   const canSubmitCustomModel = Boolean(
-    model.trim() && token.trim() && baseUrl.trim()
+    model.trim() && token.trim() && baseUrl.trim(),
   )
 
   // Simple API key input mode
@@ -386,12 +388,13 @@ export function ApiKeyOnboardingPage() {
 
         {/* Continue Button */}
         <button
+          type="button"
           onClick={() => void submitCustomModel()}
           disabled={!canSubmitCustomModel || isSubmitting}
           className={cn(
             "w-full h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] flex items-center justify-center",
             (!canSubmitCustomModel || isSubmitting) &&
-              "opacity-50 cursor-not-allowed"
+              "opacity-50 cursor-not-allowed",
           )}
         >
           {isSubmitting ? (
