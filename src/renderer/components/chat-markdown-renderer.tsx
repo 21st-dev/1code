@@ -22,10 +22,7 @@ export function stripEmojis(text: string): string {
 
 // Escape HTML special characters for safe rendering
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
 // Code block text sizes matching paragraph text sizes
@@ -41,11 +38,13 @@ function CodeBlock({
   children,
   themeId,
   size = "md",
+  isStreaming = false,
 }: {
   language?: string
   children: string
   themeId: string
   size?: "sm" | "md" | "lg"
+  isStreaming?: boolean
 }) {
   const [copied, setCopied] = useState(false)
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
@@ -57,10 +56,14 @@ function CodeBlock({
   }, [children])
 
   // Only use Shiki for known programming languages, not for plaintext/ASCII art
-  const shouldHighlight = language && language !== "plaintext" && language !== "text"
+  const shouldHighlight =
+    language && language !== "plaintext" && language !== "text"
 
   useEffect(() => {
-    if (!shouldHighlight) return
+    if (!shouldHighlight || isStreaming) {
+      setHighlightedHtml(null)
+      return
+    }
 
     let cancelled = false
 
@@ -80,7 +83,7 @@ function CodeBlock({
     return () => {
       cancelled = true
     }
-  }, [children, language, themeId, shouldHighlight])
+  }, [children, language, themeId, shouldHighlight, isStreaming])
 
   // For plaintext/ASCII art, just escape and render directly (no Shiki)
   // For code with syntax highlighting, use Shiki output when available
@@ -125,7 +128,8 @@ function CodeBlock({
           "[&_pre]:p-0 [&_code]:p-0",
         )}
         style={{
-          fontFamily: "SFMono-Regular, Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace",
+          fontFamily:
+            "SFMono-Regular, Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace",
           lineHeight: 1.5,
           tabSize: 2,
         }}
@@ -211,8 +215,7 @@ const sizeStyles: Record<
     li: "text-sm text-foreground/80 py-[3px]",
     inlineCode:
       "bg-foreground/[0.06] dark:bg-foreground/[0.1] font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
-    blockquote:
-      "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
+    blockquote: "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
     hr: "mt-8 mb-4 border-t border-border",
     table: "w-full text-sm",
     thead: "border-b border-border",
@@ -234,8 +237,7 @@ const sizeStyles: Record<
     li: "text-sm text-foreground/80 py-[3px]",
     inlineCode:
       "bg-foreground/[0.06] dark:bg-foreground/[0.1] font-mono text-[85%] rounded px-[0.4em] py-[0.2em] break-all",
-    blockquote:
-      "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
+    blockquote: "border-l-2 border-foreground/20 pl-4 text-foreground/70 mb-px",
     hr: "mt-8 mb-4 border-t border-border",
     table: "w-full text-sm",
     thead: "border-b border-border",
@@ -247,7 +249,12 @@ const sizeStyles: Record<
 }
 
 // Custom code component that uses our theme system
-function createCodeComponent(codeTheme: string, size: MarkdownSize, styles: typeof sizeStyles.md, isStreaming: boolean = false) {
+function createCodeComponent(
+  codeTheme: string,
+  size: MarkdownSize,
+  styles: typeof sizeStyles.md,
+  isStreaming: boolean = false,
+) {
   return function CodeComponent({ className, children, node, ...props }: any) {
     const match = /language-(\w+)/.exec(className || "")
     const language = match ? match[1] : undefined
@@ -255,14 +262,21 @@ function createCodeComponent(codeTheme: string, size: MarkdownSize, styles: type
 
     // Check if this is a code block (has language) or inline code
     // Streamdown wraps code blocks in <pre><code>, inline code is just <code>
-    const isCodeBlock = language || (codeContent.includes("\n") && codeContent.length > 100)
+    const isCodeBlock =
+      language || (codeContent.includes("\n") && codeContent.length > 100)
 
     if (isCodeBlock) {
       // Route mermaid blocks to MermaidBlock component
       if (language === "mermaid") {
         // Pass isStreaming to MermaidBlock
         // When streaming, MermaidBlock shows a placeholder instead of trying to render
-        return <MermaidBlock code={codeContent.replace(/\n$/, "")} size={size} isStreaming={isStreaming} />
+        return (
+          <MermaidBlock
+            code={codeContent.replace(/\n$/, "")}
+            size={size}
+            isStreaming={isStreaming}
+          />
+        )
       }
 
       return (
@@ -270,6 +284,7 @@ function createCodeComponent(codeTheme: string, size: MarkdownSize, styles: type
           language={language}
           themeId={codeTheme}
           size={size}
+          isStreaming={isStreaming}
         >
           {codeContent.replace(/\n$/, "")}
         </CodeBlock>
@@ -465,11 +480,7 @@ export const CompactMarkdownRenderer = memo(function CompactMarkdownRenderer({
   className?: string
 }) {
   return (
-    <ChatMarkdownRenderer
-      content={content}
-      size="sm"
-      className={className}
-    />
+    <ChatMarkdownRenderer content={content} size="sm" className={className} />
   )
 })
 
@@ -482,11 +493,7 @@ export const FullscreenMarkdownRenderer = memo(
     className?: string
   }) {
     return (
-      <ChatMarkdownRenderer
-        content={content}
-        size="lg"
-        className={className}
-      />
+      <ChatMarkdownRenderer content={content} size="lg" className={className} />
     )
   },
 )
@@ -547,11 +554,13 @@ const MemoizedMarkdownBlock = memo(
     size,
     className,
     codeTheme,
+    isStreaming = false,
   }: {
     content: string
     size: MarkdownSize
     className?: string
     codeTheme: string
+    isStreaming?: boolean
   }) {
     // Don't render empty blocks
     if (!content.trim()) return null
@@ -675,9 +684,9 @@ const MemoizedMarkdownBlock = memo(
           </td>
         ),
         pre: ({ children }: any) => <>{children}</>,
-        code: createCodeComponent(codeTheme, size, styles),
+        code: createCodeComponent(codeTheme, size, styles, isStreaming),
       }),
-      [styles, codeTheme, size],
+      [styles, codeTheme, size, isStreaming],
     )
 
     return (
@@ -697,7 +706,8 @@ const MemoizedMarkdownBlock = memo(
       prevProps.content === nextProps.content &&
       prevProps.size === nextProps.size &&
       prevProps.className === nextProps.className &&
-      prevProps.codeTheme === nextProps.codeTheme
+      prevProps.codeTheme === nextProps.codeTheme &&
+      prevProps.isStreaming === nextProps.isStreaming
     )
   },
 )
@@ -705,59 +715,60 @@ const MemoizedMarkdownBlock = memo(
 MemoizedMarkdownBlock.displayName = "MemoizedMarkdownBlock"
 
 // Main memoized markdown component - splits into blocks and memoizes each
-export const MemoizedMarkdown = memo(
-  function MemoizedMarkdown({
-    content,
-    id,
-    size = "sm",
-    className,
-  }: {
-    content: string
-    id: string
-    size?: MarkdownSize
-    className?: string
-  }) {
-    const codeTheme = useCodeTheme()
+export const MemoizedMarkdown = memo(function MemoizedMarkdown({
+  content,
+  id,
+  size = "sm",
+  className,
+  isStreaming = false,
+}: {
+  content: string
+  id: string
+  size?: MarkdownSize
+  className?: string
+  isStreaming?: boolean
+}) {
+  const codeTheme = useCodeTheme()
 
-    // Pre-process content - strip emojis
-    const processedContent = useMemo(() => stripEmojis(content), [content])
+  // Pre-process content - strip emojis
+  const processedContent = useMemo(() => stripEmojis(content), [content])
 
-    // Split into blocks - this recalculates when content changes,
-    // but each block is individually memoized with content-based keys
-    const blocks = useMemo(
-      () => parseIntoBlocks(processedContent),
-      [processedContent],
-    )
+  // Split into blocks - this recalculates when content changes,
+  // but each block is individually memoized with content-based keys
+  const blocks = useMemo(
+    () => parseIntoBlocks(processedContent),
+    [processedContent],
+  )
 
-    return (
-      <div
-        className={cn(
-          "prose prose-sm max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none",
-          "prose-p:my-0 prose-ul:my-0 prose-ol:my-0 prose-li:my-0",
-          "prose-ul:pl-0 prose-ol:pl-0 prose-li:pl-0",
-          "prose-hr:my-0",
-          "prose-table:my-0",
-          "[&_li>p]:inline [&_li>p]:mb-0",
-          "overflow-hidden break-words",
-          "[&_p:has(+hr)]:mb-6 [&_ul:has(+hr)]:mb-6 [&_ol:has(+hr)]:mb-6 [&_div:has(+hr)]:mb-6 [&_table:has(+hr)]:mb-6 [&_h1:has(+hr)]:mb-6 [&_h2:has(+hr)]:mb-6 [&_h3:has(+hr)]:mb-6 [&_blockquote:has(+hr)]:mb-6",
-          "[&_hr+p]:mt-4 [&_hr+ul]:mt-4 [&_hr+ol]:mt-4",
-          "[&_div+p]:mt-2 [&_div+ul]:mt-2 [&_div+ol]:mt-2",
-          "[&_table+p]:mt-4 [&_table+ul]:mt-4 [&_table+ol]:mt-4",
-          className,
-        )}
-      >
-        {blocks.map((block) => (
-          <MemoizedMarkdownBlock
-            key={`${id}-${block.key}`}
-            content={block.content}
-            size={size}
-            className={className}
-            codeTheme={codeTheme}
-          />
-        ))}
-      </div>
-    )
-  },
-)
+  return (
+    <div
+      className={cn(
+        "prose prose-sm max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none",
+        "prose-p:my-0 prose-ul:my-0 prose-ol:my-0 prose-li:my-0",
+        "prose-ul:pl-0 prose-ol:pl-0 prose-li:pl-0",
+        "prose-hr:my-0",
+        "prose-table:my-0",
+        "[&_li>p]:inline [&_li>p]:mb-0",
+        "overflow-hidden break-words",
+        "[&_p:has(+hr)]:mb-6 [&_ul:has(+hr)]:mb-6 [&_ol:has(+hr)]:mb-6 [&_div:has(+hr)]:mb-6 [&_table:has(+hr)]:mb-6 [&_h1:has(+hr)]:mb-6 [&_h2:has(+hr)]:mb-6 [&_h3:has(+hr)]:mb-6 [&_blockquote:has(+hr)]:mb-6",
+        "[&_hr+p]:mt-4 [&_hr+ul]:mt-4 [&_hr+ol]:mt-4",
+        "[&_div+p]:mt-2 [&_div+ul]:mt-2 [&_div+ol]:mt-2",
+        "[&_table+p]:mt-4 [&_table+ul]:mt-4 [&_table+ol]:mt-4",
+        className,
+      )}
+    >
+      {blocks.map((block, index) => (
+        <MemoizedMarkdownBlock
+          key={`${id}-${block.key}`}
+          content={block.content}
+          size={size}
+          className={className}
+          codeTheme={codeTheme}
+          isStreaming={isStreaming && index === blocks.length - 1}
+        />
+      ))}
+    </div>
+  )
+})
 
 MemoizedMarkdown.displayName = "MemoizedMarkdown"
