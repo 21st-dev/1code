@@ -94,12 +94,12 @@
 
 ## 6. Validation
 
-- [ ] 6.1 Run the new normalizer characterization tests, the part-union structural
+- [x] 6.1 Run the new normalizer characterization tests, the part-union structural
   test, and existing chat/store tests.
-- [ ] 6.2 Run `bun run ts:check`.
-- [ ] 6.3 Run the architecture guard check, including the new
+- [x] 6.2 Run `bun run ts:check`.
+- [x] 6.3 Run the architecture guard check, including the new
   `assertChatMessageModelOwner` assertion, and confirm it fails on a deliberately
   reintroduced `mock-api.ts` / second normalizer.
-- [ ] 6.4 Run `openspec validate refactor-chat-message-model --strict --no-interactive`.
-- [ ] 6.5 Smoke-test chat hydration for Claude and Codex/ACP histories to confirm
+- [x] 6.4 Run `openspec validate refactor-chat-message-model --strict --no-interactive`.
+- [x] 6.5 Smoke-test chat hydration for Claude and Codex/ACP histories to confirm
   rendered messages, tools, and diffs are unchanged.
