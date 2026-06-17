@@ -85,7 +85,11 @@ import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
 import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { usePushAction } from "../../changes/hooks/use-push-action"
 import { getStatusIndicator } from "../../changes/utils/status"
-import { detailsSidebarOpenAtom } from "../../details-sidebar/atoms"
+import {
+  detailsSidebarOpenAtom,
+  expandedWidgetAtomFamily,
+  expandedWidgetSidebarWidthAtom,
+} from "../../details-sidebar/atoms"
 import { DetailsSidebar } from "../../details-sidebar/details-sidebar"
 import { ExpandedWidgetSidebar } from "../../details-sidebar/expanded-widget-sidebar"
 import { useOpenDetailsWidget } from "../../details-sidebar/use-open-details-widget"
@@ -97,7 +101,6 @@ import { getTerminalScopeKey } from "../../terminal/utils"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
-  agentsDiffSidebarWidthAtom,
   localBrowserWorkbenchOpenAtomFamily,
   localBrowserWorkbenchWidthAtom,
   agentsSubChatsSidebarModeAtom,
@@ -109,6 +112,7 @@ import {
   diffActiveTabAtom,
   diffSidebarOpenAtomFamily,
   diffViewDisplayModeAtom,
+  type DiffViewDisplayMode,
   expiredUserQuestionsAtom,
   fileSearchDialogOpenAtom,
   fileViewerDisplayModeAtom,
@@ -1340,7 +1344,7 @@ interface DiffSidebarRendererProps {
   gitStatus: { pushCount?: number; pullCount?: number; hasUpstream?: boolean; ahead?: number; behind?: number; staged?: any[]; unstaged?: any[]; untracked?: any[] } | undefined
   isGitStatusLoading: boolean
   isDiffSidebarOpen: boolean
-  diffDisplayMode: "side-peek" | "center-peek" | "full-page" | "details-expanded"
+  diffDisplayMode: DiffViewDisplayMode
   diffSidebarWidth: number
   handleReview: () => void
   isReviewing: boolean
@@ -1362,7 +1366,7 @@ interface DiffSidebarRendererProps {
   handleMarkAllUnviewed: () => void
   isDesktop: boolean
   isFullscreen: boolean
-  setDiffDisplayMode: (mode: "side-peek" | "center-peek" | "full-page") => void
+  setDiffDisplayMode: (mode: DiffViewDisplayMode) => void
   handleCommitToPr: (selectedPaths?: string[]) => void
   isCommittingToPr: boolean
   subChatsWithFiles: Array<{ id: string; name: string; filePaths: string[]; fileCount: number }>
@@ -1422,27 +1426,22 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
   const closeDiff = onClose ?? handleCloseDiff
 
   const handleReviewWithAI = useCallback(() => {
-    if (diffDisplayMode !== "side-peek" && diffDisplayMode !== "details-expanded") {
+    if (diffDisplayMode === "full-page") {
       closeDiff()
     }
     handleReview()
   }, [closeDiff, diffDisplayMode, handleReview])
 
   const handleCreatePrWithAI = useCallback(() => {
-    if (diffDisplayMode !== "side-peek" && diffDisplayMode !== "details-expanded") {
+    if (diffDisplayMode === "full-page") {
       closeDiff()
     }
     handleCreatePr()
   }, [closeDiff, diffDisplayMode, handleCreatePr])
 
-  // Width for responsive layouts - use stored width for sidebar, fixed for dialog/fullpage
-  const effectiveWidth = diffDisplayMode === "side-peek"
+  const effectiveWidth = diffDisplayMode === "details-expanded"
     ? diffSidebarWidth
-    : diffDisplayMode === "center-peek"
-      ? 1200
-      : diffDisplayMode === "details-expanded"
-        ? diffSidebarWidth
-      : typeof window !== 'undefined' ? window.innerWidth : 1200
+    : typeof window !== 'undefined' ? window.innerWidth : 1200
 
   const diffViewContent = (
     <div
@@ -1485,12 +1484,8 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
           onMarkAllUnviewed={handleMarkAllUnviewed}
           isDesktop={isDesktop}
           isFullscreen={isFullscreen}
-          displayMode={
-            diffDisplayMode === "details-expanded" ? "side-peek" : diffDisplayMode
-          }
-          onDisplayModeChange={
-            diffDisplayMode === "details-expanded" ? undefined : setDiffDisplayMode
-          }
+          displayMode={diffDisplayMode}
+          onDisplayModeChange={setDiffDisplayMode}
         />
       ) : null}
 
@@ -1519,40 +1514,8 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
     </div>
   )
 
-  // Render based on display mode
-  if (diffDisplayMode === "side-peek") {
-    return (
-      <ResizableSidebar
-        isOpen={isDiffSidebarOpen}
-        onClose={handleCloseDiff}
-        widthAtom={agentsDiffSidebarWidthAtom}
-        minWidth={320}
-        side="right"
-        animationDuration={0}
-        initialWidth={0}
-        exitWidth={0}
-        showResizeTooltip={true}
-        className="bg-background border-l"
-        style={{ borderLeftWidth: "0.5px", overflow: "hidden" }}
-      >
-        {diffViewContent}
-      </ResizableSidebar>
-    )
-  }
-
   if (diffDisplayMode === "details-expanded") {
     return diffViewContent
-  }
-
-  if (diffDisplayMode === "center-peek") {
-    return (
-      <DiffCenterPeekDialog
-        isOpen={isDiffSidebarOpen}
-        onClose={handleCloseDiff}
-      >
-        {diffViewContent}
-      </DiffCenterPeekDialog>
-    )
   }
 
   if (diffDisplayMode === "full-page") {
@@ -4470,6 +4433,28 @@ export function ChatView({
   const [isTerminalSidebarOpen, setIsTerminalSidebarOpen] = useAtom(terminalSidebarAtom)
   const terminalDisplayMode = useAtomValue(terminalDisplayModeAtom)
   const openDetailsWidget = useOpenDetailsWidget(chatId)
+  const [diffMode, setDiffMode] = useAtom(diffViewModeAtom)
+  const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
+  const expandedWidgetAtom = useMemo(
+    () => expandedWidgetAtomFamily(chatId),
+    [chatId],
+  )
+  const [expandedWidget, setExpandedWidget] = useAtom(expandedWidgetAtom)
+  const handleDiffDisplayModeChange = useCallback((mode: DiffViewDisplayMode) => {
+    setDiffDisplayMode(mode)
+    if (mode === "full-page") {
+      setExpandedWidget(null)
+      setIsDiffSidebarOpen(true)
+      return
+    }
+    setIsDiffSidebarOpen(false)
+    openDetailsWidget("diff")
+  }, [
+    openDetailsWidget,
+    setDiffDisplayMode,
+    setExpandedWidget,
+    setIsDiffSidebarOpen,
+  ])
 
   const handleOpenPlanProductEntry = useCallback(() => {
     openDetailsWidget("plan")
@@ -4492,22 +4477,30 @@ export function ChatView({
   }, [isTerminalSidebarOpen, openDetailsWidget, setIsTerminalSidebarOpen, terminalDisplayMode])
 
   const handleOpenDiffProductEntry = useCallback(() => {
+    setDiffDisplayMode("details-expanded")
+    setIsDiffSidebarOpen(false)
     openDetailsWidget("diff")
-  }, [openDetailsWidget])
+  }, [openDetailsWidget, setDiffDisplayMode, setIsDiffSidebarOpen])
 
   const handleToggleDiffProductEntry = useCallback(() => {
+    setDiffDisplayMode("details-expanded")
+    setIsDiffSidebarOpen(false)
     openDetailsWidget("diff", { toggle: true })
-  }, [openDetailsWidget])
+  }, [openDetailsWidget, setDiffDisplayMode, setIsDiffSidebarOpen])
 
   const handleOpenDiffFileProductEntry = useCallback(
     (filePath: string) => {
       setSelectedFilePath(filePath)
       setFilteredDiffFiles([filePath])
+      setDiffDisplayMode("details-expanded")
+      setIsDiffSidebarOpen(false)
       openDetailsWidget("diff")
     },
     [
       openDetailsWidget,
+      setDiffDisplayMode,
       setFilteredDiffFiles,
+      setIsDiffSidebarOpen,
       setSelectedFilePath,
     ],
   )
@@ -4576,8 +4569,6 @@ export function ChatView({
   const setDiffContent = useCallback((content: string | null) => {
     setDiffCache((prev) => ({ ...prev, diffContent: content }))
   }, [setDiffCache])
-  const [diffMode, setDiffMode] = useAtom(diffViewModeAtom)
-  const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
   const subChatsSidebarMode = useAtomValue(agentsSubChatsSidebarModeAtom)
 
   // Hide/show traffic lights based on full-page diff or full-page file viewer
@@ -4592,8 +4583,8 @@ export function ChatView({
     window.desktopApi.setTrafficLightVisibility(shouldHide ? false : sidebarOpen)
   }, [isDiffSidebarOpen, diffDisplayMode, fileViewerPath, fileViewerDisplayMode, isDesktop, isFullscreen, sidebarOpen])
 
-  // Track diff sidebar width for responsive header
-  const storedDiffSidebarWidth = useAtomValue(agentsDiffSidebarWidthAtom)
+  // Track active diff surface width for responsive header
+  const storedDiffSidebarWidth = useAtomValue(expandedWidgetSidebarWidthAtom)
   const diffSidebarRef = useRef<HTMLDivElement>(null)
   const diffViewRef = useRef<AgentDiffViewRef>(null)
   const [diffSidebarWidth, setDiffSidebarWidth] = useState(
@@ -4607,10 +4598,12 @@ export function ChatView({
 
   // Compute isNarrow for filtering logic (same threshold as DiffSidebarContent)
   const isDiffSidebarNarrow = diffSidebarWidth < 500
+  const isDiffDetailsExpanded = isDetailsSidebarOpen && expandedWidget === "diff"
+  const isDiffSurfaceOpen = isDiffSidebarOpen || isDiffDetailsExpanded
 
-  // ResizeObserver to track diff sidebar width in real-time (atom only updates after resize ends)
+  // ResizeObserver to track the active diff surface width in real-time.
   useEffect(() => {
-    if (!isDiffSidebarOpen) {
+    if (!isDiffSurfaceOpen) {
       return
     }
 
@@ -4646,7 +4639,7 @@ export function ChatView({
       if (rafId !== null) cancelAnimationFrame(rafId)
       if (observer) observer.disconnect()
     }
-  }, [isDiffSidebarOpen, storedDiffSidebarWidth])
+  }, [isDiffSurfaceOpen, storedDiffSidebarWidth])
 
   // Track changed files across all sub-chats for filtering
   const subChatFiles = useAtomValue(subChatFilesAtom)
@@ -7044,6 +7037,70 @@ Make sure to preserve all functionality from both branches when resolving confli
           </DiffFullPageView>
         )}
 
+        {canOpenDiff &&
+          !isMobileFullscreen &&
+          worktreePath &&
+          isDiffSidebarOpen &&
+          diffDisplayMode === "full-page" && (
+            <DiffStateProvider
+              isDiffSidebarOpen={isDiffSidebarOpen}
+              parsedFileDiffs={parsedFileDiffs}
+              isDiffSidebarNarrow={isDiffSidebarNarrow}
+              setIsDiffSidebarOpen={setIsDiffSidebarOpen}
+              setDiffStats={setDiffStats}
+              setDiffContent={setDiffContent}
+              setParsedFileDiffs={setParsedFileDiffs}
+              setPrefetchedFileContents={setPrefetchedFileContents}
+              fetchDiffStats={fetchDiffStats}
+            >
+              <DiffSidebarRenderer
+                worktreePath={worktreePath}
+                chatId={chatId}
+                repository={repository}
+                diffStats={diffStats}
+                diffContent={diffContent}
+                parsedFileDiffs={parsedFileDiffs}
+                prefetchedFileContents={prefetchedFileContents}
+                setDiffCollapseState={setDiffCollapseState}
+                diffViewRef={diffViewRef}
+                diffSidebarRef={diffSidebarRef}
+                agentChat={agentChat}
+                branchData={branchData}
+                gitStatus={gitStatus}
+                isGitStatusLoading={isGitStatusLoading}
+                isDiffSidebarOpen={isDiffSidebarOpen}
+                diffDisplayMode="full-page"
+                diffSidebarWidth={diffSidebarWidth}
+                handleReview={handleReview}
+                isReviewing={isReviewing}
+                handleCreatePrDirect={handleCreatePrDirect}
+                handleCreatePr={handleCreatePr}
+                isCreatingPr={isCreatingPr}
+                handleMergePr={handleMergePr}
+                mergePrMutation={mergePrMutation}
+                handleRefreshGitStatus={handleRefreshGitStatus}
+                hasPrNumber={hasPrNumber}
+                isPrOpen={isPrOpen}
+                hasMergeConflicts={hasMergeConflicts}
+                handleFixConflicts={handleFixConflicts}
+                handleExpandAll={handleExpandAll}
+                handleCollapseAll={handleCollapseAll}
+                diffMode={diffMode}
+                setDiffMode={setDiffMode}
+                handleMarkAllViewed={handleMarkAllViewed}
+                handleMarkAllUnviewed={handleMarkAllUnviewed}
+                isDesktop={isDesktop}
+                isFullscreen={Boolean(isFullscreen)}
+                setDiffDisplayMode={handleDiffDisplayModeChange}
+                handleCommitToPr={handleCommitToPr}
+                isCommittingToPr={isCommittingToPr}
+                subChatsWithFiles={subChatsWithFiles}
+                setDiffStats={setDiffStats}
+                onDiscardSuccess={scheduleDiffRefresh}
+              />
+            </DiffStateProvider>
+        )}
+
         {!isMobileFullscreen &&
           worktreePath && (
             <ExpandedWidgetSidebar
@@ -7107,7 +7164,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                     handleMarkAllUnviewed={handleMarkAllUnviewed}
                     isDesktop={isDesktop}
                     isFullscreen={Boolean(isFullscreen)}
-                    setDiffDisplayMode={setDiffDisplayMode}
+                    setDiffDisplayMode={handleDiffDisplayModeChange}
                     handleCommitToPr={handleCommitToPr}
                     isCommittingToPr={isCommittingToPr}
                     subChatsWithFiles={subChatsWithFiles}

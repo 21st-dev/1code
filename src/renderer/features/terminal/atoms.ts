@@ -21,17 +21,6 @@ export const terminalSidebarOpenAtomFamily = atomFamily((chatId: string) =>
   ),
 )
 
-// Deprecated: Keep for backwards compatibility, but should not be used
-// Use terminalSidebarOpenAtomFamily(chatId) instead
-export const terminalSidebarOpenAtom = atom(false)
-
-export const terminalSidebarWidthAtom = atomWithStorage<number>(
-  "terminal-sidebar-width",
-  500,
-  undefined,
-  { getOnInit: true },
-)
-
 // Terminal cwd tracking - window-scoped, maps paneId to current working directory
 export const terminalCwdAtom = atomWithWindowStorage<Record<string, string>>(
   "terminal-cwds",
@@ -39,14 +28,30 @@ export const terminalCwdAtom = atomWithWindowStorage<Record<string, string>>(
   { getOnInit: true },
 )
 
-// Terminal display mode - sidebar (right) or bottom panel
-export type TerminalDisplayMode = "side-peek" | "bottom"
+// Terminal display mode: Details-owned terminal widget or bottom panel.
+export type TerminalDisplayMode = "details" | "bottom"
+type LegacyTerminalDisplayMode = "side-peek"
 
-export const terminalDisplayModeAtom = atomWithStorage<TerminalDisplayMode>(
+export function normalizeTerminalDisplayMode(
+  mode: TerminalDisplayMode | LegacyTerminalDisplayMode | string | null | undefined,
+): TerminalDisplayMode {
+  return mode === "bottom" ? "bottom" : "details"
+}
+
+const terminalDisplayModeStorageAtom = atomWithStorage<
+  TerminalDisplayMode | LegacyTerminalDisplayMode
+>(
   "terminal-display-mode",
-  "side-peek",
+  "details",
   undefined,
   { getOnInit: true },
+)
+
+export const terminalDisplayModeAtom = atom(
+  (get) => normalizeTerminalDisplayMode(get(terminalDisplayModeStorageAtom)),
+  (_get, set, mode: TerminalDisplayMode) => {
+    set(terminalDisplayModeStorageAtom, normalizeTerminalDisplayMode(mode))
+  },
 )
 
 export const terminalBottomHeightAtom = atomWithStorage<number>(

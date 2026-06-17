@@ -57,8 +57,8 @@ interface ChangesWidgetProps {
   onExpand?: () => void
   /** Called when a file is clicked - should open diff sidebar with this file selected */
   onFileSelect?: (filePath: string) => void
-  /** Diff display mode - affects tooltip text */
-  diffDisplayMode?: "side-peek" | "center-peek" | "full-page"
+  /** Diff display mode - affects file-preview handoff */
+  diffDisplayMode?: "details-expanded" | "full-page"
 }
 
 interface DraftPrFormState {
@@ -124,7 +124,7 @@ export const ChangesWidget = memo(function ChangesWidget({
   currentBranch,
   onExpand,
   onFileSelect,
-  diffDisplayMode = "side-peek",
+  diffDisplayMode = "details-expanded",
 }: ChangesWidgetProps) {
   const { t } = useI18n()
   // Data is now cached at the ActiveChat level via workspaceDiffCacheAtomFamily
@@ -133,13 +133,6 @@ export const ChangesWidget = memo(function ChangesWidget({
   const displayStats = diffStats
 
   const hasChanges = displayStats && displayStats.fileCount > 0
-
-  // Get tooltip text based on diff display mode
-  const expandTooltip = diffDisplayMode === "side-peek"
-    ? t("changes.diff.openInSidebar")
-    : diffDisplayMode === "center-peek"
-      ? t("changes.diff.openInDialog")
-      : t("changes.diff.openFullscreen")
 
   // Resolved hotkey for tooltip
   const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")
@@ -658,7 +651,7 @@ export const ChangesWidget = memo(function ChangesWidget({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                {expandTooltip}
+                {t("details.expandChanges")}
                 {openDiffHotkey && <Kbd>{openDiffHotkey}</Kbd>}
               </TooltipContent>
             </Tooltip>
@@ -720,7 +713,7 @@ export const ChangesWidget = memo(function ChangesWidget({
                     } : undefined}
                     onOpenInFilePreview={absolutePath ? () => {
                       setFileViewerPath(absolutePath)
-                      if (diffDisplayMode !== "side-peek") {
+                      if (diffDisplayMode === "full-page") {
                         setDiffSidebarOpen(false)
                       }
                     } : undefined}

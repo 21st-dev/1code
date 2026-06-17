@@ -9,8 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  IconSidePeek,
-  IconCenterPeek,
+  IconOpenSidebarRight,
   IconFullPage,
 } from "@/components/ui/icons"
 import type { DiffViewDisplayMode } from "@/features/agents/atoms"
@@ -23,14 +22,9 @@ interface DiffViewModeSwitcherProps {
 
 const MODES = [
   {
-    value: "side-peek" as const,
-    labelKey: "changes.diff.sidebar" as TranslationKey,
-    Icon: IconSidePeek,
-  },
-  {
-    value: "center-peek" as const,
-    labelKey: "changes.diff.dialog" as TranslationKey,
-    Icon: IconCenterPeek,
+    value: "details-expanded" as const,
+    labelKey: "details.details" as TranslationKey,
+    Icon: IconOpenSidebarRight,
   },
   {
     value: "full-page" as const,

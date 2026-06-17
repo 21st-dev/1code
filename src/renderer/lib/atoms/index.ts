@@ -38,9 +38,7 @@ export {
   agentsSubChatsSidebarWidthAtom,
 
   // Diff atoms
-  agentsDiffSidebarWidthAtom,
   agentsChangesPanelWidthAtom,
-  agentsDiffSidebarOpenAtom,
   agentsFocusedDiffFileAtom,
   filteredDiffFilesAtom,
   subChatFilesAtom,

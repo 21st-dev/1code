@@ -891,7 +891,7 @@ export function ChangesView({
 	const handleOpenInFilePreview = (filePath: string) => {
 		const absolutePath = `${worktreePath}/${filePath}`;
 		setFileViewerPath(absolutePath);
-		if (diffDisplayMode !== "side-peek") {
+		if (diffDisplayMode === "full-page") {
 			setDiffSidebarOpen(false);
 		}
 	};

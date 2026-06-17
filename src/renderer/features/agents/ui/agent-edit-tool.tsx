@@ -22,7 +22,6 @@ import { areToolPropsEqual } from "./agent-tool-utils"
 import { getFileIconByExtension } from "../mentions/agents-file-mention"
 import { useFileOpen } from "../mentions"
 import {
-  agentsDiffSidebarOpenAtom,
   agentsFocusedDiffFileAtom,
   diffSidebarOpenAtomFamily,
   selectedAgentChatIdAtom,
@@ -238,7 +237,6 @@ export const AgentEditTool = memo(function AgentEditTool({
     [selectedChatId],
   )
   const setScopedDiffSidebarOpen = useSetAtom(diffSidebarAtom)
-  const setLegacyDiffSidebarOpen = useSetAtom(agentsDiffSidebarOpenAtom)
   const setFocusedDiffFile = useSetAtom(agentsFocusedDiffFileAtom)
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
@@ -279,15 +277,12 @@ export const AgentEditTool = memo(function AgentEditTool({
     if (openDetailsWidget("diff")) return
     if (selectedChatId) {
       setScopedDiffSidebarOpen(true)
-    } else {
-      setLegacyDiffSidebarOpen(true)
     }
   }, [
     displayPath,
     openDetailsWidget,
     selectedChatId,
     setFocusedDiffFile,
-    setLegacyDiffSidebarOpen,
     setScopedDiffSidebarOpen,
   ])
 

@@ -182,8 +182,8 @@ interface DetailsSidebarProps {
   planRefetchTrigger?: number
   /** Active sub-chat ID for plan */
   activeSubChatId?: string | null
-  /** Diff display mode used for widget copy while the legacy modes are migrated */
-  diffDisplayMode?: "side-peek" | "center-peek" | "full-page"
+  /** Diff display mode used for widget copy while full-page review is open */
+  diffDisplayMode?: "details-expanded" | "full-page"
   /** Diff-related props */
   canOpenDiff: boolean
   setIsDiffSidebarOpen: (open: boolean) => void

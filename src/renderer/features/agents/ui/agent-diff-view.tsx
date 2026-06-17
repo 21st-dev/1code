@@ -664,7 +664,7 @@ const FileDiffCard = memo(function FileDiffCard({
   const handleOpenInFilePreview = () => {
     if (absolutePath) {
       setFileViewerPath(absolutePath)
-      if (diffDisplayMode !== "side-peek") {
+      if (diffDisplayMode === "full-page") {
         setDiffSidebarOpen(false)
       }
     }

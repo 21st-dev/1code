@@ -3,7 +3,6 @@ import { useAtom, useAtomValue } from "jotai"
 import { useTheme } from "next-themes"
 import { fullThemeDataAtom } from "@/lib/atoms"
 import { motion } from "motion/react"
-import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -17,9 +16,8 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
 import {
-  IconDoubleChevronRight,
   CustomTerminalIcon,
-  IconSidePeek,
+  IconOpenSidebarRight,
   IconBottomPanel,
 } from "@/components/ui/icons"
 import { AlignJustify, Check, ChevronsDown } from "lucide-react"
@@ -30,7 +28,6 @@ import { TerminalTabs } from "./terminal-tabs"
 import { getDefaultTerminalBg } from "./helpers"
 import {
   terminalSidebarOpenAtomFamily,
-  terminalSidebarWidthAtom,
   terminalDisplayModeAtom,
   terminalsAtom,
   activeTerminalIdAtom,
@@ -42,8 +39,7 @@ import type { TerminalInstance } from "./types"
 import { isSharedTerminalScope } from "./utils"
 import { useI18n, type TranslationKey } from "@/lib/i18n"
 
-// Animation constants - keep in sync with ResizableSidebar animationDuration
-const SIDEBAR_ANIMATION_DURATION_SECONDS = 0 // Disabled for performance
+// Delay is disabled for performance, but keep the scheduling path for xterm sizing.
 const SIDEBAR_ANIMATION_DURATION_MS = 0
 const ANIMATION_BUFFER_MS = 0
 
@@ -56,7 +52,7 @@ interface TerminalSidebarProps {
   workspaceId: string
   tabId?: string
   initialCommands?: string[]
-  /** Mobile fullscreen mode - skip ResizableSidebar wrapper */
+  /** Mobile fullscreen mode */
   isMobileFullscreen?: boolean
   /** Callback when closing in mobile mode */
   onClose?: () => void
@@ -93,7 +89,7 @@ function getNextTerminalName(terminals: TerminalInstance[]): string {
 }
 
 const TERMINAL_MODES = [
-  { value: "side-peek" as const, labelKey: "terminal.sidebarMode" as TranslationKey, Icon: IconSidePeek },
+  { value: "details" as const, labelKey: "details.details" as TranslationKey, Icon: IconOpenSidebarRight },
   { value: "bottom" as const, labelKey: "terminal.bottomMode" as TranslationKey, Icon: IconBottomPanel },
 ]
 
@@ -155,7 +151,6 @@ export function TerminalSidebar({
     [chatId],
   )
   const [isOpen, setIsOpen] = useAtom(terminalSidebarAtom)
-  const [displayMode, setDisplayMode] = useAtom(terminalDisplayModeAtom)
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
   const terminalCwds = useAtomValue(terminalCwdAtom)
@@ -164,8 +159,6 @@ export function TerminalSidebar({
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
 
-  // Resolved hotkey for tooltip
-  const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
   const fullThemeData = useAtomValue(fullThemeDataAtom)
 
   const terminalBg = useMemo(() => {
@@ -362,11 +355,6 @@ export function TerminalSidebar({
     [setAllTerminals, setAllActiveIds, killMutation],
   )
 
-  // Close sidebar callback - stable
-  const closeSidebar = useCallback(() => {
-    setIsOpen(false)
-  }, [setIsOpen])
-
   // Delay terminal rendering until animation completes to avoid xterm.js sizing issues
   const [canRenderTerminal, setCanRenderTerminal] = useState(false)
   const wasOpenRef = useRef(false)
@@ -512,105 +500,8 @@ export function TerminalSidebar({
     )
   }
 
-  // Bottom mode — rendering handled by TerminalBottomPanel in active-chat
-  if (displayMode === "bottom") {
-    return null
-  }
-
-  // Desktop sidebar layout (side-peek mode)
-  return (
-    <ResizableSidebar
-      isOpen={isOpen}
-      onClose={closeSidebar}
-      widthAtom={terminalSidebarWidthAtom}
-      side="right"
-      minWidth={300}
-      maxWidth={800}
-      animationDuration={SIDEBAR_ANIMATION_DURATION_SECONDS}
-      initialWidth={0}
-      exitWidth={0}
-      showResizeTooltip={true}
-      className="bg-background border-l"
-      style={{ borderLeftWidth: "0.5px", overflow: "hidden" }}
-    >
-      <div className="flex flex-col h-full min-w-0 overflow-hidden">
-        {/* Header with tabs */}
-        <div
-          className="flex items-center gap-1 pl-1 pr-2 py-1.5 flex-shrink-0"
-          style={{ backgroundColor: terminalBg }}
-        >
-          {/* Close button - on the left */}
-          <div className="flex items-center flex-shrink-0 gap-0.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={closeSidebar}
-                  className="h-6 w-6 p-0 hover:bg-foreground/10 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] text-foreground flex-shrink-0 rounded-md"
-                  aria-label={t("terminal.close")}
-                >
-                  <IconDoubleChevronRight className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t("terminal.close")}
-                {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
-              </TooltipContent>
-            </Tooltip>
-            <TerminalModeSwitcher mode={displayMode} onModeChange={setDisplayMode} />
-          </div>
-
-          {/* Terminal Tabs */}
-          {terminals.length > 0 && (
-            <TerminalTabs
-              terminals={terminals}
-              activeTerminalId={activeTerminalId}
-              cwds={terminalCwds}
-              initialCwd={cwd}
-              terminalBg={terminalBg}
-              onSelectTerminal={selectTerminal}
-              onCloseTerminal={closeTerminal}
-              onCloseOtherTerminals={closeOtherTerminals}
-              onCloseTerminalsToRight={closeTerminalsToRight}
-              onCreateTerminal={createTerminal}
-              onRenameTerminal={renameTerminal}
-            />
-          )}
-        </div>
-
-        {/* Terminal Content */}
-        <div
-          className="flex-1 min-h-0 min-w-0 overflow-hidden"
-          style={{ backgroundColor: terminalBg }}
-        >
-          {activeTerminal && canRenderTerminal ? (
-            <motion.div
-              key={activeTerminal.paneId}
-              className="h-full"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0 }}
-            >
-              <Terminal
-                paneId={activeTerminal.paneId}
-                cwd={cwd}
-                workspaceId={workspaceId}
-                scopeKey={scopeKey}
-                tabId={tabId}
-                initialCommands={initialCommands}
-                initialCwd={cwd}
-              />
-            </motion.div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              {!canRenderTerminal ? "" : t("terminal.noTerminalOpen")}
-            </div>
-          )}
-        </div>
-      </div>
-    </ResizableSidebar>
-  )
+  // Desktop terminal rendering is Details-owned, and bottom mode is rendered by active-chat.
+  return null
 }
 
 /**

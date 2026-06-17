@@ -399,14 +399,6 @@ export const agentsSidebarWidthAtom = atomWithStorage<number>(
   { getOnInit: true },
 )
 
-// Diff sidebar (right) width (global - same width for all chats)
-export const agentsDiffSidebarWidthAtom = atomWithStorage<number>(
-  "agents-diff-sidebar-width",
-  800,
-  undefined,
-  { getOnInit: true },
-)
-
 // Local Browser Workbench width and open state.
 export const localBrowserWorkbenchWidthAtom = atomWithStorage<number>(
   "agents:localBrowserWorkbenchWidth",
@@ -459,66 +451,45 @@ export const agentsChangesPanelCollapsedAtom = atomWithStorage<boolean>(
   { getOnInit: true },
 )
 
-// Diff view display mode - sidebar (side peek), center dialog, or fullscreen
-// Defined early because diffSidebarOpenAtomFamily depends on it
-export type DiffViewDisplayMode = "side-peek" | "center-peek" | "full-page"
+// Diff view display mode: Details-owned expanded diff or full-page review.
+export type DiffViewDisplayMode = "details-expanded" | "full-page"
+type LegacyDiffViewDisplayMode = "side-peek" | "center-peek"
 
-export const diffViewDisplayModeAtom = atomWithStorage<DiffViewDisplayMode>(
+export function normalizeDiffViewDisplayMode(
+  mode: DiffViewDisplayMode | LegacyDiffViewDisplayMode | string | null | undefined,
+): DiffViewDisplayMode {
+  return mode === "full-page" ? "full-page" : "details-expanded"
+}
+
+const diffViewDisplayModeStorageAtom = atomWithStorage<
+  DiffViewDisplayMode | LegacyDiffViewDisplayMode
+>(
   "agents:diffViewDisplayMode",
-  "center-peek", // default to dialog for new users
+  "details-expanded",
   undefined,
   { getOnInit: true },
 )
 
-// Diff sidebar open state storage - window-scoped, stores per chatId
-const diffSidebarOpenStorageAtom = atomWithWindowStorage<Record<string, boolean>>(
-  "agents:diffSidebarOpen",
-  {},
-  { getOnInit: true },
+export const diffViewDisplayModeAtom = atom(
+  (get) => normalizeDiffViewDisplayMode(get(diffViewDisplayModeStorageAtom)),
+  (_get, set, mode: DiffViewDisplayMode) => {
+    set(diffViewDisplayModeStorageAtom, normalizeDiffViewDisplayMode(mode))
+  },
 )
 
-// Runtime open state - not persisted, used for dialog/fullscreen modes
+// Full-page diff open state is runtime-only; Details-expanded diff is owned by
+// expandedWidgetAtomFamily and should not restore old sidebar-open state.
 const diffSidebarOpenRuntimeAtom = atom<Record<string, boolean>>({})
 
 // atomFamily to get/set diff sidebar open state per chatId
-// Only restores persisted state when display mode is "side-peek" (sidebar mode)
-// For dialog/fullscreen modes, we use runtime state only (not auto-restored on page load)
 export const diffSidebarOpenAtomFamily = atomFamily((chatId: string) =>
   atom(
-    (get) => {
-      const displayMode = get(diffViewDisplayModeAtom)
-      const runtimeOpen = get(diffSidebarOpenRuntimeAtom)[chatId]
-
-      // If we have a runtime value, use it (user explicitly opened/closed)
-      if (runtimeOpen !== undefined) {
-        return runtimeOpen
-      }
-
-      // For initial load: only restore persisted state for sidebar mode
-      // Dialog and fullscreen should not auto-open on page load
-      if (displayMode !== "side-peek") {
-        return false
-      }
-      return get(diffSidebarOpenStorageAtom)[chatId] ?? false
-    },
+    (get) => get(diffSidebarOpenRuntimeAtom)[chatId] ?? false,
     (get, set, isOpen: boolean) => {
-      // Always update runtime state
       const currentRuntime = get(diffSidebarOpenRuntimeAtom)
       set(diffSidebarOpenRuntimeAtom, { ...currentRuntime, [chatId]: isOpen })
-
-      // Also persist for sidebar mode
-      const current = get(diffSidebarOpenStorageAtom)
-      set(diffSidebarOpenStorageAtom, { ...current, [chatId]: isOpen })
     },
   ),
-)
-
-// Legacy global atom - kept for backwards compatibility, maps to empty string key
-// TODO: Remove after migration
-export const agentsDiffSidebarOpenAtom = atomWithWindowStorage<boolean>(
-  "agents-diff-sidebar-open",
-  false,
-  { getOnInit: true },
 )
 
 // Focused file path in diff sidebar (for scroll-to-file feature)

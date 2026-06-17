@@ -25,6 +25,7 @@ import { DiffViewModeSwitcher } from "./diff-view-mode-switcher";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { HiArrowPath, HiChevronDown } from "react-icons/hi2";
 import { LuGitBranch } from "react-icons/lu";
+import type { DiffViewDisplayMode } from "@/features/agents/atoms";
 import {
 	ArrowDown,
 	ArrowUp,
@@ -104,9 +105,9 @@ interface DiffSidebarHeaderProps {
 	// Desktop window drag region
 	isDesktop?: boolean;
 	isFullscreen?: boolean;
-	// Diff view display mode (side-peek, center-peek, full-page)
-	displayMode?: "side-peek" | "center-peek" | "full-page";
-	onDisplayModeChange?: (mode: "side-peek" | "center-peek" | "full-page") => void;
+	// Diff view display mode (Details expanded or full-page)
+	displayMode?: DiffViewDisplayMode;
+	onDisplayModeChange?: (mode: DiffViewDisplayMode) => void;
 }
 
 type Translate = (
@@ -159,7 +160,7 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 	onMarkAllUnviewed,
 	isDesktop = false,
 	isFullscreen = false,
-	displayMode = "side-peek",
+	displayMode = "details-expanded",
 	onDisplayModeChange,
 }: DiffSidebarHeaderProps) {
 	const { t } = useI18n();
@@ -478,21 +479,21 @@ export const DiffSidebarHeader = memo(function DiffSidebarHeader({
 					WebkitAppRegion: "no-drag",
 				}}
 			>
-				{/* Close button - X icon for dialog/fullpage modes, chevron for sidebar */}
+				{/* Close button - sidebar close for Details, X for full-page */}
 				<Button
 					variant="ghost"
 					size="sm"
 					className="h-6 w-6 p-0 flex-shrink-0 hover:bg-foreground/10"
 					onClick={onClose}
 				>
-					{displayMode === "side-peek" ? (
+					{displayMode === "details-expanded" ? (
 						<IconCloseSidebarRight className="size-4 text-muted-foreground" />
 					) : (
 						<X className="size-4 text-muted-foreground" />
 					)}
 				</Button>
 
-				{/* Display mode switcher (side-peek, center-peek, full-page) */}
+				{/* Display mode switcher (Details expanded, full-page) */}
 				{onDisplayModeChange && (
 					<DiffViewModeSwitcher
 						mode={displayMode}
