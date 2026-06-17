@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   BarChart3,
   Box,
+  Globe2,
   ListTodo,
   TerminalSquare,
 } from "lucide-react"
@@ -45,6 +46,7 @@ import {
   widgetOrderAtomFamily,
   widgetVisibilityAtomFamily,
 } from "./atoms"
+import { BrowserWidget } from "./sections/browser-widget"
 import { ChangesWidget } from "./sections/changes-widget"
 import { FilesTab, type FilesTabHandle } from "./sections/files-tab"
 import { InfoSection } from "./sections/info-section"
@@ -74,6 +76,8 @@ function getWidgetIcon(widgetId: WidgetId) {
       return TerminalSquare
     case "diff":
       return DiffIcon
+    case "browser":
+      return Globe2
     case "mcp":
       return OriginalMCPIcon
     case "trace":
@@ -210,6 +214,7 @@ interface DetailsSidebarProps {
   onExpandTerminal?: () => void
   onExpandPlan?: () => void
   onExpandDiff?: () => void
+  onExpandBrowser?: () => void
   /** Callback when a file is selected in Changes widget - opens diff with file selected */
   onFileSelect?: (filePath: string) => void
   /** Callback when a file is opened from Files tab - opens in file viewer */
@@ -240,6 +245,7 @@ export function DetailsSidebar({
   onExpandTerminal,
   onExpandPlan,
   onExpandDiff,
+  onExpandBrowser,
   onFileSelect,
   onOpenFile,
 }: DetailsSidebarProps) {
@@ -553,6 +559,19 @@ export function DetailsSidebar({
                     onFileSelect={onFileSelect}
                     diffDisplayMode={diffDisplayMode}
                   />
+                )
+
+              case "browser":
+                if (!worktreePath) return null
+                return (
+                  <WidgetCard
+                    key="browser"
+                    widgetId="browser"
+                    title={t("localBrowser.title")}
+                    onExpand={onExpandBrowser}
+                  >
+                    <BrowserWidget onExpand={onExpandBrowser} />
+                  </WidgetCard>
                 )
 
               case "mcp":

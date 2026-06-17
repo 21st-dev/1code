@@ -155,4 +155,37 @@ describe("details sidebar entrypoints", () => {
     expect(source).toMatch(/<DetailsSidebar[\s\S]*onExpandDiff=/)
     expect(openDetailsWidget).toContain('setDetailsSidebarTab("details")')
   })
+
+  test("folds local browser through Details ownership", () => {
+    const source = read("src/renderer/features/agents/main/active-chat.tsx")
+    const agentsAtoms = read("src/renderer/features/agents/atoms/index.ts")
+    const detailsAtoms = read("src/renderer/features/details-sidebar/atoms/index.ts")
+    const detailsSidebar = read(
+      "src/renderer/features/details-sidebar/details-sidebar.tsx",
+    )
+    const expandedSidebar = read(
+      "src/renderer/features/details-sidebar/expanded-widget-sidebar.tsx",
+    )
+
+    expect(detailsAtoms).toContain('| "browser"')
+    expect(detailsAtoms).toContain('id: "browser"')
+    expect(detailsAtoms).toContain('labelKey: "localBrowser.title"')
+    expect(detailsAtoms).toContain("canExpand: true")
+    expect(detailsSidebar).toContain('case "browser":')
+    expect(detailsSidebar).toContain("<BrowserWidget")
+    expect(expandedSidebar).toContain("renderBrowserContent")
+    expect(expandedSidebar).toContain('case "browser":')
+    expect(source).toContain('openDetailsWidget("browser")')
+    expect(source).toMatch(/<ExpandedWidgetSidebar[\s\S]*renderBrowserContent=/)
+    expect(source).toContain("<LocalBrowserWorkbench")
+    expect(source).toContain("onInsertReport={handleInsertLocalBrowserReport}")
+    expect(source).toContain("setPendingActiveLocalBrowserReport(report)")
+    expect(source).toContain("pendingLocalBrowserReport")
+    expect(source).toContain("editorRef.current?.setValue")
+    expect(source).not.toContain("localBrowserWorkbenchOpenAtomFamily")
+    expect(source).not.toContain("localBrowserWorkbenchWidthAtom")
+    expect(agentsAtoms).not.toContain("localBrowserWorkbenchOpenAtomFamily")
+    expect(agentsAtoms).not.toContain("localBrowserWorkbenchWidthAtom")
+    expect(agentsAtoms).toContain("pendingLocalBrowserReportAtomFamily")
+  })
 })

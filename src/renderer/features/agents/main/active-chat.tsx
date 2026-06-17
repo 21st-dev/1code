@@ -101,8 +101,6 @@ import { getTerminalScopeKey } from "../../terminal/utils"
 import {
   agentsChangesPanelCollapsedAtom,
   agentsChangesPanelWidthAtom,
-  localBrowserWorkbenchOpenAtomFamily,
-  localBrowserWorkbenchWidthAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatUnseenChangesAtom,
   agentsUnseenChangesAtom,
@@ -4385,11 +4383,6 @@ export function ChatView({
 
   // Details sidebar state
   const [isDetailsSidebarOpen, setIsDetailsSidebarOpen] = useAtom(detailsSidebarOpenAtom)
-  const localBrowserWorkbenchAtom = useMemo(
-    () => localBrowserWorkbenchOpenAtomFamily(chatId),
-    [chatId],
-  )
-  const [isLocalBrowserWorkbenchOpen, setIsLocalBrowserWorkbenchOpen] = useAtom(localBrowserWorkbenchAtom)
   const pendingActiveLocalBrowserReportAtom = useMemo(
     () => pendingLocalBrowserReportAtomFamily(activeSubChatIdForPlan || ""),
     [activeSubChatIdForPlan],
@@ -6620,13 +6613,13 @@ Make sure to preserve all functionality from both branches when resolving confli
                 {/* Local Browser Workbench Button */}
                 {!isMobileFullscreen &&
                   worktreePath &&
-                  !isLocalBrowserWorkbenchOpen && (
+                  expandedWidget !== "browser" && (
                     <Tooltip delayDuration={500}>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => setIsLocalBrowserWorkbenchOpen(true)}
+                          onClick={() => openDetailsWidget("browser")}
                           className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
                           aria-label={t("localBrowser.openWorkbench")}
                         >
@@ -6964,31 +6957,6 @@ Make sure to preserve all functionality from both branches when resolving confli
           )}
         </div>
 
-        {/* Local Browser Workbench - local visual QA loop for dev servers/static previews */}
-        {!isMobileFullscreen && worktreePath && (
-          <ResizableSidebar
-            isOpen={isLocalBrowserWorkbenchOpen}
-            onClose={() => setIsLocalBrowserWorkbenchOpen(false)}
-            widthAtom={localBrowserWorkbenchWidthAtom}
-            minWidth={620}
-            maxWidth={1100}
-            side="right"
-            animationDuration={0}
-            initialWidth={0}
-            exitWidth={0}
-            showResizeTooltip={true}
-            className="bg-background border-l"
-            style={{ borderLeftWidth: "0.5px" }}
-          >
-            <LocalBrowserWorkbench
-              chatId={chatId}
-              worktreePath={worktreePath}
-              onClose={() => setIsLocalBrowserWorkbenchOpen(false)}
-              onInsertReport={handleInsertLocalBrowserReport}
-            />
-          </ResizableSidebar>
-        )}
-
         {/* File Viewer - opens when a file is clicked */}
         {!isMobileFullscreen && fileViewerPath && worktreePath && fileViewerDisplayMode === "side-peek" && (
           <ResizableSidebar
@@ -7174,6 +7142,16 @@ Make sure to preserve all functionality from both branches when resolving confli
                   />
                 </DiffStateProvider>
               )}
+              renderBrowserContent={({ onClose }) => (
+                worktreePath ? (
+                  <LocalBrowserWorkbench
+                    chatId={chatId}
+                    worktreePath={worktreePath}
+                    onClose={onClose}
+                    onInsertReport={handleInsertLocalBrowserReport}
+                  />
+                ) : null
+              )}
             />
         )}
 
@@ -7203,6 +7181,7 @@ Make sure to preserve all functionality from both branches when resolving confli
             onExpandTerminal={handleOpenTerminalProductEntry}
             onExpandPlan={handleOpenPlanProductEntry}
             onExpandDiff={handleOpenDiffProductEntry}
+            onExpandBrowser={() => openDetailsWidget("browser")}
             onFileSelect={handleOpenDiffFileProductEntry}
             onOpenFile={setFileViewerPath}
           />

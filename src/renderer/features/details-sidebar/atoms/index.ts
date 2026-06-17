@@ -8,6 +8,7 @@ import {
   Box,
   FileDiff,
   FileText,
+  Globe2,
   ListTodo,
   Terminal,
 } from "lucide-react"
@@ -25,6 +26,7 @@ export type WidgetId =
   | "plan"
   | "terminal"
   | "diff"
+  | "browser"
   | "mcp"
   | "trace"
   | "usage"
@@ -101,6 +103,14 @@ export const WIDGET_REGISTRY: WidgetConfig[] = [
     label: "Changes",
     labelKey: "changes.title",
     icon: FileDiff,
+    canExpand: true,
+    defaultVisible: true,
+  },
+  {
+    id: "browser",
+    label: "Local Browser",
+    labelKey: "localBrowser.title",
+    icon: Globe2,
     canExpand: true,
     defaultVisible: true,
   },

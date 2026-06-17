@@ -399,30 +399,6 @@ export const agentsSidebarWidthAtom = atomWithStorage<number>(
   { getOnInit: true },
 )
 
-// Local Browser Workbench width and open state.
-export const localBrowserWorkbenchWidthAtom = atomWithStorage<number>(
-  "agents:localBrowserWorkbenchWidth",
-  760,
-  undefined,
-  { getOnInit: true },
-)
-
-const localBrowserWorkbenchOpenStorageAtom = atomWithWindowStorage<Record<string, boolean>>(
-  "agents:localBrowserWorkbenchOpen",
-  {},
-  { getOnInit: true },
-)
-
-export const localBrowserWorkbenchOpenAtomFamily = atomFamily((chatId: string) =>
-  atom(
-    (get) => get(localBrowserWorkbenchOpenStorageAtom)[chatId] ?? false,
-    (get, set, isOpen: boolean) => {
-      const current = get(localBrowserWorkbenchOpenStorageAtom)
-      set(localBrowserWorkbenchOpenStorageAtom, { ...current, [chatId]: isOpen })
-    },
-  ),
-)
-
 const pendingLocalBrowserReportStorageAtom = atom<Record<string, string | null>>({})
 
 export const pendingLocalBrowserReportAtomFamily = atomFamily((subChatId: string) =>
