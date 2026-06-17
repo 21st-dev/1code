@@ -19,5 +19,5 @@
 ## 4. Verification
 - [x] 4.1 Extend targeted tests for Details commit/push entrypoints and no duplicate git implementation.
 - [x] 4.2 Run `openspec validate add-details-commit-push-actions --strict --no-interactive`.
-- [ ] 4.3 Run targeted tests, `bun run lint`, `bun run ts:check`, and `bun run architecture:check`.
-- [ ] 4.4 Manual smoke: Details Changes widget shows commit input for selected changed files, publish/push appears for sync status, and draft PR remains confirmed.
+- [x] 4.3 Run targeted tests, `bun run lint`, `bun run ts:check`, and `bun run architecture:check`.
+- [x] 4.4 Manual smoke: Details Changes widget shows commit input for selected changed files, publish/push appears for sync status, and draft PR remains confirmed.

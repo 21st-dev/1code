@@ -37,6 +37,7 @@ import {
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import type { ChangedFile } from "../../../shared/changes-types"
 import type { AgentMode } from "../agents/atoms"
 import {
   detailsSidebarAutoOpenSuppressedAtom,
@@ -206,6 +207,9 @@ interface DetailsSidebarProps {
     pushCount?: number
     pullCount?: number
     hasUpstream?: boolean
+    staged?: ChangedFile[]
+    unstaged?: ChangedFile[]
+    untracked?: ChangedFile[]
   } | null
   /** Whether git sync status is loading */
   isGitStatusLoading?: boolean
@@ -556,6 +560,9 @@ export function DetailsSidebar({
                     pushCount={gitStatus?.pushCount ?? 0}
                     pullCount={gitStatus?.pullCount ?? 0}
                     hasUpstream={gitStatus?.hasUpstream ?? true}
+                    staged={gitStatus?.staged ?? []}
+                    unstaged={gitStatus?.unstaged ?? []}
+                    untracked={gitStatus?.untracked ?? []}
                     isSyncStatusLoading={isGitStatusLoading}
                     currentBranch={currentBranch}
                     onExpand={onExpandDiff}

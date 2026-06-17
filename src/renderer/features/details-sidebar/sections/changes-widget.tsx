@@ -40,6 +40,7 @@ import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { useI18n } from "@/lib/i18n"
 import { trpc } from "@/lib/trpc"
 import { cn } from "@/lib/utils"
+import type { ChangedFile } from "../../../../shared/changes-types"
 import { APP_META } from "../../../../shared/external-apps"
 import type { GitHubDraftPullRequestUnavailableReason } from "../../../../shared/github-workflow-context"
 import { getGitHubDraftPrUnavailableMessageKey } from "../../../../shared/github-workflow-ui-state"
@@ -54,6 +55,9 @@ interface ChangesWidgetProps {
   pushCount?: number
   pullCount?: number
   hasUpstream?: boolean
+  staged?: ChangedFile[]
+  unstaged?: ChangedFile[]
+  untracked?: ChangedFile[]
   isSyncStatusLoading?: boolean
   currentBranch?: string
   onExpand?: () => void
@@ -106,6 +110,72 @@ function getFileStatus(file: ParsedDiffFile): "added" | "modified" | "deleted" |
   return "modified"
 }
 
+function statusFilesToParsedDiffs(files: ChangedFile[]): ParsedDiffFile[] {
+  const byPath = new Map<string, ChangedFile>()
+  for (const file of files) {
+    const previous = byPath.get(file.path)
+    if (!previous) {
+      byPath.set(file.path, file)
+      continue
+    }
+
+    byPath.set(file.path, {
+      ...previous,
+      additions: previous.additions + file.additions,
+      deletions: previous.deletions + file.deletions,
+      status: file.status === "untracked" ? "untracked" : previous.status,
+    })
+  }
+
+  return Array.from(byPath.values()).map((file) => {
+    const oldPath =
+      file.status === "added" || file.status === "untracked"
+        ? "/dev/null"
+        : (file.oldPath ?? file.path)
+    const newPath = file.status === "deleted" ? "/dev/null" : file.path
+
+    return {
+      key: `${oldPath}->${newPath}`,
+      oldPath,
+      newPath,
+      diffText: "",
+      isBinary: false,
+      additions: file.additions,
+      deletions: file.deletions,
+      isValid: true,
+      fileLang: null,
+      isNewFile: file.status === "added" || file.status === "untracked",
+      isDeletedFile: file.status === "deleted",
+    }
+  })
+}
+
+function getParsedDiffDisplayPath(file: ParsedDiffFile): string {
+  if (file.newPath && file.newPath !== "/dev/null") {
+    return file.newPath
+  }
+  if (file.oldPath && file.oldPath !== "/dev/null") {
+    return file.oldPath
+  }
+  return file.newPath || file.oldPath
+}
+
+function mergeDisplayFiles(
+  statusFiles: ParsedDiffFile[],
+  parsedFiles: ParsedDiffFile[],
+): ParsedDiffFile[] {
+  const filesByPath = new Map<string, ParsedDiffFile>()
+
+  for (const file of parsedFiles) {
+    filesByPath.set(getParsedDiffDisplayPath(file), file)
+  }
+  for (const file of statusFiles) {
+    filesByPath.set(getParsedDiffDisplayPath(file), file)
+  }
+
+  return Array.from(filesByPath.values())
+}
+
 /**
  * Changes Widget for Overview Sidebar
  * Shows file list exactly like the Changes tab in diff sidebar
@@ -120,6 +190,9 @@ export const ChangesWidget = memo(function ChangesWidget({
   pushCount = 0,
   pullCount = 0,
   hasUpstream = true,
+  staged = [],
+  unstaged = [],
+  untracked = [],
   isSyncStatusLoading = false,
   currentBranch,
   onExpand,
@@ -127,12 +200,62 @@ export const ChangesWidget = memo(function ChangesWidget({
   diffDisplayMode = "details-expanded",
 }: ChangesWidgetProps) {
   const { t } = useI18n()
+  const {
+    data: freshGitStatus,
+    isLoading: isFreshGitStatusLoading,
+  } = trpc.changes.getStatus.useQuery(
+    { worktreePath: worktreePath || "" },
+    {
+      enabled: !!worktreePath,
+      refetchOnWindowFocus: true,
+      staleTime: 5000,
+    },
+  )
+  const effectiveStaged = freshGitStatus?.staged ?? staged
+  const effectiveUnstaged = freshGitStatus?.unstaged ?? unstaged
+  const effectiveUntracked = freshGitStatus?.untracked ?? untracked
+  const effectivePushCount = freshGitStatus?.pushCount ?? pushCount
+  const effectivePullCount = freshGitStatus?.pullCount ?? pullCount
+  const effectiveHasUpstream = freshGitStatus?.hasUpstream ?? hasUpstream
+  const effectiveIsSyncStatusLoading =
+    isSyncStatusLoading || isFreshGitStatusLoading
+
   // Data is now cached at the ActiveChat level via workspaceDiffCacheAtomFamily
   // So parsedFileDiffs and diffStats persist across workspace switches
-  const displayFiles = parsedFileDiffs ?? []
-  const displayStats = diffStats
+  const statusFiles = useMemo(
+    () =>
+      statusFilesToParsedDiffs([
+        ...effectiveStaged,
+        ...effectiveUnstaged,
+        ...effectiveUntracked,
+      ]),
+    [effectiveStaged, effectiveUnstaged, effectiveUntracked],
+  )
+  const displayFiles = useMemo(
+    () => mergeDisplayFiles(statusFiles, parsedFileDiffs ?? []),
+    [statusFiles, parsedFileDiffs],
+  )
+  const mergedStats = useMemo(
+    () =>
+      displayFiles.length > 0
+        ? {
+            additions: displayFiles.reduce(
+              (sum, file) => sum + file.additions,
+              0,
+            ),
+            deletions: displayFiles.reduce(
+              (sum, file) => sum + file.deletions,
+              0,
+            ),
+            fileCount: displayFiles.length,
+          }
+        : null,
+    [displayFiles],
+  )
+  const displayStats = mergedStats ?? diffStats
 
-  const hasChanges = displayStats && displayStats.fileCount > 0
+  const hasChanges =
+    displayFiles.length > 0 || !!(displayStats && displayStats.fileCount > 0)
 
   // Resolved hotkey for tooltip
   const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")
@@ -150,10 +273,10 @@ export const ChangesWidget = memo(function ChangesWidget({
   const trpcUtils = trpc.useUtils()
 
   const syncActionKind = getSyncActionKind({
-    hasUpstream,
-    pullCount,
-    pushCount,
-    isSyncStatusLoading,
+    hasUpstream: effectiveHasUpstream,
+    pullCount: effectivePullCount,
+    pushCount: effectivePushCount,
+    isSyncStatusLoading: effectiveIsSyncStatusLoading,
   })
   const showPushAction =
     !!worktreePath &&
@@ -170,14 +293,16 @@ export const ChangesWidget = memo(function ChangesWidget({
     syncActionKind === "publish"
       ? t("changes.diff.publishTooltip")
       : t("changes.diff.pushTooltip", {
-          count: pushCount,
-          plural: pushCount !== 1 ? "s" : "",
+          count: effectivePushCount,
+          plural: effectivePushCount !== 1 ? "s" : "",
         })
   const pushBadge =
-    syncActionKind === "push" && pushCount > 0 ? `↑${pushCount}` : null
+    syncActionKind === "push" && effectivePushCount > 0
+      ? `↑${effectivePushCount}`
+      : null
   const { push: pushBranch, isPending: isPushPending } = usePushAction({
     worktreePath,
-    hasUpstream,
+    hasUpstream: effectiveHasUpstream,
     onSuccess: onRefresh,
   })
   const isLikelyDefaultBranch =
@@ -222,13 +347,7 @@ export const ChangesWidget = memo(function ChangesWidget({
 
   // Helper to get display path (handles /dev/null for deleted files)
   const getDisplayPath = useCallback((file: ParsedDiffFile): string => {
-    if (file.newPath && file.newPath !== "/dev/null") {
-      return file.newPath
-    }
-    if (file.oldPath && file.oldPath !== "/dev/null") {
-      return file.oldPath
-    }
-    return file.newPath || file.oldPath
+    return getParsedDiffDisplayPath(file)
   }, [])
 
   // Initialize selection, then auto-select newly added paths on subsequent updates
