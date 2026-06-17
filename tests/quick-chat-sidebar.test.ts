@@ -57,6 +57,26 @@ describe("quick chat sidebar grouping", () => {
     expect(archivePopover).toContain('t("sidebar.permanentDelete")')
   })
 
+  test("does not repeat the quick-chat group label as each row subtitle", () => {
+    const sidebar = read("src/renderer/features/sidebar/agents-sidebar.tsx")
+    const itemBlock = sidebar.slice(
+      sidebar.indexOf("const AgentChatItem = React.memo"),
+      sidebar.indexOf("const ChatListSection = React.memo"),
+    )
+    const displayTextBlock = sidebar.slice(
+      sidebar.indexOf("const displayText = !chat.projectId"),
+      sidebar.indexOf("const isChecked = selectedChatIds.has(chat.id)"),
+    )
+
+    expect(displayTextBlock).toContain("? null")
+    expect(displayTextBlock).not.toContain('t("sidebar.quickChats")')
+    expect(itemBlock).toContain(
+      "const showSecondaryRow = Boolean(displayText || hasFileStats)",
+    )
+    expect(itemBlock).toContain("{showSecondaryRow && (")
+    expect(itemBlock).toContain("{!showSecondaryRow && (")
+  })
+
   test("uses explicit new-chat targets for top-level quick chat and project group actions", () => {
     const sidebar = read("src/renderer/features/sidebar/agents-sidebar.tsx")
     const actions = read("src/renderer/features/agents/lib/agents-actions.ts")

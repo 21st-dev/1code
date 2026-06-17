@@ -482,7 +482,7 @@ const AgentChatItem = React.memo(function AgentChatItem({
   isMobileFullscreen: boolean
   isDesktop: boolean
   isPinned: boolean
-  displayText: string
+  displayText: string | null
   gitOwner: string | null | undefined
   gitProvider: string | null | undefined
   stats: { fileCount: number; additions: number; deletions: number } | undefined
@@ -534,6 +534,13 @@ const AgentChatItem = React.memo(function AgentChatItem({
   const rowActionLabel = isQuickChat
     ? t("sidebar.deleteQuickChat")
     : t("sidebar.archiveWorkspace")
+  const hasFileStats = Boolean(
+    stats && (stats.additions > 0 || stats.deletions > 0),
+  )
+  const formattedTime = formatTime(
+    chatUpdatedAt?.toISOString() ?? new Date().toISOString(),
+  )
+  const showSecondaryRow = Boolean(displayText || hasFileStats)
 
   return (
     <ContextMenu>
@@ -619,6 +626,11 @@ const AgentChatItem = React.memo(function AgentChatItem({
                     showPlaceholder={true}
                   />
                 </span>
+                {!showSecondaryRow && (
+                  <span className="text-[11px] text-muted-foreground/60 flex-shrink-0">
+                    {formattedTime}
+                  </span>
+                )}
                 {/* Archive button or inline loader/status when icon is hidden */}
                 {!isMultiSelectMode && !isMobileFullscreen && (
                   <div className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center relative">
@@ -704,26 +716,28 @@ const AgentChatItem = React.memo(function AgentChatItem({
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 min-w-0">
-                <span className="truncate flex-1 min-w-0">{displayText}</span>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {stats && (stats.additions > 0 || stats.deletions > 0) && (
-                    <>
-                      <span className="text-green-600 dark:text-green-400">
-                        +{stats.additions}
-                      </span>
-                      <span className="text-red-600 dark:text-red-400">
-                        -{stats.deletions}
-                      </span>
-                    </>
+              {showSecondaryRow && (
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 min-w-0">
+                  {displayText && (
+                    <span className="truncate flex-1 min-w-0">
+                      {displayText}
+                    </span>
                   )}
-                  <span>
-                    {formatTime(
-                      chatUpdatedAt?.toISOString() ?? new Date().toISOString(),
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {stats && (stats.additions > 0 || stats.deletions > 0) && (
+                      <>
+                        <span className="text-green-600 dark:text-green-400">
+                          +{stats.additions}
+                        </span>
+                        <span className="text-red-600 dark:text-red-400">
+                          -{stats.deletions}
+                        </span>
+                      </>
                     )}
-                  </span>
+                    <span>{formattedTime}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -1147,7 +1161,7 @@ const ChatListSection = React.memo(function ChatListSection({
               : null
             const repoName = project?.gitRepo || project?.name
             const displayText = !chat.projectId
-              ? t("sidebar.quickChats")
+              ? null
               : chat.branch
                 ? repoName
                   ? `${repoName} • ${chat.branch}`
