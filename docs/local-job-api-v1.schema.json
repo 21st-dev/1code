@@ -86,6 +86,7 @@
       "enum": [
         "hardToolGuard",
         "planMode",
+        "quickChatAssistant",
         "scopeExpansion",
         "askUserQuestion",
         "rollback",
