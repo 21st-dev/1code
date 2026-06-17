@@ -109,6 +109,7 @@ interface AgentModelSelectorProps {
   onOpenChange: (open: boolean) => void
   selectedAgentId: AgentProviderId
   onSelectedAgentIdChange: (provider: AgentProviderId) => void
+  allowedProviderIds?: AgentProviderId[]
   selectedModelLabel: string
   allowProviderSwitch?: boolean
   triggerClassName?: string
@@ -171,6 +172,15 @@ type ActiveModelInfo = {
   modelLabel: string
   top: number
   left: number
+}
+
+function getProviderProfileProvider(
+  profile: ProviderProfileOption,
+  runtime: "claude" | "codex" | "local",
+): AgentProviderId {
+  if (runtime === "codex") return "codex"
+  if (runtime === "claude") return "claude-code"
+  return profile.targetRuntimes.includes("codex") ? "codex" : "claude-code"
 }
 
 function isDomNode(target: EventTarget | null): target is Node {
@@ -605,6 +615,7 @@ export function AgentModelSelector({
   onOpenChange,
   selectedAgentId,
   onSelectedAgentIdChange,
+  allowedProviderIds,
   selectedModelLabel,
   allowProviderSwitch = true,
   triggerClassName,
@@ -628,10 +639,20 @@ export function AgentModelSelector({
     string | null
   >(null)
 
+  const allowedProviders = useMemo(
+    () =>
+      new Set<AgentProviderId>(allowedProviderIds ?? ["claude-code", "codex"]),
+    [allowedProviderIds],
+  )
+  const providerIsAllowed = useCallback(
+    (provider: AgentProviderId) => allowedProviders.has(provider),
+    [allowedProviders],
+  )
   const canSelectProvider = useCallback(
     (provider: AgentProviderId) =>
-      allowProviderSwitch || selectedAgentId === provider,
-    [allowProviderSwitch, selectedAgentId],
+      providerIsAllowed(provider) &&
+      (allowProviderSwitch || selectedAgentId === provider),
+    [allowProviderSwitch, providerIsAllowed, selectedAgentId],
   )
   const selectedClaudeModelSource =
     claude.selectedModelSource === "custom-provider" &&
@@ -648,46 +669,58 @@ export function AgentModelSelector({
   const allModels = useMemo<FlatModelItem[]>(() => {
     const items: FlatModelItem[] = []
 
-    if (claude.isOffline && claude.ollamaModels.length > 0) {
-      for (const m of claude.ollamaModels) {
-        items.push({
-          type: "ollama",
-          modelName: m,
-          isRecommended: m === claude.recommendedOllamaModel,
-        })
-      }
-    } else {
-      if (claude.hasCustomModelConfig) {
-        items.push({ type: "custom" })
-      }
-      for (const m of claude.models) {
-        items.push({ type: "claude", model: m })
+    if (providerIsAllowed("claude-code")) {
+      if (claude.isOffline && claude.ollamaModels.length > 0) {
+        for (const m of claude.ollamaModels) {
+          items.push({
+            type: "ollama",
+            modelName: m,
+            isRecommended: m === claude.recommendedOllamaModel,
+          })
+        }
+      } else {
+        if (claude.hasCustomModelConfig) {
+          items.push({ type: "custom" })
+        }
+        for (const m of claude.models) {
+          items.push({ type: "claude", model: m })
+        }
       }
     }
 
     for (const profile of providerProfiles) {
       if (profile.targetRuntimes.includes("local")) {
-        items.push({ type: "provider-profile", profile, runtime: "local" })
+        if (providerIsAllowed(getProviderProfileProvider(profile, "local"))) {
+          items.push({ type: "provider-profile", profile, runtime: "local" })
+        }
         continue
       }
-      if (profile.targetRuntimes.includes("claude")) {
+      if (
+        providerIsAllowed("claude-code") &&
+        profile.targetRuntimes.includes("claude")
+      ) {
         items.push({ type: "provider-profile", profile, runtime: "claude" })
       }
     }
 
-    for (const m of codex.models) {
-      items.push({ type: "codex", model: m })
+    if (providerIsAllowed("codex")) {
+      for (const m of codex.models) {
+        items.push({ type: "codex", model: m })
+      }
     }
 
     for (const profile of providerProfiles) {
       if (profile.targetRuntimes.includes("local")) continue
-      if (profile.targetRuntimes.includes("codex")) {
+      if (
+        providerIsAllowed("codex") &&
+        profile.targetRuntimes.includes("codex")
+      ) {
         items.push({ type: "provider-profile", profile, runtime: "codex" })
       }
     }
 
     return items
-  }, [claude, codex, providerProfiles])
+  }, [claude, codex, providerIsAllowed, providerProfiles])
 
   // Filter by search
   const filteredModels = useMemo(() => {
@@ -877,11 +910,7 @@ export function AgentModelSelector({
   const getItemProvider = (item: FlatModelItem): AgentProviderId => {
     if (item.type === "codex") return "codex"
     if (item.type === "provider-profile") {
-      if (item.runtime === "claude") return "claude-code"
-      if (item.runtime === "codex") return "codex"
-      return item.profile.targetRuntimes.includes("codex")
-        ? "codex"
-        : "claude-code"
+      return getProviderProfileProvider(item.profile, item.runtime)
     }
     return "claude-code"
   }

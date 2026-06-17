@@ -131,7 +131,8 @@ export function createAndStartDesktopAgentJob(
       kind: "desktop-chat",
       chatId: context.chat.id,
       subChatId: context.subChat.id,
-      projectId: context.project.id,
+      workspaceKind: context.kind,
+      projectId: context.kind === "project" ? context.project.id : null,
       runId: input.runId ?? null,
       promptSha256: sha256(prompt),
       promptLength: prompt.length,
@@ -139,7 +140,7 @@ export function createAndStartDesktopAgentJob(
         input.permissionPolicy,
       ),
     },
-    projectId: context.project.id,
+    projectId: context.kind === "project" ? context.project.id : null,
     chatId: context.chat.id,
     subChatId: context.subChat.id,
   })

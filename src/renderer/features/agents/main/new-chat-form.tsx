@@ -60,7 +60,6 @@ import {
   codexOnboardingCompletedAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
-  repoOnboardingSkippedAtom,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
@@ -103,13 +102,17 @@ import {
 import { agentsSidebarOpenAtom, agentsUnseenChangesAtom } from "../atoms"
 import { AgentSendButton } from "../components/agent-send-button"
 import { VoiceInputControl } from "../../../lib/voice/voice-input-control"
-import { AgentModelSelector } from "../components/agent-model-selector"
+import {
+  AgentModelSelector,
+  type AgentProviderId,
+} from "../components/agent-model-selector"
 import {
   isProviderProfileSource,
   parseProviderProfileSource,
 } from "../../../../shared/provider-profile-types"
 import type { AgentChatProvider } from "../../../../shared/agent-chat-provider"
 import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
+import { useRuntimeCapabilityManifestStore } from "../lib/runtime-manifest-store"
 import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
 import { formatTimeAgo } from "../utils/format-time-ago"
@@ -177,7 +180,12 @@ function useAvailableModels() {
 }
 
 // Agent providers
-const agents = [
+const agents: Array<{
+  id: AgentProviderId | "cursor"
+  name: string
+  hasModels?: boolean
+  disabled?: boolean
+}> = [
   { id: "claude-code", name: "Claude Code", hasModels: true },
   { id: "cursor", name: "Cursor CLI", disabled: true },
   { id: "codex", name: "OpenAI Codex" },
@@ -223,6 +231,25 @@ export function NewChatForm({
     return exists ? selectedProject : null
   }, [selectedProject, projectsList, isLoadingProjects])
   const projectForChat = isLoadingProjects ? null : validatedProject
+  const isFolderlessQuickChat = !validatedProject
+  const { data: runtimeCapabilityManifests } =
+    useRuntimeCapabilityManifestStore()
+  const quickChatAllowedProviderIds = useMemo(() => {
+    if (!isFolderlessQuickChat) return undefined
+    if (!runtimeCapabilityManifests) return []
+
+    return runtimeCapabilityManifests
+      .filter((manifest) =>
+        manifest.capabilities.some(
+          (capability) =>
+            capability.id === "quickChatAssistant" &&
+            capability.status === "supported",
+        ),
+      )
+      .map((manifest) => manifest.runtimeId)
+  }, [isFolderlessQuickChat, runtimeCapabilityManifests])
+  const quickChatRuntimeGateLoaded =
+    !isFolderlessQuickChat || runtimeCapabilityManifests !== undefined
 
   // Clear invalid project from storage
   useEffect(() => {
@@ -255,6 +282,10 @@ export function NewChatForm({
     agentMode === "plan"
       ? t("chat.placeholder.planMode")
       : t("chat.placeholder.agentMode")
+  const effectiveMode = validatedProject ? agentMode : "agent"
+  const effectiveModePlaceholder = validatedProject
+    ? modePlaceholder
+    : t("chat.placeholder.agentMode")
   const modeSelectorTitle = t("chat.mode.selectorTooltip")
   const [workMode, setWorkMode] = useAtom(lastSelectedWorkModeAtom)
   const [worktreeCreateState, setWorktreeCreateState] = useState<
@@ -317,7 +348,6 @@ export function NewChatForm({
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
-  const setRepoOnboardingSkipped = useSetAtom(repoOnboardingSkippedAtom)
   const [createBranchDialogOpen, setCreateBranchDialogOpen] = useState(false)
 
   // Worktree config banner state
@@ -366,8 +396,14 @@ export function NewChatForm({
     return `${match[1]}/${match[2].replace(/\.git$/, "")}`
   }
   const enabledAgents = useMemo(
-    () => agents.filter((agent) => !agent.disabled),
-    [],
+    () =>
+      agents.filter((agent) => {
+        if (agent.disabled) return false
+        if (!quickChatAllowedProviderIds) return true
+        if (agent.id !== "claude-code" && agent.id !== "codex") return false
+        return quickChatAllowedProviderIds.includes(agent.id)
+      }),
+    [quickChatAllowedProviderIds],
   )
   const fallbackAgent = enabledAgents[0] ?? agents[0]!
   const [selectedAgent, setSelectedAgent] = useState(
@@ -385,6 +421,13 @@ export function NewChatForm({
       setSelectedAgent(nextAgent)
     }
   }, [enabledAgents, fallbackAgent, lastSelectedAgentId, selectedAgent.id])
+  const selectedAgentIsRuntimeAllowed = useMemo(
+    () =>
+      selectedAgent.id === "claude-code" || selectedAgent.id === "codex"
+        ? enabledAgents.some((agent) => agent.id === selectedAgent.id)
+        : false,
+    [enabledAgents, selectedAgent.id],
+  )
 
   // Get available models (with offline support)
   const availableModels = useAvailableModels()
@@ -1121,57 +1164,6 @@ export function NewChatForm({
     },
   })
 
-  // Open folder mutation for selecting a project
-  const openFolder = trpc.projects.openFolder.useMutation({
-    onSuccess: (project) => {
-      if (project) {
-        // Optimistically update the projects list cache to prevent "Select repo" flash
-        // This ensures validatedProject can find the new project immediately
-        utils.projects.list.setData(undefined, (oldData) => {
-          if (!oldData) return [project]
-          // Check if project already exists (reopened existing project)
-          const exists = oldData.some((p) => p.id === project.id)
-          if (exists) {
-            // Update existing project's timestamp
-            return oldData.map((p) =>
-              p.id === project.id ? { ...p, updatedAt: project.updatedAt } : p,
-            )
-          }
-          // Add new project at the beginning
-          return [project, ...oldData]
-        })
-
-        setSelectedProject({
-          id: project.id,
-          name: project.name,
-          path: project.path,
-          gitRemoteUrl: project.gitRemoteUrl,
-          gitProvider: project.gitProvider as
-            | "github"
-            | "gitlab"
-            | "bitbucket"
-            | null,
-          gitOwner: project.gitOwner,
-          gitRepo: project.gitRepo,
-        })
-        setRepoOnboardingSkipped(false)
-      }
-    },
-  })
-
-  const handleOpenFolder = async () => {
-    try {
-      const project = await openFolder.mutateAsync()
-      if (!project) {
-        toast.info(t("chat.selectRepoCancelled"))
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : t("chat.selectRepoFailed"),
-      )
-    }
-  }
-
   const trpcUtils = trpc.useUtils()
 
   const handleSend = useCallback(async () => {
@@ -1186,10 +1178,14 @@ export function NewChatForm({
     const hasFiles = files.filter((f) => !f.isLoading).length > 0
     const hasPastedTexts = pastedTexts.length > 0
 
+    if (!hasText && !hasImages && !hasFiles && !hasPastedTexts) {
+      return
+    }
     if (
-      (!hasText && !hasImages && !hasFiles && !hasPastedTexts) ||
-      !projectForChat
+      isFolderlessQuickChat &&
+      (!quickChatRuntimeGateLoaded || !selectedAgentIsRuntimeAllowed)
     ) {
+      toast.error(t("quickChat.providerUnavailable"))
       return
     }
     if (imageAttachmentBlocked) {
@@ -1199,7 +1195,9 @@ export function NewChatForm({
       return
     }
 
-    message = await expandCustomSlashCommand(message, projectForChat.path)
+    if (projectForChat) {
+      message = await expandCustomSlashCommand(message, projectForChat.path)
+    }
 
     const finalMessage = message.trim()
     const parts = buildAgentMessageParts({
@@ -1211,7 +1209,7 @@ export function NewChatForm({
 
     // Create chat with selected project, branch, and initial message
     createChatMutation.mutate({
-      projectId: projectForChat.id,
+      projectId: projectForChat?.id ?? null,
       name: message.trim().slice(0, 50), // Use first 50 chars as chat name
       model: selectedChatModel,
       provider: selectedAgent.id as AgentChatProvider,
@@ -1225,14 +1223,22 @@ export function NewChatForm({
           : selectedClaudeProfileId,
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
-        workMode === "worktree" ? selectedBranch || undefined : undefined,
-      branchType: workMode === "worktree" ? selectedBranchType : undefined,
-      useWorktree: workMode === "worktree",
-      mode: agentMode,
+        projectForChat && workMode === "worktree"
+          ? selectedBranch || undefined
+          : undefined,
+      branchType:
+        projectForChat && workMode === "worktree"
+          ? selectedBranchType
+          : undefined,
+      useWorktree: Boolean(projectForChat && workMode === "worktree"),
+      mode: effectiveMode,
     })
     // Editor, images, files, and pasted texts are cleared in onSuccess callback
   }, [
     projectForChat,
+    isFolderlessQuickChat,
+    quickChatRuntimeGateLoaded,
+    selectedAgentIsRuntimeAllowed,
     createChatMutation,
     hasContent,
     selectedBranch,
@@ -1247,7 +1253,7 @@ export function NewChatForm({
     effectiveClaudeModelSource,
     selectedCodexProfileId,
     selectedClaudeProfileId,
-    agentMode,
+    effectiveMode,
     imageAttachmentBlocked,
     t,
   ])
@@ -1789,86 +1795,74 @@ export function NewChatForm({
             </div>
           )}
 
-          {/* Input Area or Select Repo State */}
-          {!validatedProject ? (
-            // No project selected - show select repo button (like Sign in button)
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={handleOpenFolder}
-                disabled={openFolder.isPending}
-                className="h-8 px-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {openFolder.isPending
-                  ? t("chat.opening")
-                  : t("chat.selectRepo")}
-              </button>
-            </div>
-          ) : (
-            // Project selected - show input form
+          {/* Input Area */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: this container owns drag/drop for prompt attachments. */}
+          <div
+            className="relative w-full"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: clicking prompt chrome focuses the editor. */}
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: keyboard focus is handled by the editor itself. */}
             <div
-              className="relative w-full"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              className="relative w-full cursor-text"
+              onClick={handleContainerClick}
             >
-              <div
-                className="relative w-full cursor-text"
-                onClick={handleContainerClick}
+              <PromptInput
+                className={cn(
+                  "border bg-input-background relative z-10 p-2 rounded-xl transition-[border-color,box-shadow] duration-150",
+                  isDragOver && "ring-2 ring-primary/50 border-primary/50",
+                  isFocused && !isDragOver && "ring-2 ring-primary/50",
+                )}
+                maxHeight={240}
+                onSubmit={handleSend}
+                contextItems={contextItems}
               >
-                <PromptInput
-                  className={cn(
-                    "border bg-input-background relative z-10 p-2 rounded-xl transition-[border-color,box-shadow] duration-150",
-                    isDragOver && "ring-2 ring-primary/50 border-primary/50",
-                    isFocused && !isDragOver && "ring-2 ring-primary/50",
-                  )}
-                  maxHeight={240}
-                  onSubmit={handleSend}
-                  contextItems={contextItems}
-                >
-                  <PromptInputContextItems />
-                  {imageAttachmentNotice && (
-                    <div
-                      className={cn(
-                        "px-1 pb-1 text-[11px] leading-4",
-                        imageAttachmentBlocked
-                          ? "text-destructive"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {imageAttachmentNotice}
-                    </div>
-                  )}
-                  <AgentContextRecommendations
-                    draftText={draftText}
-                    projectPath={validatedProject?.path}
-                    isSuppressed={showMentionDropdown || showSlashDropdown}
-                    onSelect={handleRecommendationSelect}
-                  />
-                  <div className="relative">
-                    <AgentsMentionsEditor
-                      ref={editorRef}
-                      onTrigger={handleMentionTrigger}
-                      onCloseTrigger={handleCloseTrigger}
-                      onSlashTrigger={handleSlashTrigger}
-                      onCloseSlashTrigger={handleCloseSlashTrigger}
-                      onContentChange={handleContentChange}
-                      onSubmit={handleSend}
-                      onShiftTab={toggleMode}
-                      placeholder={modePlaceholder}
-                      className={cn(
-                        "bg-transparent max-h-[240px] overflow-y-auto p-1 leading-5",
-                        isMobileFullscreen ? "min-h-[56px]" : "min-h-[44px]",
-                      )}
-                      onPaste={handlePaste}
-                      disabled={createChatMutation.isPending}
-                      onFocus={() => setIsFocused(true)}
-                      onBlur={() => setIsFocused(false)}
-                    />
+                <PromptInputContextItems />
+                {imageAttachmentNotice && (
+                  <div
+                    className={cn(
+                      "px-1 pb-1 text-[11px] leading-4",
+                      imageAttachmentBlocked
+                        ? "text-destructive"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {imageAttachmentNotice}
                   </div>
-                  <PromptInputActions className="w-full flex-wrap gap-x-1 gap-y-1">
-                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-0.5 gap-y-1">
-                      {/* Mode toggle (Agent/Plan) */}
+                )}
+                <AgentContextRecommendations
+                  draftText={draftText}
+                  projectPath={validatedProject?.path}
+                  isSuppressed={showMentionDropdown || showSlashDropdown}
+                  onSelect={handleRecommendationSelect}
+                />
+                <div className="relative">
+                  <AgentsMentionsEditor
+                    ref={editorRef}
+                    onTrigger={handleMentionTrigger}
+                    onCloseTrigger={handleCloseTrigger}
+                    onSlashTrigger={handleSlashTrigger}
+                    onCloseSlashTrigger={handleCloseSlashTrigger}
+                    onContentChange={handleContentChange}
+                    onSubmit={handleSend}
+                    onShiftTab={toggleMode}
+                    placeholder={effectiveModePlaceholder}
+                    className={cn(
+                      "bg-transparent max-h-[240px] overflow-y-auto p-1 leading-5",
+                      isMobileFullscreen ? "min-h-[56px]" : "min-h-[44px]",
+                    )}
+                    onPaste={handlePaste}
+                    disabled={createChatMutation.isPending}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                  />
+                </div>
+                <PromptInputActions className="w-full flex-wrap gap-x-1 gap-y-1">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-0.5 gap-y-1">
+                    {/* Mode toggle (Agent/Plan) */}
+                    {validatedProject ? (
                       <DropdownMenu
                         open={modeDropdownOpen}
                         onOpenChange={(open) => {
@@ -2039,383 +2033,391 @@ export function NewChatForm({
                             document.body,
                           )}
                       </DropdownMenu>
-
-                      <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
-                        <AgentModelSelector
-                          open={isModelDropdownOpen}
-                          onOpenChange={setIsModelDropdownOpen}
-                          selectedAgentId={
-                            selectedAgent.id as "claude-code" | "codex"
-                          }
-                          onSelectedAgentIdChange={(provider) => {
-                            if (provider === "claude-code") {
-                              setSelectedAgent(claudeAgent)
-                            } else {
-                              setSelectedAgent(
-                                enabledAgents.find(
-                                  (agent) => agent.id === "codex",
-                                ) || fallbackAgent,
-                              )
-                            }
-                            setLastSelectedAgentId(provider)
-                          }}
-                          selectedModelLabel={selectedModelLabel}
-                          triggerClassName="min-w-0 max-w-full"
-                          providerProfiles={providerProfiles}
-                          onOpenModelsSettings={() => {
-                            setSettingsActiveTab("models")
-                            setSettingsDialogOpen(true)
-                          }}
-                          claude={{
-                            models: availableModels.models.filter(
-                              (m) => !hiddenModels.includes(m.id),
-                            ),
-                            selectedModelId: selectedModel?.id,
-                            onSelectModel: (modelId) => {
-                              const model =
-                                availableModels.models.find(
-                                  (m) => m.id === modelId,
-                                ) || availableModels.models[0]
-                              if (!model) return
-                              setSelectedModel(model)
-                              setLastSelectedModelId(model.id)
-                            },
-                            selectedModelSource: effectiveClaudeModelSource,
-                            onSelectModelSource: setSelectedClaudeModelSource,
-                            hasCustomModelConfig: hasCustomClaudeConfig,
-                            isOffline:
-                              availableModels.isOffline &&
-                              availableModels.hasOllama,
-                            ollamaModels: availableModels.ollamaModels,
-                            selectedOllamaModel: currentOllamaModel,
-                            recommendedOllamaModel:
-                              availableModels.recommendedModel,
-                            onSelectOllamaModel: setSelectedOllamaModel,
-                            isConnected: isClaudeConnected,
-                            thinkingEnabled,
-                            onThinkingChange: setThinkingEnabled,
-                          }}
-                          codex={{
-                            models: codexUiModels,
-                            selectedModelId: selectedCodexModel.id,
-                            onSelectModel: (modelId) => {
-                              const model = codexUiModels.find(
-                                (item) => item.id === modelId,
-                              )
-                              if (!model) return
-                              const nextThinking = model.thinkings.includes(
-                                lastSelectedCodexThinking as CodexThinkingLevel,
-                              )
-                                ? (lastSelectedCodexThinking as CodexThinkingLevel)
-                                : model.thinkings.includes("high")
-                                  ? "high"
-                                  : model.thinkings[0]!
-
-                              setLastSelectedCodexModelId(model.id)
-                              setLastSelectedCodexThinking(nextThinking)
-                            },
-                            selectedModelSource: lastSelectedCodexModelSource,
-                            onSelectModelSource:
-                              setLastSelectedCodexModelSource,
-                            selectedThinking: selectedCodexThinking,
-                            onSelectThinking: setLastSelectedCodexThinking,
-                            isConnected: codexOnboardingCompleted,
-                          }}
-                        />
+                    ) : (
+                      <div
+                        className="flex max-w-[112px] min-w-0 items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground rounded-md"
+                        title={t("chat.mode.agent")}
+                      >
+                        <AgentIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{t("chat.mode.agent")}</span>
                       </div>
-                    </div>
+                    )}
 
-                    <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
-                      {/* Hidden file input */}
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        hidden
-                        multiple
-                        onChange={(e) => {
-                          const inputFiles = Array.from(e.target.files || [])
-                          handleAddAttachments(inputFiles)
-                          e.target.value = "" // Reset to allow same file selection
+                    <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
+                      <AgentModelSelector
+                        open={isModelDropdownOpen}
+                        onOpenChange={setIsModelDropdownOpen}
+                        selectedAgentId={
+                          selectedAgent.id as "claude-code" | "codex"
+                        }
+                        allowedProviderIds={quickChatAllowedProviderIds}
+                        onSelectedAgentIdChange={(provider) => {
+                          if (provider === "claude-code") {
+                            setSelectedAgent(claudeAgent)
+                          } else {
+                            setSelectedAgent(
+                              enabledAgents.find(
+                                (agent) => agent.id === "codex",
+                              ) || fallbackAgent,
+                            )
+                          }
+                          setLastSelectedAgentId(provider)
+                        }}
+                        selectedModelLabel={selectedModelLabel}
+                        triggerClassName="min-w-0 max-w-full"
+                        providerProfiles={providerProfiles}
+                        onOpenModelsSettings={() => {
+                          setSettingsActiveTab("models")
+                          setSettingsDialogOpen(true)
+                        }}
+                        claude={{
+                          models: availableModels.models.filter(
+                            (m) => !hiddenModels.includes(m.id),
+                          ),
+                          selectedModelId: selectedModel?.id,
+                          onSelectModel: (modelId) => {
+                            const model =
+                              availableModels.models.find(
+                                (m) => m.id === modelId,
+                              ) || availableModels.models[0]
+                            if (!model) return
+                            setSelectedModel(model)
+                            setLastSelectedModelId(model.id)
+                          },
+                          selectedModelSource: effectiveClaudeModelSource,
+                          onSelectModelSource: setSelectedClaudeModelSource,
+                          hasCustomModelConfig: hasCustomClaudeConfig,
+                          isOffline:
+                            availableModels.isOffline &&
+                            availableModels.hasOllama,
+                          ollamaModels: availableModels.ollamaModels,
+                          selectedOllamaModel: currentOllamaModel,
+                          recommendedOllamaModel:
+                            availableModels.recommendedModel,
+                          onSelectOllamaModel: setSelectedOllamaModel,
+                          isConnected: isClaudeConnected,
+                          thinkingEnabled,
+                          onThinkingChange: setThinkingEnabled,
+                        }}
+                        codex={{
+                          models: codexUiModels,
+                          selectedModelId: selectedCodexModel.id,
+                          onSelectModel: (modelId) => {
+                            const model = codexUiModels.find(
+                              (item) => item.id === modelId,
+                            )
+                            if (!model) return
+                            const nextThinking = model.thinkings.includes(
+                              lastSelectedCodexThinking as CodexThinkingLevel,
+                            )
+                              ? (lastSelectedCodexThinking as CodexThinkingLevel)
+                              : model.thinkings.includes("high")
+                                ? "high"
+                                : "medium"
+
+                            setLastSelectedCodexModelId(model.id)
+                            setLastSelectedCodexThinking(nextThinking)
+                          },
+                          selectedModelSource: lastSelectedCodexModelSource,
+                          onSelectModelSource: setLastSelectedCodexModelSource,
+                          selectedThinking: selectedCodexThinking,
+                          onSelectThinking: setLastSelectedCodexThinking,
+                          isConnected: codexOnboardingCompleted,
                         }}
                       />
-                      {/* Voice wave indicator or Attachment button */}
-                      {isVoiceRecording ? (
-                        <VoiceWaveIndicator
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
+                    {/* Hidden file input */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      hidden
+                      multiple
+                      onChange={(e) => {
+                        const inputFiles = Array.from(e.target.files || [])
+                        handleAddAttachments(inputFiles)
+                        e.target.value = "" // Reset to allow same file selection
+                      }}
+                    />
+                    {/* Voice wave indicator or Attachment button */}
+                    {isVoiceRecording ? (
+                      <VoiceWaveIndicator
+                        isRecording={isVoiceRecording}
+                        audioLevel={voiceAudioLevel}
+                      />
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={images.length >= 5 && files.length >= 10}
+                      >
+                        <AttachIcon className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <div className="ml-1">
+                      {showVoiceControl ? (
+                        <VoiceInputControl
                           isRecording={isVoiceRecording}
-                          audioLevel={voiceAudioLevel}
+                          isTranscribing={isTranscribing}
+                          disabled={isUploading}
+                          hotkeyLabel={voiceInputHotkey}
+                          accent={effectiveMode === "plan" ? "plan" : "default"}
+                          onStart={handleVoiceMouseDown}
+                          onStop={handleVoiceMouseUp}
+                          onCancel={handleVoiceMouseLeave}
                         />
                       ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={images.length >= 5 && files.length >= 10}
-                        >
-                          <AttachIcon className="h-4 w-4" />
-                        </Button>
+                        <AgentSendButton
+                          isStreaming={false}
+                          isSubmitting={
+                            createChatMutation.isPending || isUploading
+                          }
+                          disabled={Boolean(
+                            !hasSendableContent ||
+                              isUploading ||
+                              imageAttachmentBlocked ||
+                              (isFolderlessQuickChat &&
+                                (!quickChatRuntimeGateLoaded ||
+                                  !selectedAgentIsRuntimeAllowed)),
+                          )}
+                          onClick={handleSend}
+                          mode={effectiveMode}
+                          hasContent={hasSendableContent}
+                        />
                       )}
-                      <div className="ml-1">
-                        {showVoiceControl ? (
-                          <VoiceInputControl
-                            isRecording={isVoiceRecording}
-                            isTranscribing={isTranscribing}
-                            disabled={isUploading}
-                            hotkeyLabel={voiceInputHotkey}
-                            accent={agentMode === "plan" ? "plan" : "default"}
-                            onStart={handleVoiceMouseDown}
-                            onStop={handleVoiceMouseUp}
-                            onCancel={handleVoiceMouseLeave}
-                          />
-                        ) : (
-                          <AgentSendButton
-                            isStreaming={false}
-                            isSubmitting={
-                              createChatMutation.isPending || isUploading
-                            }
-                            disabled={Boolean(
-                              !hasSendableContent ||
-                                !projectForChat ||
-                                isUploading ||
-                                imageAttachmentBlocked,
-                            )}
-                            onClick={handleSend}
-                            mode={agentMode}
-                            hasContent={hasSendableContent}
-                          />
-                        )}
-                      </div>
                     </div>
-                  </PromptInputActions>
-                </PromptInput>
+                  </div>
+                </PromptInputActions>
+              </PromptInput>
 
-                {/* Project, Work Mode, and Branch selectors - directly under input */}
-                <div className="mt-1.5 md:mt-2 ml-[5px] flex items-center gap-2">
-                  <ProjectSelector />
+              {/* Project, Work Mode, and Branch selectors - directly under input */}
+              <div className="mt-1.5 md:mt-2 ml-[5px] flex items-center gap-2">
+                <ProjectSelector />
 
-                  {/* Work mode selector - between project and branch */}
-                  {validatedProject && (
-                    <WorkModeSelector
-                      value={workMode}
-                      onChange={setWorkMode}
-                      disabled={createChatMutation.isPending}
-                    />
-                  )}
+                {/* Work mode selector - between project and branch */}
+                {validatedProject && (
+                  <WorkModeSelector
+                    value={workMode}
+                    onChange={setWorkMode}
+                    disabled={createChatMutation.isPending}
+                  />
+                )}
 
-                  {/* Branch selector - only visible when worktree mode is selected */}
-                  {validatedProject && workMode === "worktree" && (
-                    <Popover
-                      open={branchPopoverOpen}
-                      onOpenChange={(open) => {
-                        if (!open) {
-                          setBranchSearch("") // Clear search on close
-                        }
-                        setBranchPopoverOpen(open)
-                      }}
-                    >
-                      <PopoverTrigger asChild>
-                        <button
-                          className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
-                          disabled={branchesQuery.isLoading}
-                        >
-                          <BranchIcon className="w-4 h-4" />
-                          <span className="truncate max-w-[100px]">
-                            {selectedBranch ||
-                              branchesQuery.data?.defaultBranch ||
-                              "main"}
-                          </span>
-                          <IconChevronDown className="w-3 h-3 opacity-50" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80 p-0" align="start">
-                        {/* Search input with Create button */}
-                        <div className="flex items-center gap-1.5 h-7 px-1.5 mx-1 my-1 rounded-md bg-muted/50">
-                          <SearchIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <input
-                            type="text"
-                            placeholder={t("chat.branch.search")}
-                            value={branchSearch}
-                            onChange={(e) => setBranchSearch(e.target.value)}
-                            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                            autoFocus
-                          />
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 px-1.5 flex items-center gap-1 text-xs shrink-0"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              setCreateBranchDialogOpen(true)
-                              setBranchPopoverOpen(false)
-                            }}
-                          >
-                            <Plus className="h-3 w-3" />
-                            {t("chat.branch.create")}
-                          </Button>
-                        </div>
-
-                        {/* Virtualized branch list */}
-                        {filteredBranches.length === 0 ? (
-                          <div className="py-6 text-center text-sm text-muted-foreground">
-                            {t("chat.branch.empty")}
-                          </div>
-                        ) : (
-                          <div
-                            ref={branchListRef}
-                            className="overflow-auto py-1 scrollbar-hide"
-                            style={{
-                              height: Math.min(
-                                filteredBranches.length * 32 + 8,
-                                300,
-                              ),
-                            }}
-                          >
-                            <div
-                              style={{
-                                height: `${branchVirtualizer.getTotalSize()}px`,
-                                width: "100%",
-                                position: "relative",
-                              }}
-                            >
-                              {branchVirtualizer
-                                .getVirtualItems()
-                                .map((virtualItem) => {
-                                  const branch =
-                                    filteredBranches[virtualItem.index]
-                                  const isSelected =
-                                    (selectedBranch === branch.name &&
-                                      selectedBranchType === branch.type) ||
-                                    (!selectedBranch &&
-                                      branch.isDefault &&
-                                      branch.type === "local")
-                                  return (
-                                    <button
-                                      type="button"
-                                      key={`${branch.type}-${branch.name}`}
-                                      onClick={() => {
-                                        setSelectedBranch(
-                                          branch.name,
-                                          branch.type,
-                                        )
-                                        setBranchPopoverOpen(false)
-                                        setBranchSearch("")
-                                      }}
-                                      className={cn(
-                                        "flex items-center gap-1.5 w-[calc(100%-8px)] mx-1 px-1.5 text-sm text-left absolute left-0 top-0 rounded-md cursor-default select-none outline-none transition-colors",
-                                        isSelected
-                                          ? "dark:bg-neutral-800 text-foreground"
-                                          : "dark:hover:bg-neutral-800 hover:text-foreground",
-                                      )}
-                                      style={{
-                                        height: `${virtualItem.size}px`,
-                                        transform: `translateY(${virtualItem.start}px)`,
-                                      }}
-                                    >
-                                      <BranchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                                      <span className="truncate flex-1">
-                                        {branch.name}
-                                      </span>
-                                      <span
-                                        className={cn(
-                                          "text-[10px] px-1.5 py-0.5 rounded shrink-0",
-                                          branch.type === "local"
-                                            ? "bg-blue-500/10 text-blue-500"
-                                            : "bg-orange-500/10 text-orange-500",
-                                        )}
-                                      >
-                                        {branch.type}
-                                      </span>
-                                      {branch.committedAt && (
-                                        <span className="text-xs text-muted-foreground/70 shrink-0">
-                                          {formatRelativeTime(
-                                            branch.committedAt,
-                                          )}
-                                        </span>
-                                      )}
-                                      {branch.isDefault && (
-                                        <span className="text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
-                                          default
-                                        </span>
-                                      )}
-                                      {isSelected && (
-                                        <CheckIcon className="h-4 w-4 shrink-0 ml-auto" />
-                                      )}
-                                    </button>
-                                  )
-                                })}
-                            </div>
-                          </div>
-                        )}
-                      </PopoverContent>
-                    </Popover>
-                  )}
-
-                  {/* Create Branch Dialog */}
-                  {validatedProject && (
-                    <CreateBranchDialog
-                      open={createBranchDialogOpen}
-                      onOpenChange={setCreateBranchDialogOpen}
-                      projectPath={validatedProject.path}
-                      branches={branches}
-                      defaultBranch={
-                        branchesQuery.data?.defaultBranch || "main"
+                {/* Branch selector - only visible when worktree mode is selected */}
+                {validatedProject && workMode === "worktree" && (
+                  <Popover
+                    open={branchPopoverOpen}
+                    onOpenChange={(open) => {
+                      if (!open) {
+                        setBranchSearch("") // Clear search on close
                       }
-                      onBranchCreated={(branchName) => {
-                        setSelectedBranch(branchName, "local")
-                      }}
-                    />
-                  )}
-                </div>
-                {worktreeCreateState === "creating" &&
-                  createChatMutation.isPending && (
-                    <div
-                      className="mt-2 ml-[5px] flex items-center gap-2 text-xs text-muted-foreground"
-                      role="status"
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                      <span>{t("chat.creatingWorktree")}</span>
-                    </div>
-                  )}
+                      setBranchPopoverOpen(open)
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-[background-color,color] duration-150 ease-out rounded-md hover:bg-muted/50 outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                        disabled={branchesQuery.isLoading}
+                      >
+                        <BranchIcon className="w-4 h-4" />
+                        <span className="truncate max-w-[100px]">
+                          {selectedBranch ||
+                            branchesQuery.data?.defaultBranch ||
+                            "main"}
+                        </span>
+                        <IconChevronDown className="w-3 h-3 opacity-50" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-0" align="start">
+                      {/* Search input with Create button */}
+                      <div className="flex items-center gap-1.5 h-7 px-1.5 mx-1 my-1 rounded-md bg-muted/50">
+                        <SearchIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <input
+                          type="text"
+                          placeholder={t("chat.branch.search")}
+                          value={branchSearch}
+                          onChange={(e) => setBranchSearch(e.target.value)}
+                          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                          // biome-ignore lint/a11y/noAutofocus: branch search should receive focus when the popover opens.
+                          autoFocus
+                        />
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 flex items-center gap-1 text-xs shrink-0"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setCreateBranchDialogOpen(true)
+                            setBranchPopoverOpen(false)
+                          }}
+                        >
+                          <Plus className="h-3 w-3" />
+                          {t("chat.branch.create")}
+                        </Button>
+                      </div>
 
-                {/* Worktree config banner - moved to corner banner below */}
+                      {/* Virtualized branch list */}
+                      {filteredBranches.length === 0 ? (
+                        <div className="py-6 text-center text-sm text-muted-foreground">
+                          {t("chat.branch.empty")}
+                        </div>
+                      ) : (
+                        <div
+                          ref={branchListRef}
+                          className="overflow-auto py-1 scrollbar-hide"
+                          style={{
+                            height: Math.min(
+                              filteredBranches.length * 32 + 8,
+                              300,
+                            ),
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: `${branchVirtualizer.getTotalSize()}px`,
+                              width: "100%",
+                              position: "relative",
+                            }}
+                          >
+                            {branchVirtualizer
+                              .getVirtualItems()
+                              .map((virtualItem) => {
+                                const branch =
+                                  filteredBranches[virtualItem.index]
+                                const isSelected =
+                                  (selectedBranch === branch.name &&
+                                    selectedBranchType === branch.type) ||
+                                  (!selectedBranch &&
+                                    branch.isDefault &&
+                                    branch.type === "local")
+                                return (
+                                  <button
+                                    type="button"
+                                    key={`${branch.type}-${branch.name}`}
+                                    onClick={() => {
+                                      setSelectedBranch(
+                                        branch.name,
+                                        branch.type,
+                                      )
+                                      setBranchPopoverOpen(false)
+                                      setBranchSearch("")
+                                    }}
+                                    className={cn(
+                                      "flex items-center gap-1.5 w-[calc(100%-8px)] mx-1 px-1.5 text-sm text-left absolute left-0 top-0 rounded-md cursor-default select-none outline-none transition-colors",
+                                      isSelected
+                                        ? "dark:bg-neutral-800 text-foreground"
+                                        : "dark:hover:bg-neutral-800 hover:text-foreground",
+                                    )}
+                                    style={{
+                                      height: `${virtualItem.size}px`,
+                                      transform: `translateY(${virtualItem.start}px)`,
+                                    }}
+                                  >
+                                    <BranchIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <span className="truncate flex-1">
+                                      {branch.name}
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        "text-[10px] px-1.5 py-0.5 rounded shrink-0",
+                                        branch.type === "local"
+                                          ? "bg-blue-500/10 text-blue-500"
+                                          : "bg-orange-500/10 text-orange-500",
+                                      )}
+                                    >
+                                      {branch.type}
+                                    </span>
+                                    {branch.committedAt && (
+                                      <span className="text-xs text-muted-foreground/70 shrink-0">
+                                        {formatRelativeTime(branch.committedAt)}
+                                      </span>
+                                    )}
+                                    {branch.isDefault && (
+                                      <span className="text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded shrink-0">
+                                        default
+                                      </span>
+                                    )}
+                                    {isSelected && (
+                                      <CheckIcon className="h-4 w-4 shrink-0 ml-auto" />
+                                    )}
+                                  </button>
+                                )
+                              })}
+                          </div>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                )}
 
-                {/* File mention dropdown */}
-                {/* Desktop: use projectPath for local file search */}
-                <AgentsFileMention
-                  isOpen={showMentionDropdown && !!validatedProject}
-                  onClose={() => {
-                    setShowMentionDropdown(false)
-                    // Reset subpage state when dropdown closes
-                    setShowingFilesList(false)
-                    setShowingSkillsList(false)
-                    setShowingAgentsList(false)
-                    setShowingToolsList(false)
-                  }}
-                  onSelect={handleMentionSelect}
-                  searchText={mentionSearchText}
-                  position={mentionPosition}
-                  projectPath={validatedProject?.path}
-                  showingFilesList={showingFilesList}
-                  showingSkillsList={showingSkillsList}
-                  showingAgentsList={showingAgentsList}
-                  showingToolsList={showingToolsList}
-                />
-
-                {/* Slash command dropdown */}
-                <AgentsSlashCommand
-                  isOpen={showSlashDropdown}
-                  onClose={handleCloseSlashTrigger}
-                  onSelect={handleSlashSelect}
-                  searchText={slashSearchText}
-                  position={slashPosition}
-                  projectPath={validatedProject?.path}
-                  mode={agentMode}
-                  disabledCommands={["clear"]}
-                />
+                {/* Create Branch Dialog */}
+                {validatedProject && (
+                  <CreateBranchDialog
+                    open={createBranchDialogOpen}
+                    onOpenChange={setCreateBranchDialogOpen}
+                    projectPath={validatedProject.path}
+                    branches={branches}
+                    defaultBranch={branchesQuery.data?.defaultBranch || "main"}
+                    onBranchCreated={(branchName) => {
+                      setSelectedBranch(branchName, "local")
+                    }}
+                  />
+                )}
               </div>
+              {worktreeCreateState === "creating" &&
+                createChatMutation.isPending && (
+                  <div
+                    className="mt-2 ml-[5px] flex items-center gap-2 text-xs text-muted-foreground"
+                    role="status"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                    <span>{t("chat.creatingWorktree")}</span>
+                  </div>
+                )}
+
+              {/* Worktree config banner - moved to corner banner below */}
+
+              {/* File mention dropdown */}
+              {/* Desktop: use projectPath for local file search */}
+              <AgentsFileMention
+                isOpen={showMentionDropdown && !!validatedProject}
+                onClose={() => {
+                  setShowMentionDropdown(false)
+                  // Reset subpage state when dropdown closes
+                  setShowingFilesList(false)
+                  setShowingSkillsList(false)
+                  setShowingAgentsList(false)
+                  setShowingToolsList(false)
+                }}
+                onSelect={handleMentionSelect}
+                searchText={mentionSearchText}
+                position={mentionPosition}
+                projectPath={validatedProject?.path}
+                showingFilesList={showingFilesList}
+                showingSkillsList={showingSkillsList}
+                showingAgentsList={showingAgentsList}
+                showingToolsList={showingToolsList}
+              />
+
+              {/* Slash command dropdown */}
+              <AgentsSlashCommand
+                isOpen={showSlashDropdown}
+                onClose={handleCloseSlashTrigger}
+                onSelect={handleSlashSelect}
+                searchText={slashSearchText}
+                position={slashPosition}
+                projectPath={validatedProject?.path}
+                mode={agentMode}
+                disabledCommands={["clear"]}
+              />
             </div>
-          )}
+          </div>
         </div>
       </div>
 

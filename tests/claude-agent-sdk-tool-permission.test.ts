@@ -1,13 +1,12 @@
 import { describe, expect, mock, test } from "bun:test"
 import { join } from "node:path"
-import type { AgentScopeContract } from "../src/shared/agent-scope-contracts"
+import type { PreToolUseHookInput } from "@anthropic-ai/claude-agent-sdk"
 import {
   getClaudePermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
-import type {
-  ClaudeAskUserQuestionPending,
-} from "../src/main/lib/claude/agent-sdk-tool-permission"
+import type { ClaudeAskUserQuestionPending } from "../src/main/lib/claude/agent-sdk-tool-permission"
+import type { AgentScopeContract } from "../src/shared/agent-scope-contracts"
 
 mock.module("electron", () => ({
   app: {
@@ -110,6 +109,63 @@ describe("Claude Agent SDK tool permission handler", () => {
     expect(writeResult.message).toContain("blocked in plan mode")
   })
 
+  test("enforces assistant web-only allow-list before Claude tools run", async () => {
+    const controls = createClaudeAgentSdkPermissionControls(
+      baseHandlerInput({
+        permissionPolicy: resolveDesktopPermissionPolicy({
+          runtimeId: "claude-code",
+          mode: "agent",
+          workspaceKind: "folderless",
+        }),
+      }),
+    )
+
+    await expect(
+      controls.canUseTool(
+        "WebSearch",
+        { query: "OpenAI" },
+        toolOptions("assistant-web-1"),
+      ),
+    ).resolves.toEqual({
+      behavior: "allow",
+      updatedInput: { query: "OpenAI" },
+    })
+
+    await expect(
+      controls.canUseTool(
+        "Read",
+        { file_path: "src/app.ts" },
+        toolOptions("assistant-read-1"),
+      ),
+    ).resolves.toMatchObject({
+      behavior: "deny",
+      message: expect.stringContaining("filesystem tools are unavailable"),
+    })
+
+    const assistantTodoHookInput: PreToolUseHookInput = {
+      hook_event_name: "PreToolUse",
+      tool_name: "TodoWrite",
+      tool_input: { todos: [] },
+      tool_use_id: "assistant-unknown-1",
+    }
+    const preToolUseResult = await controls.preToolUseHook(
+      assistantTodoHookInput,
+      "assistant-unknown-1",
+      { signal: new AbortController().signal },
+    )
+
+    expect(preToolUseResult).toMatchObject({
+      continue: true,
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: expect.stringContaining(
+          "runtime mutation tools are unavailable",
+        ),
+      },
+    })
+  })
+
   test("bridges AskUserQuestion through pending approval state", async () => {
     const pendingToolApprovals = new Map<string, ClaudeAskUserQuestionPending>()
     const emitted: any[] = []
@@ -182,9 +238,9 @@ describe("Claude Agent SDK tool permission handler", () => {
       mode: "agent",
       hasScopeContract: true,
     })
-    expect(getClaudePermissionMapping(permissionPolicy).requiresToolPolicy).toBe(
-      true,
-    )
+    expect(
+      getClaudePermissionMapping(permissionPolicy).requiresToolPolicy,
+    ).toBe(true)
 
     const handler = createClaudeAgentSdkToolPermissionHandler(
       baseHandlerInput({

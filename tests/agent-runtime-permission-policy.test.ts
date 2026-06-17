@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import {
+  decideAssistantToolPermission,
+  getClaudeAssistantSdkDisallowedTools,
   getCodexAppServerPermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
-import {
-  DESKTOP_RUNTIME_CONTROL_LEVELS,
-} from "../src/shared/agent-runtime-control"
+import { DESKTOP_RUNTIME_CONTROL_LEVELS } from "../src/shared/agent-runtime-control"
 
 describe("desktop runtime permission policy", () => {
   test("maps Claude plan mode to native read-only without bypass", () => {
@@ -45,7 +45,9 @@ describe("desktop runtime permission policy", () => {
       allowDangerouslySkipPermissions: true,
       requiresToolPolicy: true,
     })
-    expect(policy.runtimeMapping.bypassReason).toContain("Locus guarded tool policy")
+    expect(policy.runtimeMapping.bypassReason).toContain(
+      "Locus guarded tool policy",
+    )
   })
 
   test("maps Codex plan and guarded runs to ACP temporary permission handler", () => {
@@ -137,6 +139,109 @@ describe("desktop runtime permission policy", () => {
     )
   })
 
+  test("selects assistant control from folderless workspace kind and fails closed by tool category", () => {
+    const claudePolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "claude-code",
+      mode: "plan",
+      workspaceKind: "folderless",
+      hasScopeContract: true,
+    })
+    const codexPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "agent",
+      workspaceKind: "folderless",
+      codexAdapterSource: "codex-app-server",
+    })
+
+    expect(claudePolicy).toMatchObject({
+      runtimeId: "claude-code",
+      mode: "plan",
+      controlLevel: "assistant",
+      guarded: false,
+      planWorkspaceSideEffects: "deny",
+      requiresPreExecutionEnforcement: true,
+      enforcement: "locus-assistant-tool-policy",
+      runtimeMapping: {
+        runtime: "claude-code",
+        sdkPermissionMode: "plan",
+        allowDangerouslySkipPermissions: false,
+        requiresToolPolicy: true,
+        sdkDisallowedTools: getClaudeAssistantSdkDisallowedTools(),
+      },
+    })
+    expect(claudePolicy.blockedSideEffects).toEqual([
+      "workspace-file-read",
+      "workspace-file-write",
+      "side-effecting-shell",
+      "terminal-execution",
+      "project-mcp-tool",
+      "mcp-configuration",
+      "runtime-configuration",
+      "provider-configuration",
+      "unknown-tool",
+    ])
+
+    expect(getCodexAppServerPermissionMapping(codexPolicy)).toMatchObject({
+      runtime: "codex",
+      adapterSource: "codex-app-server",
+      controlLevel: "assistant",
+      appServerApprovalPolicy: "untrusted",
+      requiresApprovalGate: true,
+      approvalHook: {
+        required: true,
+        missing: "fail-closed",
+        delayed: "fail-closed",
+      },
+      permissionHandlerFailure: "fail-closed",
+    })
+
+    expect(decideAssistantToolPermission({ toolName: "WebSearch" })).toEqual({
+      decision: "allow",
+      category: "web-information",
+    })
+    expect(decideAssistantToolPermission({ toolName: "web_fetch" })).toEqual({
+      decision: "allow",
+      category: "web-information",
+    })
+    expect(decideAssistantToolPermission({ toolName: "Read" })).toMatchObject({
+      decision: "deny",
+      category: "filesystem",
+      message: expect.stringContaining("filesystem tools are unavailable"),
+    })
+    expect(getClaudeAssistantSdkDisallowedTools()).toEqual(
+      expect.arrayContaining([
+        "Read",
+        "Grep",
+        "Glob",
+        "LS",
+        "Bash",
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "NotebookRead",
+        "NotebookEdit",
+        "Task",
+        "TodoRead",
+        "TodoWrite",
+        "ExitPlanMode",
+      ]),
+    )
+    expect(getClaudeAssistantSdkDisallowedTools()).not.toContain("WebSearch")
+    expect(getClaudeAssistantSdkDisallowedTools()).not.toContain("WebFetch")
+    for (const toolName of getClaudeAssistantSdkDisallowedTools()) {
+      expect(decideAssistantToolPermission({ toolName })).toMatchObject({
+        decision: "deny",
+      })
+    }
+    expect(
+      decideAssistantToolPermission({ toolName: "unknownFutureTool" }),
+    ).toMatchObject({
+      decision: "deny",
+      category: "unknown",
+      message: expect.stringContaining("only web search and web fetch"),
+    })
+  })
+
   test("maps normal Agent mode to observed control by default", () => {
     const claudePolicy = resolveDesktopPermissionPolicy({
       runtimeId: "claude-code",
@@ -147,6 +252,7 @@ describe("desktop runtime permission policy", () => {
       mode: "agent",
     })
 
+    expect(DESKTOP_RUNTIME_CONTROL_LEVELS).toContain("assistant")
     expect(DESKTOP_RUNTIME_CONTROL_LEVELS).toContain("observe")
     expect(DESKTOP_RUNTIME_CONTROL_LEVELS).toContain("guarded")
     expect(DESKTOP_RUNTIME_CONTROL_LEVELS).toContain("strict")
@@ -249,6 +355,7 @@ describe("desktop runtime permission policy", () => {
     expect(claude).toContain("prepareClaudeAgentSdkDesktopRunControls")
     expect(claude).not.toContain("resolveDesktopPermissionPolicy")
     expect(claudeControls).toContain("resolveDesktopPermissionPolicy")
+    expect(claudeControls).toContain("workspaceKind: preflight.kind")
     expect(claude).not.toContain("getClaudePermissionMapping")
     expect(claude).not.toContain("permissionHandler: {")
     expect(claude).not.toContain("createClaudeAgentSdkToolPermissionHandler")
@@ -265,10 +372,15 @@ describe("desktop runtime permission policy", () => {
     expect(claudeToolPermission).toContain(
       "permissionPolicy.planWorkspaceSideEffects",
     )
-    expect(claude).not.toContain('Only ".md" files can be modified in plan mode.')
+    expect(claude).not.toContain(
+      'Only ".md" files can be modified in plan mode.',
+    )
 
     expect(codex).toContain("resolveDesktopPermissionPolicy")
-    expect(codexAcpTemporaryCompatAdapter).toContain("getCodexPermissionMapping")
+    expect(codex).toContain("workspaceKind: verifiedRunContext.kind")
+    expect(codexAcpTemporaryCompatAdapter).toContain(
+      "getCodexPermissionMapping",
+    )
     expect(codexAcpTemporaryCompatAdapter).toContain(
       "const permission = getCodexPermissionMapping(request.permissionPolicy)",
     )

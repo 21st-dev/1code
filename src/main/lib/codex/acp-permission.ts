@@ -5,15 +5,18 @@ import type {
   ToolCallUpdate,
   ToolKind,
 } from "@agentclientprotocol/sdk"
-import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import type { ResolvedDesktopRuntimeControlLevel } from "../../../shared/agent-runtime-control"
+import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import {
   classifyObservedToolRisk,
   decideClaudeToolUse,
   type ObservedToolRisk,
   type ValidatedAgentScopeContract,
 } from "../agent-guard"
-import type { ObservedToolPolicy } from "../agent-runtime/permission-policy"
+import {
+  decideAssistantToolPermission,
+  type ObservedToolPolicy,
+} from "../agent-runtime/permission-policy"
 
 type AcpPermissionHandler = (
   params: RequestPermissionRequest,
@@ -115,7 +118,9 @@ function commandFromRawInput(rawInput: Record<string, unknown>): string | null {
       .filter((part): part is string => typeof part === "string")
       .map((part) => part.trim())
       .filter(Boolean)
-    const shellCommandIndex = parts.findIndex((part) => part === "-c" || part === "-lc")
+    const shellCommandIndex = parts.findIndex(
+      (part) => part === "-c" || part === "-lc",
+    )
     if (shellCommandIndex >= 0 && parts[shellCommandIndex + 1]) {
       return parts[shellCommandIndex + 1]
     }
@@ -332,7 +337,7 @@ export function normalizeCodexDynamicPermissionTool(
   const toolName = getToolNameFromTitle(title) || "Unknown"
   const rawArgs = parsedInput?.args
   const toolInput = normalizeCodexDynamicPermissionToolInput(
-    isRecord(rawArgs) ? rawArgs : parsedInput ?? {},
+    isRecord(rawArgs) ? rawArgs : (parsedInput ?? {}),
     toolName,
     title,
   )
@@ -394,6 +399,19 @@ export function decideCodexAcpToolPermission({
 }: CodexAcpPermissionPolicyInput & {
   tool: CodexAcpPermissionTool
 }): CodexAcpToolPermissionDecision {
+  if (controlLevel === "assistant") {
+    const assistantDecision = decideAssistantToolPermission({
+      toolName: tool.toolName,
+      toolKind: tool.kind,
+    })
+    return {
+      decision: assistantDecision.decision,
+      ...(assistantDecision.message
+        ? { message: assistantDecision.message }
+        : {}),
+    }
+  }
+
   if (mode === "plan" && isCodexPlanModeBlockedTool(tool)) {
     return {
       decision: "deny",
@@ -463,10 +481,7 @@ export function createCodexAcpPermissionHandler({
     if (decision.observed) onObservedToolDecision?.(decision.observed)
     if (decision.guardEvent) onGuardEvent?.(decision.guardEvent)
 
-    return buildCodexAcpPermissionResponse(
-      params.options,
-      decision.decision,
-    )
+    return buildCodexAcpPermissionResponse(params.options, decision.decision)
   }
 }
 

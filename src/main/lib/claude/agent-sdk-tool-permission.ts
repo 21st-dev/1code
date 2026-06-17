@@ -1,7 +1,7 @@
 import type {
+  Options as ClaudeAgentSdkOptions,
   HookCallback,
   HookJSONOutput,
-  Options as ClaudeAgentSdkOptions,
   PermissionResult,
   PreToolUseHookInput,
 } from "@anthropic-ai/claude-agent-sdk"
@@ -13,6 +13,7 @@ import {
   type ValidatedAgentScopeContract,
 } from "../agent-guard"
 import type { DesktopPermissionPolicy } from "../agent-runtime/permission-policy"
+import { decideAssistantToolPermission } from "../agent-runtime/permission-policy"
 import type { UIMessageChunk } from "./types"
 
 export type ClaudeAgentSdkCanUseTool = NonNullable<
@@ -58,9 +59,7 @@ function fixOllamaToolInputAliases(
   toolInput: Record<string, unknown>,
 ): void {
   if (
-    (toolName === "Read" ||
-      toolName === "Write" ||
-      toolName === "Edit") &&
+    (toolName === "Read" || toolName === "Write" || toolName === "Edit") &&
     toolInput.file &&
     !toolInput.file_path
   ) {
@@ -167,6 +166,20 @@ export function createClaudeAgentSdkPermissionControls({
       fixOllamaToolInputAliases(toolName, toolInput)
     }
 
+    if (permissionPolicy.controlLevel === "assistant") {
+      const decision = decideAssistantToolPermission({ toolName })
+      if (decision.decision === "deny") {
+        return {
+          behavior: "deny",
+          message: decision.message || "Assistant mode blocked tool use.",
+        }
+      }
+      return {
+        behavior: "allow",
+        updatedInput: toolInput,
+      }
+    }
+
     if (permissionPolicy.planWorkspaceSideEffects === "deny") {
       if (toolName === "Edit" || toolName === "Write") {
         return {
@@ -247,8 +260,7 @@ export function createClaudeAgentSdkPermissionControls({
 
       const askToolPart = parts.find(
         (part) =>
-          part.toolCallId === toolUseID &&
-          part.type === "tool-AskUserQuestion",
+          part.toolCallId === toolUseID && part.type === "tool-AskUserQuestion",
       )
 
       if (!response.approved) {

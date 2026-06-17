@@ -41,10 +41,65 @@ describe("desktop runtime preflight", () => {
       cwd: "/tmp/project-worktree",
     })
 
+    expect(result.kind).toBe("project")
     expect(result.project.id).toBe("project-1")
     expect(result.chat.id).toBe("chat-1")
     expect(result.subChat.id).toBe("sub-chat-1")
     expect(result.cwd).toBe("/tmp/project-worktree")
+  })
+
+  test("returns folderless context with main-process scratch cwd", () => {
+    const db = createAgentJobTestDb()
+    db.insert(chats)
+      .values({
+        id: "quick-chat-1",
+        projectId: null,
+      })
+      .run()
+    db.insert(subChats)
+      .values({
+        id: "quick-sub-chat-1",
+        chatId: "quick-chat-1",
+      })
+      .run()
+
+    const result = verifyDesktopRunPreflight(db, {
+      chatId: "quick-chat-1",
+      subChatId: "quick-sub-chat-1",
+      cwd: "/tmp/renderer-supplied",
+      folderlessScratchCwd: "/tmp/locus-test-scratch",
+    })
+
+    expect(result.kind).toBe("folderless")
+    expect(result.project).toBeNull()
+    expect(result.cwd).toBe("/tmp/locus-test-scratch")
+    expect(result.cwd).not.toBe("/tmp/renderer-supplied")
+  })
+
+  test("rejects folderless chat carrying repository state", () => {
+    const db = createAgentJobTestDb()
+    db.insert(chats)
+      .values({
+        id: "quick-chat-with-worktree",
+        projectId: null,
+        worktreePath: "/tmp/project-worktree",
+      })
+      .run()
+    db.insert(subChats)
+      .values({
+        id: "quick-sub-chat-with-worktree",
+        chatId: "quick-chat-with-worktree",
+      })
+      .run()
+
+    expect(() =>
+      verifyDesktopRunPreflight(db, {
+        chatId: "quick-chat-with-worktree",
+        subChatId: "quick-sub-chat-with-worktree",
+        cwd: "/tmp/renderer-supplied",
+        folderlessScratchCwd: "/tmp/locus-test-scratch",
+      }),
+    ).toThrow("Folderless desktop run cannot carry project")
   })
 
   test("rejects mismatched cwd and sub-chat ownership", () => {

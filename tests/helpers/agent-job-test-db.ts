@@ -23,7 +23,7 @@ export function createAgentJobTestDb() {
     CREATE TABLE chats (
       id text PRIMARY KEY NOT NULL,
       name text,
-      project_id text DEFAULT 'project-1' NOT NULL,
+      project_id text DEFAULT 'project-1',
       worktree_path text,
       created_at integer,
       updated_at integer,

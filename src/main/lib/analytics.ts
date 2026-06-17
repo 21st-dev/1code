@@ -119,7 +119,7 @@ export function trackProjectOpened(project: {
  */
 export function trackWorkspaceCreated(workspace: {
   id: string
-  projectId: string
+  projectId: string | null
   useWorktree: boolean
   repository?: string
 }) {

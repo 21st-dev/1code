@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs"
+import os from "node:os"
 import path from "node:path"
 import { eq } from "drizzle-orm"
 import {
@@ -14,15 +16,29 @@ export type DesktopRunPreflightInput = {
   chatId: string
   subChatId: string
   cwd: string
+  folderlessScratchCwd?: string
   blockers?: DesktopRunPreflightBlocker[]
 }
 
-export type DesktopRunPreflightResult = {
+export type ProjectDesktopRunPreflightResult = {
+  kind: "project"
   chat: Chat
   subChat: SubChat
   project: Project
   cwd: string
 }
+
+export type FolderlessDesktopRunPreflightResult = {
+  kind: "folderless"
+  chat: Chat
+  subChat: SubChat
+  project: null
+  cwd: string
+}
+
+export type DesktopRunPreflightResult =
+  | ProjectDesktopRunPreflightResult
+  | FolderlessDesktopRunPreflightResult
 
 export type DesktopRunPreflightBlocker = {
   id:
@@ -53,6 +69,16 @@ export class DesktopRunPreflightError extends Error {
 
 function normalizeDesktopRunPath(value: string): string {
   return path.resolve(value)
+}
+
+function resolveFolderlessScratchCwd(input: DesktopRunPreflightInput): string {
+  const scratchCwd = normalizeDesktopRunPath(
+    input.folderlessScratchCwd ||
+      process.env.LOCUS_FOLDERLESS_SCRATCH_CWD ||
+      path.join(os.tmpdir(), "locus-folderless-chat"),
+  )
+  mkdirSync(scratchCwd, { recursive: true })
+  return scratchCwd
 }
 
 function failPreflight(blocker: DesktopRunPreflightBlocker): never {
@@ -91,6 +117,34 @@ export function verifyDesktopRunPreflight(
     )
   }
 
+  if (!chat.projectId) {
+    if (
+      chat.worktreePath ||
+      chat.branch ||
+      chat.baseBranch ||
+      chat.prUrl ||
+      chat.prNumber != null ||
+      chat.archivedAt
+    ) {
+      failPreflight({
+        id: "project",
+        status: "mismatch",
+        message:
+          "Folderless desktop run cannot carry project, worktree, PR, or archived workspace state.",
+      })
+    }
+
+    assertDesktopRunPreflightBlockers(input.blockers)
+
+    return {
+      kind: "folderless",
+      chat,
+      subChat,
+      project: null,
+      cwd: resolveFolderlessScratchCwd(input),
+    }
+  }
+
   const project = db
     .select()
     .from(projects)
@@ -110,5 +164,5 @@ export function verifyDesktopRunPreflight(
 
   assertDesktopRunPreflightBlockers(input.blockers)
 
-  return { chat, subChat, project, cwd: expectedCwd }
+  return { kind: "project", chat, subChat, project, cwd: expectedCwd }
 }

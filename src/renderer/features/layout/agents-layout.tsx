@@ -171,7 +171,7 @@ export function AgentsLayout() {
   })
 
   const openProjectPickerForNewWorkspace = useCallback(async () => {
-    if (validatedProject || openFolder.isPending) return
+    if (openFolder.isPending) return
 
     try {
       const project = await openFolder.mutateAsync()
@@ -183,7 +183,7 @@ export function AgentsLayout() {
         error instanceof Error ? error.message : t("chat.selectRepoFailed"),
       )
     }
-  }, [validatedProject, openFolder, t])
+  }, [openFolder, t])
 
   const openHelperApisSettings = useCallback(() => {
     setSettingsActiveTab("models")

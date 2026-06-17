@@ -1,12 +1,11 @@
+import type { AgentJobMode } from "../../../shared/agent-jobs"
 import {
-  getAgentRunRequiredCapabilityIds,
   type AgentRuntimeCapabilityId,
   type AgentRuntimeId,
+  getAgentRunRequiredCapabilityIds,
 } from "../../../shared/agent-runtime-capabilities"
-import type { AgentJobMode } from "../../../shared/agent-jobs"
 import type { DesktopPermissionPolicy } from "./permission-policy"
 import type { DesktopRunPreflightResult } from "./preflight"
-import type { RunEvent } from "./runtime-events"
 import type {
   AgentRuntimeProviderAuthMode,
   AgentRuntimeProviderDiagnostic,
@@ -17,6 +16,7 @@ import type {
   AgentRuntimeRunResultBase,
   AgentRuntimeTraceObserver,
 } from "./run-contract"
+import type { RunEvent } from "./runtime-events"
 
 export type DesktopRunIdentity = AgentRuntimeRunIdentityBase & {
   runId: string
@@ -29,7 +29,8 @@ export type DesktopRunContext = AgentRuntimeRunContextBase & {
   runtimeId: AgentRuntimeId
   mode: AgentJobMode
   source: "desktop"
-  projectId: string
+  workspaceKind: DesktopRunPreflightResult["kind"]
+  projectId: string | null
   chatId: string
   subChatId: string
   cwd: string
@@ -103,6 +104,8 @@ export function getDesktopRunRequestedCapabilities(
 ): AgentRuntimeCapabilityId[] {
   return getAgentRunRequiredCapabilityIds({
     mode: permissionPolicy.mode,
+    workspaceKind:
+      permissionPolicy.controlLevel === "assistant" ? "folderless" : "project",
     hasScopeContract: permissionPolicy.guarded,
   })
 }
@@ -152,7 +155,8 @@ export function createDesktopRunContextFromPreflight(
     mode,
     source: "desktop",
     executionProfile: "interactive",
-    projectId: preflight.project.id,
+    workspaceKind: preflight.kind,
+    projectId: preflight.kind === "project" ? preflight.project.id : null,
     chatId: preflight.chat.id,
     subChatId: preflight.subChat.id,
     cwd: preflight.cwd,

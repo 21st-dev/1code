@@ -6,6 +6,7 @@ export type AgentRuntimeAlias = AgentRuntimeId | "claude"
 export const AGENT_RUNTIME_CAPABILITY_IDS = [
   "hardToolGuard",
   "planMode",
+  "quickChatAssistant",
   "scopeExpansion",
   "askUserQuestion",
   "rollback",
@@ -122,6 +123,7 @@ const SECRET_TEXT_PATTERNS = [
 const CAPABILITY_LABELS: Record<AgentRuntimeCapabilityId, string> = {
   hardToolGuard: "Hard tool guard",
   planMode: "Plan mode enforcement",
+  quickChatAssistant: "Quick chat assistant enforcement",
   scopeExpansion: "Scope expansion approval",
   askUserQuestion: "Ask user question",
   rollback: "Rollback and fork",
@@ -206,7 +208,9 @@ export function validateAgentRuntimeCapability(
   capability: AgentRuntimeCapability,
 ): void {
   if (!capability.reason.trim()) {
-    throw new Error(`Runtime capability ${capability.id} must include a reason.`)
+    throw new Error(
+      `Runtime capability ${capability.id} must include a reason.`,
+    )
   }
 
   assertNoSecretText(capability.label, `${capability.id} label`)
@@ -306,6 +310,22 @@ const CLAUDE_RUNTIME_MANIFEST = manifest({
       support: {
         kind: "runtime-code",
         references: ["src/main/lib/trpc/routers/claude.ts"],
+      },
+    }),
+    capability({
+      id: "quickChatAssistant",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Claude folderless quick chats derive assistant controls from desktop preflight and deny non-web tools through the Agent SDK canUseTool and PreToolUse policy path.",
+      hint: "Quick chat permits web search/fetch tools only; attach a project before using file, shell, MCP, or runtime tools.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/agent-runtime/permission-policy.ts",
+          "src/main/lib/claude/agent-sdk-tool-permission.ts",
+          "tests/claude-agent-sdk-tool-permission.test.ts",
+        ],
       },
     }),
     capability({
@@ -481,6 +501,24 @@ const CODEX_RUNTIME_MANIFEST = manifest({
         references: [
           "src/main/lib/codex/app-server-approval.ts",
           "src/main/lib/trpc/routers/codex.ts",
+        ],
+      },
+    }),
+    capability({
+      id: "quickChatAssistant",
+      status: "supported",
+      scope: "runtime-neutral",
+      reason:
+        "Codex folderless quick chats derive assistant controls from desktop preflight and deny non-web ACP and app-server approval requests through fail-closed handlers.",
+      hint: "Quick chat permits web search/fetch tools only; attach a project before using file, shell, MCP, or runtime tools.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/agent-runtime/permission-policy.ts",
+          "src/main/lib/codex/acp-permission.ts",
+          "src/main/lib/codex/app-server-approval.ts",
+          "tests/codex-acp-permission.test.ts",
+          "tests/codex-app-server-approval.test.ts",
         ],
       },
     }),
@@ -701,7 +739,10 @@ export function buildAgentRuntimeCapabilityDiagnostic(input: {
     input.message ||
     `${AGENT_RUNTIME_MANIFESTS[runtimeId].label} ${capability.label} is ${capability.status}. ${capability.reason}`
 
-  assertNoSecretText(message, `${runtimeId} ${capability.id} diagnostic message`)
+  assertNoSecretText(
+    message,
+    `${runtimeId} ${capability.id} diagnostic message`,
+  )
 
   return {
     type: "unsupported-capability",
@@ -785,8 +826,11 @@ export function isRuntimeCapabilitySupported(
 
 export function getAgentRunRequiredCapabilityIds(input: {
   mode?: "plan" | "agent"
+  workspaceKind?: "project" | "folderless"
   hasScopeContract?: boolean
 }): AgentRuntimeCapabilityId[] {
+  if (input.workspaceKind === "folderless") return ["quickChatAssistant"]
+
   const ids: AgentRuntimeCapabilityId[] = []
   if (input.hasScopeContract) ids.push("hardToolGuard")
   if (input.mode === "plan") ids.push("planMode")

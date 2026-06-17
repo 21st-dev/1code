@@ -31,6 +31,7 @@ export const agentJobsRouter = router({
         source: sourceSchema.default("cli"),
         status: statusSchema.optional(),
         limit: z.number().int().min(1).max(100).default(20),
+        includeFolderless: z.boolean().default(false),
       }).optional(),
     )
     .query(({ input }) => {
@@ -39,6 +40,7 @@ export const agentJobsRouter = router({
         source: input?.source ?? "cli",
         status: input?.status,
         limit: input?.limit ?? 20,
+        projectOnly: input?.includeFolderless !== true,
       })
       return {
         jobs: jobs.map(serializeAgentJob),

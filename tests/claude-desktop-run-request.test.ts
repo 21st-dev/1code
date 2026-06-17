@@ -72,6 +72,7 @@ describe("Claude desktop run request", () => {
       jobId: "job-1",
       mode: "agent",
       preflight: {
+        kind: "project",
         cwd: "/repo",
         chat: { id: "chat-1", projectId: "project-1" },
         subChat: { id: "sub-1", chatId: "chat-1" },
@@ -118,6 +119,7 @@ describe("Claude desktop run request", () => {
       runtimeId: "claude-code",
       mode: "agent",
       source: "desktop",
+      workspaceKind: "project",
       projectId: "project-1",
       chatId: "chat-1",
       subChatId: "sub-1",
@@ -211,6 +213,7 @@ describe("Claude desktop run request", () => {
       jobId: "job-1",
       mode: "plan",
       preflight: {
+        kind: "project",
         cwd: "/repo",
         chat: { id: "chat-1", projectId: "project-1" },
         subChat: { id: "sub-1", chatId: "chat-1" },

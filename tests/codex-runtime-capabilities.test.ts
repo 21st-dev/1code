@@ -1,16 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import {
   buildCodexRuntimeCapabilityErrorChunk,
-  getCodexRuntimeCapabilitiesForAdapter,
+  type CodexRuntimeCapabilityId,
   getCodexRunRequiredCapability,
   getCodexRuntimeCapabilities,
+  getCodexRuntimeCapabilitiesForAdapter,
   getCodexRuntimeCapability,
-  type CodexRuntimeCapabilityId,
 } from "../src/shared/codex-runtime-capabilities"
 
 const expectedCapabilityIds: CodexRuntimeCapabilityId[] = [
   "hardToolGuard",
   "planMode",
+  "quickChatAssistant",
   "scopeExpansion",
   "askUserQuestion",
   "rollback",
@@ -48,6 +49,9 @@ describe("Codex runtime capabilities", () => {
       scope: "runtime-neutral",
     })
     expect(getCodexRuntimeCapability("planMode")).toMatchObject({
+      status: "supported",
+    })
+    expect(getCodexRuntimeCapability("quickChatAssistant")).toMatchObject({
       status: "supported",
     })
     expect(getCodexRuntimeCapability("scopeExpansion")).toMatchObject({
@@ -93,9 +97,8 @@ describe("Codex runtime capabilities", () => {
   })
 
   test("reports app-server capability support only where isolated proofs exist", () => {
-    const appServerCapabilities = getCodexRuntimeCapabilitiesForAdapter(
-      "codex-app-server",
-    )
+    const appServerCapabilities =
+      getCodexRuntimeCapabilitiesForAdapter("codex-app-server")
     const byId = new Map(
       appServerCapabilities.map((capability) => [capability.id, capability]),
     )
@@ -109,6 +112,7 @@ describe("Codex runtime capabilities", () => {
         .map((capability) => capability.id),
     ).toEqual([
       "planMode",
+      "quickChatAssistant",
       "askUserQuestion",
       "providerProfiles",
       "attachments",
@@ -116,7 +120,9 @@ describe("Codex runtime capabilities", () => {
     ])
     expect(byId.get("hardToolGuard")).toMatchObject({
       status: "degraded",
-      reason: expect.stringContaining("depends on an explicit provider auth context"),
+      reason: expect.stringContaining(
+        "depends on an explicit provider auth context",
+      ),
       hint: expect.stringContaining("provider auth context"),
     })
     expect(byId.get("scopeExpansion")).toMatchObject({
@@ -193,7 +199,9 @@ describe("Codex runtime capabilities", () => {
       }).find((capability) => capability.id === "hardToolGuard"),
     ).toMatchObject({
       status: "supported",
-      reason: expect.stringContaining("provider-profile gateway smoke evidence"),
+      reason: expect.stringContaining(
+        "provider-profile gateway smoke evidence",
+      ),
     })
 
     expect(

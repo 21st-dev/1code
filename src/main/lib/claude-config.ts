@@ -339,7 +339,7 @@ export function resolveProjectPathFromWorktree(
         .where(eq(chats.worktreePath, expectedWorktreePath))
         .get()
 
-      if (chat) {
+      if (chat?.projectId) {
         const project = db
           .select({ path: projects.path })
           .from(projects)

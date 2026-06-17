@@ -1,15 +1,15 @@
 import { describe, expect, mock, test } from "bun:test"
+import { join } from "node:path"
 import type {
   PermissionOption,
   RequestPermissionRequest,
   RequestPermissionResponse,
 } from "@agentclientprotocol/sdk"
-import { join } from "node:path"
-import type { AgentGuardEvent } from "../src/shared/agent-scope-contracts"
 import {
   getCodexPermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
+import type { AgentGuardEvent } from "../src/shared/agent-scope-contracts"
 
 mock.module("electron", () => ({
   app: {
@@ -32,7 +32,9 @@ const {
   normalizeCodexDynamicPermissionTool,
   normalizeCodexPermissionTool,
 } = await import("../src/main/lib/codex/acp-permission")
-const { validateAgentScopeContract } = await import("../src/main/lib/agent-guard")
+const { validateAgentScopeContract } = await import(
+  "../src/main/lib/agent-guard"
+)
 
 const permissionOptions: PermissionOption[] = [
   { optionId: "approved", kind: "allow_once", name: "Yes, proceed" },
@@ -62,9 +64,11 @@ describe("Codex ACP permission enforcement", () => {
     expect(buildCodexAcpPermissionResponse(permissionOptions, "deny")).toEqual({
       outcome: { outcome: "selected", optionId: "abort" },
     })
-    expect(buildCodexAcpPermissionResponse(permissionOptions, "allow")).toEqual({
-      outcome: { outcome: "selected", optionId: "approved" },
-    })
+    expect(buildCodexAcpPermissionResponse(permissionOptions, "allow")).toEqual(
+      {
+        outcome: { outcome: "selected", optionId: "approved" },
+      },
+    )
   })
 
   test("normalizes ACP execute requests into guarded Bash input", () => {
@@ -105,6 +109,62 @@ describe("Codex ACP permission enforcement", () => {
 
     expect(response).toEqual({
       outcome: { outcome: "selected", optionId: "abort" },
+    })
+  })
+
+  test("assistant ACP policy allows web fetch and denies file or unknown tools", async () => {
+    const policy = resolveDesktopPermissionPolicy({
+      runtimeId: "codex",
+      mode: "agent",
+      workspaceKind: "folderless",
+    })
+    const permission = getCodexPermissionMapping(policy)
+    const handler = createCodexAcpPermissionHandler({
+      mode: "agent",
+      controlLevel: permission.controlLevel,
+      observedToolPolicy: permission.observedToolPolicy,
+    })
+
+    await expect(
+      handler(
+        permissionRequest({
+          title: "Fetch https://example.com",
+          kind: "fetch",
+          rawInput: { url: "https://example.com" },
+        }),
+      ),
+    ).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "approved" },
+    })
+
+    await expect(
+      handler(
+        permissionRequest({
+          title: "Grep src",
+          kind: "search",
+          rawInput: { path: "src", pattern: "secret" },
+        }),
+      ),
+    ).resolves.toEqual({
+      outcome: { outcome: "selected", optionId: "abort" },
+    })
+
+    expect(
+      decideCodexAcpToolPermission({
+        tool: {
+          toolUseId: "unknown-1",
+          toolName: "futureSideEffect",
+          toolInput: {},
+          kind: null,
+          title: "futureSideEffect",
+        },
+        mode: "agent",
+        controlLevel: permission.controlLevel,
+        observedToolPolicy: permission.observedToolPolicy,
+      }),
+    ).toMatchObject({
+      decision: "deny",
+      message: expect.stringContaining("only web search and web fetch"),
     })
   })
 
@@ -279,15 +339,20 @@ describe("Codex ACP permission enforcement", () => {
 
   test("installs the handler through the current ACP model client seam", async () => {
     let connected = false
-    let installedHandler: ((params: RequestPermissionRequest) => Promise<RequestPermissionResponse>) | null =
-      null
+    let installedHandler:
+      | ((
+          params: RequestPermissionRequest,
+        ) => Promise<RequestPermissionResponse>)
+      | null = null
     const model = {
       async connectClient() {
         connected = true
       },
       client: {
         setPermissionRequestHandler(
-          handler: (params: RequestPermissionRequest) => Promise<RequestPermissionResponse>,
+          handler: (
+            params: RequestPermissionRequest,
+          ) => Promise<RequestPermissionResponse>,
         ) {
           installedHandler = handler
         },

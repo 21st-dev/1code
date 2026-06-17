@@ -152,6 +152,7 @@ export function KanbanView() {
     const windowId = getWindowId()
     const allIds: string[] = []
     for (const chat of chats) {
+      if (!chat.projectId) continue
       try {
         const stored = localStorage.getItem(`${windowId}:agent-open-sub-chats-${chat.id}`)
         if (stored) {
@@ -267,6 +268,7 @@ export function KanbanView() {
     // Add workspaces
     if (chats) {
       for (const chat of chats) {
+        if (!chat.projectId) continue
         const project = projectsMap.get(chat.projectId)
 
         const status = deriveWorkspaceStatus(chat.id, {
