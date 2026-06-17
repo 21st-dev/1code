@@ -81,6 +81,9 @@ If that sentence reads cleanly to you, the vocabulary holds.
 
 ## 4. Entry-point grammar (fixes ③ — the "new X" confusion)
 
+> **Implemented:** `refactor-canonical-vocabulary` aligned create-action labels
+> and the actively misleading `handleNewAgent` handler with this grammar.
+
 Once terms are fixed, every create action maps 1:1, no synonyms:
 
 | Action | Creates | Canonical label |
@@ -97,6 +100,10 @@ Once terms are fixed, every create action maps 1:1, no synonyms:
 ---
 
 ## 5. Empty-state / onboarding language (fixes ④)
+
+> **Implemented:** `refactor-canonical-vocabulary` aligned the no-project,
+> project-selection, onboarding, and quick-chat attachment entry copy with this
+> grammar, with i18n tests and an architecture guard to prevent re-drift.
 
 Today the same "no repo / get started / connect provider" moment is phrased 5+
 ways: "Welcome to Agents" / "Attach folder" / "No project open" / "No projects
