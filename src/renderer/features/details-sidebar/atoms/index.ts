@@ -201,19 +201,8 @@ export const expandedWidgetSidebarWidthAtom = atomWithStorage<number>(
 )
 
 // ============================================================================
-// Feature Flag & Sidebar State
+// Sidebar State
 // ============================================================================
-
-// Temporary rollback gate for the DetailsSidebar migration, not a product mode.
-// Deletion follow-up: remove the `overview:unifiedEnabled=false` fallback after
-// Plan, Diff, and Terminal expanded entrypoints and legacy sidebar gates have
-// one stable desktop release.
-export const unifiedSidebarEnabledAtom = atomWithStorage<boolean>(
-  "overview:unifiedEnabled",
-  true,
-  undefined,
-  { getOnInit: true },
-)
 
 // Details sidebar open state (per-window, persisted)
 export const detailsSidebarOpenAtom = atomWithWindowStorage<boolean>(

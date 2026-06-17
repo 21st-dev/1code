@@ -13,7 +13,6 @@ import { cn } from "../../../lib/utils"
 import {
   currentPlanPathAtomFamily,
   pendingBuildPlanSubChatIdAtom,
-  planSidebarOpenAtomFamily,
   subChatModeAtomFamily,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
@@ -65,16 +64,10 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   const topGradientRef = useRef<HTMLDivElement>(null)
   const bottomGradientRef = useRef<HTMLDivElement>(null)
 
-  // Plan sidebar atoms - per subChat
-  const planSidebarOpenAtom = useMemo(
-    () => planSidebarOpenAtomFamily(subChatId),
-    [subChatId],
-  )
   const currentPlanPathAtom = useMemo(
     () => currentPlanPathAtomFamily(subChatId),
     [subChatId],
   )
-  const [, setIsPlanSidebarOpen] = useAtom(planSidebarOpenAtom)
   const [, setCurrentPlanPath] = useAtom(currentPlanPathAtom)
 
   // Only consider streaming if chat is actively streaming
@@ -144,14 +137,13 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
     setIsExpanded((prev) => !prev)
   }, [])
 
-  // Handle opening plan sidebar
+  // Handle opening the Details-owned plan widget
   const handleOpenSidebar = useCallback(() => {
     if (filePath) {
       setCurrentPlanPath(filePath)
-      if (openDetailsWidget("plan")) return
-      setIsPlanSidebarOpen(true)
+      openDetailsWidget("plan")
     }
-  }, [filePath, openDetailsWidget, setCurrentPlanPath, setIsPlanSidebarOpen])
+  }, [filePath, openDetailsWidget, setCurrentPlanPath])
 
   // Handle build plan - triggers via atom, consumed by ChatViewInner
   const handleBuildPlan = useCallback(() => {

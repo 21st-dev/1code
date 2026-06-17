@@ -10,7 +10,6 @@ import {
 } from "../atoms"
 import {
   widgetVisibilityAtomFamily,
-  unifiedSidebarEnabledAtom,
 } from "../../details-sidebar/atoms"
 import { trpc } from "../../../lib/trpc"
 import { Plus, AlignJustify, TerminalSquare, X } from "lucide-react"
@@ -230,18 +229,15 @@ export function SubChatSelector({
   const pendingQuestionsMap = useAtomValue(pendingUserQuestionsAtom)
 
   // Overview sidebar state - to check if widgets are visible
-  const isUnifiedSidebarEnabled = useAtomValue(unifiedSidebarEnabledAtom)
   const widgetVisibilityAtom = useMemo(
     () => widgetVisibilityAtomFamily(chatId || ""),
     [chatId],
   )
   const widgetVisibility = useAtomValue(widgetVisibilityAtom)
 
-  // Show standalone buttons when:
-  // 1. Unified sidebar is disabled (use legacy sidebars), OR
-  // 2. Unified sidebar is enabled but the widget is hidden by user.
-  const showDiffButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("diff")
-  const showTerminalButton = !isUnifiedSidebarEnabled || !widgetVisibility.includes("terminal")
+  // Show standalone buttons only when the corresponding Details widget is hidden.
+  const showDiffButton = !widgetVisibility.includes("diff")
+  const showTerminalButton = !widgetVisibility.includes("terminal")
 
   // Resolved hotkeys for tooltips
   const openDiffHotkey = useResolvedHotkeyDisplay("open-diff")

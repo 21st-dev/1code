@@ -39,8 +39,7 @@ import {
   ArrowDown,
   ChevronDown,
   Globe2,
-  ListTree,
-  TerminalSquare
+  ListTree
 } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import {
@@ -86,17 +85,14 @@ import { DiffFullPageView } from "../../changes/components/diff-full-page-view"
 import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { usePushAction } from "../../changes/hooks/use-push-action"
 import { getStatusIndicator } from "../../changes/utils/status"
-import {
-  detailsSidebarOpenAtom,
-  unifiedSidebarEnabledAtom,
-} from "../../details-sidebar/atoms"
+import { detailsSidebarOpenAtom } from "../../details-sidebar/atoms"
 import { DetailsSidebar } from "../../details-sidebar/details-sidebar"
 import { ExpandedWidgetSidebar } from "../../details-sidebar/expanded-widget-sidebar"
 import { useOpenDetailsWidget } from "../../details-sidebar/use-open-details-widget"
 import { FileViewerSidebar } from "../../file-viewer"
 import { FileSearchDialog } from "../../file-viewer/components/file-search-dialog"
 import { terminalBottomHeightAtom, terminalDisplayModeAtom, terminalSidebarOpenAtomFamily } from "../../terminal/atoms"
-import { TerminalBottomPanelContent, TerminalSidebar } from "../../terminal/terminal-sidebar"
+import { TerminalBottomPanelContent } from "../../terminal/terminal-sidebar"
 import { getTerminalScopeKey } from "../../terminal/utils"
 import {
   agentsChangesPanelCollapsedAtom,
@@ -104,7 +100,6 @@ import {
   agentsDiffSidebarWidthAtom,
   localBrowserWorkbenchOpenAtomFamily,
   localBrowserWorkbenchWidthAtom,
-  agentsPlanSidebarWidthAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatUnseenChangesAtom,
   agentsUnseenChangesAtom,
@@ -136,7 +131,6 @@ import {
   pendingReviewMessageAtom,
   pendingUserQuestionsAtom,
   planEditRefetchTriggerAtomFamily,
-  planSidebarOpenAtomFamily,
   QUESTIONS_SKIPPED_MESSAGE,
   selectedAgentChatIdAtom,
   selectedCommitAtom,
@@ -162,7 +156,6 @@ import { AgentSendButton } from "../components/agent-send-button"
 import type { TextSelectionSource } from "../context/text-selection-context"
 import { TextSelectionProvider } from "../context/text-selection-context"
 import { useAgentsFileUpload, type UploadedImage } from "../hooks/use-agents-file-upload"
-import { useAgentPanelConflicts } from "../hooks/use-agent-panel-conflicts"
 import { useAuthRetry } from "../hooks/use-auth-retry"
 import { useChangedFilesTracking } from "../hooks/use-changed-files-tracking"
 import { useDesktopNotifications } from "../hooks/use-desktop-notifications"
@@ -219,7 +212,6 @@ import {
   type AgentDiffViewRef,
   type ParsedDiffFile,
 } from "../ui/agent-diff-view"
-import { AgentPlanSidebar } from "../ui/agent-plan-sidebar"
 import { AgentQueueIndicator } from "../ui/agent-queue-indicator"
 import { AgentToolCall } from "../ui/agent-tool-call"
 import { AgentToolRegistry } from "../ui/agent-tool-registry"
@@ -4408,15 +4400,9 @@ export function ChatView({
     [chatId],
   )
   const [isDiffSidebarOpen, setIsDiffSidebarOpen] = useAtom(diffSidebarAtom)
-  // Subscribe to activeSubChatId for plan sidebar (needs to update when switching sub-chats)
+  // Subscribe to activeSubChatId for plan details (needs to update when switching sub-chats)
   const activeSubChatIdForPlan = useAgentSubChatStore((state) => state.activeSubChatId)
 
-  // Per-subChat plan sidebar state - each sub-chat remembers its own open/close state
-  const planSidebarAtom = useMemo(
-    () => planSidebarOpenAtomFamily(activeSubChatIdForPlan || ""),
-    [activeSubChatIdForPlan],
-  )
-  const [isPlanSidebarOpen, setIsPlanSidebarOpen] = useAtom(planSidebarAtom)
   const currentPlanPathAtom = useMemo(
     () => currentPlanPathAtomFamily(activeSubChatIdForPlan || ""),
     [activeSubChatIdForPlan],
@@ -4434,8 +4420,7 @@ export function ChatView({
   // File search dialog (Cmd+P)
   const [fileSearchOpen, setFileSearchOpen] = useAtom(fileSearchDialogOpenAtom)
 
-  // Details sidebar state (unified sidebar that combines all right sidebars)
-  const isUnifiedSidebarEnabled = useAtomValue(unifiedSidebarEnabledAtom)
+  // Details sidebar state
   const [isDetailsSidebarOpen, setIsDetailsSidebarOpen] = useAtom(detailsSidebarOpenAtom)
   const localBrowserWorkbenchAtom = useMemo(
     () => localBrowserWorkbenchOpenAtomFamily(chatId),
@@ -4459,17 +4444,6 @@ export function ChatView({
   const toggleDetailsHotkey = useResolvedHotkeyDisplay("toggle-details")
   const toggleTerminalHotkey = useResolvedHotkeyDisplay("toggle-terminal")
 
-  // Close plan sidebar when switching to a sub-chat that has no plan
-  const prevSubChatIdRef = useRef(activeSubChatIdForPlan)
-  useEffect(() => {
-    if (prevSubChatIdRef.current !== activeSubChatIdForPlan) {
-      // Sub-chat changed - if new one has no plan path, close sidebar
-      if (!currentPlanPath) {
-        setIsPlanSidebarOpen(false)
-      }
-      prevSubChatIdRef.current = activeSubChatIdForPlan
-    }
-  }, [activeSubChatIdForPlan, currentPlanPath, setIsPlanSidebarOpen])
   const setPendingBuildPlanSubChatId = useSetAtom(pendingBuildPlanSubChatIdAtom)
 
   // Read plan edit refetch trigger from atom (set by ChatViewInner when Edit completes)
@@ -4498,41 +4472,42 @@ export function ChatView({
   const openDetailsWidget = useOpenDetailsWidget(chatId)
 
   const handleOpenPlanProductEntry = useCallback(() => {
-    if (openDetailsWidget("plan")) return
-    setIsPlanSidebarOpen(true)
-  }, [openDetailsWidget, setIsPlanSidebarOpen])
+    openDetailsWidget("plan")
+  }, [openDetailsWidget])
 
   const handleOpenTerminalProductEntry = useCallback(() => {
-    if (openDetailsWidget("terminal")) return
-    setIsTerminalSidebarOpen(true)
-  }, [openDetailsWidget, setIsTerminalSidebarOpen])
+    if (terminalDisplayMode === "bottom") {
+      setIsTerminalSidebarOpen(true)
+      return
+    }
+    openDetailsWidget("terminal")
+  }, [openDetailsWidget, setIsTerminalSidebarOpen, terminalDisplayMode])
 
   const handleToggleTerminalProductEntry = useCallback(() => {
-    if (openDetailsWidget("terminal", { toggle: true })) return
-    setIsTerminalSidebarOpen(!isTerminalSidebarOpen)
-  }, [isTerminalSidebarOpen, openDetailsWidget, setIsTerminalSidebarOpen])
+    if (terminalDisplayMode === "bottom") {
+      setIsTerminalSidebarOpen(!isTerminalSidebarOpen)
+      return
+    }
+    openDetailsWidget("terminal", { toggle: true })
+  }, [isTerminalSidebarOpen, openDetailsWidget, setIsTerminalSidebarOpen, terminalDisplayMode])
 
   const handleOpenDiffProductEntry = useCallback(() => {
-    if (openDetailsWidget("diff")) return
-    setIsDiffSidebarOpen(true)
-  }, [openDetailsWidget, setIsDiffSidebarOpen])
+    openDetailsWidget("diff")
+  }, [openDetailsWidget])
 
   const handleToggleDiffProductEntry = useCallback(() => {
-    if (openDetailsWidget("diff", { toggle: true })) return
-    setIsDiffSidebarOpen(!isDiffSidebarOpen)
-  }, [isDiffSidebarOpen, openDetailsWidget, setIsDiffSidebarOpen])
+    openDetailsWidget("diff", { toggle: true })
+  }, [openDetailsWidget])
 
   const handleOpenDiffFileProductEntry = useCallback(
     (filePath: string) => {
       setSelectedFilePath(filePath)
       setFilteredDiffFiles([filePath])
-      if (openDetailsWidget("diff")) return
-      setIsDiffSidebarOpen(true)
+      openDetailsWidget("diff")
     },
     [
       openDetailsWidget,
       setFilteredDiffFiles,
-      setIsDiffSidebarOpen,
       setSelectedFilePath,
     ],
   )
@@ -4604,28 +4579,6 @@ export function ChatView({
   const [diffMode, setDiffMode] = useAtom(diffViewModeAtom)
   const [diffDisplayMode, setDiffDisplayMode] = useAtom(diffViewDisplayModeAtom)
   const subChatsSidebarMode = useAtomValue(agentsSubChatsSidebarModeAtom)
-
-  useAgentPanelConflicts({
-    isDetailsSidebarOpen,
-    isPlanSidebarOpen,
-    currentPlanPath,
-    isTerminalSidebarOpen,
-    terminalDisplayMode,
-    isDiffSidebarOpen,
-    diffDisplayMode,
-    setIsDetailsSidebarOpen,
-    setIsPlanSidebarOpen,
-    setIsTerminalSidebarOpen,
-    setIsDiffSidebarOpen,
-  })
-
-  // Force narrow width when switching to side-peek mode (from dialog/fullscreen)
-  useEffect(() => {
-    if (diffDisplayMode === "side-peek") {
-      // Set to narrow width (400px) to ensure correct layout
-      appStore.set(agentsDiffSidebarWidthAtom, 400)
-    }
-  }, [diffDisplayMode])
 
   // Hide/show traffic lights based on full-page diff or full-page file viewer
   // When exiting full-page mode, restore based on sidebar state (not unconditionally true)
@@ -6721,52 +6674,27 @@ Make sure to preserve all functionality from both branches when resolving confli
                     </TooltipContent>
                   </Tooltip>
                 )}
-                {/* Overview/Terminal Button - shows when sidebar is closed and worktree/sandbox exists (desktop only) */}
+                {/* Details Button - shows when sidebar is closed and worktree/sandbox exists (desktop only) */}
                 {!isMobileFullscreen &&
-                  worktreePath && (
-                    isUnifiedSidebarEnabled ? (
-                      // Details button for unified sidebar
-                      !isDetailsSidebarOpen && (
-                        <Tooltip delayDuration={500}>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setIsDetailsSidebarOpen(true)}
-                              className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
-                              aria-label={t("details.details")}
-                            >
-                              <IconOpenSidebarRight className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom">
-                            {t("details.details")}
-                            {toggleDetailsHotkey && <Kbd>{toggleDetailsHotkey}</Kbd>}
-                          </TooltipContent>
-                        </Tooltip>
-                      )
-                    ) : (
-                      // Terminal button for legacy sidebars
-                      !isTerminalSidebarOpen && (
-                        <Tooltip delayDuration={500}>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setIsTerminalSidebarOpen(true)}
-                              className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
-                              aria-label={t("agent.chat.openTerminal")}
-                            >
-                              <TerminalSquare className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom">
-                            {t("agent.chat.openTerminal")}
-                            {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
-                          </TooltipContent>
-                        </Tooltip>
-                      )
-                    )
+                  worktreePath &&
+                  !isDetailsSidebarOpen && (
+                    <Tooltip delayDuration={500}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setIsDetailsSidebarOpen(true)}
+                          className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
+                          aria-label={t("details.details")}
+                        >
+                          <IconOpenSidebarRight className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {t("details.details")}
+                        {toggleDetailsHotkey && <Kbd>{toggleDetailsHotkey}</Kbd>}
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 {/* Restore Button - shows when viewing archived workspace (desktop only) */}
                 {!isMobileFullscreen && isArchived && (
@@ -7068,97 +6996,6 @@ Make sure to preserve all functionality from both branches when resolving confli
           </ResizableSidebar>
         )}
 
-        {/* Plan Sidebar - shows plan files on the right (leftmost right sidebar) */}
-        {/* Only show when we have an active sub-chat with a plan */}
-        {!isUnifiedSidebarEnabled && !isMobileFullscreen && activeSubChatIdForPlan && (
-          <ResizableSidebar
-            isOpen={isPlanSidebarOpen && !!currentPlanPath}
-            onClose={() => setIsPlanSidebarOpen(false)}
-            widthAtom={agentsPlanSidebarWidthAtom}
-            minWidth={400}
-            maxWidth={800}
-            side="right"
-            animationDuration={0}
-            initialWidth={0}
-            exitWidth={0}
-            showResizeTooltip={true}
-            className="bg-tl-background border-l"
-            style={{ borderLeftWidth: "0.5px" }}
-          >
-            <AgentPlanSidebar
-              chatId={activeSubChatIdForPlan}
-              planPath={currentPlanPath}
-              onClose={() => setIsPlanSidebarOpen(false)}
-              onBuildPlan={handleApprovePlanFromSidebar}
-              refetchTrigger={planEditRefetchTrigger}
-              mode={currentMode}
-            />
-          </ResizableSidebar>
-        )}
-
-        {/* Diff View - hidden on mobile fullscreen and when diff is not available */}
-        {/* Supports three display modes: side-peek (sidebar), center-peek (dialog), full-page */}
-        {/* Wrapped in DiffStateProvider to isolate diff state and prevent ChatView re-renders */}
-        {!isUnifiedSidebarEnabled && canOpenDiff && !isMobileFullscreen && (
-          <DiffStateProvider
-            isDiffSidebarOpen={isDiffSidebarOpen}
-            parsedFileDiffs={parsedFileDiffs}
-            isDiffSidebarNarrow={isDiffSidebarNarrow}
-            setIsDiffSidebarOpen={setIsDiffSidebarOpen}
-            setDiffStats={setDiffStats}
-            setDiffContent={setDiffContent}
-            setParsedFileDiffs={setParsedFileDiffs}
-            setPrefetchedFileContents={setPrefetchedFileContents}
-            fetchDiffStats={fetchDiffStats}
-          >
-            <DiffSidebarRenderer
-              worktreePath={worktreePath}
-              chatId={chatId}
-              repository={repository}
-              diffStats={diffStats}
-              diffContent={diffContent}
-              parsedFileDiffs={parsedFileDiffs}
-              prefetchedFileContents={prefetchedFileContents}
-              setDiffCollapseState={setDiffCollapseState}
-              diffViewRef={diffViewRef}
-              diffSidebarRef={diffSidebarRef}
-              agentChat={agentChat}
-              branchData={branchData}
-              gitStatus={gitStatus}
-              isGitStatusLoading={isGitStatusLoading}
-              isDiffSidebarOpen={isDiffSidebarOpen}
-              diffDisplayMode={diffDisplayMode}
-              diffSidebarWidth={diffSidebarWidth}
-              handleReview={handleReview}
-              isReviewing={isReviewing}
-              handleCreatePrDirect={handleCreatePrDirect}
-              handleCreatePr={handleCreatePr}
-              isCreatingPr={isCreatingPr}
-              handleMergePr={handleMergePr}
-              mergePrMutation={mergePrMutation}
-              handleRefreshGitStatus={handleRefreshGitStatus}
-              hasPrNumber={hasPrNumber}
-              isPrOpen={isPrOpen}
-              hasMergeConflicts={hasMergeConflicts}
-              handleFixConflicts={handleFixConflicts}
-              handleExpandAll={handleExpandAll}
-              handleCollapseAll={handleCollapseAll}
-              diffMode={diffMode}
-              setDiffMode={setDiffMode}
-              handleMarkAllViewed={handleMarkAllViewed}
-              handleMarkAllUnviewed={handleMarkAllUnviewed}
-              isDesktop={isDesktop}
-              isFullscreen={Boolean(isFullscreen)}
-              setDiffDisplayMode={setDiffDisplayMode}
-              handleCommitToPr={handleCommitToPr}
-              isCommittingToPr={isCommittingToPr}
-              subChatsWithFiles={subChatsWithFiles}
-              setDiffStats={setDiffStats}
-              onDiscardSuccess={scheduleDiffRefresh}
-            />
-          </DiffStateProvider>
-        )}
-
         {/* File Viewer - opens when a file is clicked */}
         {!isMobileFullscreen && fileViewerPath && worktreePath && fileViewerDisplayMode === "side-peek" && (
           <ResizableSidebar
@@ -7207,18 +7044,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           </DiffFullPageView>
         )}
 
-        {/* Terminal Sidebar - shows when worktree exists (desktop only) */}
-        {!isUnifiedSidebarEnabled && worktreePath && (
-          <TerminalSidebar
-            chatId={chatId}
-            scopeKey={terminalScopeKey}
-            cwd={worktreePath}
-            workspaceId={chatId}
-          />
-        )}
-
-        {isUnifiedSidebarEnabled &&
-          !isMobileFullscreen &&
+        {!isMobileFullscreen &&
           worktreePath && (
             <ExpandedWidgetSidebar
               chatId={chatId}
@@ -7292,11 +7118,10 @@ Make sure to preserve all functionality from both branches when resolving confli
                 </DiffStateProvider>
               )}
             />
-          )}
+        )}
 
-        {/* Unified Details Sidebar - combines all right sidebars into one (rightmost) */}
-        {isUnifiedSidebarEnabled &&
-          !isMobileFullscreen &&
+        {/* Details Sidebar - canonical right inspector for current chat details */}
+        {!isMobileFullscreen &&
           worktreePath && (
           <DetailsSidebar
             chatId={chatId}
@@ -7307,9 +7132,6 @@ Make sure to preserve all functionality from both branches when resolving confli
             onBuildPlan={handleApprovePlanFromSidebar}
             planRefetchTrigger={planEditRefetchTrigger}
             activeSubChatId={activeSubChatIdForPlan}
-            isPlanSidebarOpen={!isUnifiedSidebarEnabled && isPlanSidebarOpen && !!currentPlanPath}
-            isTerminalSidebarOpen={!isUnifiedSidebarEnabled && isTerminalSidebarOpen}
-            isDiffSidebarOpen={!isUnifiedSidebarEnabled && isDiffSidebarOpen}
             diffDisplayMode={diffDisplayMode}
             canOpenDiff={canOpenDiff}
             setIsDiffSidebarOpen={setIsDiffSidebarOpen}
@@ -7331,7 +7153,7 @@ Make sure to preserve all functionality from both branches when resolving confli
       </div>
 
       {/* Terminal Bottom Panel — renders below the main row when displayMode is "bottom" */}
-      {terminalDisplayMode === "bottom" && !isUnifiedSidebarEnabled && worktreePath && !isMobileFullscreen && (
+      {terminalDisplayMode === "bottom" && worktreePath && !isMobileFullscreen && (
         <ResizableBottomPanel
           isOpen={isTerminalSidebarOpen}
           onClose={() => setIsTerminalSidebarOpen(false)}

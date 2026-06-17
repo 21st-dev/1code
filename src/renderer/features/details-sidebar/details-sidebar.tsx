@@ -182,11 +182,7 @@ interface DetailsSidebarProps {
   planRefetchTrigger?: number
   /** Active sub-chat ID for plan */
   activeSubChatId?: string | null
-  /** Sidebar open states - used to hide widgets when their sidebar is open */
-  isPlanSidebarOpen?: boolean
-  isTerminalSidebarOpen?: boolean
-  isDiffSidebarOpen?: boolean
-  /** Diff display mode - only hide widget when in side-peek mode */
+  /** Diff display mode used for widget copy while the legacy modes are migrated */
   diffDisplayMode?: "side-peek" | "center-peek" | "full-page"
   /** Diff-related props */
   canOpenDiff: boolean
@@ -231,9 +227,6 @@ export function DetailsSidebar({
   onBuildPlan,
   planRefetchTrigger,
   activeSubChatId,
-  isPlanSidebarOpen,
-  isTerminalSidebarOpen,
-  isDiffSidebarOpen,
   diffDisplayMode,
   canOpenDiff,
   diffStats,
@@ -509,8 +502,7 @@ export function DetailsSidebar({
                 )
 
               case "plan":
-                // Hidden when Plan sidebar is open
-                if (!planPath || isPlanSidebarOpen) return null
+                if (!planPath) return null
                 return (
                   <PlanWidget
                     key="plan"
@@ -525,8 +517,7 @@ export function DetailsSidebar({
                 )
 
               case "terminal":
-                // Hidden when Terminal sidebar is open
-                if (!worktreePath || isTerminalSidebarOpen) return null
+                if (!worktreePath) return null
                 return (
                   <TerminalWidget
                     key="terminal"
@@ -542,12 +533,7 @@ export function DetailsSidebar({
 
               case "diff":
                 // Show widget if we have local diff stats
-                // Hide only when Diff sidebar is open in side-peek mode
-                if (
-                  !canOpenDiff ||
-                  (isDiffSidebarOpen && diffDisplayMode === "side-peek")
-                )
-                  return null
+                if (!canOpenDiff) return null
                 return (
                   <ChangesWidget
                     key="diff"

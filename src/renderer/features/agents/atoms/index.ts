@@ -961,35 +961,6 @@ export const viewedFilesAtomFamily = atomFamily((chatId: string) =>
 // Open Locally dialog trigger - set to chatId to open dialog for that chat
 export const openLocallyChatIdAtom = atom<string | null>(null)
 
-// Plan sidebar state atoms
-
-// Plan sidebar width (global, persisted)
-export const agentsPlanSidebarWidthAtom = atomWithStorage<number>(
-  "agents-plan-sidebar-width",
-  500,
-  undefined,
-  { getOnInit: true },
-)
-
-// Plan sidebar open state storage - stores per chatId (persisted)
-// Uses window-scoped storage so each window can have independent plan sidebar states
-const planSidebarOpenStorageAtom = atomWithWindowStorage<Record<string, boolean>>(
-  "agents:planSidebarOpen",
-  {},
-  { getOnInit: true },
-)
-
-// atomFamily to get/set plan sidebar open state per chatId
-export const planSidebarOpenAtomFamily = atomFamily((chatId: string) =>
-  atom(
-    (get) => get(planSidebarOpenStorageAtom)[chatId] ?? false,
-    (get, set, isOpen: boolean) => {
-      const current = get(planSidebarOpenStorageAtom)
-      set(planSidebarOpenStorageAtom, { ...current, [chatId]: isOpen })
-    },
-  ),
-)
-
 // Current plan path storage - stores per chatId (runtime only, not persisted)
 const currentPlanPathStorageAtom = atom<Record<string, string | null>>({})
 

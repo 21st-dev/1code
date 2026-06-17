@@ -31,6 +31,7 @@ describe("details sidebar entrypoints", () => {
   })
 
   test("keeps expanded diff actions in the unified renderer", () => {
+    const source = read("src/renderer/features/agents/main/active-chat.tsx")
     const diffSection = read(
       "src/renderer/features/details-sidebar/sections/diff-section.tsx",
     )
@@ -45,26 +46,42 @@ describe("details sidebar entrypoints", () => {
     expect(diffSection).not.toContain(
       "onClick={() => setIsDiffSidebarOpen(true)}",
     )
+    expect(source).toContain("renderDiffContent={({ onClose }) => (")
+    expect(source).toContain('diffDisplayMode="details-expanded"')
+    expect(source).toContain("<DiffSidebarRenderer")
     expect(expandedSidebar).toContain(
       "parsedFileDiffs={parsedFileDiffs ?? undefined}",
     )
     expect(expandedSidebar).not.toContain("onOpenFullDiff={")
   })
 
-  test("mounts legacy Plan, Diff, and Terminal sidebars only behind the rollback flag", () => {
+  test("does not keep legacy right-sidebar fallback paths", () => {
     const source = read("src/renderer/features/agents/main/active-chat.tsx")
+    const detailsAtoms = read("src/renderer/features/details-sidebar/atoms/index.ts")
+    const openDetailsWidget = read(
+      "src/renderer/features/details-sidebar/use-open-details-widget.ts",
+    )
+    const subChatSelector = read(
+      "src/renderer/features/agents/ui/sub-chat-selector.tsx",
+    )
 
-    expect(source).toMatch(
-      /Plan Sidebar[\s\S]*\{!isUnifiedSidebarEnabled && !isMobileFullscreen && activeSubChatIdForPlan &&/,
-    )
-    expect(source).toMatch(
-      /Diff View[\s\S]*\{!isUnifiedSidebarEnabled && canOpenDiff && !isMobileFullscreen &&/,
-    )
-    expect(source).toMatch(
-      /Terminal Sidebar[\s\S]*\{!isUnifiedSidebarEnabled && worktreePath &&/,
-    )
-    expect(source).toMatch(
-      /Terminal Bottom Panel[\s\S]*terminalDisplayMode === "bottom" && !isUnifiedSidebarEnabled &&/,
-    )
+    for (const content of [
+      source,
+      detailsAtoms,
+      openDetailsWidget,
+      subChatSelector,
+    ]) {
+      expect(content).not.toContain("unifiedSidebarEnabledAtom")
+      expect(content).not.toContain("!isUnifiedSidebarEnabled")
+    }
+
+    expect(source).not.toContain("useAgentPanelConflicts")
+    expect(source).not.toContain("AgentPlanSidebar")
+    expect(source).not.toContain("<TerminalSidebar")
+    expect(source).toMatch(/<ExpandedWidgetSidebar[\s\S]*renderDiffContent=/)
+    expect(source).toMatch(/<DetailsSidebar[\s\S]*onExpandPlan=/)
+    expect(source).toMatch(/<DetailsSidebar[\s\S]*onExpandTerminal=/)
+    expect(source).toMatch(/<DetailsSidebar[\s\S]*onExpandDiff=/)
+    expect(openDetailsWidget).toContain('setDetailsSidebarTab("details")')
   })
 })

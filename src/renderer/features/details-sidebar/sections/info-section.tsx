@@ -54,7 +54,6 @@ import { useAgentSubChatStore } from "../../agents/stores/sub-chat-store"
 import { useOpenDetailsWidget } from "../use-open-details-widget"
 import {
   activeTerminalIdAtom,
-  terminalSidebarOpenAtomFamily,
   terminalsAtom,
 } from "../../terminal/atoms"
 import { GitHubWriteBackConfirmationDialog } from "../components/github-write-back-confirmation-dialog"
@@ -317,11 +316,6 @@ export const InfoSection = memo(function InfoSection({
 }: InfoSectionProps) {
   const { t } = useI18n()
   const setPendingGitHubContextMessage = useSetAtom(pendingGitHubContextMessageAtom)
-  const terminalSidebarAtom = useMemo(
-    () => terminalSidebarOpenAtomFamily(chatId),
-    [chatId],
-  )
-  const setTerminalSidebarOpen = useSetAtom(terminalSidebarAtom)
   const openDetailsWidget = useOpenDetailsWidget(chatId)
   const setAllTerminals = useSetAtom(terminalsAtom)
   const setActiveTerminalIds = useSetAtom(activeTerminalIdAtom)
@@ -854,9 +848,7 @@ export const InfoSection = memo(function InfoSection({
       ...prev,
       [terminalScopeKey]: terminalId,
     }))
-    if (!openDetailsWidget("terminal")) {
-      setTerminalSidebarOpen(true)
-    }
+    openDetailsWidget("terminal")
 
     runGhAuthLoginMutation.mutate(
       {
@@ -882,7 +874,6 @@ export const InfoSection = memo(function InfoSection({
     runGhAuthLoginMutation,
     setActiveTerminalIds,
     setAllTerminals,
-    setTerminalSidebarOpen,
     openDetailsWidget,
     t,
     terminalScopeKey,
