@@ -1,7 +1,7 @@
 "use client"
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { Columns3, LayoutDashboard } from "lucide-react"
+import { Columns3, FolderPlus, LayoutDashboard, Plus } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import React, {
   forwardRef,
@@ -118,6 +118,8 @@ import { UsagePopover } from "./usage-popover"
 const FEEDBACK_URL =
   import.meta.env.VITE_FEEDBACK_URL ||
   "https://github.com/lupanpan1030/agent-code-for-me/issues"
+
+const PROJECT_GROUP_VISIBLE_LIMIT = 5
 
 // GitHub avatar with loading placeholder
 const GitHubAvatar = React.memo(function GitHubAvatar({
@@ -897,8 +899,11 @@ function chatListSectionPropsAreEqual(
     return false
   if (prevProps.deletePending !== nextProps.deletePending) return false
   if (prevProps.title !== nextProps.title) return false
+  if (prevProps.projectId !== nextProps.projectId) return false
   if (prevProps.collapsed !== nextProps.collapsed) return false
   if (prevProps.collapsible !== nextProps.collapsible) return false
+  if (prevProps.hiddenCount !== nextProps.hiddenCount) return false
+  if (prevProps.expanded !== nextProps.expanded) return false
   if (prevProps.isMobileFullscreen !== nextProps.isMobileFullscreen)
     return false
   if (prevProps.isDesktop !== nextProps.isDesktop) return false
@@ -934,9 +939,14 @@ function chatListSectionPropsAreEqual(
 
 interface ChatListSectionProps {
   title: string
+  projectId?: string
   collapsible?: boolean
   collapsed?: boolean
   onToggleCollapsed?: () => void
+  hiddenCount?: number
+  expanded?: boolean
+  onToggleExpanded?: () => void
+  onNewProjectWorkspace?: (projectId: string) => void
   chats: Array<{
     id: string
     name: string | null
@@ -1006,9 +1016,14 @@ interface ChatListSectionProps {
 // Memoized Chat List Section component
 const ChatListSection = React.memo(function ChatListSection({
   title,
+  projectId,
   collapsible = false,
   collapsed = false,
   onToggleCollapsed,
+  hiddenCount = 0,
+  expanded = false,
+  onToggleExpanded,
+  onNewProjectWorkspace,
   chats,
   selectedChatId,
   focusedChatIndex,
@@ -1050,7 +1065,7 @@ const ChatListSection = React.memo(function ChatListSection({
 }: ChatListSectionProps) {
   const { t } = useI18n()
 
-  if (chats.length === 0) return null
+  if (chats.length === 0 && !collapsible) return null
 
   // Pre-compute global indices map to avoid O(n²) findIndex in map()
   const globalIndexMap = useMemo(() => {
@@ -1062,22 +1077,48 @@ const ChatListSection = React.memo(function ChatListSection({
   return (
     <>
       {collapsible ? (
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
+        <div
           className={cn(
-            "flex h-5 w-full items-center gap-1 mb-1 text-left text-xs font-medium text-muted-foreground hover:text-foreground transition-colors rounded-sm",
+            "flex h-5 w-full items-center gap-1 mb-1",
             isMultiSelectMode ? "pl-3" : "pl-2",
           )}
         >
-          <IconChevronDown
-            className={cn(
-              "h-3 w-3 shrink-0 transition-transform",
-              collapsed && "-rotate-90",
-            )}
-          />
-          <span className="truncate whitespace-nowrap">{title}</span>
-        </button>
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            className="flex min-w-0 flex-1 items-center gap-1 text-left text-xs font-medium text-muted-foreground hover:text-foreground transition-colors rounded-sm"
+          >
+            <IconChevronDown
+              className={cn(
+                "h-3 w-3 shrink-0 transition-transform",
+                collapsed && "-rotate-90",
+              )}
+            />
+            <span className="truncate whitespace-nowrap">{title}</span>
+          </button>
+          {projectId && onNewProjectWorkspace && (
+            <Tooltip delayDuration={500}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onNewProjectWorkspace(projectId)
+                  }}
+                  className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  aria-label={t("sidebar.newWorkspaceInProject", {
+                    project: title,
+                  })}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {t("sidebar.newWorkspaceInProject", { project: title })}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       ) : (
         <div
           className={cn(
@@ -1176,6 +1217,20 @@ const ChatListSection = React.memo(function ChatListSection({
               />
             )
           })}
+          {onToggleExpanded && hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={onToggleExpanded}
+              className={cn(
+                "mt-0.5 h-6 w-full rounded-md text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+                isMultiSelectMode ? "px-3" : "px-2",
+              )}
+            >
+              {expanded
+                ? t("sidebar.showFewerWorkspaces")
+                : t("sidebar.showMoreWorkspaces", { count: hiddenCount })}
+            </button>
+          )}
         </div>
       )}
     </>
@@ -1627,6 +1682,8 @@ export function AgentsSidebar({
   onToggleSidebar,
   isMobileFullscreen = false,
   onChatSelect,
+  onNewWorkspaceProjectPicker,
+  isNewWorkspaceProjectPickerPending = false,
 }: AgentsSidebarProps) {
   const { t } = useI18n()
   const [selectedChatId, setSelectedChatId] = useAtom(selectedAgentChatIdAtom)
@@ -1702,6 +1759,9 @@ export function AgentsSidebar({
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(
     new Set(),
   )
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(
+    new Set(),
+  )
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Agent name tooltip refs (for truncated names) - using DOM manipulation to avoid re-renders
@@ -1733,7 +1793,7 @@ export function AgentsSidebar({
   const showWorkspaceIcon = useAtomValue(showWorkspaceIconAtom)
 
   // Desktop: use selectedProject instead of teams
-  const [selectedProject] = useAtom(selectedProjectAtom)
+  const [selectedProject, setSelectedProject] = useAtom(selectedProjectAtom)
   const activeSubChatId = useAgentSubChatStore((state) =>
     state.chatId === selectedChatId ? state.activeSubChatId : null,
   )
@@ -2168,6 +2228,18 @@ export function AgentsSidebar({
     })
   }, [])
 
+  const handleToggleProjectExpanded = useCallback((projectId: string) => {
+    setExpandedProjectIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(projectId)) {
+        next.delete(projectId)
+      } else {
+        next.add(projectId)
+      }
+      return next
+    })
+  }, [])
+
   // Rename mutation
   const renameChatMutation = trpc.chats.rename.useMutation({
     onSuccess: () => {
@@ -2331,11 +2403,29 @@ export function AgentsSidebar({
 
       const groups = [...groupsByProject.values()].sort(
         (a, b) => b.updatedAtMs - a.updatedAtMs,
-      )
+      ).map((group) => {
+        const isCollapsed = collapsedProjectIds.has(group.projectId)
+        const isExpanded = expandedProjectIds.has(group.projectId)
+        const visibleChats = isCollapsed
+          ? []
+          : isExpanded
+            ? group.chats
+            : group.chats.slice(0, PROJECT_GROUP_VISIBLE_LIMIT)
+
+        return {
+          ...group,
+          visibleChats,
+          hiddenCount: Math.max(
+            0,
+            group.chats.length - PROJECT_GROUP_VISIBLE_LIMIT,
+          ),
+          isExpanded,
+        }
+      })
       const visualOrder = [
         ...quickChats,
         ...pinned,
-        ...groups.flatMap((group) => group.chats),
+        ...groups.flatMap((group) => group.visibleChats),
       ]
 
       return {
@@ -2344,7 +2434,19 @@ export function AgentsSidebar({
         projectGroups: groups,
         filteredChats: visualOrder,
       }
-    }, [searchQuery, agentChats, pinnedChatIds, projectsMap, t])
+    }, [
+      searchQuery,
+      agentChats,
+      pinnedChatIds,
+      projectsMap,
+      collapsedProjectIds,
+      expandedProjectIds,
+      t,
+    ])
+  const hasChatSections =
+    quickChatAgents.length > 0 ||
+    pinnedAgents.length > 0 ||
+    projectGroups.length > 0
 
   // Handle bulk archive of selected chats
   const handleBulkArchive = useCallback(() => {
@@ -2561,6 +2663,52 @@ export function AgentsSidebar({
       onChatSelect()
     }
   }
+
+  const handleOpenRepository = useCallback(async () => {
+    triggerHaptic("light")
+    await onNewWorkspaceProjectPicker?.()
+  }, [onNewWorkspaceProjectPicker, triggerHaptic])
+
+  const handleNewProjectWorkspace = useCallback(
+    (projectId: string) => {
+      const project = projects?.find((item) => item.id === projectId)
+      if (!project) return
+
+      triggerHaptic("light")
+      setSelectedProject({
+        id: project.id,
+        name: project.name,
+        path: project.path,
+        gitRemoteUrl: project.gitRemoteUrl,
+        gitProvider: project.gitProvider as
+          | "github"
+          | "gitlab"
+          | "bitbucket"
+          | null
+          | undefined,
+        gitOwner: project.gitOwner,
+        gitRepo: project.gitRepo,
+      })
+      setSelectedChatId(null)
+      setSelectedDraftId(null)
+      setShowNewChatForm(true)
+      setDesktopView(null)
+      if (isMobileFullscreen && onChatSelect) {
+        onChatSelect()
+      }
+    },
+    [
+      isMobileFullscreen,
+      onChatSelect,
+      projects,
+      setDesktopView,
+      setSelectedChatId,
+      setSelectedDraftId,
+      setSelectedProject,
+      setShowNewChatForm,
+      triggerHaptic,
+    ],
+  )
 
   const handleChatClick = useCallback(
     async (chatId: string, e?: React.MouseEvent, globalIndex?: number) => {
@@ -3198,7 +3346,7 @@ export function AgentsSidebar({
           )}
 
           {/* Chats Section */}
-          {filteredChats.length > 0 ? (
+          {hasChatSections ? (
             <div className={cn("mb-4", isMultiSelectMode ? "px-0" : "-mx-1")}>
               {/* Quick chat section */}
               <ChatListSection
@@ -3287,16 +3435,54 @@ export function AgentsSidebar({
               />
 
               {/* Project groups */}
+              {projectGroups.length > 0 && (
+                <div
+                  className={cn(
+                    "mb-1 flex h-6 items-center justify-between",
+                    isMultiSelectMode ? "pl-3 pr-1" : "pl-2 pr-1",
+                  )}
+                >
+                  <h3 className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                    {t("sidebar.projects")}
+                  </h3>
+                  {onNewWorkspaceProjectPicker && (
+                    <Tooltip delayDuration={500}>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={handleOpenRepository}
+                          disabled={isNewWorkspaceProjectPickerPending}
+                          className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:pointer-events-none disabled:opacity-50"
+                          aria-label={t("sidebar.openRepository")}
+                        >
+                          <FolderPlus className="h-3.5 w-3.5" />
+                          <span>{t("sidebar.openRepository")}</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {t("sidebar.openRepository")}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+              )}
               {projectGroups.map((group) => (
                 <ChatListSection
                   key={group.projectId}
                   title={group.title}
+                  projectId={group.projectId}
                   collapsible
                   collapsed={collapsedProjectIds.has(group.projectId)}
                   onToggleCollapsed={() =>
                     handleToggleProjectCollapse(group.projectId)
                   }
-                  chats={group.chats}
+                  hiddenCount={group.hiddenCount}
+                  expanded={group.isExpanded}
+                  onToggleExpanded={() =>
+                    handleToggleProjectExpanded(group.projectId)
+                  }
+                  onNewProjectWorkspace={handleNewProjectWorkspace}
+                  chats={group.visibleChats}
                   selectedChatId={selectedChatId}
                   focusedChatIndex={focusedChatIndex}
                   loadingChatIds={loadingChatIds}
