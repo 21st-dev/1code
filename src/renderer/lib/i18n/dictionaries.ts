@@ -2129,6 +2129,8 @@ export const en = {
   "quickChat.attachFolderTooltip": "Attach this quick chat to a local project",
   "quickChat.attachSuccess": "Quick chat attached to project",
   "quickChat.attachFailed": "Failed to attach project",
+  "quickChat.providerUnavailable":
+    "No supported runtime is available for quick chat.",
   "chat.branch.search": "Search branches...",
   "chat.branch.create": "Create",
   "chat.branch.empty": "No branches found.",
@@ -5362,6 +5364,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "quickChat.attachFolderTooltip": "把这个快速对话关联到本地项目",
   "quickChat.attachSuccess": "快速对话已关联到项目",
   "quickChat.attachFailed": "关联项目失败",
+  "quickChat.providerUnavailable": "没有可用于快速对话的受支持 runtime。",
   "chat.branch.search": "搜索分支...",
   "chat.branch.create": "创建",
   "chat.branch.empty": "没有找到分支。",
