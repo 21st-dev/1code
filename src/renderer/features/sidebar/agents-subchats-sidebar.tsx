@@ -79,7 +79,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../components/ui/alert-dialog"
-import { api } from "../../lib/mock-api"
+import { agentChatApi } from "../agents/lib/agent-chat-api"
 import { trpcClient } from "../../lib/trpc"
 import { toast } from "sonner"
 import { AgentsRenameSubChatDialog } from "../agents/components/agents-rename-subchat-dialog"
@@ -239,7 +239,7 @@ export function AgentsSubChatsSidebar({
   const previousChatId = useAtomValue(previousAgentChatIdAtom)
 
   // Fetch agent chats for navigation after archive
-  const { data: agentChats } = api.agents.getAgentChats.useQuery(
+  const { data: agentChats } = agentChatApi.agents.getAgentChats.useQuery(
     { teamId: selectedTeamId! },
     { enabled: !!selectedTeamId },
   )
@@ -656,7 +656,7 @@ export function AgentsSubChatsSidebar({
     }
   }, [parentChatId, setUndoStack])
 
-  const renameMutation = api.agents.renameSubChat.useMutation({
+  const renameMutation = agentChatApi.agents.renameSubChat.useMutation({
     // Note: store is updated optimistically in handleRenameSave, no need for onSuccess
     onError: (error) => {
       if (error.data?.code === "NOT_FOUND") {

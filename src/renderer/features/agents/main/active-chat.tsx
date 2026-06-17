@@ -72,7 +72,7 @@ import {
 import { useResolvedHotkeyDisplay } from "../../../lib/hotkeys"
 import { useI18n } from "../../../lib/i18n"
 import { appStore } from "../../../lib/jotai-store"
-import { api } from "../../../lib/mock-api"
+import { agentChatApi } from "../lib/agent-chat-api"
 import { trpc, trpcClient } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { isDesktopApp } from "../../../lib/utils/platform"
@@ -1773,7 +1773,7 @@ const ChatViewInner = memo(function ChatViewInner({
   }, [])
 
   // tRPC utils for cache invalidation
-  const utils = api.useUtils()
+  const utils = agentChatApi.useUtils()
 
   // Get sub-chat name from store
   const subChatName = useAgentSubChatStore(
@@ -1781,7 +1781,7 @@ const ChatViewInner = memo(function ChatViewInner({
   )
 
   // Mutation for renaming sub-chat
-  const renameSubChatMutation = api.agents.renameSubChat.useMutation({
+  const renameSubChatMutation = agentChatApi.agents.renameSubChat.useMutation({
     onError: (error) => {
       if (error.data?.code === "NOT_FOUND") {
         toast.error(t("agent.chat.toast.sendMessageBeforeRenaming"))
@@ -1826,7 +1826,7 @@ const ChatViewInner = memo(function ChatViewInner({
   const [subChatMode, setSubChatMode] = useAtom(subChatModeAtomFamily(subChatId))
 
   // Mutation for updating sub-chat mode in database
-  const updateSubChatModeMutation = api.agents.updateSubChatMode.useMutation({
+  const updateSubChatModeMutation = agentChatApi.agents.updateSubChatMode.useMutation({
     onSuccess: () => {
       // Invalidate to refetch with new mode from DB
       utils.agents.getAgentChat.invalidate({ chatId: parentChatId })
@@ -4753,15 +4753,15 @@ export function ChatView({
   }, [activeSubChatId, setSubChatUnseenChanges])
 
   // tRPC utils for optimistic cache updates
-  const utils = api.useUtils()
+  const utils = agentChatApi.useUtils()
   const utilsRef = useRef(utils)
   utilsRef.current = utils
 
   // tRPC mutations for renaming
-  const renameSubChatMutation = api.agents.renameSubChat.useMutation()
-  const renameChatMutation = api.agents.renameChat.useMutation()
+  const renameSubChatMutation = agentChatApi.agents.renameSubChat.useMutation()
+  const renameChatMutation = agentChatApi.agents.renameChat.useMutation()
   const generateSubChatNameMutation =
-    api.agents.generateSubChatName.useMutation()
+    agentChatApi.agents.generateSubChatName.useMutation()
   const renameSubChatMutationRef = useRef(renameSubChatMutation)
   const renameChatMutationRef = useRef(renameChatMutation)
   const generateSubChatNameMutationRef = useRef(generateSubChatNameMutation)
@@ -4779,7 +4779,7 @@ export function ChatView({
 
   // Fetch local chat data only. Hosted sandbox chats are not part of the
   // desktop local-first flow.
-  const { data: localAgentChat, isLoading: isLocalLoading } = api.agents.getAgentChat.useQuery(
+  const { data: localAgentChat, isLoading: isLocalLoading } = agentChatApi.agents.getAgentChat.useQuery(
     { chatId },
     { enabled: !!chatId },
   )

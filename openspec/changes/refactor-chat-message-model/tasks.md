@@ -62,19 +62,19 @@
 
 ## 4. Phase 2 — retire the compat shim (single owner)
 
-- [ ] 4.1 Add a typed chat adapter (or inline typed tRPC + normalizer) for the
+- [x] 4.1 Add a typed chat adapter (or inline typed tRPC + normalizer) for the
   chat surface currently behind `api.agents.*` / `api.useUtils`.
-- [ ] 4.2 Migrate the call sites to the typed owner: `agents-content.tsx`,
+- [x] 4.2 Migrate the call sites to the typed owner: `agents-content.tsx`,
   `active-chat.tsx`, `agent-diff-view.tsx`, `sub-chat-selector.tsx`,
   `agents-subchats-sidebar.tsx`.
-- [ ] 4.3 Inventory web-only stub consumers and move the genuine stubs
+- [x] 4.3 Inventory web-only stub consumers and move the genuine stubs
   (stripe/user/claudeCode/agentInvites/repositorySandboxes) to
   `src/renderer/lib/web-stubs.ts` with identical return shapes; delete unused.
-- [ ] 4.4 Delete `src/renderer/lib/mock-api.ts`; update `CLAUDE.md` and
+- [x] 4.4 Delete `src/renderer/lib/mock-api.ts`; update `CLAUDE.md` and
   `docs/OWNERSHIP_MAP.md` to point at the new owners (persisted-message normalizer
   = hydration owner; `runtime-event-state.ts` stays the live owner; main writers
   noted as read-side-governed, write-side adoption deferred).
-- [ ] 4.5 Add an `assertChatMessageModelOwner` assertion to
+- [x] 4.5 Add an `assertChatMessageModelOwner` assertion to
   `scripts/check-architecture-guards.mjs` that fails if `mock-api.ts` exists, if
   the persisted normalizer is exported from more than one module, or if any removed
   call-site import path reappears.

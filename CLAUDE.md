@@ -78,9 +78,11 @@ src/
     └── lib/
         ├── atoms/           # Global Jotai atoms
         ├── stores/          # Global Zustand stores
-        ├── trpc.ts          # Real tRPC client
-        └── mock-api.ts      # DEPRECATED - being replaced with real tRPC
+        └── trpc.ts          # Real tRPC client
 ```
+
+Chat hydration uses `src/shared/chat-message-normalizer.ts`; renderer chat
+hooks live in `src/renderer/features/agents/lib/agent-chat-api.ts`.
 
 ## Database (Drizzle ORM)
 
@@ -251,7 +253,6 @@ Automatic update production readiness depends on signing. macOS builds need Deve
 - tRPC routers structure
 
 **In Progress:**
-- Replacing `mock-api.ts` with real tRPC calls in renderer
 - ProjectSelector component (local folder picker)
 
 **Planned:**

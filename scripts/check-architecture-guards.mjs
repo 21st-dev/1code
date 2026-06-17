@@ -70,6 +70,7 @@ function assertOwnershipDocs() {
   const requiredSections = [
     "## Runtime Capability Truth",
     "## Runtime Chat UI Event State",
+    "## Renderer Chat Message Model And Hydration",
     "## Guard Decisions",
     "## Provider Credentials",
     "## Claude Desktop Chat Runtime",
@@ -175,11 +176,50 @@ function assertRuntimeEventStateOwner() {
   }
 }
 
+function assertChatMessageModelOwner() {
+  const normalizerOwner = "src/shared/chat-message-normalizer.ts"
+  const removedShim = "src/renderer/lib/mock-api.ts"
+  const sourceFiles = walkFiles("src", [".ts", ".tsx"])
+  const normalizerExportFiles = []
+
+  if (existsSync(path.join(repoRoot, removedShim))) {
+    fail(`${removedShim} must not exist; renderer chat data must use agent-chat-api plus the shared normalizer.`)
+  }
+
+  for (const absolutePath of sourceFiles) {
+    const filePath = relative(absolutePath)
+    const content = readFileSync(absolutePath, "utf8")
+
+    if (/from\s+["'][^"']*mock-api["']/.test(content)) {
+      fail(`${filePath} must not import the removed mock-api shim.`)
+    }
+
+    if (/\bexport\s+(?:function|const)\s+normalizePersistedChatMessages\b/.test(content)) {
+      normalizerExportFiles.push(filePath)
+    }
+  }
+
+  if (
+    normalizerExportFiles.length !== 1 ||
+    normalizerExportFiles[0] !== normalizerOwner
+  ) {
+    fail(
+      `normalizePersistedChatMessages must be exported only from ${normalizerOwner}; found ${normalizerExportFiles.join(", ") || "none"}.`,
+    )
+  }
+
+  const adapter = readText("src/renderer/features/agents/lib/agent-chat-api.ts")
+  if (!adapter.includes('from "../../../../shared/chat-message-normalizer"')) {
+    fail("agent-chat-api must hydrate persisted messages through src/shared/chat-message-normalizer.ts.")
+  }
+}
+
 assertOwnershipDocs()
 assertPackageScripts()
 assertRuntimeCapabilitySingleOwner()
 assertGuardDecisionSingleOwner()
 assertRuntimeEventStateOwner()
+assertChatMessageModelOwner()
 
 if (failures.length > 0) {
   console.error("Architecture guard failed:")

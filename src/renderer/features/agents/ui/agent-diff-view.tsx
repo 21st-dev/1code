@@ -77,7 +77,6 @@ import { getFileIconByExtension } from "../mentions/agents-file-mention"
 const useIsHydrated = () => true // Desktop is always hydrated
 
 import { useI18n } from "../../../lib/i18n"
-import { api } from "../../../lib/mock-api"
 import { trpcClient } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 export type DiffViewMode = "unified" | "split"

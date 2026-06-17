@@ -32,7 +32,7 @@ import {
 import { NewChatForm } from "../main/new-chat-form"
 import { KanbanView } from "../../kanban"
 import { ChatView } from "../main/active-chat"
-import { api } from "../../../lib/mock-api"
+import { agentChatApi } from "../lib/agent-chat-api"
 import { trpc } from "../../../lib/trpc"
 import { useIsMobile } from "../../../lib/hooks/use-mobile"
 import { AgentsSidebar } from "../../sidebar/agents-sidebar"
@@ -149,7 +149,7 @@ export function AgentsContent() {
   const selectedTeamImageUrl: string | undefined = undefined
 
   // Fetch agent chats for keyboard navigation and mobile view
-  const { data: agentChats } = api.agents.getAgentChats.useQuery(
+  const { data: agentChats } = agentChatApi.agents.getAgentChats.useQuery(
     { teamId: selectedTeamId! },
     { enabled: !!selectedTeamId },
   )
@@ -164,7 +164,7 @@ export function AgentsContent() {
   }, [projects])
 
   // Fetch current chat data for preview info
-  const { data: chatData } = api.agents.getAgentChat.useQuery(
+  const { data: chatData } = agentChatApi.agents.getAgentChat.useQuery(
     { chatId: selectedChatId! },
     { enabled: !!selectedChatId },
   )

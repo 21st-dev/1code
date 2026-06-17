@@ -45,7 +45,7 @@ import {
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu"
 import { InlineEdit } from "./inline-edit"
-import { api } from "../../../lib/mock-api"
+import { agentChatApi } from "../lib/agent-chat-api"
 import { toast } from "sonner"
 import { SearchCombobox } from "../../../components/ui/search-combobox"
 import { SubChatContextMenu } from "./sub-chat-context-menu"
@@ -380,7 +380,7 @@ export function SubChatSelector({
   const [editName, setEditName] = useState("")
   const [editLoading, setEditLoading] = useState(false)
 
-  const renameMutation = api.agents.renameSubChat.useMutation({
+  const renameMutation = agentChatApi.agents.renameSubChat.useMutation({
     onSuccess: (_, variables) => {
       // Update local store
       useAgentSubChatStore
