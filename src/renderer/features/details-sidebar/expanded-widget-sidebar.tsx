@@ -23,6 +23,7 @@ import { TerminalSection } from "./sections/terminal-section"
 import { DiffSection } from "./sections/diff-section"
 import { useI18n } from "@/lib/i18n"
 import type { ParsedDiffFile } from "./types"
+import type { AgentMode } from "../agents/atoms"
 
 interface ExpandedWidgetSidebarProps {
   /** Workspace/chat ID */
@@ -37,6 +38,10 @@ interface ExpandedWidgetSidebarProps {
   planRefetchTrigger?: number
   /** Active sub-chat ID for plan */
   activeSubChatId?: string | null
+  /** Current agent mode for plan actions */
+  mode?: AgentMode
+  /** Callback when "Build plan" is clicked */
+  onBuildPlan?: () => void
   /** Diff-related props */
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
   parsedFileDiffs?: ParsedDiffFile[] | null
@@ -49,6 +54,8 @@ export function ExpandedWidgetSidebar({
   planPath,
   planRefetchTrigger,
   activeSubChatId,
+  mode = "agent",
+  onBuildPlan,
   diffStats,
   parsedFileDiffs,
 }: ExpandedWidgetSidebarProps) {
@@ -103,6 +110,8 @@ export function ExpandedWidgetSidebar({
             planPath={planPath}
             refetchTrigger={planRefetchTrigger}
             isExpanded
+            mode={mode}
+            onApprovePlan={onBuildPlan}
           />
         )
       case "terminal":

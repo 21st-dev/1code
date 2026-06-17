@@ -1,18 +1,30 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useRef } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtom } from "jotai"
-import { IconSpinner, PlanIcon } from "@/components/ui/icons"
+import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
+import { cn } from "@/lib/utils"
+import {
+  CodeIcon,
+  IconSpinner,
+  MarkdownIcon,
+  PlanIcon,
+} from "@/components/ui/icons"
 import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
 import { trpc } from "@/lib/trpc"
 import { planContentCacheAtomFamily } from "../atoms"
 import { useI18n } from "@/lib/i18n"
+import type { AgentMode } from "../../agents/atoms"
+import { CopyButton } from "../../agents/ui/message-action-buttons"
 
 interface PlanSectionProps {
   chatId: string
   planPath: string | null
   refetchTrigger?: number
   isExpanded?: boolean
+  mode?: AgentMode
+  onApprovePlan?: () => void
 }
 
 /**
@@ -25,8 +37,11 @@ export const PlanSection = memo(function PlanSection({
   planPath,
   refetchTrigger,
   isExpanded = false,
+  mode = "agent",
+  onApprovePlan,
 }: PlanSectionProps) {
   const { t } = useI18n()
+  const [viewMode, setViewMode] = useState<"rendered" | "plaintext">("rendered")
   // Refs for scroll gradients (avoid re-renders)
   const contentRef = useRef<HTMLDivElement>(null)
   const topGradientRef = useRef<HTMLDivElement>(null)
@@ -129,6 +144,12 @@ export const PlanSection = memo(function PlanSection({
     return match ? match[1] : t("details.plan")
   }, [displayContent, t])
 
+  const handleToggleViewMode = useCallback(() => {
+    setViewMode((current) =>
+      current === "rendered" ? "plaintext" : "rendered",
+    )
+  }, [])
+
   // No plan path - don't render anything (parent should hide the widget)
   if (!planPath) {
     return null
@@ -161,6 +182,56 @@ export const PlanSection = memo(function PlanSection({
 
   return (
     <div className="flex flex-col">
+      {isExpanded && (
+        <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2">
+          <div className="min-w-0 text-sm font-medium truncate">
+            {planTitle}
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleViewMode}
+              className="h-6 w-6 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground"
+              aria-label={
+                viewMode === "rendered"
+                  ? t("agent.plan.showRawMarkdown")
+                  : t("agent.plan.showRendered")
+              }
+            >
+              <div className="relative h-4 w-4">
+                <MarkdownIcon
+                  className={cn(
+                    "absolute inset-0 h-4 w-4 transition-[opacity,transform] duration-200 ease-out",
+                    viewMode === "rendered"
+                      ? "opacity-100 scale-100"
+                      : "opacity-0 scale-75",
+                  )}
+                />
+                <CodeIcon
+                  className={cn(
+                    "absolute inset-0 h-4 w-4 transition-[opacity,transform] duration-200 ease-out",
+                    viewMode === "plaintext"
+                      ? "opacity-100 scale-100"
+                      : "opacity-0 scale-75",
+                  )}
+                />
+              </div>
+            </Button>
+            <CopyButton text={displayContent} />
+            {mode === "plan" && onApprovePlan && (
+              <Button
+                size="sm"
+                className="h-6 px-3 text-xs font-medium rounded-md transition-transform duration-150 active:scale-[0.97]"
+                onClick={onApprovePlan}
+              >
+                {t("agent.plan.approve")}
+                <Kbd className="ml-1.5 text-primary-foreground/70">⌘↵</Kbd>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       {/* Plan content with scroll gradients */}
       <div className="relative">
         {/* Top scroll gradient - matches header bg (muted/30) */}
@@ -179,7 +250,13 @@ export const PlanSection = memo(function PlanSection({
           className={`px-2 py-2 overflow-y-auto allow-text-selection ${isExpanded ? "" : "max-h-64"}`}
           data-plan-path={planPath}
         >
-          <ChatMarkdownRenderer content={displayContent} size="sm" />
+          {viewMode === "rendered" ? (
+            <ChatMarkdownRenderer content={displayContent} size="sm" />
+          ) : (
+            <pre className="text-sm font-mono whitespace-pre-wrap text-foreground/80 leading-relaxed">
+              {displayContent}
+            </pre>
+          )}
         </div>
 
         {/* Bottom scroll gradient */}

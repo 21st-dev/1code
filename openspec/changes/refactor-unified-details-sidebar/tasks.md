@@ -8,8 +8,8 @@
 - [ ] 1.3 Ensure `use-open-details-widget.ts` opens the Details tab and expanded widget path only; no legacy sidebar fallback remains after this phase.
 
 ## 2. Parity: Plan
-- [ ] 2.1 Bring Plan expanded rendering to parity with `agent-plan-sidebar.tsx`: plan title, loading/error/empty states, markdown render, plaintext/raw toggle, copy, and plan path/refetch behavior.
-- [ ] 2.2 Preserve the plan build/promote action, including plan-mode-only visibility and keyboard hint behavior.
+- [x] 2.1 Bring Plan expanded rendering to parity with `agent-plan-sidebar.tsx`: plan title, loading/error/empty states, markdown render, plaintext/raw toggle, copy, and plan path/refetch behavior.
+- [x] 2.2 Preserve the plan build/promote action, including plan-mode-only visibility and keyboard hint behavior.
 - [ ] 2.3 Remove legacy Plan sidebar rendering + open-state wiring only after 2.1 and 2.2 are verified (`active-chat.tsx:4400`–`:4404`, `agent-plan-sidebar.tsx`).
 
 ## 3. Parity: Diff

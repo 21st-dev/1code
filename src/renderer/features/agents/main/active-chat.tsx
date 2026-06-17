@@ -7214,6 +7214,8 @@ Make sure to preserve all functionality from both branches when resolving confli
               planPath={currentPlanPath}
               planRefetchTrigger={planEditRefetchTrigger}
               activeSubChatId={activeSubChatIdForPlan}
+              mode={currentMode}
+              onBuildPlan={handleApprovePlanFromSidebar}
               diffStats={diffStats}
               parsedFileDiffs={parsedFileDiffs}
             />
