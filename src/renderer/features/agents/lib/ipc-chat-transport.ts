@@ -1,9 +1,15 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
+import type { UIMessageChunk as ClaudeUIMessageChunk } from "../../../../main/lib/claude"
+import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attachments"
 import {
-  claudeLoginModalConfigAtom,
+  type LongTextAttachmentPart,
+  normalizeLongTextAttachmentPart,
+} from "../../../../shared/long-text-attachments"
+import {
   agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
+  claudeLoginModalConfigAtom,
   enableTasksAtom,
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
@@ -11,24 +17,27 @@ import {
   sessionInfoAtom,
   showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
+import { en, type TranslationKey, zhCN } from "../../../lib/i18n/dictionaries"
 import { appStore } from "../../../lib/jotai-store"
-import {
-  normalizeLongTextAttachmentPart,
-  type LongTextAttachmentPart,
-} from "../../../../shared/long-text-attachments"
-import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attachments"
 import { trpcClient } from "../../../lib/trpc"
-import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
+  approvedGuardedRunContractsAtom,
   compactingSubChatsAtom,
   MODEL_ID_MAP,
-  approvedGuardedRunContractsAtom,
   pendingAuthRetryMessageAtom,
   subChatClaudeModelSourceAtomFamily,
   subChatModelIdAtomFamily,
 } from "../atoms"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
+import {
+  type AiSdkTransportChunk,
+  getCanonicalMessageParts,
+  isDataImageMessagePart,
+  isFileContentMessagePart,
+  isTextMessagePart,
+  toAiSdkTransportChunk,
+} from "./chat-message-ui-adapter"
 import {
   applyRuntimeEventStateChunk,
   clearPendingUserQuestionForRuntimeChunk,
@@ -44,6 +53,22 @@ function tr(key: TranslationKey, values?: Record<string, string | number>) {
     const value = values?.[name]
     return value === undefined ? match : String(value)
   })
+}
+
+type ClaudeErrorDebugInfo = {
+  category?: string
+  [key: string]: unknown
+}
+
+function getClaudeErrorDebugInfo(
+  chunk: ClaudeUIMessageChunk,
+): ClaudeErrorDebugInfo | undefined {
+  if (chunk.type !== "error") {
+    return undefined
+  }
+
+  const debugInfo = (chunk as { debugInfo?: ClaudeErrorDebugInfo }).debugInfo
+  return debugInfo && typeof debugInfo === "object" ? debugInfo : undefined
 }
 
 // Error categories and their user-friendly messages
@@ -135,8 +160,6 @@ const ERROR_TOAST_CONFIG: Record<
   // SDK_ERROR and other unknown errors use chunk.errorText for description
 }
 
-type UIMessageChunk = any // Inferred from subscription
-
 type IPCChatTransportConfig = {
   chatId: string
   subChatId: string
@@ -165,7 +188,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
   async sendMessages(options: {
     messages: UIMessage[]
     abortSignal?: AbortSignal
-  }): Promise<ReadableStream<UIMessageChunk>> {
+  }): Promise<ReadableStream<AiSdkTransportChunk>> {
     // Extract prompt and images from last user message
     const lastUser = [...options.messages]
       .reverse()
@@ -250,7 +273,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               : {}),
           },
           {
-            onData: (chunk: UIMessageChunk) => {
+            onData: (chunk: ClaudeUIMessageChunk) => {
               chunkCount++
               lastChunkType = chunk.type
 
@@ -350,7 +373,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Handle errors - show toast to user FIRST before anything else
               if (chunk.type === "error") {
-                const category = chunk.debugInfo?.category || "UNKNOWN"
+                const debugInfo = getClaudeErrorDebugInfo(chunk)
+                const category = debugInfo?.category || "UNKNOWN"
 
                 // Detailed SDK error logging for debugging
                 console.error(`[SDK ERROR] ========================================`)
@@ -360,8 +384,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 console.error(`[SDK ERROR] SubChat ID: ${this.config.subChatId}`)
                 console.error(`[SDK ERROR] CWD: ${this.config.cwd}`)
                 console.error(`[SDK ERROR] Mode: ${currentMode}`)
-                if (chunk.debugInfo) {
-                  console.error(`[SDK ERROR] Debug info:`, JSON.stringify(chunk.debugInfo, null, 2))
+                if (debugInfo) {
+                  console.error(`[SDK ERROR] Debug info:`, JSON.stringify(debugInfo, null, 2))
                 }
                 console.error(`[SDK ERROR] Full chunk:`, JSON.stringify(chunk, null, 2))
                 console.error(`[SDK ERROR] ========================================`)
@@ -375,7 +399,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   `CWD: ${this.config.cwd}`,
                   `Mode: ${currentMode}`,
                   `Timestamp: ${new Date().toISOString()}`,
-                  chunk.debugInfo ? `Debug Info: ${JSON.stringify(chunk.debugInfo, null, 2)}` : null,
+                  debugInfo ? `Debug Info: ${JSON.stringify(debugInfo, null, 2)}` : null,
                 ].filter(Boolean).join("\n")
 
                 // Show toast based on error category
@@ -410,7 +434,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Try to enqueue, but don't crash if stream is already closed
               try {
-                controller.enqueue(chunk)
+                controller.enqueue(toAiSdkTransportChunk(chunk))
               } catch (e) {
                 // CRITICAL: Log when enqueue fails - this could explain missing chunks!
                 console.log(`[SD] R:ENQUEUE_ERR sub=${subId} type=${chunk.type} n=${chunkCount} err=${e}`)
@@ -458,32 +482,28 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     })
   }
 
-  async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
+  async reconnectToStream(): Promise<ReadableStream<AiSdkTransportChunk> | null> {
     return null // Not needed for local app
   }
 
   private extractText(msg: UIMessage | undefined): string {
     if (!msg) return ""
-    if (msg.parts) {
-      const textParts: string[] = []
-      const fileContents: string[] = []
 
-      for (const p of msg.parts) {
-        const partType = (p as any).type as string
-        if (partType === "text" && (p as any).text) {
-          textParts.push((p as any).text)
-        } else if (partType === "file-content") {
-          // Hidden file content - add to prompt but not displayed in UI
-          const fc = p as any
-          const fileName = fc.filePath?.split("/").pop() || fc.filePath || "file"
-          fileContents.push(`\n--- ${fileName} ---\n${fc.content}`)
-        }
+    const textParts: string[] = []
+    const fileContents: string[] = []
+
+    for (const part of getCanonicalMessageParts(msg)) {
+      if (isTextMessagePart(part)) {
+        textParts.push(part.text)
+      } else if (isFileContentMessagePart(part)) {
+        // Hidden file content - add to prompt but not displayed in UI
+        const fileName =
+          part.filePath.split("/").pop() || part.filePath || "file"
+        fileContents.push(`\n--- ${fileName} ---\n${part.content}`)
       }
-
-      // Combine text and file contents
-      return textParts.join("\n") + fileContents.join("")
     }
-    return ""
+
+    return textParts.join("\n") + fileContents.join("")
   }
 
   /**
@@ -491,11 +511,11 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
    * Looks for parts with type "data-image" that have base64Data
    */
   private extractImages(msg: UIMessage | undefined): ImageAttachment[] {
-    if (!msg || !msg.parts) return []
+    if (!msg) return []
 
     const images: ImageAttachment[] = []
 
-    for (const part of msg.parts) {
+    for (const part of getCanonicalMessageParts(msg)) {
       const attachment = normalizeChatImageAttachmentPart(part)
       if (attachment) {
         images.push({
@@ -512,13 +532,12 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
       }
 
       // Check for data-image parts with base64 data
-      if (part.type === "data-image" && (part as any).data) {
-        const data = (part as any).data
-        if (data.base64Data && data.mediaType) {
+      if (isDataImageMessagePart(part)) {
+        if (part.data.base64Data && part.data.mediaType) {
           images.push({
-            base64Data: data.base64Data,
-            mediaType: data.mediaType,
-            filename: data.filename,
+            base64Data: part.data.base64Data,
+            mediaType: part.data.mediaType,
+            filename: part.data.filename,
           })
         }
       }
@@ -530,9 +549,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
   private extractLongTextAttachments(
     msg: UIMessage | undefined
   ): LongTextAttachmentPart[] {
-    if (!msg?.parts) return []
-
-    return msg.parts.flatMap((part) => {
+    return getCanonicalMessageParts(msg).flatMap((part) => {
       const attachment = normalizeLongTextAttachmentPart(part)
       return attachment ? [attachment] : []
     })

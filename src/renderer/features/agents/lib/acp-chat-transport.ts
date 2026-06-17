@@ -1,12 +1,12 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
 import { normalizeAgentChatMetadataModel } from "../../../../shared/agent-chat-provider"
+import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attachments"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import {
-  normalizeLongTextAttachmentPart,
   type LongTextAttachmentPart,
+  normalizeLongTextAttachmentPart,
 } from "../../../../shared/long-text-attachments"
-import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attachments"
 import {
   parseProviderProfileSource,
   providerProfileSource,
@@ -17,9 +17,9 @@ import {
   codexOnboardingCompletedAtom,
   sessionInfoAtom,
 } from "../../../lib/atoms"
+import { en, type TranslationKey, zhCN } from "../../../lib/i18n/dictionaries"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
-import { en, zhCN, type TranslationKey } from "../../../lib/i18n/dictionaries"
 import {
   approvedGuardedRunContractsAtom,
   pendingAuthRetryMessageAtom,
@@ -27,12 +27,19 @@ import {
   subChatCodexModelSourceAtomFamily,
   subChatCodexThinkingAtomFamily,
 } from "../atoms"
-import { CODEX_MODELS, type CodexThinkingLevel } from "./models"
 import { useAgentSubChatStore } from "../stores/sub-chat-store"
 import type { AgentMessageMetadata } from "../ui/agent-message-usage"
+import {
+  type AiSdkTransportChunk,
+  type CodexTransportChunk,
+  getCanonicalMessageParts,
+  isDataImageMessagePart,
+  isFileContentMessagePart,
+  isTextMessagePart,
+  toAiSdkTransportChunk,
+} from "./chat-message-ui-adapter"
+import { CODEX_MODELS, type CodexThinkingLevel } from "./models"
 import { applyRuntimeEventStateChunk } from "./runtime-event-state"
-
-type UIMessageChunk = any
 
 function tr(key: TranslationKey, values?: Record<string, string | number>) {
   const useZh =
@@ -157,7 +164,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
   async sendMessages(options: {
     messages: UIMessage[]
     abortSignal?: AbortSignal
-  }): Promise<ReadableStream<UIMessageChunk>> {
+  }): Promise<ReadableStream<AiSdkTransportChunk>> {
     const lastUser = [...options.messages]
       .reverse()
       .find((message) => message.role === "user")
@@ -261,7 +268,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
             ...(providerProfileId ? {} : { codexAuthMethod }),
           },
           {
-            onData: (chunk: UIMessageChunk) => {
+            onData: (chunk: CodexTransportChunk) => {
               if (chunk.type === "session-init") {
                 appStore.set(sessionInfoAtom, {
                   tools: chunk.tools || [],
@@ -354,8 +361,8 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
               )
 
               try {
-                const normalizedChunk = normalizeCodexStreamChunk(chunk) as UIMessageChunk
-                controller.enqueue(normalizedChunk)
+                const normalizedChunk = normalizeCodexStreamChunk(chunk)
+                controller.enqueue(toAiSdkTransportChunk(normalizedChunk))
               } catch {
                 // Stream already closed
               }
@@ -420,7 +427,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
     })
   }
 
-  async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
+  async reconnectToStream(): Promise<ReadableStream<AiSdkTransportChunk> | null> {
     return null
   }
 
@@ -435,19 +442,16 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
   private extractText(message: UIMessage | undefined): string {
     if (!message) return ""
 
-    if (!message.parts) return ""
-
     const textParts: string[] = []
     const fileContents: string[] = []
 
-    for (const part of message.parts) {
-      if (part.type === "text" && (part as any).text) {
-        textParts.push((part as any).text)
-      } else if ((part as any).type === "file-content") {
-        const filePart = part as any
+    for (const part of getCanonicalMessageParts(message)) {
+      if (isTextMessagePart(part)) {
+        textParts.push(part.text)
+      } else if (isFileContentMessagePart(part)) {
         const fileName =
-          filePart.filePath?.split("/").pop() || filePart.filePath || "file"
-        fileContents.push(`\n--- ${fileName} ---\n${filePart.content}`)
+          part.filePath.split("/").pop() || part.filePath || "file"
+        fileContents.push(`\n--- ${fileName} ---\n${part.content}`)
       }
     }
 
@@ -455,11 +459,11 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
   }
 
   private extractImages(message: UIMessage | undefined): ImageAttachment[] {
-    if (!message?.parts) return []
+    if (!message) return []
 
     const images: ImageAttachment[] = []
 
-    for (const part of message.parts) {
+    for (const part of getCanonicalMessageParts(message)) {
       const attachment = normalizeChatImageAttachmentPart(part)
       if (attachment) {
         images.push({
@@ -475,13 +479,12 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
         continue
       }
 
-      if (part.type === "data-image" && (part as any).data) {
-        const data = (part as any).data
-        if (data.base64Data && data.mediaType) {
+      if (isDataImageMessagePart(part)) {
+        if (part.data.base64Data && part.data.mediaType) {
           images.push({
-            base64Data: data.base64Data,
-            mediaType: data.mediaType,
-            filename: data.filename,
+            base64Data: part.data.base64Data,
+            mediaType: part.data.mediaType,
+            filename: part.data.filename,
           })
         }
       }
@@ -493,9 +496,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
   private extractLongTextAttachments(
     message: UIMessage | undefined
   ): LongTextAttachmentPart[] {
-    if (!message?.parts) return []
-
-    return message.parts.flatMap((part) => {
+    return getCanonicalMessageParts(message).flatMap((part) => {
       const attachment = normalizeLongTextAttachmentPart(part)
       return attachment ? [attachment] : []
     })

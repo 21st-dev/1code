@@ -81,14 +81,14 @@
 
 ## 5. Phase 3 — remove boundary casts
 
-- [ ] 5.1 Type `UIMessageChunk` in `ipc-chat-transport.ts` and
+- [x] 5.1 Type `UIMessageChunk` in `ipc-chat-transport.ts` and
   `acp-chat-transport.ts`; narrow part-union access instead of `(part as any)`.
   Add a typed transport-seam adapter that converts canonical ⇄ AI SDK `UIMessage`
   (canonical optional-parts/local-parts ↔ `UIMessage` required-parts), so local
   parts pass through opaquely and only the renderer interprets them.
-- [ ] 5.2 Remove `as any`/`@ts-ignore` at message seams in `message-store.ts` and
+- [x] 5.2 Remove `as any`/`@ts-ignore` at message seams in `message-store.ts` and
   `active-chat.tsx`, editing only type boundaries (no control-flow/render change).
-- [ ] 5.3 Verify no parallel normalization path remains: `mock-api.ts` gone, one
+- [x] 5.3 Verify no parallel normalization path remains: `mock-api.ts` gone, one
   hydration normalizer, one shared copy each of `normalizeCodexToolPart` /
   `normalizeAcpParts`, and `metadata`/state access is typed.
 

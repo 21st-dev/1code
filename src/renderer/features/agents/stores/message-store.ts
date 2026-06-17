@@ -5,6 +5,7 @@ import { atomFamily } from "jotai/utils"
 import type {
   CanonicalChatMessage,
   CanonicalChatMessagePart,
+  ChatMessageMetadata,
 } from "../../../../shared/chat-message"
 import { appStore } from "../../../lib/jotai-store"
 
@@ -177,7 +178,7 @@ interface MessageStructure {
   id: string
   role: "user" | "assistant" | "system"
   partsStructure: PartStructure[]
-  metadata?: any
+  metadata?: ChatMessageMetadata
 }
 
 // Cache for message structure
@@ -189,7 +190,7 @@ export const messageStructureAtomFamily = atomFamily((messageKey: string) =>
     if (!message) return null
 
     // Build structure without text content
-    const partsStructure: PartStructure[] = (message.parts || []).map((part: any) => {
+    const partsStructure: PartStructure[] = (message.parts || []).map((part) => {
       const structure: PartStructure = {
         type: part.type,
       }
@@ -488,7 +489,7 @@ export const isFirstUserMessageAtomFamily = atomFamily((userMsgId: string) =>
 
 type RollbackLookupMessage = {
   role: "user" | "assistant" | "system"
-  metadata?: any
+  metadata?: ChatMessageMetadata
   parts?: MessagePart[]
 }
 
@@ -528,7 +529,7 @@ export function findRollbackTargetSdkUuidForUserIndex(
   }
 
   // 3) No compact after target assistant: allow rollback only if target has SDK UUID.
-  const sdkUuid = (targetAssistantMessage.metadata as any)?.sdkMessageUuid
+  const sdkUuid = targetAssistantMessage.metadata?.sdkMessageUuid
   return typeof sdkUuid === "string" && sdkUuid.length > 0 ? sdkUuid : null
 }
 
@@ -693,10 +694,10 @@ export const messageTokenDataAtom = atom((get) => {
   const lastId = ids[ids.length - 1]
   const lastMsg = lastId ? get(messageAtomFamily(getPerChatMessageKey(subChatId, lastId))) : null
   // Note: metadata has flat structure (metadata.outputTokens), not nested (metadata.usage.outputTokens)
-  const lastMsgOutputTokens = (lastMsg?.metadata as any)?.outputTokens || 0
-  const lastMsgParts = (lastMsg as any)?.parts as Array<{ type?: string; state?: string }> | undefined
+  const lastMsgOutputTokens = lastMsg?.metadata?.outputTokens || 0
+  const lastMsgParts = lastMsg?.parts
   const lastPart = lastMsgParts?.[lastMsgParts.length - 1]
-  const lastMsgPartsKey = `${lastMsgParts?.length ?? 0}:${lastPart?.type ?? ""}:${(lastPart as any)?.state ?? ""}`
+  const lastMsgPartsKey = `${lastMsgParts?.length ?? 0}:${lastPart?.type ?? ""}:${lastPart?.state ?? ""}`
 
   const cached = tokenDataCacheByChat.get(subChatId)
 
@@ -716,7 +717,7 @@ export const messageTokenDataAtom = atom((get) => {
   let startIndex = 0
   for (let i = 0; i < ids.length; i++) {
     const msg = get(messageAtomFamily(getPerChatMessageKey(subChatId, ids[i]!)))
-    const parts = (msg as any)?.parts as Array<{ type?: string; state?: string }> | undefined
+    const parts = msg?.parts
     if (
       parts?.some(
         (part) =>
@@ -736,7 +737,7 @@ export const messageTokenDataAtom = atom((get) => {
   let reasoningTokens = 0
   for (let i = startIndex; i < ids.length; i++) {
     const msg = get(messageAtomFamily(getPerChatMessageKey(subChatId, ids[i]!)))
-    const metadata = msg?.metadata as any
+    const metadata = msg?.metadata
     // Note: metadata has flat structure from transform.ts (metadata.inputTokens, metadata.outputTokens)
     // Extended fields like cacheReadInputTokens are not currently in MessageMetadata type
     if (metadata) {
@@ -793,6 +794,18 @@ const previousMessageState = new Map<string, {
   lastPartInputJson: string | undefined
   metadataJson: string | undefined
 }>()
+
+function cloneMessagePart(part: MessagePart): MessagePart {
+  const clonedPart = { ...part }
+  if (
+    part.input &&
+    typeof part.input === "object" &&
+    !Array.isArray(part.input)
+  ) {
+    clonedPart.input = { ...(part.input as Record<string, unknown>) }
+  }
+  return clonedPart
+}
 
 function hasMessageChanged(subChatId: string, msgId: string, msg: Message): boolean {
   const cacheKey = `${subChatId}:${msgId}`
@@ -938,7 +951,7 @@ export const syncMessagesWithStatusAtom = atom(
         // Deep clone message with new parts array and new part objects
         const clonedMsg = {
           ...msg,
-          parts: msg.parts?.map((part: any) => ({ ...part, input: part.input ? { ...part.input } : undefined })),
+          parts: msg.parts?.map(cloneMessagePart),
         }
         set(messageAtomFamily(messageKey), clonedMsg)
       }

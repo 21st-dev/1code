@@ -58,7 +58,14 @@ import {
   inferAgentChatProviderFromMessages,
   type AgentChatProvider,
 } from "../../../../shared/agent-chat-provider"
+import type {
+  CanonicalChatMessage,
+  CanonicalChatMessagePart,
+} from "../../../../shared/chat-message"
+import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attachments"
+import { normalizePersistedChatMessages } from "../../../../shared/chat-message-normalizer"
 import type { FileStatus } from "../../../../shared/changes-types"
+import { normalizeLongTextAttachmentPart } from "../../../../shared/long-text-attachments"
 import { isProviderProfileSource } from "../../../../shared/provider-profile-types"
 import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { trackMessageSent } from "../../../lib/analytics"
@@ -164,6 +171,10 @@ import { useTextContextSelection } from "../hooks/use-text-context-selection"
 import { useToggleFocusOnCmdEsc } from "../hooks/use-toggle-focus-on-cmd-esc"
 import { useWorkspaceDiffFetch } from "../hooks/use-workspace-diff-fetch"
 import { ACPChatTransport } from "../lib/acp-chat-transport"
+import {
+  getCanonicalMessageParts,
+  isDataImageMessagePart,
+} from "../lib/chat-message-ui-adapter"
 import { formatHistoryForContext } from "../lib/export-chat"
 import {
   clearSubChatDraft,
@@ -237,6 +248,47 @@ function useStableCallback<T extends (...args: any[]) => any>(callback: T): T {
   const callbackRef = useRef(callback)
   callbackRef.current = callback
   return useCallback(((...args: Parameters<T>) => callbackRef.current(...args)) as T, [])
+}
+
+function getPartInputRecord(
+  part: CanonicalChatMessagePart,
+): Record<string, unknown> | null {
+  return part.input && typeof part.input === "object" && !Array.isArray(part.input)
+    ? (part.input as Record<string, unknown>)
+    : null
+}
+
+function getPartInputString(
+  part: CanonicalChatMessagePart,
+  key: string,
+): string | null {
+  const input = getPartInputRecord(part)
+  const value = input?.[key]
+  return typeof value === "string" ? value : null
+}
+
+function isPendingAskUserQuestionPart(part: CanonicalChatMessagePart): boolean {
+  const input = getPartInputRecord(part)
+  return (
+    part.type === "tool-AskUserQuestion" &&
+    part.state !== "output-available" &&
+    part.state !== "output-error" &&
+    part.state !== "result" &&
+    Array.isArray(input?.questions)
+  )
+}
+
+function isAnsweredAskUserQuestionPart(
+  part: CanonicalChatMessagePart,
+  toolUseId: string,
+): boolean {
+  return (
+    part.type === "tool-AskUserQuestion" &&
+    part.toolCallId === toolUseId &&
+    (part.state === "output-available" ||
+      part.state === "output-error" ||
+      part.state === "result")
+  )
 }
 // import { selectedTeamIdAtom } from "@/lib/atoms/team"
 const selectedTeamIdAtom = atom<string | null>(null)
@@ -2411,14 +2463,9 @@ const ChatViewInner = memo(function ChatViewInner({
   // This handles: 1) restoring on chat switch, 2) clearing when question is answered/timed out
   useEffect(() => {
     // Check if there's a pending AskUserQuestion in the last assistant message
-    const pendingQuestionPart = lastAssistantMessage?.parts?.find(
-      (part: any) =>
-        part.type === "tool-AskUserQuestion" &&
-        part.state !== "output-available" &&
-        part.state !== "output-error" &&
-        part.state !== "result" &&
-        part.input?.questions,
-    ) as any | undefined
+    const pendingQuestionPart = getCanonicalMessageParts(lastAssistantMessage).find(
+      isPendingAskUserQuestionPart,
+    )
 
 
     // Helper to clear pending question for this subChat
@@ -2439,13 +2486,9 @@ const ChatViewInner = memo(function ChatViewInner({
       // But if the question in messages is already answered, clear the atom
       if (!pendingQuestionPart) {
         // Check if the specific toolUseId is now answered
-        const answeredPart = lastAssistantMessage?.parts?.find(
-          (part: any) =>
-            part.type === "tool-AskUserQuestion" &&
-            part.toolCallId === pendingQuestions.toolUseId &&
-            (part.state === "output-available" ||
-              part.state === "output-error" ||
-              part.state === "result"),
+        const answeredPart = getCanonicalMessageParts(lastAssistantMessage).find(
+          (part) =>
+            isAnsweredAskUserQuestionPart(part, pendingQuestions.toolUseId),
         )
         if (answeredPart) {
           clearPendingQuestion()
@@ -2791,13 +2834,14 @@ const ChatViewInner = memo(function ChatViewInner({
     // Count completed plan Edits
     let completedPlanEdits = 0
     for (const msg of messages) {
-      if (msg.role !== "assistant" || !(msg as any).parts) continue
-      for (const part of (msg as any).parts as any[]) {
+      if (msg.role !== "assistant") continue
+      for (const part of getCanonicalMessageParts(msg)) {
+        const filePath = getPartInputString(part, "file_path")
         if (
           part.type === "tool-Edit" &&
           part.state !== "input-streaming" &&
           part.state !== "pending" &&
-          isPlanFile(part.input?.file_path || "")
+          isPlanFile(filePath || "")
         ) {
           completedPlanEdits++
         }
@@ -2934,10 +2978,9 @@ const ChatViewInner = memo(function ChatViewInner({
         }
       }
 
-      for (const part of userMsg.parts || []) {
-        const longTextPart = part as any
-        if (longTextPart?.type !== "long-text-attachment") continue
-        if (typeof longTextPart.localRef !== "string" || !longTextPart.localRef) {
+      for (const part of getCanonicalMessageParts(userMsg)) {
+        const longTextPart = normalizeLongTextAttachmentPart(part)
+        if (!longTextPart?.localRef) {
           continue
         }
 
@@ -2970,34 +3013,44 @@ const ChatViewInner = memo(function ChatViewInner({
         .trim()
 
       // Extract images from user message for restoring into input
-      const userMsgImages: UploadedImage[] = (userMsg.parts || [])
-        .filter(
-          (p: any) =>
-            (p.type === "data-image" && p.data) ||
-            (p.type === "attachment-image" && p.localRef),
-        )
-        .map((p: any) => ({
+      const userMsgImages: UploadedImage[] = getCanonicalMessageParts(userMsg).flatMap<UploadedImage>((part) => {
+        const imageAttachment = normalizeChatImageAttachmentPart(part)
+        if (imageAttachment) {
+          return [{
+            id: crypto.randomUUID(),
+            kind: "image" as const,
+            filename: imageAttachment.filename || "image",
+            url: "",
+            localRef: imageAttachment.localRef,
+            attachmentId: imageAttachment.attachmentId,
+            sizeBytes: imageAttachment.sizeBytes,
+            width: imageAttachment.width,
+            height: imageAttachment.height,
+            sha256: imageAttachment.sha256,
+            mediaType: imageAttachment.mediaType,
+            isLoading: true,
+            status: "ready" as const,
+          }]
+        }
+
+        if (!isDataImageMessagePart(part)) {
+          return []
+        }
+
+        const data = part.data
+        return [{
           id: crypto.randomUUID(),
           kind: "image" as const,
-          filename: p.type === "attachment-image" ? p.filename || "image" : p.data.filename || "image",
+          filename: data.filename || "image",
           url:
-            p.type === "attachment-image"
-              ? ""
-              : p.data.url || (p.data.base64Data && p.data.mediaType
-                ? `data:${p.data.mediaType};base64,${p.data.base64Data}`
-                : ""),
-          base64Data: p.type === "data-image" ? p.data.base64Data : undefined,
-          localRef: p.type === "attachment-image" ? p.localRef : undefined,
-          attachmentId:
-            p.type === "attachment-image" ? p.attachmentId : undefined,
-          sizeBytes: p.type === "attachment-image" ? p.sizeBytes : undefined,
-          width: p.type === "attachment-image" ? p.width : undefined,
-          height: p.type === "attachment-image" ? p.height : undefined,
-          sha256: p.type === "attachment-image" ? p.sha256 : undefined,
-          mediaType: p.type === "attachment-image" ? p.mediaType : p.data.mediaType,
-          isLoading: p.type === "attachment-image",
-          status: p.type === "attachment-image" ? "ready" as const : undefined,
-        }))
+            data.url || (data.base64Data && data.mediaType
+              ? `data:${data.mediaType};base64,${data.base64Data}`
+              : ""),
+          base64Data: data.base64Data,
+          mediaType: data.mediaType,
+          isLoading: false,
+        }]
+      })
 
       setIsRollingBack(true)
 
@@ -4800,7 +4853,7 @@ export function ChatView({
     mode?: "plan" | "agent" | null
     created_at?: Date | string | null
     updated_at?: Date | string | null
-    messages?: any
+    messages?: CanonicalChatMessage[] | string | null
     stream_id?: string | null
   }>
   const agentSubChatsRef = useRef(agentSubChats)
@@ -5532,16 +5585,18 @@ Make sure to preserve all functionality from both branches when resolving confli
 
     // Find last plan file path from active sub-chat only
     let lastPlanPath: string | null = null
-    const messages = (activeSubChat.messages as any[]) || []
+    const messages = Array.isArray(activeSubChat.messages)
+      ? activeSubChat.messages
+      : []
     for (const msg of messages) {
       if (msg.role !== "assistant") continue
-      const parts = msg.parts || []
-      for (const part of parts) {
+      for (const part of getCanonicalMessageParts(msg)) {
+        const filePath = getPartInputString(part, "file_path")
         if (
           part.type === "tool-Write" &&
-          isPlanFile(part.input?.file_path || "")
+          isPlanFile(filePath || "")
         ) {
-          lastPlanPath = part.input.file_path
+          lastPlanPath = filePath
         }
       }
     }
@@ -5556,21 +5611,14 @@ Make sure to preserve all functionality from both branches when resolving confli
       const override = subChatProviderOverrides[subChatId]
       if (override) return override
 
-      const subChat = ((agentChat as any)?.subChats || []).find(
-        (sc: any) => sc?.id === subChatId,
-      ) as { messages?: any } | undefined
+      const subChat = agentChat?.subChats?.find((sc) => sc?.id === subChatId)
       const rawMessages = subChat?.messages
 
-      let messages: any[] = []
+      let messages: CanonicalChatMessage[] = []
       if (Array.isArray(rawMessages)) {
         messages = rawMessages
       } else if (typeof rawMessages === "string") {
-        try {
-          const parsed = JSON.parse(rawMessages)
-          messages = Array.isArray(parsed) ? parsed : []
-        } catch {
-          messages = []
-        }
+        messages = normalizePersistedChatMessages(rawMessages)
       }
 
       return inferAgentChatProviderFromMessages(messages)
