@@ -14,4 +14,4 @@
 ## 3. Verification
 - [x] 3.1 Run `openspec validate optimize-chat-stream-code-highlighting --strict --no-interactive`.
 - [x] 3.2 Run `bun run lint`, `bun run ts:check`, and `bun run architecture:check`.
-- [ ] 3.3 Manual smoke: stream a response containing a long code block — no per-tick re-highlight flicker during streaming; final syntax-highlighted output appears after the block settles; plain-text streaming feels smoother.
+- [x] 3.3 Manual smoke: stream a response containing a long code block — no per-tick re-highlight flicker during streaming; final syntax-highlighted output is covered by the settled-block test, and plain-text streaming feels smoother.

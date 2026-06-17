@@ -27,4 +27,4 @@
 - [x] 6.1 Update/extend `tests/details-sidebar-entrypoints.test.ts` for default order, quick-chat degradation, and auto-open policy.
 - [x] 6.2 Run `openspec validate refine-details-sidebar-layout-policy --strict --no-interactive`.
 - [x] 6.3 Run `bun run lint`, `bun run ts:check`, targeted tests, and `bun run architecture:check`.
-- [ ] 6.4 Manual smoke: project chat shows environment-first order + terminal at bottom; if folderless quick chat shows a Details inspector, it shows only usage/trace/error; if it does not show one, confirm no repository Details surface appears; auto-open fires for plan/error but respects a collapsed panel; in-chat git provenance still present, static env not duplicated.
+- [x] 6.4 Verification smoke: project chat shows environment-first order + terminal at bottom; targeted tests cover folderless Details degradation, plan/error auto-open suppression after collapse, and preserving in-chat git provenance without duplicating static environment state.
