@@ -170,6 +170,8 @@ interface DetailsSidebarProps {
   worktreePath: string | null
   /** Terminal scope key shared with the full terminal renderer */
   terminalScopeKey?: string
+  terminalTabId?: string
+  terminalInitialCommands?: string[]
   /** Plan path for plan section */
   planPath: string | null
   /** Current agent mode (plan or agent) */
@@ -222,6 +224,8 @@ export function DetailsSidebar({
   chatId,
   worktreePath,
   terminalScopeKey,
+  terminalTabId,
+  terminalInitialCommands,
   planPath,
   mode,
   onBuildPlan,
@@ -530,6 +534,8 @@ export function DetailsSidebar({
                     scopeKey={terminalScopeKey}
                     cwd={worktreePath}
                     workspaceId={chatId}
+                    tabId={terminalTabId}
+                    initialCommands={terminalInitialCommands}
                     onExpand={onExpandTerminal}
                   />
                 )

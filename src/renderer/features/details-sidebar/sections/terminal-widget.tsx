@@ -33,6 +33,8 @@ interface TerminalWidgetProps {
   scopeKey?: string
   cwd: string
   workspaceId: string
+  tabId?: string
+  initialCommands?: string[]
   onExpand?: () => void
 }
 
@@ -67,6 +69,8 @@ export const TerminalWidget = memo(function TerminalWidget({
   scopeKey,
   cwd,
   workspaceId,
+  tabId,
+  initialCommands,
   onExpand,
 }: TerminalWidgetProps) {
   const { t } = useI18n()
@@ -355,6 +359,9 @@ export const TerminalWidget = memo(function TerminalWidget({
                 paneId={activeTerminal.paneId}
                 cwd={cwd}
                 workspaceId={workspaceId}
+                scopeKey={terminalKey}
+                tabId={tabId}
+                initialCommands={initialCommands}
                 initialCwd={cwd}
               />
             </motion.div>

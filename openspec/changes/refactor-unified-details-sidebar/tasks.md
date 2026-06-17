@@ -21,8 +21,8 @@
 - [ ] 3.6 Remove legacy Diff sidebar rendering + open-state wiring only after 3.1-3.5 are verified (`active-chat.tsx:4391`–`:4395`).
 
 ## 4. Parity: Terminal
-- [ ] 4.1 Bring Terminal expanded rendering to parity with `terminal-sidebar.tsx`: interactive session, tabs, new/close/rename, close others/right, theme background, and no duplicate terminal state.
-- [ ] 4.2 Preserve `scopeKey`, `tabId`, `initialCommands`, `cwd`, and `workspaceId` propagation so expanded and compact terminal views share the same terminal sessions.
+- [x] 4.1 Bring Terminal expanded rendering to parity with `terminal-sidebar.tsx`: interactive session, tabs, new/close/rename, close others/right, theme background, and no duplicate terminal state.
+- [x] 4.2 Preserve `scopeKey`, `tabId`, `initialCommands`, `cwd`, and `workspaceId` propagation so expanded and compact terminal views share the same terminal sessions.
 - [ ] 4.3 Preserve the existing bottom-panel terminal mode outside the right region, or explicitly document and approve any removal before implementation; it must not depend on `unifiedSidebarEnabledAtom`.
 - [ ] 4.4 Remove legacy Terminal side-peek surface + open-state wiring only after 4.1-4.3 are verified (`active-chat.tsx:4477`–`:4482`).
 

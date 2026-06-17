@@ -33,6 +33,8 @@ interface ExpandedWidgetSidebarProps {
   worktreePath: string | null
   /** Terminal scope key shared with the full terminal renderer */
   terminalScopeKey?: string
+  terminalTabId?: string
+  terminalInitialCommands?: string[]
   /** Plan path for plan section */
   planPath: string | null
   /** Plan refetch trigger */
@@ -53,6 +55,8 @@ export function ExpandedWidgetSidebar({
   chatId,
   worktreePath,
   terminalScopeKey,
+  terminalTabId,
+  terminalInitialCommands,
   planPath,
   planRefetchTrigger,
   activeSubChatId,
@@ -124,6 +128,8 @@ export function ExpandedWidgetSidebar({
             scopeKey={terminalScopeKey}
             cwd={worktreePath}
             workspaceId={chatId}
+            tabId={terminalTabId}
+            initialCommands={terminalInitialCommands}
             isExpanded
           />
         ) : null

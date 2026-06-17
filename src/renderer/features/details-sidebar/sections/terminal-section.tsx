@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { ReactNode } from "react"
 import { useAtom, useAtomValue } from "jotai"
 import { useTheme } from "next-themes"
 import { fullThemeDataAtom } from "@/lib/atoms"
@@ -25,9 +26,11 @@ interface TerminalSectionProps {
   scopeKey?: string
   cwd: string
   workspaceId: string
+  tabId?: string
+  initialCommands?: string[]
   isExpanded?: boolean
   /** Render header with tabs separately (for widget card integration) */
-  renderHeader?: (header: React.ReactNode) => void
+  renderHeader?: (header: ReactNode) => void
   /** Background color for terminal */
   onTerminalBgChange?: (bg: string) => void
 }
@@ -58,6 +61,8 @@ export function TerminalSection({
   scopeKey,
   cwd,
   workspaceId,
+  tabId,
+  initialCommands,
   isExpanded = false,
   renderHeader,
   onTerminalBgChange,
@@ -309,6 +314,9 @@ export function TerminalSection({
               paneId={activeTerminal.paneId}
               cwd={cwd}
               workspaceId={workspaceId}
+              scopeKey={terminalKey}
+              tabId={tabId}
+              initialCommands={initialCommands}
               initialCwd={cwd}
             />
           </motion.div>
@@ -349,6 +357,9 @@ export function TerminalSection({
               paneId={activeTerminal.paneId}
               cwd={cwd}
               workspaceId={workspaceId}
+              scopeKey={terminalKey}
+              tabId={tabId}
+              initialCommands={initialCommands}
               initialCwd={cwd}
             />
           </motion.div>
