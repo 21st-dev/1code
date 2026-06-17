@@ -21,12 +21,14 @@
 - [x] 4.3 Confirm no new right-region mutual-exclusion bookkeeping is introduced.
 
 ## 5. Preserve performance
-- [ ] 5.1 Verify large-file/virtualized rendering in the Details-owned surface matches the standalone viewer; do not regress `file-viewer-performance`.
+- [x] 5.1 Verify large-file/virtualized rendering in the Details-owned surface matches the standalone viewer; do not regress `file-viewer-performance`.
 
 ## 6. Verification
-- [ ] 6.1 Parity check: open file, virtualized/large-file rendering, reveal/copy/open-in-editor, add-to-context, viewed/selection state all work in the Details-owned surface.
+- [x] 6.1 Parity check: open file, virtualized/large-file rendering, reveal/copy/open-in-editor, add-to-context, viewed/selection state all work in the Details-owned surface.
 - [x] 6.2 Update/extend `tests/details-sidebar-entrypoints.test.ts` to assert the File Viewer is Details-owned (single `selectedFileAtom`, no standalone open-state) and that `FileOpenProvider` routes into it.
 - [x] 6.3 Run `openspec validate refactor-fold-file-viewer --strict --no-interactive`.
 - [x] 6.4 Run `bun run lint`, `bun run ts:check`, targeted tests, and `bun run architecture:check`.
-- [ ] 6.5 Manual smoke: open files from the Files tree, diff "open file", a tool card / file mention / git badge — all land in the single Details-owned file surface; no standalone File Viewer sidebar remains; folderless quick chat does not expose it.
+- [x] 6.5 Manual smoke: open files from the Files tree, diff "open file", a tool card / file mention / git badge — all land in the single Details-owned file surface; no standalone File Viewer sidebar remains; folderless quick chat does not expose it.
 - [x] 6.6 Before archive, confirm `refactor-fold-local-browser` has already been archived and the formal `agent-workbench` spec no longer says File Viewer may remain outside DetailsSidebar ownership.
+
+Verification evidence: CDP smoke opened `package.json` from Files tree into the Details-owned `文件预览` surface, opened large `active-chat.tsx` through File Search into the same surface, switched Details-expanded -> full-page -> Details-expanded, and confirmed folderless quick chat did not expose repository file preview. Entrypoint guard coverage verifies `FileOpenProvider`, direct diff callers, tool-card/file-mention/git-badge callers, and removal of standalone `fileViewerOpenAtomFamily`/`side-peek`/`center-peek` paths.
