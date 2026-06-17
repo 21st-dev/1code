@@ -59,6 +59,11 @@ The system SHALL distinguish runtime-neutral capabilities from runtime-specific 
 - **THEN** the system rejects or disables the request before provider work starts
 - **AND** returns a normalized unsupported-capability diagnostic
 
+#### Scenario: Folderless assistant is advertised as runtime-neutral
+- **WHEN** folderless quick chat is presented for both Claude and Codex
+- **THEN** both runtimes report supported assistant-tier pre-tool enforcement for web-only quick chat
+- **AND** any adapter path that cannot prove fail-closed assistant enforcement is gated out or labeled degraded before the user starts a quick chat with that runtime
+
 ### Requirement: Capability-Driven Runtime Surfaces
 The system SHALL gate runtime-dependent UI, CLI, job, and protocol behavior from capability manifests.
 

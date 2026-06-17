@@ -24,11 +24,18 @@ The system SHALL let users attach images to agent chat messages from supported l
 ### Requirement: Image-Only Messages
 The system SHALL allow image-only messages wherever user chat messages can be sent.
 
-#### Scenario: New chat image-only send
+#### Scenario: New project-backed chat image-only send
 - **WHEN** the new-chat input contains one or more ready image attachments and no text
 - **AND** a project is selected
 - **THEN** the send action is enabled
 - **AND** the created chat receives a user message containing the image attachments
+
+#### Scenario: New folderless quick-chat image-only send
+- **WHEN** the new-chat input contains one or more ready image attachments and no text
+- **AND** no project is selected
+- **AND** the selected runtime supports assistant attachment delivery
+- **THEN** the send action is enabled
+- **AND** the created quick chat receives a user message containing the image attachments
 
 #### Scenario: Active chat image-only send
 - **WHEN** an active chat input contains one or more ready image attachments and no text
