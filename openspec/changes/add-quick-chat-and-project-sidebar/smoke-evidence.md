@@ -75,3 +75,37 @@ Implemented a second enforcement layer for assistant quick chat:
 This closes the identified SDK auto-allow gap structurally. It is not recorded
 as a live Claude provider tool-call smoke unless a separate run demonstrates the
 model attempted `Read` and the SDK rejected it at runtime.
+
+## 2026-06-17 live Claude assistant deny smoke
+
+Reusable helper:
+
+- `scripts/smoke-quick-chat-assistant-deny.cjs`
+
+Command shape:
+
+```bash
+node_modules/electron/dist/Electron.app/Contents/MacOS/Electron \
+  scripts/smoke-quick-chat-assistant-deny.cjs \
+  --target-file=/etc/hosts
+```
+
+The smoke runs through the real Claude Agent SDK with the same assistant-tier
+configuration used by Locus: `permissionMode: "plan"`, the source-matched
+assistant `disallowedTools`, and a `canUseTool` handler that only allows web
+information tools. The prompt explicitly asks Claude to use file/shell tooling
+to read the target file.
+
+Result summary:
+
+| Check | Result |
+| --- | --- |
+| Denylist source drift | Passed: helper denylist matched `getClaudeAssistantSdkDisallowedTools()` source entries; `missing = []` |
+| SDK advertised tools | Passed: denied file/shell/runtime tools were absent from the SDK-advertised tool list |
+| Web tools retained | Passed: `WebFetch` and `WebSearch` remained advertised |
+| Denied tool use | Passed: no denied tool produced a `tool_use` block |
+| Model-visible result | Passed: Claude replied `NO_FILE_TOOL_AVAILABLE` when asked to read `/etc/hosts` |
+
+This is live provider evidence that the assistant SDK denylist removes known
+non-web Claude tools before the model turn, so the assistant path no longer
+depends solely on `canUseTool` being called for read-only tools.
