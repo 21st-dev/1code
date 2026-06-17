@@ -61,9 +61,10 @@ The system SHALL localize app-authored renderer copy in common product surfaces 
 
 #### Scenario: User navigates common product surfaces in Simplified Chinese
 - **WHEN** the user selects Simplified Chinese
-- **AND** opens onboarding, Settings, chat sidebars, chat controls, changes/diff controls, file viewer controls, terminal controls, or shared app dialogs
+- **AND** opens onboarding, Settings, chat sidebars, chat controls, changes/diff controls, file viewer controls, terminal controls, shared app dialogs, or Codex account/model selection controls
 - **THEN** migrated app-authored labels, buttons, placeholders, tooltips, dialog copy, and toast shells render in Simplified Chinese
 - **AND** professional developer-tool terms remain in English according to the terminology policy
+- **AND** provider names, model IDs, protocol names, URLs, commands, and raw diagnostics remain unchanged
 
 #### Scenario: User navigates common product surfaces in English
 - **WHEN** the user selects English
