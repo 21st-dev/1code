@@ -23,6 +23,20 @@ or UI helper.
   shared atom updates for AskUserQuestion and guarded-run events must go through
   the owner.
 
+## Renderer Chat Message Model And Hydration
+
+- Canonical model owner: `src/shared/chat-message.ts`
+- Persisted-message normalizer owner:
+  `src/shared/chat-message-normalizer.ts`
+- Consumers: renderer chat store, renderer chat view, chat transports, and
+  `src/main/lib/trpc/routers/chats-crud.ts` create-input validation.
+- Rule: persisted `sub_chats.messages` JSON must hydrate through the shared
+  normalizer and type against the shared canonical message model. Render-derived
+  grouping parts may live in the renderable union but must not become persisted
+  message schema. The live runtime-event-state path remains owned by
+  `runtime-event-state.ts`; main-process message writers may adopt the shared
+  type later without introducing a second definition.
+
 ## Guard Decisions
 
 - Canonical owner: `src/main/lib/agent-guard/decision.ts`

@@ -1,20 +1,20 @@
 ## 1. Ownership and guardrails
 
-- [ ] 1.1 Confirm canonical owners in `docs/OWNERSHIP_MAP.md` for renderer chat,
+- [x] 1.1 Confirm canonical owners in `docs/OWNERSHIP_MAP.md` for renderer chat,
   transports, and runtime-event-state before changing normalization or message
   types; add the new persisted-message-normalizer + canonical-model owner entries.
-- [ ] 1.2 Confirm no conflicting active OpenSpec change touches chat rendering,
+- [x] 1.2 Confirm no conflicting active OpenSpec change touches chat rendering,
   transports, or `architecture-ownership`.
 
 ## 2. Phase 0 — canonical message model (no behavior change)
 
-- [ ] 2.1 Inventory every message part `type` discriminant used in the renderer
+- [x] 2.1 Inventory every message part `type` discriminant used in the renderer
   (grep `assistant-message-item.tsx`, `active-chat.tsx`, the `ui/` tool renderers)
   AND the existing type sources — `AgentUserMessagePart` in `message-parts.ts` and
   the `chats-crud.ts` `initialMessageParts` zod union — and classify each as a
   **persisted** part, a **render-derived** part (e.g. `exploring-group`,
   `task-group`), or a message-level field. This classification is the input to 2.2.
-- [ ] 2.2 Add `src/shared/chat-message.ts` defining the canonical model as a local
+- [x] 2.2 Add `src/shared/chat-message.ts` defining the canonical model as a local
   EXTENSION of the AI SDK type, not the generic alone (because `UIMessage.parts` is
   required and `DataUIPart` is fixed to `` `data-${NAME}` ``):
   `Omit<UIMessage, "parts"> & { parts?: CanonicalChatMessagePart[]; createdAt?: string | Date; metadata?: ChatMessageMetadata }`.
@@ -27,20 +27,20 @@
   types); and `RenderableMessagePart` = `CanonicalChatMessagePart` ∪ render-derived
   parts from 2.1 (`exploring-group`, `task-group`). `createdAt` is `string | Date`
   (persistence writes an ISO string; do not type as `Date`).
-- [ ] 2.3 Make `src/shared/chat-message.ts` the single definition: export a matching
+- [x] 2.3 Make `src/shared/chat-message.ts` the single definition: export a matching
   zod schema, then rewire `chats-crud.ts` `initialMessageParts` and renderer
   `AgentUserMessagePart` to derive from the shared type/schema (no third copy).
   Confirm `src/shared/` does not import renderer/main code.
-- [ ] 2.4 Replace the loose `Message`/`MessagePart` in
+- [x] 2.4 Replace the loose `Message`/`MessagePart` in
   `src/renderer/features/agents/stores/message-store.ts` with the canonical model
   (re-export or import), keeping all logic unchanged.
-- [ ] 2.5 Add structural tests: every **persisted** part `type` from 2.1 is a member
+- [x] 2.5 Add structural tests: every **persisted** part `type` from 2.1 is a member
   of `CanonicalChatMessagePart`, and every **rendered** part `type` is a member of
   `RenderableMessagePart`; also assert an unregistered generic data part such as
   `data-foo` is rejected by the canonical persisted type/schema (so a future add
   can't silently drop a case, leak a render-only part into the persisted union, or
   reintroduce broad `DataUIPart` acceptance).
-- [ ] 2.6 `bun run ts:check` stays green after the type swap.
+- [x] 2.6 `bun run ts:check` stays green after the type swap.
 
 ## 3. Phase 1 — extract the normalizer with characterization tests
 

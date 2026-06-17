@@ -2,27 +2,14 @@
 
 import { atom } from "jotai"
 import { atomFamily } from "jotai/utils"
+import type {
+  CanonicalChatMessage,
+  CanonicalChatMessagePart,
+} from "../../../../shared/chat-message"
 import { appStore } from "../../../lib/jotai-store"
 
-// Types
-export interface MessagePart {
-  type: string
-  text?: string
-  toolCallId?: string
-  state?: string
-  input?: any
-  output?: any
-  result?: any
-  [key: string]: any
-}
-
-export interface Message {
-  id: string
-  role: "user" | "assistant" | "system"
-  parts?: MessagePart[]
-  metadata?: any
-  createdAt?: Date
-}
+export type MessagePart = CanonicalChatMessagePart
+export type Message = CanonicalChatMessage
 
 // ============================================================================
 // MESSAGE STORE - OPTIMIZED ARCHITECTURE

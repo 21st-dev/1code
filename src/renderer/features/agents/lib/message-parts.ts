@@ -2,15 +2,14 @@ import { MENTION_PREFIXES } from "../../mentions/types/core"
 import { utf8ToBase64 } from "../utils/base64"
 import type {
   LongTextAttachment,
-  LongTextAttachmentPart,
 } from "../../../../shared/long-text-attachments"
 import { toLongTextAttachmentPart } from "../../../../shared/long-text-attachments"
 import {
   isSupportedChatImageMediaType,
   toChatImageAttachmentPart,
   type ChatImageAttachment,
-  type ChatImageAttachmentPart,
 } from "../../../../shared/chat-attachments"
+import type { CanonicalAgentUserMessagePart } from "../../../../shared/chat-message"
 
 type SendableImage = {
   id?: string
@@ -56,29 +55,7 @@ type MentionPastedText = LongTextAttachment & {
   size: number
 }
 
-export type AgentUserMessagePart =
-  | ChatImageAttachmentPart
-  | {
-      type: "data-image"
-      data: {
-        url: string
-        mediaType?: string
-        filename?: string
-        base64Data?: string
-      }
-    }
-  | {
-      type: "data-file"
-      data: {
-        url: string
-        mediaType?: string
-        filename: string
-        size?: number
-      }
-    }
-  | { type: "text"; text: string }
-  | { type: "file-content"; filePath: string; content: string }
-  | LongTextAttachmentPart
+export type AgentUserMessagePart = CanonicalAgentUserMessagePart
 
 function sanitizePreview(preview: string, extraChars = "") {
   const escapedExtra = extraChars.replace(/[\\\]^]/g, "\\$&")

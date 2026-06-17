@@ -4,6 +4,7 @@ import {
   agentChatProviders,
   buildAgentChatMessageMetadata,
 } from "../../../../shared/agent-chat-provider"
+import { agentUserMessagePartSchema } from "../../../../shared/chat-message"
 import {
   trackWorkspaceArchived,
   trackWorkspaceCreated,
@@ -98,57 +99,7 @@ export const chatCrudProcedures = {
         modelSource: z.string().optional(),
         providerProfileId: z.string().nullable().optional(),
         initialMessage: z.string().optional(),
-        initialMessageParts: z
-          .array(
-            z.union([
-              z.object({ type: z.literal("text"), text: z.string() }),
-              z.object({
-                type: z.literal("data-image"),
-                data: z.object({
-                  url: z.string(),
-                  mediaType: z.string().optional(),
-                  filename: z.string().optional(),
-                  base64Data: z.string().optional(),
-                }),
-              }),
-              z.object({
-                type: z.literal("attachment-image"),
-                attachmentId: z.string(),
-                localRef: z.string(),
-                filename: z.string(),
-                mediaType: z.string(),
-                sizeBytes: z.number().int().nonnegative(),
-                width: z.number().optional(),
-                height: z.number().optional(),
-                sha256: z.string().optional(),
-              }),
-              z.object({
-                type: z.literal("data-file"),
-                data: z.object({
-                  url: z.string(),
-                  mediaType: z.string().optional(),
-                  filename: z.string(),
-                  size: z.number().optional(),
-                }),
-              }),
-              z.object({
-                type: z.literal("long-text-attachment"),
-                attachmentId: z.string(),
-                localRef: z.string(),
-                filename: z.string(),
-                byteLength: z.number().int().nonnegative(),
-                preview: z.string(),
-                kind: z.enum(["pasted", "chatHistory"]),
-              }),
-              // Hidden file content - sent to agent but not displayed in UI
-              z.object({
-                type: z.literal("file-content"),
-                filePath: z.string(),
-                content: z.string(),
-              }),
-            ]),
-          )
-          .optional(),
+        initialMessageParts: z.array(agentUserMessagePartSchema).optional(),
         baseBranch: z.string().optional(), // Branch to base the worktree off
         branchType: z.enum(["local", "remote"]).optional(), // Whether baseBranch is local or remote
         useWorktree: z.boolean().default(true), // If false, work directly in project dir
