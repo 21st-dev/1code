@@ -1348,7 +1348,7 @@ interface DiffSidebarRendererProps {
   gitStatus: { pushCount?: number; pullCount?: number; hasUpstream?: boolean; ahead?: number; behind?: number; staged?: any[]; unstaged?: any[]; untracked?: any[] } | undefined
   isGitStatusLoading: boolean
   isDiffSidebarOpen: boolean
-  diffDisplayMode: "side-peek" | "center-peek" | "full-page"
+  diffDisplayMode: "side-peek" | "center-peek" | "full-page" | "details-expanded"
   diffSidebarWidth: number
   handleReview: () => void
   isReviewing: boolean
@@ -1376,6 +1376,7 @@ interface DiffSidebarRendererProps {
   subChatsWithFiles: Array<{ id: string; name: string; filePaths: string[]; fileCount: number }>
   setDiffStats: React.Dispatch<React.SetStateAction<DiffStats>>
   onDiscardSuccess?: () => void
+  onClose?: () => void
 }
 
 const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
@@ -1422,29 +1423,33 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
   subChatsWithFiles,
   setDiffStats,
   onDiscardSuccess,
+  onClose,
 }: DiffSidebarRendererProps) {
   // Get callbacks and state from context
   const { handleCloseDiff, viewedCount, handleViewedCountChange } = useDiffState()
+  const closeDiff = onClose ?? handleCloseDiff
 
   const handleReviewWithAI = useCallback(() => {
-    if (diffDisplayMode !== "side-peek") {
-      handleCloseDiff()
+    if (diffDisplayMode !== "side-peek" && diffDisplayMode !== "details-expanded") {
+      closeDiff()
     }
     handleReview()
-  }, [diffDisplayMode, handleCloseDiff, handleReview])
+  }, [closeDiff, diffDisplayMode, handleReview])
 
   const handleCreatePrWithAI = useCallback(() => {
-    if (diffDisplayMode !== "side-peek") {
-      handleCloseDiff()
+    if (diffDisplayMode !== "side-peek" && diffDisplayMode !== "details-expanded") {
+      closeDiff()
     }
     handleCreatePr()
-  }, [diffDisplayMode, handleCloseDiff, handleCreatePr])
+  }, [closeDiff, diffDisplayMode, handleCreatePr])
 
   // Width for responsive layouts - use stored width for sidebar, fixed for dialog/fullpage
   const effectiveWidth = diffDisplayMode === "side-peek"
     ? diffSidebarWidth
     : diffDisplayMode === "center-peek"
       ? 1200
+      : diffDisplayMode === "details-expanded"
+        ? diffSidebarWidth
       : typeof window !== 'undefined' ? window.innerWidth : 1200
 
   const diffViewContent = (
@@ -1473,7 +1478,7 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
           isCreatingPrWithAI={isCreatingPr}
           onMergePr={handleMergePr}
           isMergingPr={mergePrMutation.isPending}
-          onClose={handleCloseDiff}
+          onClose={closeDiff}
           onRefresh={handleRefreshGitStatus}
           hasPrNumber={hasPrNumber}
           isPrOpen={isPrOpen}
@@ -1488,8 +1493,12 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
           onMarkAllUnviewed={handleMarkAllUnviewed}
           isDesktop={isDesktop}
           isFullscreen={isFullscreen}
-          displayMode={diffDisplayMode}
-          onDisplayModeChange={setDiffDisplayMode}
+          displayMode={
+            diffDisplayMode === "details-expanded" ? "side-peek" : diffDisplayMode
+          }
+          onDisplayModeChange={
+            diffDisplayMode === "details-expanded" ? undefined : setDiffDisplayMode
+          }
         />
       ) : null}
 
@@ -1537,6 +1546,10 @@ const DiffSidebarRenderer = memo(function DiffSidebarRenderer({
         {diffViewContent}
       </ResizableSidebar>
     )
+  }
+
+  if (diffDisplayMode === "details-expanded") {
+    return diffViewContent
   }
 
   if (diffDisplayMode === "center-peek") {
@@ -7218,6 +7231,66 @@ Make sure to preserve all functionality from both branches when resolving confli
               onBuildPlan={handleApprovePlanFromSidebar}
               diffStats={diffStats}
               parsedFileDiffs={parsedFileDiffs}
+              renderDiffContent={({ onClose }) => (
+                <DiffStateProvider
+                  isDiffSidebarOpen={true}
+                  parsedFileDiffs={parsedFileDiffs}
+                  isDiffSidebarNarrow={isDiffSidebarNarrow}
+                  setIsDiffSidebarOpen={setIsDiffSidebarOpen}
+                  setDiffStats={setDiffStats}
+                  setDiffContent={setDiffContent}
+                  setParsedFileDiffs={setParsedFileDiffs}
+                  setPrefetchedFileContents={setPrefetchedFileContents}
+                  fetchDiffStats={fetchDiffStats}
+                >
+                  <DiffSidebarRenderer
+                    worktreePath={worktreePath}
+                    chatId={chatId}
+                    repository={repository}
+                    diffStats={diffStats}
+                    diffContent={diffContent}
+                    parsedFileDiffs={parsedFileDiffs}
+                    prefetchedFileContents={prefetchedFileContents}
+                    setDiffCollapseState={setDiffCollapseState}
+                    diffViewRef={diffViewRef}
+                    diffSidebarRef={diffSidebarRef}
+                    agentChat={agentChat}
+                    branchData={branchData}
+                    gitStatus={gitStatus}
+                    isGitStatusLoading={isGitStatusLoading}
+                    isDiffSidebarOpen={true}
+                    diffDisplayMode="details-expanded"
+                    diffSidebarWidth={diffSidebarWidth}
+                    handleReview={handleReview}
+                    isReviewing={isReviewing}
+                    handleCreatePrDirect={handleCreatePrDirect}
+                    handleCreatePr={handleCreatePr}
+                    isCreatingPr={isCreatingPr}
+                    handleMergePr={handleMergePr}
+                    mergePrMutation={mergePrMutation}
+                    handleRefreshGitStatus={handleRefreshGitStatus}
+                    hasPrNumber={hasPrNumber}
+                    isPrOpen={isPrOpen}
+                    hasMergeConflicts={hasMergeConflicts}
+                    handleFixConflicts={handleFixConflicts}
+                    handleExpandAll={handleExpandAll}
+                    handleCollapseAll={handleCollapseAll}
+                    diffMode={diffMode}
+                    setDiffMode={setDiffMode}
+                    handleMarkAllViewed={handleMarkAllViewed}
+                    handleMarkAllUnviewed={handleMarkAllUnviewed}
+                    isDesktop={isDesktop}
+                    isFullscreen={Boolean(isFullscreen)}
+                    setDiffDisplayMode={setDiffDisplayMode}
+                    handleCommitToPr={handleCommitToPr}
+                    isCommittingToPr={isCommittingToPr}
+                    subChatsWithFiles={subChatsWithFiles}
+                    setDiffStats={setDiffStats}
+                    onDiscardSuccess={scheduleDiffRefresh}
+                    onClose={onClose}
+                  />
+                </DiffStateProvider>
+              )}
             />
           )}
 

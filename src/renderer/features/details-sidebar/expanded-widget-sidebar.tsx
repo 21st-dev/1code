@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo } from "react"
+import type { ReactNode } from "react"
 import { useAtom } from "jotai"
 import { X } from "lucide-react"
 import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
@@ -45,6 +46,7 @@ interface ExpandedWidgetSidebarProps {
   /** Diff-related props */
   diffStats?: { additions: number; deletions: number; fileCount: number } | null
   parsedFileDiffs?: ParsedDiffFile[] | null
+  renderDiffContent?: (options: { onClose: () => void }) => ReactNode
 }
 
 export function ExpandedWidgetSidebar({
@@ -58,6 +60,7 @@ export function ExpandedWidgetSidebar({
   onBuildPlan,
   diffStats,
   parsedFileDiffs,
+  renderDiffContent,
 }: ExpandedWidgetSidebarProps) {
   const { t } = useI18n()
   // Per-workspace expanded widget state
@@ -125,7 +128,9 @@ export function ExpandedWidgetSidebar({
           />
         ) : null
       case "diff":
-        return (
+        return renderDiffContent ? (
+          renderDiffContent({ onClose: closeSidebar })
+        ) : (
           <DiffSection
             diffStats={diffStats}
             parsedFileDiffs={parsedFileDiffs ?? undefined}

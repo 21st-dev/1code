@@ -13,8 +13,8 @@
 - [ ] 2.3 Remove legacy Plan sidebar rendering + open-state wiring only after 2.1 and 2.2 are verified (`active-chat.tsx:4400`–`:4404`, `agent-plan-sidebar.tsx`).
 
 ## 3. Parity: Diff
-- [ ] 3.1 Replace the simplified expanded `DiffSection` path with the full diff review behavior currently in `DiffSidebarRenderer` (`active-chat.tsx:1342`–`:1554`): header, file list, per-file diff, viewed state, selection state, expand/collapse, mark viewed/unviewed, discard refresh, and responsive width behavior.
-- [ ] 3.2 Preserve review/create-PR entrypoints, direct PR creation, AI PR creation, merge/fix-conflicts actions, branch/git status refresh, and commit-to-PR actions.
+- [x] 3.1 Replace the simplified expanded `DiffSection` path with the full diff review behavior currently in `DiffSidebarRenderer` (`active-chat.tsx:1342`–`:1554`): header, file list, per-file diff, viewed state, selection state, expand/collapse, mark viewed/unviewed, discard refresh, and responsive width behavior.
+- [x] 3.2 Preserve review/create-PR entrypoints, direct PR creation, AI PR creation, merge/fix-conflicts actions, branch/git status refresh, and commit-to-PR actions.
 - [ ] 3.3 Preserve file actions from the Details changes widget into the expanded diff path: open selected file, open file preview handoff, reveal/copy/open-in-editor actions, and selection for commit/commit-push.
 - [ ] 3.4 Collapse diff display to Details expanded diff + full-page; remove `side-peek` as a separate sidebar and fold `center-peek` into `full-page` (`active-chat.tsx:1350`, `:1443`–`:1554`).
 - [ ] 3.5 Keep a single explicit "open full-page diff" entrypoint for deep multi-file review.
