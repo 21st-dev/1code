@@ -38,10 +38,10 @@
 - [x] 6.4 Keep Local Browser and File Viewer out of scope for this phase; do not claim all right-side surfaces are removed until phase 2.
 
 ## 7. Verification
-- [ ] 7.1 Per-surface parity check: Plan, Diff, and Terminal expanded widget renderers do everything their removed sidebars did.
+- [x] 7.1 Per-surface parity check: Plan, Diff, and Terminal expanded widget renderers do everything their removed sidebars did.
 - [x] 7.2 Confirm no remaining Plan/Diff/Terminal right-region mutual-exclusion is needed; `use-agent-panel-conflicts.ts` has no call sites and no replacement auto-close/auto-restore bookkeeping is introduced.
 - [x] 7.3 Update `tests/details-sidebar-entrypoints.test.ts` so it asserts no `unifiedSidebarEnabledAtom` fallback, no legacy Plan/Diff/Terminal sidebar render gates, and Details-owned expanded entrypoints for Plan/Diff/Terminal.
 - [x] 7.4 Add or update targeted tests for diff display-mode normalization, terminal display-mode/bottom-panel preservation, and `use-open-details-widget.ts` routing.
 - [x] 7.5 Run `openspec validate refactor-unified-details-sidebar --strict --no-interactive`.
-- [ ] 7.6 Run `bun run lint`, `bun run ts:check`, and targeted tests.
+- [x] 7.6 Run `bun run lint`, `bun run ts:check`, and targeted tests.
 - [ ] 7.7 Manual smoke: open/expand plan, diff (Details expanded + full-page), terminal, and terminal bottom mode if retained; switch sub-chats; resize; confirm Plan/Diff/Terminal no longer fight DetailsSidebar and no legacy Plan/Diff/Terminal sidebar remains.
