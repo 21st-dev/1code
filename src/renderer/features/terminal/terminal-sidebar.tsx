@@ -1,20 +1,9 @@
 import { useAtom, useAtomValue } from "jotai"
-import { AlignJustify, Check, ChevronsDown } from "lucide-react"
+import { AlignJustify, ChevronsDown } from "lucide-react"
 import { motion } from "motion/react"
 import { useTheme } from "next-themes"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  CustomTerminalIcon,
-  IconBottomPanel,
-  IconOpenSidebarRight,
-} from "@/components/ui/icons"
 import { Kbd } from "@/components/ui/kbd"
 import {
   Tooltip,
@@ -23,11 +12,10 @@ import {
 } from "@/components/ui/tooltip"
 import { fullThemeDataAtom } from "@/lib/atoms"
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { type TranslationKey, useI18n } from "@/lib/i18n"
+import { useI18n } from "@/lib/i18n"
 import { trpc } from "@/lib/trpc"
 import {
   activeTerminalIdAtom,
-  type TerminalDisplayMode,
   terminalCwdAtom,
   terminalDisplayModeAtom,
   terminalSidebarOpenAtomFamily,
@@ -35,6 +23,7 @@ import {
 } from "./atoms"
 import { getDefaultTerminalBg } from "./helpers"
 import { Terminal } from "./terminal"
+import { TerminalModeSwitcher } from "./terminal-mode-switcher"
 import { TerminalTabs } from "./terminal-tabs"
 import type { TerminalInstance } from "./types"
 import { isSharedTerminalScope } from "./utils"
@@ -86,61 +75,6 @@ function getNextTerminalName(terminals: TerminalInstance[]): string {
   const maxNumber =
     existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
   return `Terminal ${maxNumber + 1}`
-}
-
-const TERMINAL_MODES = [
-  {
-    value: "details" as const,
-    labelKey: "details.details" as TranslationKey,
-    Icon: IconOpenSidebarRight,
-  },
-  {
-    value: "bottom" as const,
-    labelKey: "terminal.bottomMode" as TranslationKey,
-    Icon: IconBottomPanel,
-  },
-]
-
-function TerminalModeSwitcher({
-  mode,
-  onModeChange,
-}: {
-  mode: TerminalDisplayMode
-  onModeChange: (mode: TerminalDisplayMode) => void
-}) {
-  const { t } = useI18n()
-  const currentMode =
-    TERMINAL_MODES.find((m) => m.value === mode) ?? TERMINAL_MODES[0]
-  const CurrentIcon = currentMode.Icon
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0 flex-shrink-0 hover:bg-foreground/10"
-        >
-          <CurrentIcon className="size-4 text-muted-foreground" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[140px]">
-        {TERMINAL_MODES.map(({ value, labelKey, Icon }) => (
-          <DropdownMenuItem
-            key={value}
-            onClick={() => onModeChange(value)}
-            className="flex items-center gap-2"
-          >
-            <Icon className="size-4 text-muted-foreground" />
-            <span className="flex-1">{t(labelKey)}</span>
-            {mode === value && (
-              <Check className="size-4 text-muted-foreground ml-auto" />
-            )}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
 }
 
 export function TerminalSidebar({
@@ -526,7 +460,6 @@ export function TerminalSidebar({
  * Renders terminal content in a horizontal panel at the bottom of active-chat.
  */
 interface TerminalBottomPanelContentProps {
-  chatId: string
   scopeKey: string
   cwd: string
   workspaceId: string
@@ -536,7 +469,6 @@ interface TerminalBottomPanelContentProps {
 }
 
 export function TerminalBottomPanelContent({
-  chatId,
   scopeKey,
   cwd,
   workspaceId,

@@ -160,22 +160,29 @@ Locus SHALL treat Chat as the default operating surface for interactive desktop 
 - **AND** the job trace is bound to the selected job rather than presented as a competing default workspace beside Chat
 
 ### Requirement: Unified Details Inspector Ownership
-The unified Details sidebar SHALL be the canonical right-side inspector owner for current-chat details.
+The unified Details sidebar SHALL be the canonical right-side inspector owner for current-chat details covered by the Details widget registry, including Plan, Diff, and Terminal.
 
 #### Scenario: Details sidebar renders inspector widgets
 - **WHEN** the user opens the Details sidebar for a chat with a local workspace
 - **THEN** the sidebar can render workspace, todo, plan, terminal, diff, MCP, trace, usage, and error widgets according to widget availability
 - **AND** widgets use the existing widget registry and visibility/order mechanisms rather than ad hoc renderer-owned panels
 
-#### Scenario: Expanded renderer is needed
+#### Scenario: Plan, Diff, and Terminal expand through the Details owner
 - **WHEN** a user expands Plan, Diff, or Terminal from the Details sidebar
-- **THEN** the app may open the existing larger renderer for that content
-- **AND** the Details sidebar remains the product entry point and state owner for that inspector category
+- **THEN** the expanded content is rendered through the DetailsSidebar-owned expanded widget model with one expanded widget active at a time
+- **AND** the expanded renderer preserves the behavior of the sidebar it replaces, including plan render/build actions, full diff review and PR actions, and interactive terminal session controls
+- **AND** collapsing returns the user to the stacked Details widget view
 
-#### Scenario: Legacy separate sidebar path remains during migration
-- **WHEN** a temporary separate-sidebar fallback remains available during this change
-- **THEN** it is either not a user-facing product mode or is guarded by an explicit migration flag
-- **AND** the change records a deletion follow-up before implementation is considered complete
+#### Scenario: Legacy separate inspector sidebars are removed
+- **WHEN** this phase ships
+- **THEN** Plan, Diff, and Terminal do not have separate user-facing right-side sidebars competing with the Details sidebar
+- **AND** the `unifiedSidebarEnabledAtom` rollback flag and the Plan/Diff/Terminal legacy sidebar code path it gated are removed
+- **AND** `use-agent-panel-conflicts` coordination is removed rather than replaced by another Plan/Diff/Terminal right-region mutual-exclusion hook
+
+#### Scenario: Deferred right-side surfaces remain out of scope
+- **WHEN** Local Browser or File Viewer right-side surfaces are opened before their later unification phase
+- **THEN** they may remain outside the DetailsSidebar ownership model for this phase
+- **AND** their existence does not reintroduce separate Plan, Diff, or Terminal inspector sidebars
 
 ### Requirement: Actionable Error Trace Rows
 The workbench trace surfaces SHALL render runtime, provider, MCP, guard, worktree, and job failures with product error semantics.

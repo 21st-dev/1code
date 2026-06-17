@@ -5,14 +5,16 @@ import { motion } from "motion/react"
 import { useTheme } from "next-themes"
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Button } from "@/components/ui/button"
 import {
   activeTerminalIdAtom,
   terminalCwdAtom,
+  terminalDisplayModeAtom,
+  terminalSidebarOpenAtomFamily,
   terminalsAtom,
 } from "@/features/terminal/atoms"
 import { getDefaultTerminalBg } from "@/features/terminal/helpers"
 import { Terminal } from "@/features/terminal/terminal"
+import { TerminalModeSwitcher } from "@/features/terminal/terminal-mode-switcher"
 import { TerminalTabs } from "@/features/terminal/terminal-tabs"
 import type { TerminalInstance } from "@/features/terminal/types"
 import { fullThemeDataAtom } from "@/lib/atoms"
@@ -70,6 +72,8 @@ export function TerminalSection({
   // Terminal state - reuse existing atoms
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
+  const [displayMode, setDisplayMode] = useAtom(terminalDisplayModeAtom)
+  const [, setBottomPanelOpen] = useAtom(terminalSidebarOpenAtomFamily(chatId))
   const terminalCwds = useAtomValue(terminalCwdAtom)
 
   // Theme detection for terminal background
@@ -262,6 +266,16 @@ export function TerminalSection({
     }
   }, [terminals.length, createTerminal])
 
+  const handleDisplayModeChange = useCallback(
+    (mode: "details" | "bottom") => {
+      setDisplayMode(mode)
+      if (mode === "bottom") {
+        setBottomPanelOpen(true)
+      }
+    },
+    [setBottomPanelOpen, setDisplayMode],
+  )
+
   // Delay terminal rendering slightly
   const [canRenderTerminal, setCanRenderTerminal] = useState(false)
   useEffect(() => {
@@ -342,6 +356,10 @@ export function TerminalSection({
         className="flex items-center gap-1 px-1 py-1 flex-shrink-0"
         style={{ backgroundColor: terminalBg }}
       >
+        <TerminalModeSwitcher
+          mode={displayMode}
+          onModeChange={handleDisplayModeChange}
+        />
         {tabsHeader}
       </div>
 

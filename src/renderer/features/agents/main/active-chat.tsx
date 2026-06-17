@@ -7223,7 +7223,6 @@ Make sure to preserve all functionality from both branches when resolving confli
           style={{ borderTopWidth: "0.5px" }}
         >
           <TerminalBottomPanelContent
-            chatId={chatId}
             scopeKey={terminalScopeKey}
             cwd={worktreePath}
             workspaceId={chatId}

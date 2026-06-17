@@ -1,32 +1,35 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { useTheme } from "next-themes"
-import { fullThemeDataAtom } from "@/lib/atoms"
-import { motion } from "motion/react"
 import { ArrowUpRight } from "lucide-react"
+import { motion } from "motion/react"
+import { useTheme } from "next-themes"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { PlusIcon } from "@/components/ui/icons"
+import { Kbd } from "@/components/ui/kbd"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Kbd } from "@/components/ui/kbd"
-import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
-import { Terminal } from "@/features/terminal/terminal"
-import { TerminalTabs } from "@/features/terminal/terminal-tabs"
-import { getDefaultTerminalBg } from "@/features/terminal/helpers"
 import {
-  terminalsAtom,
   activeTerminalIdAtom,
   terminalCwdAtom,
+  terminalDisplayModeAtom,
+  terminalSidebarOpenAtomFamily,
+  terminalsAtom,
 } from "@/features/terminal/atoms"
-import { trpc } from "@/lib/trpc"
+import { getDefaultTerminalBg } from "@/features/terminal/helpers"
+import { Terminal } from "@/features/terminal/terminal"
+import { TerminalModeSwitcher } from "@/features/terminal/terminal-mode-switcher"
+import { TerminalTabs } from "@/features/terminal/terminal-tabs"
 import type { TerminalInstance } from "@/features/terminal/types"
-import { cn } from "@/lib/utils"
+import { fullThemeDataAtom } from "@/lib/atoms"
+import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { useI18n } from "@/lib/i18n"
+import { trpc } from "@/lib/trpc"
+import { cn } from "@/lib/utils"
 
 interface TerminalWidgetProps {
   chatId: string
@@ -78,6 +81,8 @@ export const TerminalWidget = memo(function TerminalWidget({
   // Terminal state - reuse existing atoms
   const [allTerminals, setAllTerminals] = useAtom(terminalsAtom)
   const [allActiveIds, setAllActiveIds] = useAtom(activeTerminalIdAtom)
+  const [displayMode, setDisplayMode] = useAtom(terminalDisplayModeAtom)
+  const [, setBottomPanelOpen] = useAtom(terminalSidebarOpenAtomFamily(chatId))
   const terminalCwds = useAtomValue(terminalCwdAtom)
 
   // Theme detection for terminal background
@@ -268,6 +273,16 @@ export const TerminalWidget = memo(function TerminalWidget({
     }
   }, [terminals.length, createTerminal])
 
+  const handleDisplayModeChange = useCallback(
+    (mode: "details" | "bottom") => {
+      setDisplayMode(mode)
+      if (mode === "bottom") {
+        setBottomPanelOpen(true)
+      }
+    },
+    [setBottomPanelOpen, setDisplayMode],
+  )
+
   // Delay terminal rendering slightly
   const [canRenderTerminal, setCanRenderTerminal] = useState(false)
   useEffect(() => {
@@ -285,6 +300,11 @@ export const TerminalWidget = memo(function TerminalWidget({
           className="flex items-center gap-1 pl-1 pr-2 py-1.5 select-none group"
           style={{ backgroundColor: terminalBg }}
         >
+          <TerminalModeSwitcher
+            mode={displayMode}
+            onModeChange={handleDisplayModeChange}
+          />
+
           {/* Terminal Tabs - directly without wrapper, like in terminal-sidebar.tsx */}
           {terminals.length > 0 && (
             <TerminalTabs

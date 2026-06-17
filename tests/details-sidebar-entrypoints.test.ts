@@ -93,6 +93,15 @@ describe("details sidebar entrypoints", () => {
     const terminalSidebar = read(
       "src/renderer/features/terminal/terminal-sidebar.tsx",
     )
+    const terminalWidget = read(
+      "src/renderer/features/details-sidebar/sections/terminal-widget.tsx",
+    )
+    const terminalSection = read(
+      "src/renderer/features/details-sidebar/sections/terminal-section.tsx",
+    )
+    const terminalModeSwitcher = read(
+      "src/renderer/features/terminal/terminal-mode-switcher.tsx",
+    )
 
     expect(terminalAtoms).toContain(
       'export type TerminalDisplayMode = "details" | "bottom"',
@@ -103,9 +112,14 @@ describe("details sidebar entrypoints", () => {
     expect(terminalAtoms).toContain(
       'return mode === "bottom" ? "bottom" : "details"',
     )
-    expect(terminalSidebar).toContain('value: "details" as const')
-    expect(terminalSidebar).toContain('value: "bottom" as const')
-    expect(terminalSidebar).not.toContain('value: "side-peek" as const')
+    expect(terminalModeSwitcher).toContain('value: "details" as const')
+    expect(terminalModeSwitcher).toContain('value: "bottom" as const')
+    expect(terminalModeSwitcher).not.toContain('value: "side-peek" as const')
+    expect(terminalWidget).toContain("<TerminalModeSwitcher")
+    expect(terminalWidget).toContain("setBottomPanelOpen(true)")
+    expect(terminalSection).toContain("<TerminalModeSwitcher")
+    expect(terminalSection).toContain("setBottomPanelOpen(true)")
+    expect(terminalSidebar).toContain("<TerminalModeSwitcher")
     expect(terminalSidebar).not.toContain("<ResizableSidebar")
     expect(source).toContain('terminalDisplayMode === "bottom"')
     expect(source).toContain("<TerminalBottomPanelContent")
