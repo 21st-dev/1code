@@ -161,7 +161,7 @@ Locus SHALL treat Chat as the default operating surface for interactive desktop 
 - **AND** the job trace is bound to the selected job rather than presented as a competing default workspace beside Chat
 
 ### Requirement: Unified Details Inspector Ownership
-The unified Details sidebar SHALL be the canonical right-side inspector owner for current-chat details covered by the Details widget registry, including Plan, Diff, and Terminal.
+The unified Details sidebar SHALL be the canonical right-side inspector owner for current-chat details covered by the Details widget registry, including Plan, Diff, Terminal, and the Local Browser.
 
 #### Scenario: Details sidebar renders inspector widgets
 - **WHEN** the user opens the Details sidebar for a chat with a local workspace
@@ -180,10 +180,16 @@ The unified Details sidebar SHALL be the canonical right-side inspector owner fo
 - **AND** the `unifiedSidebarEnabledAtom` rollback flag and the Plan/Diff/Terminal legacy sidebar code path it gated are removed
 - **AND** `use-agent-panel-conflicts` coordination is removed rather than replaced by another Plan/Diff/Terminal right-region mutual-exclusion hook
 
-#### Scenario: Deferred right-side surfaces remain out of scope
-- **WHEN** Local Browser or File Viewer right-side surfaces are opened before their later unification phase
-- **THEN** they may remain outside the DetailsSidebar ownership model for this phase
-- **AND** their existence does not reintroduce separate Plan, Diff, or Terminal inspector sidebars
+#### Scenario: Local Browser is a Details-owned surface
+- **WHEN** the user opens the Local Browser for a chat with a local workspace
+- **THEN** it is presented as a Details widget that expands through the Details-owned expanded renderer, not as an independent competing right-side sidebar
+- **AND** its independent per-chat open-state and standalone sidebar mount are removed
+- **AND** the Local Browser preview boundary, diagnostics capture, and capture-to-chat handoff behavior are preserved
+
+#### Scenario: Folderless quick chats do not expose the Local Browser
+- **WHEN** a folderless quick chat (no project) is active
+- **THEN** the Local Browser is not offered
+- **AND** this matches the established quick-chat surface scope for repository-centric surfaces
 
 ### Requirement: Actionable Error Trace Rows
 The workbench trace surfaces SHALL render runtime, provider, MCP, guard, worktree, and job failures with product error semantics.

@@ -22,4 +22,4 @@
 - [x] 4.2 Update/extend `tests/details-sidebar-entrypoints.test.ts` to assert the Local Browser is Details-owned (no standalone open-state).
 - [x] 4.3 Run `openspec validate refactor-fold-local-browser --strict --no-interactive`.
 - [x] 4.4 Run `bun run lint`, `bun run ts:check`, targeted tests, and `bun run architecture:check`.
-- [ ] 4.5 Manual smoke: open/expand the browser from Details; capture → context insert; confirm no standalone Local Browser sidebar remains; folderless quick chat does not expose it.
+- [x] 4.5 Manual smoke: open/expand the browser from Details; capture → context insert; confirm no standalone Local Browser sidebar remains; folderless quick chat does not expose it.
