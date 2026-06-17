@@ -80,10 +80,10 @@ The system SHALL maintain a repeatable audit boundary for hardcoded renderer tex
 - **AND** intentional exclusions include technical terms, product/provider names, raw/user/generated content, commands, paths, diffs, logs, debug metadata, or low-level base component labels
 
 ### Requirement: Quick Chat And Sidebar Localization
-All user-facing strings introduced for quick chat, the assistant composer, project-grouped navigation, repository/folder entry points, and delete/clear actions SHALL be localized in English and Simplified Chinese.
+All user-facing strings introduced for quick chat, the assistant composer, project-grouped navigation, project entry points, and delete/clear actions SHALL be localized in English and Simplified Chinese.
 
 #### Scenario: New strings ship in both locales
-- **WHEN** a new string is added for quick chat, assistant mode, "open repository", "attach folder", per-project "new conversation", "permanent delete", or "clear archive"
+- **WHEN** a new string is added for quick chat, assistant mode, "Open a Project", "Attach a Project", per-project "New Workspace", "New Quick chat", "permanent delete", or "clear archive"
 - **THEN** the string is present in both the English and Simplified Chinese dictionaries
 - **AND** the second tree level is displayed as "工作区" and folderless chats as "快速对话" in Simplified Chinese
 

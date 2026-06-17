@@ -29,18 +29,18 @@ The sidebar SHALL show folderless quick chats in a dedicated group above the pro
 - **AND** they are not nested under any project
 
 ### Requirement: Navigation Entry Points
-The sidebar SHALL provide distinct entry points for creating a quick chat, opening a repository, and creating a workspace in a specific project.
+The sidebar SHALL provide distinct entry points for creating a quick chat, opening a project, and creating a workspace in a specific project.
 
-#### Scenario: Open a repository
-- **WHEN** the user activates "open repository" from the projects section header
+#### Scenario: Open a project
+- **WHEN** the user activates "Open a Project" from the projects section header
 - **THEN** the system opens the folder/clone picker and adds the project
 
-#### Scenario: New conversation in a project
+#### Scenario: New workspace in a project
 - **WHEN** the user activates the "+" on a project group header
 - **THEN** a new workspace is started in that project without re-picking a folder
 
-#### Scenario: Top new-chat default
-- **WHEN** the user activates the top "新建会话" action
+#### Scenario: Top new-quick-chat default
+- **WHEN** the user activates the top "New Quick chat" action
 - **THEN** a folderless quick chat composer is shown
 
 ### Requirement: Keyboard Navigation Order Matches Display

@@ -55,15 +55,15 @@ A quick chat SHALL read uploaded file attachments from context and let the user 
 
 #### Scenario: Operation needs real file tooling
 - **WHEN** the requested operation requires multi-step changes to real files on disk
-- **THEN** the system offers to attach a folder rather than performing host filesystem operations in the quick chat
+- **THEN** the system offers the "Attach a Project" entry point rather than performing host filesystem operations in the quick chat
 
 ### Requirement: In-Place Upgrade To A Project Workspace
-A quick chat SHALL be upgradable in place into a project workspace by attaching a folder, preserving prior conversation history.
+A quick chat SHALL be upgradable in place into a project workspace through the "Attach a Project" entry point, preserving prior Chat history.
 
-#### Scenario: Attach a folder to a quick chat
-- **WHEN** the user attaches a folder to a quick chat from the composer
+#### Scenario: Attach a Project to a quick chat
+- **WHEN** the user activates "Attach a Project" for a quick chat from the composer
 - **THEN** the chat becomes associated with that project (optionally with a worktree)
-- **AND** prior assistant messages remain visible as conversation history
+- **AND** prior assistant messages remain visible as Chat history
 - **AND** subsequent turns run through project-backed preflight with the project working directory and plan/agent permissions
 - **AND** the chat moves from the quick-chat group into that project's group in navigation
 
