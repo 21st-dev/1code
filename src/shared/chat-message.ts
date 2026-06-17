@@ -68,7 +68,7 @@ type CommonMessagePartFields = {
 export type DataImageMessagePart = {
   type: "data-image"
   data: {
-    url: string
+    url?: string
     mediaType?: string
     filename?: string
     base64Data?: string
@@ -278,7 +278,7 @@ export const chatImageAttachmentMessagePartSchema = passthroughObject({
 export const dataImageMessagePartSchema = passthroughObject({
   type: z.literal("data-image"),
   data: z.object({
-    url: z.string(),
+    url: z.string().optional(),
     mediaType: z.string().optional(),
     filename: z.string().optional(),
     base64Data: z.string().optional(),

@@ -68,6 +68,14 @@ describe("canonical chat message model", () => {
       },
     },
     {
+      type: "data-image",
+      data: {
+        base64Data: "abc",
+        mediaType: "image/png",
+        filename: "main-writer-legacy.png",
+      },
+    },
+    {
       type: "data-file",
       data: {
         url: "file:///tmp/report.txt",
@@ -144,6 +152,7 @@ describe("canonical chat message model", () => {
       persistedParts[10],
       persistedParts[11],
       persistedParts[12],
+      persistedParts[13],
     ]) {
       expect(agentUserMessagePartSchema.safeParse(part).success).toBe(true)
     }
