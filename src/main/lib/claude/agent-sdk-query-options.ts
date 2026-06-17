@@ -264,6 +264,9 @@ export function createClaudeAgentSdkQueryOptions({
       ...(permission.allowDangerouslySkipPermissions && {
         allowDangerouslySkipPermissions: true,
       }),
+      ...(permission.sdkDisallowedTools?.length && {
+        disallowedTools: [...permission.sdkDisallowedTools],
+      }),
       includePartialMessages: true,
       ...(!isUsingOllama && {
         settingSources: ["project" as const, "user" as const],

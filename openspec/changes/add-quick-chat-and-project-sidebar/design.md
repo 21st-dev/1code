@@ -40,7 +40,7 @@ This change has two coupled parts: a runtime/data capability (folderless quick c
 - Do not include `TodoWrite` in the first assistant allow-list unless implementation proves it only writes Locus-owned chat state and cannot reach project or runtime state.
 
 ### 4. Claude and Codex full-scope enforcement
-- Claude: extend `agent-sdk-tool-permission.ts` and query option assembly so assistant runs install a strict allow-list `canUseTool` before SDK query starts. Unknown tool names deny by default.
+- Claude: extend `agent-sdk-tool-permission.ts` and query option assembly so assistant runs install a strict allow-list `canUseTool` plus SDK-level `disallowedTools` before SDK query starts. Known non-web Claude tools are removed from the model context; unknown tool names still deny by default when surfaced to the hook.
 - Codex ACP: extend the ACP permission handler/mapping so assistant runs deny side-effecting tool requests before execution. If ACP cannot classify or intercept a tool, it fails closed for assistant runs.
 - Codex app-server: extend the app-server approval gate so assistant runs deny file, shell, MCP/project, runtime mutation, and unknown approval requests before execution. If app-server approval hooks are unavailable, delayed, or cannot classify the request, the run fails closed before provider/tool work starts.
 - Capability truth must reflect this. The feature can be presented as runtime-neutral only after both Claude and Codex report supported assistant-tier enforcement with tests. If either runtime is degraded, the UI must gate that runtime for quick chat or show an explicit downgrade.

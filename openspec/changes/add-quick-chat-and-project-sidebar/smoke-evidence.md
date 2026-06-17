@@ -35,7 +35,7 @@ Result summary:
 | Check | Result |
 | --- | --- |
 | Claude folderless quick chat creation | Passed: `projectId = null`, preflight `kind = "folderless"` |
-| Claude assistant tool policy | Passed: `WebFetch` allowed; `Read`, `Bash`, and MCP/project tools denied |
+| Claude assistant policy probes | Passed: policy/preflight probes allowed `WebFetch` and denied `Read`, `Bash`, and MCP/project tools |
 | Codex folderless quick chat creation | Passed: `projectId = null`, no worktree |
 | Codex ACP assistant policy | Passed: shell, file edit, and MCP tool requests returned deny decisions |
 | Codex app-server assistant gate | Passed: command and file approvals returned decline; permission expansion denied before execution |
@@ -50,3 +50,28 @@ Mobile/fullscreen layout was separately smoke-tested through Electron CDP at
 `390x844`: `scrollWidth = 390`, `overflowingCount = 0`, quick composer,
 model selector, send button, and `添加代码仓库` were visible; project-only
 `Worktree`/`Branch`/`Plan` controls were absent.
+
+## 2026-06-17 Claude SDK denylist hardening
+
+Follow-up review found that the earlier Claude row was policy/preflight evidence,
+not a live provider proof that the SDK always calls `canUseTool` for read-only
+tools in plan mode.
+
+Implemented a second enforcement layer for assistant quick chat:
+
+- `src/main/lib/agent-runtime/permission-policy.ts` now maps Claude assistant
+  runs to SDK-level `sdkDisallowedTools` for known non-web Claude tools:
+  `Read`, `Grep`, `Glob`, `LS`, `Bash`, `Write`, `Edit`, `MultiEdit`,
+  `NotebookRead`, `NotebookEdit`, `Task`, `TodoRead`, `TodoWrite`, and
+  `ExitPlanMode`.
+- `src/main/lib/claude/agent-sdk-query-options.ts` passes that list to
+  `options.disallowedTools` before SDK query startup, while keeping the existing
+  `canUseTool` and `PreToolUse` fail-closed hooks for surfaced unknown/MCP tools.
+- Targeted tests assert assistant mappings carry the denylist, web tools are not
+  disallowed, every listed tool is denied by the assistant policy, and Claude SDK
+  query options include `disallowedTools` for folderless assistant runs but not
+  normal project-backed agent runs.
+
+This closes the identified SDK auto-allow gap structurally. It is not recorded
+as a live Claude provider tool-call smoke unless a separate run demonstrates the
+model attempted `Read` and the SDK rejected it at runtime.

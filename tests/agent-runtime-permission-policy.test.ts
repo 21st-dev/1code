@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import {
   decideAssistantToolPermission,
+  getClaudeAssistantSdkDisallowedTools,
   getCodexAppServerPermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
@@ -165,6 +166,7 @@ describe("desktop runtime permission policy", () => {
         sdkPermissionMode: "plan",
         allowDangerouslySkipPermissions: false,
         requiresToolPolicy: true,
+        sdkDisallowedTools: getClaudeAssistantSdkDisallowedTools(),
       },
     })
     expect(claudePolicy.blockedSideEffects).toEqual([
@@ -206,6 +208,31 @@ describe("desktop runtime permission policy", () => {
       category: "filesystem",
       message: expect.stringContaining("filesystem tools are unavailable"),
     })
+    expect(getClaudeAssistantSdkDisallowedTools()).toEqual(
+      expect.arrayContaining([
+        "Read",
+        "Grep",
+        "Glob",
+        "LS",
+        "Bash",
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "NotebookRead",
+        "NotebookEdit",
+        "Task",
+        "TodoRead",
+        "TodoWrite",
+        "ExitPlanMode",
+      ]),
+    )
+    expect(getClaudeAssistantSdkDisallowedTools()).not.toContain("WebSearch")
+    expect(getClaudeAssistantSdkDisallowedTools()).not.toContain("WebFetch")
+    for (const toolName of getClaudeAssistantSdkDisallowedTools()) {
+      expect(decideAssistantToolPermission({ toolName })).toMatchObject({
+        decision: "deny",
+      })
+    }
     expect(
       decideAssistantToolPermission({ toolName: "unknownFutureTool" }),
     ).toMatchObject({

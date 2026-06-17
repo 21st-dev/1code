@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import { join } from "node:path"
-import type { AgentScopeContract } from "../src/shared/agent-scope-contracts"
+import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk"
+import { validateAgentScopeContract } from "../src/main/lib/agent-guard"
 import {
+  getClaudeAssistantSdkDisallowedTools,
   getClaudePermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
-import { validateAgentScopeContract } from "../src/main/lib/agent-guard"
+import type { DesktopRunPreflightResult } from "../src/main/lib/agent-runtime/preflight"
 import {
   createClaudeAgentSdkDesktopRuntimeQueryOptions,
   createClaudeAgentSdkQueryOptions,
@@ -15,6 +17,7 @@ import {
   resolveClaudeAgentSdkResumeOptions,
 } from "../src/main/lib/claude/agent-sdk-query-options"
 import { createClaudeDesktopRunRequest } from "../src/main/lib/claude/desktop-run-request"
+import type { AgentScopeContract } from "../src/shared/agent-scope-contracts"
 
 function createRequest(options: {
   signal: AbortSignal
@@ -263,8 +266,7 @@ describe("Claude Agent SDK query options", () => {
     ])
     expect(guardEvents).toEqual([])
 
-    const preToolUseHook =
-      queryParams.options.hooks?.PreToolUse?.[0]?.hooks[0]
+    const preToolUseHook = queryParams.options.hooks?.PreToolUse?.[0]?.hooks[0]
     expect(typeof preToolUseHook).toBe("function")
     await expect(
       preToolUseHook?.(
@@ -359,14 +361,16 @@ describe("Claude Agent SDK query options", () => {
       getClaudeBinaryPath: () => "/owned/claude",
     })
 
-    expect(queryParams.options.pathToClaudeCodeExecutable).toBe(
-      "/owned/claude",
-    )
+    expect(queryParams.options.pathToClaudeCodeExecutable).toBe("/owned/claude")
+    const editToolOptions: Parameters<CanUseTool>[2] = {
+      signal: new AbortController().signal,
+      toolUseID: "tool-1",
+    }
     await expect(
       queryParams.options.canUseTool?.(
         "Edit",
         { file_path: "src/app.ts" },
-        { toolUseID: "tool-1" } as any,
+        editToolOptions,
       ),
     ).resolves.toMatchObject({ behavior: "allow" })
     expect(guardEvents).toHaveLength(1)
@@ -378,8 +382,7 @@ describe("Claude Agent SDK query options", () => {
       },
     ])
 
-    const preToolUseHook =
-      queryParams.options.hooks?.PreToolUse?.[0]?.hooks[0]
+    const preToolUseHook = queryParams.options.hooks?.PreToolUse?.[0]?.hooks[0]
     expect(typeof preToolUseHook).toBe("function")
     await expect(
       preToolUseHook?.(
@@ -458,6 +461,7 @@ describe("Claude Agent SDK query options", () => {
     expect(queryParams.options.mcpServers).toBe(mcpServers)
     expect(queryParams.options.permissionMode).toBe("bypassPermissions")
     expect(queryParams.options.allowDangerouslySkipPermissions).toBe(true)
+    expect(queryParams.options.disallowedTools).toBeUndefined()
     expect(queryParams.options.includePartialMessages).toBe(true)
     expect(queryParams.options.settingSources).toEqual(["project", "user"])
     expect(queryParams.options.canUseTool).toBe(canUseTool)
@@ -473,6 +477,87 @@ describe("Claude Agent SDK query options", () => {
 
     sourceController.abort()
     expect(queryParams.options.abortController?.signal.aborted).toBe(true)
+  })
+
+  test("passes assistant SDK disallowed tools before relying on hook callbacks", () => {
+    const sourceController = new AbortController()
+    const permissionPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "claude-code",
+      mode: "plan",
+      workspaceKind: "folderless",
+    })
+    const request = createClaudeDesktopRunRequest({
+      runId: "run-assistant",
+      streamId: "stream-assistant",
+      jobId: "job-assistant",
+      mode: "plan",
+      preflight: {
+        cwd: process.cwd(),
+        chat: { id: "chat-assistant", projectId: null },
+        subChat: { id: "sub-assistant", chatId: "chat-assistant" },
+        project: null,
+      } as DesktopRunPreflightResult,
+      prompt: "hello",
+      permissionPolicy,
+      providerBinding: {
+        model: "claude-sonnet-4",
+        modelSource: "request",
+        providerProfileId: null,
+        gatewayEndpoint: null,
+        authMode: "runtime-managed",
+      },
+      signal: sourceController.signal,
+      resumeSessionId: null,
+      parentSessionId: null,
+      emitTrace: () => {},
+    })
+    const canUseTool = async () => ({ behavior: "allow" as const })
+
+    const queryParams = createClaudeAgentSdkQueryOptions({
+      request,
+      prompt: "hello",
+      systemPrompt: {
+        type: "preset",
+        preset: "claude_code",
+      },
+      env: {},
+      permission: getClaudePermissionMapping(permissionPolicy),
+      mcpServers: {},
+      isUsingOllama: false,
+      canUseTool,
+      stderr: () => {},
+      pathToClaudeCodeExecutable: "/bin/claude",
+      resumeSessionAt: null,
+      forkSession: false,
+      model: null,
+      maxThinkingTokens: null,
+    })
+
+    expect(queryParams.options.permissionMode).toBe("plan")
+    expect(queryParams.options.canUseTool).toBe(canUseTool)
+    expect(queryParams.options.disallowedTools).toEqual(
+      getClaudeAssistantSdkDisallowedTools(),
+    )
+    expect(queryParams.options.disallowedTools).toEqual(
+      expect.arrayContaining([
+        "Read",
+        "Grep",
+        "Glob",
+        "LS",
+        "Bash",
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "NotebookRead",
+        "NotebookEdit",
+        "Task",
+        "TodoRead",
+        "TodoWrite",
+        "ExitPlanMode",
+      ]),
+    )
+    expect(queryParams.options.disallowedTools).not.toContain("WebSearch")
+    expect(queryParams.options.disallowedTools).not.toContain("WebFetch")
   })
 
   test("uses continue mode and skips project/user setting sources for Ollama", () => {

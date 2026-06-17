@@ -42,6 +42,7 @@ export type ClaudePermissionMapping = {
   sdkPermissionMode: "plan" | "bypassPermissions"
   allowDangerouslySkipPermissions: boolean
   requiresToolPolicy: boolean
+  sdkDisallowedTools?: string[]
   bypassReason: string | null
 }
 
@@ -184,11 +185,31 @@ const DISABLED_OBSERVATION: ObservedToolPolicy = {
 
 const ASSISTANT_ALLOWED_WEB_TOOL_NAMES = new Set(["websearch", "webfetch"])
 
+const CLAUDE_ASSISTANT_SDK_DISALLOWED_TOOLS = [
+  "Read",
+  "Write",
+  "Edit",
+  "MultiEdit",
+  "NotebookRead",
+  "NotebookEdit",
+  "Glob",
+  "Grep",
+  "LS",
+  "Bash",
+  "BashOutput",
+  "KillShell",
+  "Task",
+  "TodoRead",
+  "TodoWrite",
+  "ExitPlanMode",
+] as const
+
 const ASSISTANT_FILESYSTEM_TOOL_NAMES = new Set([
   "read",
   "write",
   "edit",
   "multiedit",
+  "notebookread",
   "notebookedit",
   "glob",
   "grep",
@@ -202,10 +223,13 @@ const ASSISTANT_SHELL_TOOL_NAMES = new Set([
   "shell",
   "exec",
   "execute",
+  "bashoutput",
+  "killshell",
 ])
 
 const ASSISTANT_RUNTIME_MUTATION_TOOL_NAMES = new Set([
   "exitplanmode",
+  "todoread",
   "todowrite",
   "task",
   "planwrite",
@@ -221,6 +245,10 @@ const FILESYSTEM_TOOL_KINDS = new Set([
 
 function normalizeAssistantToolName(toolName: string): string {
   return toolName.replace(/[^A-Za-z0-9]/g, "").toLowerCase()
+}
+
+export function getClaudeAssistantSdkDisallowedTools(): string[] {
+  return [...CLAUDE_ASSISTANT_SDK_DISALLOWED_TOOLS]
 }
 
 export function decideAssistantToolPermission(input: {
@@ -502,6 +530,7 @@ export function resolveDesktopPermissionPolicy({
               sdkPermissionMode: "plan",
               allowDangerouslySkipPermissions: false,
               requiresToolPolicy: true,
+              sdkDisallowedTools: getClaudeAssistantSdkDisallowedTools(),
               bypassReason: null,
             }
           : createCodexPermissionMapping({
