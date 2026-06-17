@@ -83,6 +83,7 @@ import { DiffSidebarHeader } from "../../changes/components/diff-sidebar-header"
 import { usePushAction } from "../../changes/hooks/use-push-action"
 import { getStatusIndicator } from "../../changes/utils/status"
 import {
+  detailsSidebarAutoOpenSuppressedAtom,
   detailsSidebarOpenAtom,
   expandedWidgetAtomFamily,
   expandedWidgetSidebarWidthAtom,
@@ -4380,6 +4381,9 @@ export function ChatView({
 
   // Details sidebar state
   const [isDetailsSidebarOpen, setIsDetailsSidebarOpen] = useAtom(detailsSidebarOpenAtom)
+  const setDetailsSidebarAutoOpenSuppressed = useSetAtom(
+    detailsSidebarAutoOpenSuppressedAtom,
+  )
   const pendingActiveLocalBrowserReportAtom = useMemo(
     () => pendingLocalBrowserReportAtomFamily(activeSubChatIdForPlan || ""),
     [activeSubChatIdForPlan],
@@ -4510,6 +4514,11 @@ export function ChatView({
   const handleOpenPlanProductEntry = useCallback(() => {
     openDetailsWidget("plan")
   }, [openDetailsWidget])
+
+  const handleOpenDetailsSidebar = useCallback(() => {
+    setDetailsSidebarAutoOpenSuppressed(false)
+    setIsDetailsSidebarOpen(true)
+  }, [setDetailsSidebarAutoOpenSuppressed, setIsDetailsSidebarOpen])
 
   const handleOpenTerminalProductEntry = useCallback(() => {
     if (terminalDisplayMode === "bottom") {
@@ -6727,7 +6736,7 @@ Make sure to preserve all functionality from both branches when resolving confli
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => setIsDetailsSidebarOpen(true)}
+                          onClick={handleOpenDetailsSidebar}
                           className="h-6 w-6 p-0 hover:bg-foreground/10 transition-colors text-foreground flex-shrink-0 rounded-md ml-2"
                           aria-label={t("details.details")}
                         >

@@ -57,6 +57,8 @@ export const SubChatStatusCard = memo(function SubChatStatusCard({
   onStop,
   hasQueueCardAbove = false,
 }: SubChatStatusCardProps) {
+  // Environment split: this card is sub-chat file provenance and a diff jump
+  // entry, not a duplicate of static workspace/branch environment state.
   const { t } = useI18n()
   const isBusy = isStreaming || isCompacting
   const [isExpanded, setIsExpanded] = useState(false)

@@ -6,7 +6,7 @@ import { motion } from "motion/react"
 import { useTheme } from "next-themes"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { PlusIcon } from "@/components/ui/icons"
+import { IconBottomPanel, PlusIcon } from "@/components/ui/icons"
 import { Kbd } from "@/components/ui/kbd"
 import {
   Tooltip,
@@ -268,10 +268,10 @@ export const TerminalWidget = memo(function TerminalWidget({
 
   // Auto-create first terminal when section is rendered and no terminals exist
   useEffect(() => {
-    if (terminals.length === 0) {
+    if (displayMode === "details" && terminals.length === 0) {
       createTerminal()
     }
-  }, [terminals.length, createTerminal])
+  }, [displayMode, terminals.length, createTerminal])
 
   const handleDisplayModeChange = useCallback(
     (mode: "details" | "bottom") => {
@@ -283,6 +283,14 @@ export const TerminalWidget = memo(function TerminalWidget({
     [setBottomPanelOpen, setDisplayMode],
   )
 
+  const handleOpenBottomPanel = useCallback(() => {
+    if (terminalsRef.current.length === 0) {
+      createTerminal()
+    }
+    setDisplayMode("bottom")
+    setBottomPanelOpen(true)
+  }, [createTerminal, setBottomPanelOpen, setDisplayMode])
+
   // Delay terminal rendering slightly
   const [canRenderTerminal, setCanRenderTerminal] = useState(false)
   useEffect(() => {
@@ -291,6 +299,48 @@ export const TerminalWidget = memo(function TerminalWidget({
     }, 50)
     return () => clearTimeout(timer)
   }, [])
+
+  if (displayMode === "bottom") {
+    return (
+      <div className="mx-2 mb-2">
+        <div className="rounded-lg border border-border/50 overflow-hidden">
+          <div className="flex items-center gap-2 px-2 py-1.5 select-none group bg-muted/30">
+            <TerminalModeSwitcher
+              mode={displayMode}
+              onModeChange={handleDisplayModeChange}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium text-foreground truncate">
+                {activeTerminal?.name ?? t("terminal.noTerminalOpen")}
+              </div>
+              <div className="text-[11px] text-muted-foreground truncate">
+                {terminals.length > 0
+                  ? `${terminals.length} - ${cwd}`
+                  : t("terminal.bottomMode")}
+              </div>
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleOpenBottomPanel}
+                  className="h-6 w-6 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground rounded-md transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0"
+                  aria-label={t("terminal.bottomMode")}
+                >
+                  <IconBottomPanel className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                {t("terminal.bottomMode")}
+                {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-2 mb-2">

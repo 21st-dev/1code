@@ -35,14 +35,14 @@ type LegacyTerminalDisplayMode = "side-peek"
 export function normalizeTerminalDisplayMode(
   mode: TerminalDisplayMode | LegacyTerminalDisplayMode | string | null | undefined,
 ): TerminalDisplayMode {
-  return mode === "bottom" ? "bottom" : "details"
+  return mode === "details" ? "details" : "bottom"
 }
 
 const terminalDisplayModeStorageAtom = atomWithStorage<
   TerminalDisplayMode | LegacyTerminalDisplayMode
 >(
   "terminal-display-mode",
-  "details",
+  "bottom",
   undefined,
   { getOnInit: true },
 )

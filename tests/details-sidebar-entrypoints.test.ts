@@ -87,7 +87,84 @@ describe("details sidebar entrypoints", () => {
     expect(switcher).not.toContain('value: "center-peek" as const')
   })
 
-  test("normalizes terminal side-peek to Details and preserves bottom panel", () => {
+  test("uses environment-first default Details widget order", () => {
+    const atoms = read("src/renderer/features/details-sidebar/atoms/index.ts")
+    const registrySection = atoms.slice(
+      atoms.indexOf("export const WIDGET_REGISTRY"),
+      atoms.indexOf("// Helper to get default visible widgets"),
+    )
+    const widgetIds = Array.from(
+      registrySection.matchAll(/id: "([^"]+)"/g),
+      (match) => match[1],
+    )
+
+    expect(widgetIds).toEqual([
+      "info",
+      "diff",
+      "todo",
+      "plan",
+      "mcp",
+      "trace",
+      "usage",
+      "error",
+      "terminal",
+      "browser",
+      "file",
+    ])
+    expect(atoms).toContain(
+      "get(widgetVisibilityStorageAtom)[workspaceId] ?? DEFAULT_VISIBLE_WIDGETS",
+    )
+    expect(atoms).toContain(
+      "get(widgetOrderStorageAtom)[workspaceId] ?? DEFAULT_WIDGET_ORDER",
+    )
+  })
+
+  test("keeps folderless quick chats out of repository Details surfaces", () => {
+    const source = read("src/renderer/features/agents/main/active-chat.tsx")
+
+    expect(source).toMatch(/worktreePath && \(\s*<ExpandedWidgetSidebar/)
+    expect(source).toMatch(/worktreePath && \(\s*<DetailsSidebar/)
+    expect(source).toMatch(/worktreePath &&\s*!\s*isDetailsSidebarOpen/)
+    expect(source).toContain("isFolderlessChat")
+    expect(source).toContain("quickChat.attachFolder")
+    expect(source).not.toContain("projectId === null")
+  })
+
+  test("separates user Details opens from context auto-open policy", () => {
+    const atoms = read("src/renderer/features/details-sidebar/atoms/index.ts")
+    const openDetailsWidget = read(
+      "src/renderer/features/details-sidebar/use-open-details-widget.ts",
+    )
+    const detailsSidebar = read(
+      "src/renderer/features/details-sidebar/details-sidebar.tsx",
+    )
+    const source = read("src/renderer/features/agents/main/active-chat.tsx")
+    const planTool = read(
+      "src/renderer/features/agents/ui/agent-plan-file-tool.tsx",
+    )
+
+    expect(atoms).toContain("detailsSidebarAutoOpenSuppressedAtom")
+    expect(openDetailsWidget).toContain('source?: "user" | "context"')
+    expect(openDetailsWidget).toContain(
+      'type DetailsWidgetOpenReason = "plan-produced" | "run-error"',
+    )
+    expect(openDetailsWidget).toContain("isFolderlessChat?: boolean")
+    expect(openDetailsWidget).toContain("CONTEXT_AUTO_OPEN_REASONS")
+    expect(openDetailsWidget).toContain('options?.source === "context"')
+    expect(openDetailsWidget).toContain("setDetailsSidebarOpen(true)")
+    expect(openDetailsWidget).toContain(
+      "setDetailsSidebarAutoOpenSuppressed(false)",
+    )
+    expect(detailsSidebar).toContain(
+      "setDetailsSidebarAutoOpenSuppressed(true)",
+    )
+    expect(source).toContain("handleOpenDetailsSidebar")
+    expect(source).toContain("setDetailsSidebarAutoOpenSuppressed(false)")
+    expect(planTool).toContain('source: "context"')
+    expect(planTool).toContain('reason: "plan-produced"')
+  })
+
+  test("defaults terminal side-peek to bottom and preserves Details opt-in", () => {
     const source = read("src/renderer/features/agents/main/active-chat.tsx")
     const terminalAtoms = read("src/renderer/features/terminal/atoms.ts")
     const terminalSidebar = read(
@@ -110,13 +187,19 @@ describe("details sidebar entrypoints", () => {
       'type LegacyTerminalDisplayMode = "side-peek"',
     )
     expect(terminalAtoms).toContain(
-      'return mode === "bottom" ? "bottom" : "details"',
+      'return mode === "details" ? "details" : "bottom"',
+    )
+    expect(terminalAtoms).toContain(
+      '"terminal-display-mode",\n  "bottom"',
     )
     expect(terminalModeSwitcher).toContain('value: "details" as const')
     expect(terminalModeSwitcher).toContain('value: "bottom" as const')
     expect(terminalModeSwitcher).not.toContain('value: "side-peek" as const')
     expect(terminalWidget).toContain("<TerminalModeSwitcher")
+    expect(terminalWidget).toContain('if (displayMode === "bottom")')
+    expect(terminalWidget).toContain("handleOpenBottomPanel")
     expect(terminalWidget).toContain("setBottomPanelOpen(true)")
+    expect(terminalWidget).toContain("<IconBottomPanel")
     expect(terminalSection).toContain("<TerminalModeSwitcher")
     expect(terminalSection).toContain("setBottomPanelOpen(true)")
     expect(terminalSidebar).toContain("<TerminalModeSwitcher")
@@ -124,6 +207,25 @@ describe("details sidebar entrypoints", () => {
     expect(source).toContain('terminalDisplayMode === "bottom"')
     expect(source).toContain("<TerminalBottomPanelContent")
     expect(source).toContain('openDetailsWidget("terminal", { toggle: true })')
+  })
+
+  test("keeps in-chat git readouts as message-level provenance", () => {
+    const gitActivityBadges = read(
+      "src/renderer/features/agents/ui/git-activity-badges.tsx",
+    )
+    const subChatStatusCard = read(
+      "src/renderer/features/agents/ui/sub-chat-status-card.tsx",
+    )
+
+    expect(gitActivityBadges).toContain("message-level git provenance")
+    expect(gitActivityBadges).toContain("extractGitActivity(parts)")
+    expect(gitActivityBadges).toContain("extractChangedFiles(parts")
+    expect(gitActivityBadges).toContain('openDetailsWidget("diff")')
+    expect(gitActivityBadges).not.toContain("currentBranch")
+    expect(subChatStatusCard).toContain("sub-chat file provenance")
+    expect(subChatStatusCard).toContain("uncommittedFiles")
+    expect(subChatStatusCard).toContain('openDetailsWidget("diff")')
+    expect(subChatStatusCard).not.toContain("currentBranch")
   })
 
   test("does not keep legacy right-sidebar fallback paths", () => {

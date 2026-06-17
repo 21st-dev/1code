@@ -41,6 +41,8 @@ export const GitActivityBadges = memo(function GitActivityBadges({
   chatId,
   subChatId,
 }: GitActivityBadgesProps) {
+  // Environment split: this renders message-level git provenance from the turn
+  // (changed files, commit, PR), while static workspace state belongs in Details.
   const { t } = useI18n()
   const selectedProject = useAtomValue(selectedProjectAtom)
   const setDiffSidebarOpen = useSetAtom(diffSidebarOpenAtomFamily(chatId))

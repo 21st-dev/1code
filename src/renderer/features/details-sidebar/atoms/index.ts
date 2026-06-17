@@ -53,10 +53,34 @@ export const WIDGET_REGISTRY: WidgetConfig[] = [
     defaultVisible: true,
   },
   {
+    id: "diff",
+    label: "Changes",
+    labelKey: "changes.title",
+    icon: FileDiff,
+    canExpand: true,
+    defaultVisible: true,
+  },
+  {
     id: "todo",
     label: "To-dos",
     labelKey: "details.todoList",
     icon: ListTodo,
+    canExpand: false,
+    defaultVisible: true,
+  },
+  {
+    id: "plan",
+    label: "Plan",
+    labelKey: "details.plan",
+    icon: FileText,
+    canExpand: true,
+    defaultVisible: true,
+  },
+  {
+    id: "mcp",
+    label: "MCP Servers",
+    labelKey: "details.mcpServers",
+    icon: OriginalMCPIcon as unknown as LucideIcon,
     canExpand: false,
     defaultVisible: true,
   },
@@ -85,34 +109,10 @@ export const WIDGET_REGISTRY: WidgetConfig[] = [
     defaultVisible: true,
   },
   {
-    id: "plan",
-    label: "Plan",
-    labelKey: "details.plan",
-    icon: FileText,
-    canExpand: true,
-    defaultVisible: true,
-  },
-  {
     id: "terminal",
     label: "Terminal",
     labelKey: "details.terminal",
     icon: Terminal,
-    canExpand: true,
-    defaultVisible: false,
-  },
-  {
-    id: "diff",
-    label: "Changes",
-    labelKey: "changes.title",
-    icon: FileDiff,
-    canExpand: true,
-    defaultVisible: true,
-  },
-  {
-    id: "file",
-    label: "File Viewer",
-    labelKey: "fileViewer.title",
-    icon: FileSearch,
     canExpand: true,
     defaultVisible: false,
   },
@@ -125,12 +125,12 @@ export const WIDGET_REGISTRY: WidgetConfig[] = [
     defaultVisible: true,
   },
   {
-    id: "mcp",
-    label: "MCP Servers",
-    labelKey: "details.mcpServers",
-    icon: OriginalMCPIcon as unknown as LucideIcon,
-    canExpand: false,
-    defaultVisible: true,
+    id: "file",
+    label: "File Viewer",
+    labelKey: "fileViewer.title",
+    icon: FileSearch,
+    canExpand: true,
+    defaultVisible: false,
   },
 ]
 
@@ -259,6 +259,13 @@ export const detailsSidebarOpenAtom = atomWithWindowStorage<boolean>(
   false,
   { getOnInit: true },
 )
+
+export const detailsSidebarAutoOpenSuppressedAtom =
+  atomWithWindowStorage<boolean>(
+    "overview:sidebarAutoOpenSuppressed",
+    false,
+    { getOnInit: true },
+  )
 
 // Details sidebar active tab (per-window, persisted)
 export type DetailsSidebarTab = "details" | "files"

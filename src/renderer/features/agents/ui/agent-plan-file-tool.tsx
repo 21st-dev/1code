@@ -126,11 +126,19 @@ export const AgentPlanFileTool = memo(function AgentPlanFileTool({
   }, [planContent, updateScrollGradients])
 
   // Auto-set current plan path when plan file appears (so Details sidebar can show it immediately)
+  const autoOpenedPlanPathRef = useRef<string | null>(null)
   useEffect(() => {
     if (filePath && hasVisibleContent) {
       setCurrentPlanPath(filePath)
+      if (autoOpenedPlanPathRef.current !== filePath) {
+        autoOpenedPlanPathRef.current = filePath
+        openDetailsWidget("plan", {
+          source: "context",
+          reason: "plan-produced",
+        })
+      }
     }
-  }, [filePath, hasVisibleContent, setCurrentPlanPath])
+  }, [filePath, hasVisibleContent, openDetailsWidget, setCurrentPlanPath])
 
   // Handle expand/collapse
   const handleToggleExpand = useCallback(() => {

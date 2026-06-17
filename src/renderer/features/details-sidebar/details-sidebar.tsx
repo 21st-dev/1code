@@ -39,6 +39,7 @@ import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { AgentMode } from "../agents/atoms"
 import {
+  detailsSidebarAutoOpenSuppressedAtom,
   detailsSidebarOpenAtom,
   detailsSidebarTabAtom,
   detailsSidebarWidthAtom,
@@ -256,6 +257,9 @@ export function DetailsSidebar({
   const { t } = useI18n()
   // Global sidebar open state
   const [isOpen, setIsOpen] = useAtom(detailsSidebarOpenAtom)
+  const setDetailsSidebarAutoOpenSuppressed = useSetAtom(
+    detailsSidebarAutoOpenSuppressedAtom,
+  )
 
   // Active tab state (Details / Files)
   const [activeTab, setActiveTab] = useAtom(detailsSidebarTabAtom)
@@ -293,8 +297,9 @@ export function DetailsSidebar({
 
   // Close sidebar callback
   const closeSidebar = useCallback(() => {
+    setDetailsSidebarAutoOpenSuppressed(true)
     setIsOpen(false)
-  }, [setIsOpen])
+  }, [setDetailsSidebarAutoOpenSuppressed, setIsOpen])
 
   // Resolved hotkeys for tooltips
   const toggleDetailsHotkey = useResolvedHotkeyDisplay("toggle-details")
@@ -318,13 +323,15 @@ export function DetailsSidebar({
       ) {
         e.preventDefault()
         e.stopPropagation()
-        setIsOpen(!isOpen)
+        const nextIsOpen = !isOpen
+        setDetailsSidebarAutoOpenSuppressed(!nextIsOpen)
+        setIsOpen(nextIsOpen)
       }
     }
 
     window.addEventListener("keydown", handleKeyDown, true)
     return () => window.removeEventListener("keydown", handleKeyDown, true)
-  }, [setIsOpen, isOpen])
+  }, [setDetailsSidebarAutoOpenSuppressed, setIsOpen, isOpen])
 
   // Stable noop callback for when onOpenFile is not provided
   const noopSelectFile = useCallback(() => {}, [])
