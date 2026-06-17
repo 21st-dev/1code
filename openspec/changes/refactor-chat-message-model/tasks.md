@@ -44,20 +44,20 @@
 
 ## 3. Phase 1 — extract the normalizer with characterization tests
 
-- [ ] 3.1 Move the `getAgentChat` persisted-message transform from
+- [x] 3.1 Move the `getAgentChat` persisted-message transform from
   `src/renderer/lib/mock-api.ts` into a pure
   `src/shared/chat-message-normalizer.ts` returning the canonical model; it may
   reuse `codex-tool-normalizer.ts`.
-- [ ] 3.2 Promote `normalizeAcpParts` out of `assistant-message-item.tsx` into
+- [x] 3.2 Promote `normalizeAcpParts` out of `assistant-message-item.tsx` into
   `src/shared/` (verbatim) so the hydration normalizer and the render path import
   the same primitive; keep the render call shape unchanged (no `useMemo`, in-place
   mutation preserved). No second copy of `normalizeAcpParts`/`normalizeCodexToolPart`.
-- [ ] 3.3 Add characterization tests covering legacy `tool-invocation` migration,
+- [x] 3.3 Add characterization tests covering legacy `tool-invocation` migration,
   Codex MCP wrapper normalization, ACP tool-title verb mapping, tool `state`
   mapping, AND the `createdAt` shape after hydration (it is an ISO string today),
   asserting current output on representative fixtures (incl. real Claude and Codex
   persisted blobs to pin the read boundary).
-- [ ] 3.4 Have `mock-api.ts` delegate to the shared normalizer temporarily (still
+- [x] 3.4 Have `mock-api.ts` delegate to the shared normalizer temporarily (still
   present) so behavior is provably unchanged before call-site migration.
 
 ## 4. Phase 2 — retire the compat shim (single owner)

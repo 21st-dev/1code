@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai"
 import { ListTree, MoreHorizontal } from "lucide-react"
 import { memo, useCallback, useContext, useMemo, useState } from "react"
 import { useI18n } from "@/lib/i18n"
+import { normalizeAcpParts } from "../../../../shared/acp-tool-normalizer"
 import { normalizeCodexToolPart } from "../../../../shared/codex-tool-normalizer"
 import {
   DropdownMenu,
@@ -51,138 +52,6 @@ import {
 import { MessageJsonDisplay } from "../ui/message-json-display"
 import { ForkContext } from "./isolated-message-group"
 import { MemoizedTextPart } from "./memoized-text-part"
-
-// Map first word of an ACP tool title to a canonical Claude Code tool type.
-// Codex tool calls arrive with type = "tool-Read README.md", "tool-Run echo ---",
-// "tool-List /Users/...", "tool-Search *.test.ts in backend", etc.
-// input.toolName contains the full ACP title, input.args the raw codex parameters.
-const ACP_VERB_TO_TOOL_TYPE: Record<string, string> = {
-  Read: "Read",
-  Run: "Bash",
-  List: "Glob",
-  Search: "Grep",
-  Grep: "Grep",
-  Glob: "Glob",
-  Edit: "Edit",
-  Write: "Write",
-  Thought: "Thinking",
-  Fetch: "WebFetch",
-}
-
-// Check if a part.type looks like an ACP title-based type (e.g. "tool-Read README.md")
-// Returns the verb if matched, null otherwise
-function getAcpVerb(partType: string): string | null {
-  if (!partType.startsWith("tool-")) return null
-  const afterTool = partType.slice(5) // strip "tool-"
-  // Check if it starts with a known verb followed by space or end-of-string
-  for (const verb of Object.keys(ACP_VERB_TO_TOOL_TYPE)) {
-    if (afterTool === verb || afterTool.startsWith(verb + " ")) {
-      return verb
-    }
-  }
-  return null
-}
-
-// Normalize ACP/codex tool parts into canonical types so grouping and rendering work.
-// Handles two formats:
-// 1. Streaming: type="tool-acp.acp_provider_agent_dynamic_tool", input={toolName, args}
-// 2. Persisted/live: type="tool-Read README.md", input={toolName, args}
-function normalizeAcpParts(parts: any[]): any[] {
-  return parts.map((part) => {
-    if (!part.type?.startsWith("tool-")) return part
-
-    // Guard: only process ACP parts, not Claude Code parts.
-    // ACP parts have: input.toolName, or space in type (e.g. "tool-Read README.md"),
-    // or the proxy tool name. Claude Code parts have exact types like "tool-Read".
-    const isAcpPart =
-      part.input?.toolName ||
-      part.type.includes(" ") ||
-      part.type === "tool-acp.acp_provider_agent_dynamic_tool"
-    if (!isAcpPart) return part
-
-    const partInput =
-      part.input && typeof part.input === "object"
-        ? (part.input as Record<string, any>)
-        : {}
-
-    // Determine the ACP title — either from the type itself or from input.toolName
-    let title: string | null = null
-    let args: Record<string, any> = {}
-
-    // Case 1: type is already the title-based type (e.g. "tool-Read README.md")
-    const verb = getAcpVerb(part.type)
-    if (verb) {
-      title = partInput.toolName || part.type.slice(5)
-      args =
-        partInput.args && typeof partInput.args === "object"
-          ? (partInput.args as Record<string, any>)
-          : partInput
-    }
-
-    // Case 2: type is the ACP proxy tool name
-    if (!verb && part.type === "tool-acp.acp_provider_agent_dynamic_tool") {
-      let input = part.input
-      if (typeof input === "string") {
-        try {
-          input = JSON.parse(input)
-        } catch {
-          return part
-        }
-      }
-      const parsedInput =
-        input && typeof input === "object" ? (input as Record<string, any>) : {}
-      if (parsedInput.toolName) {
-        title = parsedInput.toolName
-        args =
-          parsedInput.args && typeof parsedInput.args === "object"
-            ? (parsedInput.args as Record<string, any>)
-            : parsedInput
-      }
-    }
-
-    if (!title) return part
-
-    // Parse the first word of the title to get canonical tool type
-    const spaceIdx = title.indexOf(" ")
-    const titleVerb = spaceIdx === -1 ? title : title.slice(0, spaceIdx)
-    const detail = spaceIdx === -1 ? "" : title.slice(spaceIdx + 1)
-    const canonicalType = ACP_VERB_TO_TOOL_TYPE[titleVerb]
-
-    if (!canonicalType) return part
-
-    // Enrich input with fields that the tool registry expects for display
-    const enrichedInput: Record<string, any> = {
-      ...args,
-      _acpTitle: title,
-      _acpDetail: detail,
-    }
-    if (canonicalType === "Read" && !enrichedInput.file_path && detail) {
-      enrichedInput.file_path = detail
-    }
-    if (canonicalType === "Bash") {
-      // Codex passes command as array ['/bin/zsh', '-lc', 'actual command'] — extract shell string
-      if (Array.isArray(enrichedInput.command)) {
-        enrichedInput.command =
-          enrichedInput.command[enrichedInput.command.length - 1] || detail
-      } else if (!enrichedInput.command && detail) {
-        enrichedInput.command = detail
-      }
-    }
-    if (canonicalType === "Grep" && !enrichedInput.pattern && detail) {
-      enrichedInput.pattern = detail
-    }
-    if (canonicalType === "Glob" && !enrichedInput.pattern && detail) {
-      enrichedInput.pattern = detail
-    }
-
-    return {
-      ...part,
-      type: `tool-${canonicalType}`,
-      input: enrichedInput,
-      output: part.output,
-    }
-  })
-}
 
 // Exploring tools - these get grouped when 3+ consecutive
 const EXPLORING_TOOLS = new Set([
