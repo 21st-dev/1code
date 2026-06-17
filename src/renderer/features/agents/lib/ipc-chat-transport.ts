@@ -10,7 +10,6 @@ import {
   agentsLoginModalOpenAtom,
   autoOfflineModeAtom,
   claudeLoginModalConfigAtom,
-  enableTasksAtom,
   extendedThinkingEnabledAtom,
   historyEnabledAtom,
   selectedOllamaModelAtom,
@@ -212,7 +211,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     // Using 32000 to stay safely under the 64000 max output tokens limit
     const maxThinkingTokens = thinkingEnabled ? 32_000 : undefined
     const historyEnabled = appStore.get(historyEnabledAtom)
-    const enableTasks = appStore.get(enableTasksAtom)
+    // TodoWrite/Task tools are always exposed. This was a persisted flag with no
+    // settings control (default ON); inlined to the default to drop the orphan.
+    const enableTasks = true
 
     // Read model selection dynamically per sub-chat (so split panes stay independent)
     const selectedModelId = appStore.get(subChatModelIdAtomFamily(this.config.subChatId))

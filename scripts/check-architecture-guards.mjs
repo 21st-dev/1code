@@ -214,12 +214,83 @@ function assertChatMessageModelOwner() {
   }
 }
 
+function assertNoDeadSettingsState() {
+  const atomsFile = "src/renderer/lib/atoms/index.ts"
+  const atomsContent = readText(atomsFile)
+
+  // Atoms defined in the settings/atoms source, and the persisted subset.
+  const defRegex = /export\s+const\s+(\w+)\s*=\s*(?:atomWithStorage|atomFamily|atom)\b/g
+  const defMatches = [...atomsContent.matchAll(defRegex)]
+  const definedAtoms = defMatches.map((m) => m[1])
+  const persistedAtoms = [
+    ...atomsContent.matchAll(/export\s+const\s+(\w+)\s*=\s*atomWithStorage\b/g),
+  ].map((m) => m[1])
+
+  // Text of every source file except the atoms definition file, for detecting
+  // references that live outside atoms/index.ts (a real consumer).
+  const externalText = walkFiles("src", [".ts", ".tsx"])
+    .filter((p) => relative(p) !== atomsFile)
+    .map((p) => readFileSync(p, "utf8"))
+    .join("\n")
+  const wordRegex = (name) => new RegExp(`\\b${name}\\b`)
+
+  // Liveness: seed with atoms referenced outside atoms/index.ts, then propagate
+  // consumer -> producer (a live derived atom's body keeps the atoms it reads
+  // alive) so a setting read only through a live derived atom is not flagged.
+  const bodyByName = new Map()
+  for (let i = 0; i < defMatches.length; i++) {
+    const start = defMatches[i].index
+    const end = i + 1 < defMatches.length ? defMatches[i + 1].index : atomsContent.length
+    bodyByName.set(defMatches[i][1], atomsContent.slice(start, end))
+  }
+  const live = new Set(definedAtoms.filter((name) => wordRegex(name).test(externalText)))
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const liveName of [...live]) {
+      const body = bodyByName.get(liveName)
+      if (!body) continue
+      for (const name of definedAtoms) {
+        if (!live.has(name) && wordRegex(name).test(body)) {
+          live.add(name)
+          changed = true
+        }
+      }
+    }
+  }
+
+  for (const name of persistedAtoms) {
+    if (!live.has(name)) {
+      fail(
+        `Persisted settings atom ${name} in ${atomsFile} has no reader (dead settings state); wire a reader/control or remove it.`,
+      )
+    }
+  }
+
+  // Every settings tab module must be reached by the settings content switcher.
+  // Match by module path (not exported symbol), so same-file aliases such as
+  // AgentsProjectWorktreeTab / AgentsProjectsTab are not false positives.
+  const switcher = readText("src/renderer/features/settings/settings-content.tsx")
+  const tabModules = walkFiles("src/renderer/components/dialogs/settings-tabs", [".tsx"])
+    .map(relative)
+    .filter((p) => /agents-[\w-]+-tab\.tsx$/.test(p))
+  for (const tabModule of tabModules) {
+    const moduleName = path.basename(tabModule, ".tsx")
+    if (!switcher.includes(`settings-tabs/${moduleName}`)) {
+      fail(
+        `Settings tab module ${tabModule} is never rendered by settings-content.tsx (unrendered tab); render it or remove it.`,
+      )
+    }
+  }
+}
+
 assertOwnershipDocs()
 assertPackageScripts()
 assertRuntimeCapabilitySingleOwner()
 assertGuardDecisionSingleOwner()
 assertRuntimeEventStateOwner()
 assertChatMessageModelOwner()
+assertNoDeadSettingsState()
 
 if (failures.length > 0) {
   console.error("Architecture guard failed:")
