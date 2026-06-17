@@ -1,30 +1,30 @@
 "use client"
 
-import { useCallback, useEffect, useMemo } from "react"
-import type { ReactNode } from "react"
 import { useAtom } from "jotai"
 import { X } from "lucide-react"
-import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
+import type { ReactNode } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
+import { ResizableSidebar } from "@/components/ui/resizable-sidebar"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Kbd } from "@/components/ui/kbd"
+import { useI18n } from "@/lib/i18n"
+import type { AgentMode } from "../agents/atoms"
 import {
   expandedWidgetAtomFamily,
   expandedWidgetSidebarWidthAtom,
   WIDGET_REGISTRY,
   type WidgetId,
 } from "./atoms"
+import { DiffSection } from "./sections/diff-section"
 import { InfoSection } from "./sections/info-section"
 import { PlanSection } from "./sections/plan-section"
 import { TerminalSection } from "./sections/terminal-section"
-import { DiffSection } from "./sections/diff-section"
-import { useI18n } from "@/lib/i18n"
 import type { ParsedDiffFile } from "./types"
-import type { AgentMode } from "../agents/atoms"
 
 interface ExpandedWidgetSidebarProps {
   /** Workspace/chat ID */
@@ -104,11 +104,7 @@ export function ExpandedWidgetSidebar({
     switch (expandedWidget) {
       case "info":
         return (
-          <InfoSection
-            chatId={chatId}
-            worktreePath={worktreePath}
-            isExpanded
-          />
+          <InfoSection chatId={chatId} worktreePath={worktreePath} isExpanded />
         )
       case "plan":
         return (
@@ -169,7 +165,9 @@ export function ExpandedWidgetSidebar({
             {widgetConfig && (
               <>
                 <widgetConfig.icon className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">{t(widgetConfig.labelKey)}</span>
+                <span className="text-sm font-medium">
+                  {t(widgetConfig.labelKey)}
+                </span>
               </>
             )}
           </div>
@@ -193,9 +191,7 @@ export function ExpandedWidgetSidebar({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {renderWidgetContent()}
-        </div>
+        <div className="flex-1 overflow-y-auto">{renderWidgetContent()}</div>
       </div>
     </ResizableSidebar>
   )

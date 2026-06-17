@@ -1,43 +1,43 @@
-import { useEffect, useCallback, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { useTheme } from "next-themes"
-import { fullThemeDataAtom } from "@/lib/atoms"
+import { AlignJustify, Check, ChevronsDown } from "lucide-react"
 import { motion } from "motion/react"
+import { useTheme } from "next-themes"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  CustomTerminalIcon,
+  IconBottomPanel,
+  IconOpenSidebarRight,
+} from "@/components/ui/icons"
+import { Kbd } from "@/components/ui/kbd"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu"
-import {
-  CustomTerminalIcon,
-  IconOpenSidebarRight,
-  IconBottomPanel,
-} from "@/components/ui/icons"
-import { AlignJustify, Check, ChevronsDown } from "lucide-react"
-import { Kbd } from "@/components/ui/kbd"
+import { fullThemeDataAtom } from "@/lib/atoms"
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
+import { type TranslationKey, useI18n } from "@/lib/i18n"
+import { trpc } from "@/lib/trpc"
+import {
+  activeTerminalIdAtom,
+  type TerminalDisplayMode,
+  terminalCwdAtom,
+  terminalDisplayModeAtom,
+  terminalSidebarOpenAtomFamily,
+  terminalsAtom,
+} from "./atoms"
+import { getDefaultTerminalBg } from "./helpers"
 import { Terminal } from "./terminal"
 import { TerminalTabs } from "./terminal-tabs"
-import { getDefaultTerminalBg } from "./helpers"
-import {
-  terminalSidebarOpenAtomFamily,
-  terminalDisplayModeAtom,
-  terminalsAtom,
-  activeTerminalIdAtom,
-  terminalCwdAtom,
-  type TerminalDisplayMode,
-} from "./atoms"
-import { trpc } from "@/lib/trpc"
 import type { TerminalInstance } from "./types"
 import { isSharedTerminalScope } from "./utils"
-import { useI18n, type TranslationKey } from "@/lib/i18n"
 
 // Delay is disabled for performance, but keep the scheduling path for xterm sizing.
 const SIDEBAR_ANIMATION_DURATION_MS = 0
@@ -89,8 +89,16 @@ function getNextTerminalName(terminals: TerminalInstance[]): string {
 }
 
 const TERMINAL_MODES = [
-  { value: "details" as const, labelKey: "details.details" as TranslationKey, Icon: IconOpenSidebarRight },
-  { value: "bottom" as const, labelKey: "terminal.bottomMode" as TranslationKey, Icon: IconBottomPanel },
+  {
+    value: "details" as const,
+    labelKey: "details.details" as TranslationKey,
+    Icon: IconOpenSidebarRight,
+  },
+  {
+    value: "bottom" as const,
+    labelKey: "terminal.bottomMode" as TranslationKey,
+    Icon: IconBottomPanel,
+  },
 ]
 
 function TerminalModeSwitcher({
@@ -101,7 +109,8 @@ function TerminalModeSwitcher({
   onModeChange: (mode: TerminalDisplayMode) => void
 }) {
   const { t } = useI18n()
-  const currentMode = TERMINAL_MODES.find((m) => m.value === mode) ?? TERMINAL_MODES[0]
+  const currentMode =
+    TERMINAL_MODES.find((m) => m.value === mode) ?? TERMINAL_MODES[0]
   const CurrentIcon = currentMode.Icon
 
   return (
@@ -407,7 +416,15 @@ export function TerminalSidebar({
     } else {
       createTerminal()
     }
-  }, [isOpen, terminals.length, scopeKey, createTerminal, trpcUtils, setAllTerminals, setAllActiveIds])
+  }, [
+    isOpen,
+    terminals.length,
+    scopeKey,
+    createTerminal,
+    trpcUtils,
+    setAllTerminals,
+    setAllActiveIds,
+  ])
 
   // Note: Cmd+J keyboard shortcut is handled in active-chat.tsx
   // to ensure it works regardless of terminal display mode or focus state.
@@ -577,7 +594,12 @@ export function TerminalBottomPanelContent({
     const id = generateTerminalId()
     const paneId = generatePaneId(currentScopeKey, id)
     const name = getNextTerminalName(currentTerminals)
-    const newTerminal: TerminalInstance = { id, paneId, name, createdAt: Date.now() }
+    const newTerminal: TerminalInstance = {
+      id,
+      paneId,
+      name,
+      createdAt: Date.now(),
+    }
     setAllTerminals((prev) => ({
       ...prev,
       [currentScopeKey]: [...(prev[currentScopeKey] || []), newTerminal],
@@ -653,12 +675,19 @@ export function TerminalBottomPanelContent({
         killMutation.mutate({ paneId: terminal.paneId })
       })
       const remainingTerminals = currentTerminals.slice(0, index + 1)
-      setAllTerminals((prev) => ({ ...prev, [currentScopeKey]: remainingTerminals }))
+      setAllTerminals((prev) => ({
+        ...prev,
+        [currentScopeKey]: remainingTerminals,
+      }))
       const currentActiveId = activeTerminalIdRef.current
-      if (currentActiveId && !remainingTerminals.find((t) => t.id === currentActiveId)) {
+      if (
+        currentActiveId &&
+        !remainingTerminals.find((t) => t.id === currentActiveId)
+      ) {
         setAllActiveIds((prev) => ({
           ...prev,
-          [currentScopeKey]: remainingTerminals[remainingTerminals.length - 1]?.id || null,
+          [currentScopeKey]:
+            remainingTerminals[remainingTerminals.length - 1]?.id || null,
         }))
       }
     },
@@ -695,7 +724,14 @@ export function TerminalBottomPanelContent({
     } else {
       createTerminal()
     }
-  }, [terminals.length, scopeKey, createTerminal, trpcUtils, setAllTerminals, setAllActiveIds])
+  }, [
+    terminals.length,
+    scopeKey,
+    createTerminal,
+    trpcUtils,
+    setAllTerminals,
+    setAllActiveIds,
+  ])
 
   return (
     <div className="flex flex-col h-full min-w-0 overflow-hidden">
@@ -723,7 +759,10 @@ export function TerminalBottomPanelContent({
               {toggleTerminalHotkey && <Kbd>{toggleTerminalHotkey}</Kbd>}
             </TooltipContent>
           </Tooltip>
-          <TerminalModeSwitcher mode={displayMode} onModeChange={setDisplayMode} />
+          <TerminalModeSwitcher
+            mode={displayMode}
+            onModeChange={setDisplayMode}
+          />
         </div>
 
         {/* Terminal Tabs */}

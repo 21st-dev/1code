@@ -1,22 +1,21 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAtom } from "jotai"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
 import { Button } from "@/components/ui/button"
-import { Kbd } from "@/components/ui/kbd"
-import { cn } from "@/lib/utils"
 import {
   CodeIcon,
   IconSpinner,
   MarkdownIcon,
-  PlanIcon,
 } from "@/components/ui/icons"
-import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
-import { trpc } from "@/lib/trpc"
-import { planContentCacheAtomFamily } from "../atoms"
+import { Kbd } from "@/components/ui/kbd"
 import { useI18n } from "@/lib/i18n"
+import { trpc } from "@/lib/trpc"
+import { cn } from "@/lib/utils"
 import type { AgentMode } from "../../agents/atoms"
 import { CopyButton } from "../../agents/ui/message-action-buttons"
+import { planContentCacheAtomFamily } from "../atoms"
 
 interface PlanSectionProps {
   chatId: string
@@ -56,7 +55,10 @@ export const PlanSection = memo(function PlanSection({
     isLoading,
     error,
     refetch,
-  } = trpc.files.readFile.useQuery({ filePath: planPath! }, { enabled: !!planPath })
+  } = trpc.files.readFile.useQuery(
+    { filePath: planPath! },
+    { enabled: !!planPath },
+  )
 
   // Update cache when content loads successfully
   useEffect(() => {
@@ -168,9 +170,7 @@ export const PlanSection = memo(function PlanSection({
   if (showError) {
     return (
       <div className="px-3 py-4 text-center">
-        <p className="text-xs text-muted-foreground">
-          Failed to load plan
-        </p>
+        <p className="text-xs text-muted-foreground">Failed to load plan</p>
       </div>
     )
   }

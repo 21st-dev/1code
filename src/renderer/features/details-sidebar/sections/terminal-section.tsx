@@ -1,25 +1,24 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { ReactNode } from "react"
 import { useAtom, useAtomValue } from "jotai"
-import { useTheme } from "next-themes"
-import { fullThemeDataAtom } from "@/lib/atoms"
 import { motion } from "motion/react"
+import { useTheme } from "next-themes"
+import type { ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
-import { Terminal } from "@/features/terminal/terminal"
-import { TerminalTabs } from "@/features/terminal/terminal-tabs"
-import { getDefaultTerminalBg } from "@/features/terminal/helpers"
 import {
-  terminalSidebarOpenAtomFamily,
-  terminalsAtom,
   activeTerminalIdAtom,
   terminalCwdAtom,
+  terminalSidebarOpenAtomFamily,
+  terminalsAtom,
 } from "@/features/terminal/atoms"
-import { trpc } from "@/lib/trpc"
+import { getDefaultTerminalBg } from "@/features/terminal/helpers"
+import { Terminal } from "@/features/terminal/terminal"
+import { TerminalTabs } from "@/features/terminal/terminal-tabs"
 import type { TerminalInstance } from "@/features/terminal/types"
+import { fullThemeDataAtom } from "@/lib/atoms"
 import { useI18n } from "@/lib/i18n"
+import { trpc } from "@/lib/trpc"
 
 interface TerminalSectionProps {
   chatId: string
@@ -274,21 +273,22 @@ export function TerminalSection({
   }, [])
 
   // Tabs component for header
-  const tabsHeader = terminals.length > 0 ? (
-    <TerminalTabs
-      terminals={terminals}
-      activeTerminalId={activeTerminalId}
-      cwds={terminalCwds}
-      initialCwd={cwd}
-      terminalBg={terminalBg}
-      onSelectTerminal={selectTerminal}
-      onCloseTerminal={closeTerminal}
-      onCloseOtherTerminals={closeOtherTerminals}
-      onCloseTerminalsToRight={closeTerminalsToRight}
-      onCreateTerminal={createTerminal}
-      onRenameTerminal={renameTerminal}
-    />
-  ) : null
+  const tabsHeader =
+    terminals.length > 0 ? (
+      <TerminalTabs
+        terminals={terminals}
+        activeTerminalId={activeTerminalId}
+        cwds={terminalCwds}
+        initialCwd={cwd}
+        terminalBg={terminalBg}
+        onSelectTerminal={selectTerminal}
+        onCloseTerminal={closeTerminal}
+        onCloseOtherTerminals={closeOtherTerminals}
+        onCloseTerminalsToRight={closeTerminalsToRight}
+        onCreateTerminal={createTerminal}
+        onRenameTerminal={renameTerminal}
+      />
+    ) : null
 
   // Call renderHeader if provided (for widget card integration)
   useEffect(() => {
@@ -331,7 +331,13 @@ export function TerminalSection({
 
   // Standard render with tabs inside
   return (
-    <div className="flex flex-col" style={{ minHeight: isExpanded ? "400px" : "200px", height: isExpanded ? "100%" : undefined }}>
+    <div
+      className="flex flex-col"
+      style={{
+        minHeight: isExpanded ? "400px" : "200px",
+        height: isExpanded ? "100%" : undefined,
+      }}
+    >
       {/* Tabs */}
       <div
         className="flex items-center gap-1 px-1 py-1 flex-shrink-0"
@@ -343,7 +349,10 @@ export function TerminalSection({
       {/* Terminal Content */}
       <div
         className="flex-1 min-h-0 overflow-hidden"
-        style={{ backgroundColor: terminalBg, height: isExpanded ? "100%" : "200px" }}
+        style={{
+          backgroundColor: terminalBg,
+          height: isExpanded ? "100%" : "200px",
+        }}
       >
         {activeTerminal && canRenderTerminal ? (
           <motion.div

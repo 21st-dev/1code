@@ -8,12 +8,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  IconOpenSidebarRight,
-  IconFullPage,
-} from "@/components/ui/icons"
+import { IconFullPage, IconOpenSidebarRight } from "@/components/ui/icons"
 import type { DiffViewDisplayMode } from "@/features/agents/atoms"
-import { useI18n, type TranslationKey } from "@/lib/i18n"
+import { type TranslationKey, useI18n } from "@/lib/i18n"
 
 interface DiffViewModeSwitcherProps {
   mode: DiffViewDisplayMode
