@@ -45,7 +45,11 @@ describe("i18n dictionary parity", () => {
       "sidebar.startNewChat": "开始快速对话",
       "sidebar.newWorkspace": "新建工作区",
       "sidebar.workspaces": "工作区",
+      "onboarding.repo.selectTitle": "打开项目",
+      "onboarding.repo.selectFolder": "打开项目",
+      "onboarding.repo.skip": "开始快速对话",
       "chat.defaultTitle": "新对话",
+      "chat.selectRepo": "选择项目",
       "chat.creatingWorktree": "正在创建工作树...",
       "chat.placeholder.agentMode": "让智能体执行，@ 添加上下文，/ 输入命令",
       "usage.title": "用量",
@@ -77,11 +81,17 @@ describe("i18n dictionary parity", () => {
     expect(en["sidebar.startNewChat"]).toBe("Start a Quick chat")
     expect(en["settings.keyboard.actions.newWorkspace"]).toBe("New Workspace")
     expect(en["quickChat.attachFolder"]).toBe("Attach a Project")
+    expect(en["chat.selectRepo"]).toBe("Select Project")
+    expect(en["onboarding.repo.selectTitle"]).toBe("Open a Project")
+    expect(en["onboarding.repo.skip"]).toBe("Start a Quick chat")
     expect(en["settings.models.subChatTitle.title"]).toBe("Chat Title API")
 
     expect(zhCN["sidebar.newChat"]).toBe("新建快速对话")
     expect(zhCN["settings.keyboard.actions.newWorkspace"]).toBe("新建工作区")
     expect(zhCN["quickChat.attachFolder"]).toBe("关联项目")
+    expect(zhCN["chat.selectRepo"]).toBe("选择项目")
+    expect(zhCN["onboarding.repo.selectTitle"]).toBe("打开项目")
+    expect(zhCN["onboarding.repo.skip"]).toBe("开始快速对话")
     expect(zhCN["settings.models.subChatTitle.title"]).toBe("对话标题 API")
   })
 })
