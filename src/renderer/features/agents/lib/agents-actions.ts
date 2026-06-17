@@ -76,8 +76,8 @@ const openShortcutsAction: AgentActionDefinition = {
 
 const createNewAgentAction: AgentActionDefinition = {
   id: "create-new-agent",
-  label: "New chat",
-  description: "Create a new quick chat",
+  label: "New Quick chat",
+  description: "Start a Quick chat",
   category: "general",
   hotkey: "cmd+n",
   handler: async (context) => {

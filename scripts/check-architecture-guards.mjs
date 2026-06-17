@@ -31,6 +31,42 @@ function assertIncludes(filePath, text, label) {
   }
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function dictionaryEntriesForKey(content, key) {
+  const keyPattern = escapeRegExp(key)
+  const entryPattern = new RegExp(
+    `"${keyPattern}"\\s*:\\s*([\\s\\S]*?)(?=,\\n\\s*"[^"]+"\\s*:)`,
+    "g",
+  )
+  return [...content.matchAll(entryPattern)].map((match) => match[1])
+}
+
+function assertDictionaryContainsValue(content, key, expectedValue) {
+  const entries = dictionaryEntriesForKey(content, key)
+  if (!entries.some((entry) => entry.includes(JSON.stringify(expectedValue)))) {
+    fail(`src/renderer/lib/i18n/dictionaries.ts must set ${key} to ${JSON.stringify(expectedValue)} in at least one locale.`)
+  }
+}
+
+function assertDictionaryValueExcludes(content, key, forbiddenValues) {
+  const entries = dictionaryEntriesForKey(content, key)
+  if (entries.length === 0) {
+    fail(`src/renderer/lib/i18n/dictionaries.ts must define ${key}.`)
+    return
+  }
+
+  for (const entry of entries) {
+    for (const forbiddenValue of forbiddenValues) {
+      if (entry.includes(forbiddenValue)) {
+        fail(`src/renderer/lib/i18n/dictionaries.ts ${key} must not use retired Chat vocabulary ${JSON.stringify(forbiddenValue)}.`)
+      }
+    }
+  }
+}
+
 function walkFiles(relativeDir, extensions, result = []) {
   const absoluteDir = path.join(repoRoot, relativeDir)
   if (!existsSync(absoluteDir)) return result
@@ -284,6 +320,52 @@ function assertNoDeadSettingsState() {
   }
 }
 
+function assertCanonicalVocabularyI18n() {
+  const dictionary = readText("src/renderer/lib/i18n/dictionaries.ts")
+
+  const expectedValues = [
+    ["sidebar.newChat", "New Quick chat"],
+    ["sidebar.newChat", "新建快速对话"],
+    ["sidebar.startNewChat", "Start a Quick chat"],
+    ["sidebar.startNewChat", "开始快速对话"],
+    ["settings.keyboard.actions.newWorkspace", "New Workspace"],
+    ["settings.keyboard.actions.newWorkspace", "新建工作区"],
+    ["quickChat.attachFolder", "Attach a Project"],
+    ["quickChat.attachFolder", "关联项目"],
+    ["sidebar.openRepository", "Open a Project"],
+    ["sidebar.openRepository", "打开项目"],
+    ["settings.models.subChatTitle.title", "Chat Title API"],
+    ["settings.models.subChatTitle.title", "对话标题 API"],
+    ["settings.debug.chats", "Workspaces"],
+    ["settings.debug.chats", "工作区"],
+    ["settings.debug.subChats", "Chats"],
+    ["settings.debug.subChats", "对话"],
+  ]
+
+  for (const [key, expectedValue] of expectedValues) {
+    assertDictionaryContainsValue(dictionary, key, expectedValue)
+  }
+
+  const chatEntityLabelKeys = [
+    "onboarding.customModel.utilityApisBody",
+    "settings.models.subChatTitle.title",
+    "settings.models.subChatTitle.description",
+    "settings.models.subChatTitle.modelHint",
+    "settings.commands.builtin.clear",
+    "settings.debug.subChats",
+    "toast.models.subChatTitleSettingsSaved",
+    "toast.models.subChatTitleSettingsReset",
+    "toast.models.failedToSaveSubChatTitleSettings",
+    "toast.models.failedToResetSubChatTitleSettings",
+    "workbench.error.chat_context_missing.body",
+  ]
+  const retiredChatTerms = ["sub-chat", "Sub-chat", "subchat", "子对话"]
+
+  for (const key of chatEntityLabelKeys) {
+    assertDictionaryValueExcludes(dictionary, key, retiredChatTerms)
+  }
+}
+
 assertOwnershipDocs()
 assertPackageScripts()
 assertRuntimeCapabilitySingleOwner()
@@ -291,6 +373,7 @@ assertGuardDecisionSingleOwner()
 assertRuntimeEventStateOwner()
 assertChatMessageModelOwner()
 assertNoDeadSettingsState()
+assertCanonicalVocabularyI18n()
 
 if (failures.length > 0) {
   console.error("Architecture guard failed:")

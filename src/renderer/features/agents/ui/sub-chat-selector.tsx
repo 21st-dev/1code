@@ -923,7 +923,7 @@ export function SubChatSelector({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  New chat
+                  New Chat
                   {newAgentHotkey && <Kbd>{newAgentHotkey}</Kbd>}
                 </TooltipContent>
               </Tooltip>

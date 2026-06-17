@@ -41,8 +41,8 @@ describe("i18n dictionary parity", () => {
       "settings.skills.viewCommands": "命令",
       "sidebar.kanbanView": "看板视图",
       "sidebar.searchWorkspaces": "搜索工作区...",
-      "sidebar.newChat": "新建会话",
-      "sidebar.startNewChat": "开始新的快速对话",
+      "sidebar.newChat": "新建快速对话",
+      "sidebar.startNewChat": "开始快速对话",
       "sidebar.newWorkspace": "新建工作区",
       "sidebar.workspaces": "工作区",
       "chat.defaultTitle": "新对话",
@@ -59,7 +59,7 @@ describe("i18n dictionary parity", () => {
       "settings.plugins.viewStore": "Locus 商店",
       "settings.plugins.storeApproveExact": "批准精确候选",
       "settings.commands.officialSnapshotLastUpdated": "上次更新",
-      "settings.keyboard.actions.newWorkspace": "新建会话",
+      "settings.keyboard.actions.newWorkspace": "新建工作区",
       "agent.pastedText.pastChat": "历史对话",
       "agent.textSelection.addToContext": "添加到上下文",
       "agent.chat.searchChats": "搜索对话...",
@@ -70,5 +70,18 @@ describe("i18n dictionary parity", () => {
     for (const [key, expected] of Object.entries(expectedChinese)) {
       expect(zhCN[key as keyof typeof en]).toBe(expected)
     }
+  })
+
+  test("canonical vocabulary labels stay aligned", () => {
+    expect(en["sidebar.newChat"]).toBe("New Quick chat")
+    expect(en["sidebar.startNewChat"]).toBe("Start a Quick chat")
+    expect(en["settings.keyboard.actions.newWorkspace"]).toBe("New Workspace")
+    expect(en["quickChat.attachFolder"]).toBe("Attach a Project")
+    expect(en["settings.models.subChatTitle.title"]).toBe("Chat Title API")
+
+    expect(zhCN["sidebar.newChat"]).toBe("新建快速对话")
+    expect(zhCN["settings.keyboard.actions.newWorkspace"]).toBe("新建工作区")
+    expect(zhCN["quickChat.attachFolder"]).toBe("关联项目")
+    expect(zhCN["settings.models.subChatTitle.title"]).toBe("对话标题 API")
   })
 })

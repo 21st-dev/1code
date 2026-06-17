@@ -2668,7 +2668,7 @@ export function AgentsSidebar({
     return chatIds
   }, [pendingQuestions])
 
-  const handleNewAgent = async () => {
+  const handleNewQuickChat = async () => {
     triggerHaptic("light")
     setNewChatTarget({ type: "quick" })
     setSelectedChatId(null)
@@ -2681,7 +2681,7 @@ export function AgentsSidebar({
     }
   }
 
-  const handleOpenRepository = useCallback(async () => {
+  const handleOpenProject = useCallback(async () => {
     triggerHaptic("light")
     await onNewWorkspaceProjectPicker?.()
   }, [onNewWorkspaceProjectPicker, triggerHaptic])
@@ -3277,11 +3277,11 @@ export function AgentsSidebar({
               )}
             />
           </div>
-          {/* New Workspace Button */}
+          {/* New Quick chat Button */}
           <Tooltip delayDuration={500}>
             <TooltipTrigger asChild>
               <ButtonCustom
-                onClick={handleNewAgent}
+                onClick={handleNewQuickChat}
                 variant="outline"
                 size="sm"
                 className={cn(
@@ -3469,7 +3469,7 @@ export function AgentsSidebar({
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          onClick={handleOpenRepository}
+                          onClick={handleOpenProject}
                           disabled={isNewWorkspaceProjectPickerPending}
                           className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:pointer-events-none disabled:opacity-50"
                           aria-label={t("sidebar.openRepository")}

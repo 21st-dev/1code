@@ -84,6 +84,10 @@ describe("quick chat sidebar grouping", () => {
     const hotkeys = read(
       "src/renderer/features/agents/lib/agents-hotkeys-manager.ts",
     )
+    const shortcutRegistry = read("src/renderer/lib/hotkeys/shortcut-registry.ts")
+    const subChatSelector = read(
+      "src/renderer/features/agents/ui/sub-chat-selector.tsx",
+    )
 
     expect(sidebar).toContain(
       "const setNewChatTarget = useSetAtom(newChatTargetAtom)",
@@ -92,16 +96,21 @@ describe("quick chat sidebar grouping", () => {
     expect(sidebar).toContain(
       'setNewChatTarget({ type: "project", projectId: project.id })',
     )
+    expect(sidebar).toContain("const handleNewQuickChat = async () =>")
+    expect(sidebar).not.toContain("const handleNewAgent = async () =>")
     expect(sidebar).toContain('t("sidebar.newChat")')
     expect(sidebar).toContain('t("sidebar.startNewChat")')
 
     expect(actions).toContain(
       "setNewChatTarget?: (target: NewChatTarget) => void",
     )
+    expect(actions).toContain('label: "New Quick chat"')
     expect(actions).toContain('context.setNewChatTarget?.({ type: "quick" })')
     expect(actions).not.toContain(
       "await context.openProjectPickerForNewWorkspace?.()",
     )
+    expect(shortcutRegistry).toContain('label: "New Workspace"')
+    expect(subChatSelector).toContain("New Chat")
     expect(layout).toContain(
       "const setNewChatTarget = useSetAtom(newChatTargetAtom)",
     )
