@@ -67,9 +67,9 @@
 - [x] 4.2 Migrate the call sites to the typed owner: `agents-content.tsx`,
   `active-chat.tsx`, `agent-diff-view.tsx`, `sub-chat-selector.tsx`,
   `agents-subchats-sidebar.tsx`.
-- [x] 4.3 Inventory web-only stub consumers and move the genuine stubs
-  (stripe/user/claudeCode/agentInvites/repositorySandboxes) to
-  `src/renderer/lib/web-stubs.ts` with identical return shapes; delete unused.
+- [x] 4.3 Inventory web-only stub consumers and delete unused
+  stripe/user/claudeCode/agentInvites/repositorySandboxes stubs without creating
+  a replacement web-only stub path.
 - [x] 4.4 Delete `src/renderer/lib/mock-api.ts`; update `CLAUDE.md` and
   `docs/OWNERSHIP_MAP.md` to point at the new owners (persisted-message normalizer
   = hydration owner; `runtime-event-state.ts` stays the live owner; main writers

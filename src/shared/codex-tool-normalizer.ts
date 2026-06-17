@@ -1,3 +1,5 @@
+import type { CanonicalChatMessagePart } from "./chat-message"
+
 type AnyRecord = Record<string, any>
 
 const CODEX_VERB_TO_TOOL_TYPE: Record<string, string> = {
@@ -344,6 +346,10 @@ function getPartToolName(part: AnyRecord): string | null {
   return null
 }
 
+export function normalizeCodexToolPart(
+  part: CanonicalChatMessagePart,
+  options?: NormalizeCodexToolPartOptions,
+): CanonicalChatMessagePart
 export function normalizeCodexToolPart(
   part: unknown,
   options?: NormalizeCodexToolPartOptions,

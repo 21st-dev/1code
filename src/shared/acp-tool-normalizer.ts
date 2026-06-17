@@ -1,3 +1,5 @@
+import type { CanonicalChatMessagePart } from "./chat-message"
+
 type AnyRecord = Record<string, any>
 
 // Map first word of an ACP tool title to a canonical Claude Code tool type.
@@ -32,22 +34,25 @@ export function getAcpVerb(partType: string): string | null {
 // Handles:
 // 1. Streaming: type="tool-acp.acp_provider_agent_dynamic_tool", input={toolName,args}
 // 2. Persisted/live: type="tool-Read README.md", input={toolName,args}
-export function normalizeAcpParts(parts: any[]): any[] {
+export function normalizeAcpParts(
+  parts: CanonicalChatMessagePart[],
+): CanonicalChatMessagePart[] {
   return parts.map((part) => {
     if (!part.type?.startsWith("tool-")) return part
+    const rawInput =
+      part.input && typeof part.input === "object"
+        ? (part.input as AnyRecord)
+        : null
 
     // Guard: only process ACP parts, not Claude Code parts.
     // ACP parts have input.toolName, a space in type, or the proxy tool name.
     const isAcpPart =
-      part.input?.toolName ||
+      rawInput?.toolName ||
       part.type.includes(" ") ||
       part.type === "tool-acp.acp_provider_agent_dynamic_tool"
     if (!isAcpPart) return part
 
-    const partInput =
-      part.input && typeof part.input === "object"
-        ? (part.input as AnyRecord)
-        : {}
+    const partInput = rawInput ?? {}
 
     let title: string | null = null
     let args: AnyRecord = {}
@@ -98,6 +103,9 @@ export function normalizeAcpParts(parts: any[]): any[] {
     if (canonicalType === "Read" && !enrichedInput.file_path && detail) {
       enrichedInput.file_path = detail
     }
+    if ((canonicalType === "Edit" || canonicalType === "Write") && !enrichedInput.file_path && detail) {
+      enrichedInput.file_path = detail
+    }
     if (canonicalType === "Bash") {
       if (Array.isArray(enrichedInput.command)) {
         enrichedInput.command =
@@ -118,6 +126,6 @@ export function normalizeAcpParts(parts: any[]): any[] {
       type: `tool-${canonicalType}`,
       input: enrichedInput,
       output: part.output,
-    }
+    } as CanonicalChatMessagePart
   })
 }

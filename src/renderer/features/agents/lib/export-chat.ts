@@ -1,6 +1,7 @@
-import { trpcClient } from "../../../lib/trpc"
 import { toast } from "sonner"
+import type { CanonicalChatMessage } from "../../../../shared/chat-message"
 import { en, type TranslationKey } from "../../../lib/i18n/dictionaries"
+import { trpcClient } from "../../../lib/trpc"
 
 const MAX_HISTORY_CHARS = 50_000
 type Translate = (key: TranslationKey, values?: Record<string, string | number>) => string
@@ -10,7 +11,7 @@ type Translate = (key: TranslationKey, values?: Record<string, string | number>)
  * Tool calls are summarized as one-liners. Truncates at ~50k chars, dropping oldest first.
  */
 export function formatHistoryForContext(
-  messages: Array<{ role: string; parts?: Array<{ type: string; text?: string; toolName?: string; result?: any; args?: any }> }>,
+  messages: Array<Pick<CanonicalChatMessage, "role" | "parts">>,
 ): string {
   const formatted: string[] = []
 

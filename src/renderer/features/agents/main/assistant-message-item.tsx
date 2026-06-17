@@ -5,6 +5,10 @@ import { ListTree, MoreHorizontal } from "lucide-react"
 import { memo, useCallback, useContext, useMemo, useState } from "react"
 import { useI18n } from "@/lib/i18n"
 import { normalizeAcpParts } from "../../../../shared/acp-tool-normalizer"
+import type {
+  CanonicalChatMessage,
+  CanonicalChatMessagePart,
+} from "../../../../shared/chat-message"
 import { normalizeCodexToolPart } from "../../../../shared/codex-tool-normalizer"
 import {
   DropdownMenu,
@@ -250,7 +254,7 @@ function CollapsibleSteps({
 // ============================================================================
 
 export interface AssistantMessageItemProps {
-  message: any
+  message: CanonicalChatMessage
   isLastMessage: boolean
   isStreaming: boolean
   status: string
@@ -295,6 +299,18 @@ function getTrackedPartTextLength(part: any): number {
   }
 
   return -1
+}
+
+function getPartInputString(
+  part: CanonicalChatMessagePart,
+  key: string,
+): string | null {
+  const input =
+    part.input && typeof part.input === "object" && !Array.isArray(part.input)
+      ? (part.input as Record<string, unknown>)
+      : null
+  const value = input?.[key]
+  return typeof value === "string" ? value : null
 }
 
 // Custom comparison - check if message content actually changed
@@ -398,13 +414,13 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   // Note: no useMemo — AI SDK mutates parts in-place, so the array reference
   // doesn't change and useMemo would return stale results.
   const messageParts = normalizeAcpParts(
-    (message?.parts || []).map(
-      (part: any) => normalizeCodexToolPart(part) as any,
+    (message.parts || []).map((part: CanonicalChatMessagePart) =>
+      normalizeCodexToolPart(part),
     ),
   )
 
   const contentParts = useMemo(
-    () => messageParts.filter((p: any) => p.type !== "step-start"),
+    () => messageParts.filter((p) => p.type !== "step-start"),
     [messageParts],
   )
 
@@ -476,7 +492,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
 
     for (let i = 0; i < messageParts.length; i++) {
       const part = messageParts[i]
-      const filePath = part.input?.file_path || ""
+      const filePath = getPartInputString(part, "file_path") || ""
 
       if (
         (part.type === "tool-Write" || part.type === "tool-Edit") &&
@@ -692,7 +708,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
       // - In collapsed steps: all show mini indicator, last collapsed op's card shown separately after finalParts
       // - In final parts: all but last show mini indicator, last shows full card
       if (part.type === "tool-Write" || part.type === "tool-Edit") {
-        const filePath = part.input?.file_path || ""
+        const filePath = getPartInputString(part, "file_path") || ""
         if (isPlanFile(filePath)) {
           // Use part.toolCallId to find operation since idx may be adjusted for collapsed parts
           const opIndex = planOpsSummary.operations.findIndex(
@@ -813,7 +829,10 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
             key={idx}
             input={part.input}
             result={part.result}
-            errorText={(part as any).errorText || (part as any).error}
+            errorText={
+              part.errorText ||
+              (typeof part.error === "string" ? part.error : undefined)
+            }
             state={isPending ? "call" : "result"}
             isError={isError}
             isStreaming={isStreaming && isLastMessage}
@@ -826,9 +845,10 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
         const meta = AgentToolRegistry[part.type]
         const { isPending, isError } = getToolStatus(part, status)
         // Make Read tool clickable to open file in viewer
+        const filePath = getPartInputString(part, "file_path")
         const handleClick =
-          part.type === "tool-Read" && onOpenFile && part.input?.file_path
-            ? () => onOpenFile(part.input.file_path)
+          part.type === "tool-Read" && onOpenFile && filePath
+            ? () => onOpenFile(filePath)
             : undefined
         return (
           <AgentToolCall

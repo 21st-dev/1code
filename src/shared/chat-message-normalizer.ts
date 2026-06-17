@@ -81,7 +81,9 @@ function isCodexMcpWrapperPart(part: AnyRecord): boolean {
 function normalizeCodexMcpWrapperPart(part: AnyRecord): AnyRecord | null {
   if (!isCodexMcpWrapperPart(part)) return null
 
-  const normalizedMcpPart = normalizeCodexToolPart(part) as AnyRecord
+  const normalizedMcpPart = normalizeCodexToolPart(
+    part as CanonicalChatMessagePart,
+  ) as AnyRecord
   if (normalizedMcpPart === part) return null
   if (normalizedMcpPart.state) {
     return normalizeToolStateAndOutput(normalizedMcpPart)
@@ -109,7 +111,9 @@ function normalizeAcpHydrationPart(part: AnyRecord): AnyRecord | null {
     inputForSharedPrimitive !== part.input
       ? { ...part, input: inputForSharedPrimitive }
       : part
-  const normalized = normalizeAcpParts([candidate])[0] as AnyRecord
+  const normalized = normalizeAcpParts([
+    candidate as CanonicalChatMessagePart,
+  ])[0] as AnyRecord
   if (normalized === candidate) return null
 
   const outputWasAddedAsUndefined =

@@ -2887,7 +2887,7 @@ const ChatViewInner = memo(function ChatViewInner({
       const sdkUuid = findRollbackTargetSdkUuidForUserIndex(
         userMsgIndex,
         messages.length,
-        (index) => messages[index] as any,
+        (index) => messages[index],
       )
 
       if (!sdkUuid) {
@@ -4026,7 +4026,7 @@ const ChatViewInner = memo(function ChatViewInner({
 
       try {
         // 1. Format current messages as markdown
-        const historyMarkdown = formatHistoryForContext(messages as any)
+        const historyMarkdown = formatHistoryForContext(messages)
 
         // 2. Stage as a long text attachment in the main process
         const result = await trpcClient.files.stageLongTextAttachment.mutate({
@@ -5741,7 +5741,7 @@ Make sure to preserve all functionality from both branches when resolving confli
 
   const syncFinishedMessagesToChatCache = useCallback(
     (subChatId: string, chat: Chat<any>) => {
-      const latestMessages = (chat as any)?.messages
+      const latestMessages = chat.messages
       if (!Array.isArray(latestMessages)) return
       const latestMessagesJson = JSON.stringify(latestMessages)
 
