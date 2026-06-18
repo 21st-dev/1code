@@ -798,6 +798,35 @@ describe("Codex app-server adapter", () => {
     })
   })
 
+  test("applies Codex plugin config overrides after ordinary app-server config", async () => {
+    const transport = new FakeCodexAppServerTransport()
+
+    await createCodexAppServerAdapter({
+      enabled: true,
+      configOverrides: {
+        "features.apply_patch_freeform": true,
+        "plugins.figma@openai-curated.enabled": true,
+      },
+      pluginConfigOverrides: {
+        "plugins.figma@openai-curated.enabled": false,
+        "plugins.github@openai-curated.enabled": true,
+      },
+      createTransport: () => transport,
+    }).run(createRequest(appServerPolicy()))
+
+    const threadStart = transport.requests.find(
+      (request) => request.method === "thread/start",
+    )
+
+    expect(threadStart?.params).toMatchObject({
+      config: {
+        "features.apply_patch_freeform": true,
+        "plugins.figma@openai-curated.enabled": false,
+        "plugins.github@openai-curated.enabled": true,
+      },
+    })
+  })
+
   test("passes allowlisted CODEX_HOME to app-server without inheriting host secrets", async () => {
     const transport = new FakeCodexAppServerTransport()
 

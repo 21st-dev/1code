@@ -65,6 +65,7 @@ export type CreateCodexAppServerAdapterInput = {
   enabled?: boolean
   experimentalApi?: boolean
   configOverrides?: Record<string, unknown>
+  pluginConfigOverrides?: Record<string, boolean>
   createTransport?: (input: {
     request: DesktopRunRequest
     providerBinding: CodexAppServerProviderBinding
@@ -296,6 +297,7 @@ export function createCodexAppServerAdapter({
   enabled = false,
   experimentalApi = false,
   configOverrides,
+  pluginConfigOverrides,
   createTransport,
   providerGatewayToken = null,
   appManagedApiKey = null,
@@ -601,6 +603,7 @@ export function createCodexAppServerAdapter({
         const appServerConfig = {
           ...(providerBinding.client.config ?? {}),
           ...(configOverrides ?? {}),
+          ...(pluginConfigOverrides ?? {}),
         }
 
         const resumeThreadId = request.session.resumeSessionId ?? null
