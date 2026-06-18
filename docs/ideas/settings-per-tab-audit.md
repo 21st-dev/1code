@@ -13,11 +13,13 @@
 
 ---
 
-## Models (`agents-models-tab.tsx`, 2,168 lines)
+## Models (`agents-models-tab.tsx`)
+
+**Status:** Resolved by `refactor-models-provider-config`.
 
 **Render map (top → bottom):** Models list (hide/show per model) · Anthropic Accounts ·
-Codex Account (subscription) · *Advanced routing* collapsible [Provider Profiles +
-Helper APIs ×3] · *API Keys* collapsible [Codex API Key + Override Model].
+Codex Account (subscription + Codex API key) · *Advanced routing* collapsible
+[Provider Profiles + Helper APIs ×3].
 
 ### 🔴 A. Two coexisting provider-config systems, both UI-exposed (headline)
 
@@ -37,6 +39,10 @@ Helper APIs ×3] · *API Keys* collapsible [Codex API Key + Override Model].
   (`getLegacyClaudeProviderProfileId` already hints this migration exists) and
   **retire "Override Model"**; until then, at minimum co-locate the two and state the
   precedence. This is your call (it's the ② decision).
+- **Resolution:** Provider Profiles is canonical. The Override Model editor was
+  removed; onboarding now creates/selects Provider Profiles; persisted
+  `custom-provider` sources normalize before send and fail closed if no safe target
+  exists.
 
 ### 🟡 B. Codex config split across two sections
 
@@ -45,6 +51,7 @@ Helper APIs ×3] · *API Keys* collapsible [Codex API Key + Override Model].
   auth modes of the same provider, in two places.
 - **Action (design):** co-locate Codex subscription + API key under one "Codex"
   block (recommended), or cross-link them.
+- **Resolution:** Codex subscription and Codex API key now live in one Codex block.
 
 ### 🟡 C. "Override Model" is misfiled under "API Keys"
 
@@ -53,6 +60,7 @@ Helper APIs ×3] · *API Keys* collapsible [Codex API Key + Override Model].
   "Provider Profiles" lives under *Advanced routing*.
 - **Action:** fold into the §A decision — the two custom-provider editors belong in
   one place ("Custom providers"), separate from per-key entry.
+- **Resolution:** removed with §A.
 
 ### 🟢 D. UX smells (lower priority)
 
@@ -69,6 +77,8 @@ Helper APIs ×3] · *API Keys* collapsible [Codex API Key + Override Model].
   Codex-logout (1625) all confirm. Inconsistent; one click wipes a saved key.
 - **Action:** add a confirmation to remove-Codex-API-key (and audit `handleReset`
   for the same).
+- **Resolution:** Codex API key removal and helper resets now use app
+  `AlertDialog` confirmation.
 
 ### 🟡 F/G/H. Consistency + control smells (code-visible)
 
@@ -79,6 +89,7 @@ Helper APIs ×3] · *API Keys* collapsible [Codex API Key + Override Model].
   styled `Select` component used elsewhere (0× in this tab). Visual inconsistency.
 - **H — headers as raw JSON text box:** error-prone (mitigated: it validates and
   toasts `invalidHeaders`). Low priority; could become key/value rows later.
+- **Resolution:** F and G are fixed; H remains a low-priority follow-up.
 
 ### Not found
 - No outright **dead** control (the legacy override is a live fallback, not dead).

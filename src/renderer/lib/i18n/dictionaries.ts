@@ -464,11 +464,6 @@ export const en = {
     "Stored encrypted on this device",
   "settings.models.voiceTranscription.baseUrlHint":
     "Base URL or /audio/transcriptions endpoint",
-  "settings.models.overrideModel.title": "Custom Claude-compatible Provider",
-  "settings.models.overrideModel.modelHint":
-    "Model identifier to use for requests",
-  "settings.models.overrideModel.authHint":
-    "Select how Claude Code receives the provider token",
   "settings.models.removeCodexApiKey": "Remove Codex API key",
   "settings.models.removeCodexApiKeyConfirm":
     "Remove the saved Codex API key from this device?",
@@ -3716,10 +3711,6 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "加密保存在这台设备上",
   "settings.models.voiceTranscription.baseUrlHint":
     "基础 URL 或 /audio/transcriptions 端点",
-  "settings.models.overrideModel.title": "自定义兼容 Claude 的提供方",
-  "settings.models.overrideModel.modelHint": "请求时使用的模型标识",
-  "settings.models.overrideModel.authHint":
-    "选择 Claude Code 接收提供方令牌的方式",
   "settings.models.removeCodexApiKey": "移除 Codex API 密钥",
   "settings.models.removeCodexApiKeyConfirm":
     "要从这台设备移除已保存的 Codex API 密钥吗？",
