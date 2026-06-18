@@ -89,14 +89,37 @@
   `agent_provider_profiles` with `auth_mode=none`; the profile was editable and
   selectable from the chat model selector under the local provider profile group;
   no `custom-provider` selector row appeared.
-  Still blocked in this environment: token-backed custom-model onboarding cannot
-  create/select a profile because the main process returns
-  `System secure storage is unavailable. Please enable the OS keychain/credential
-  store and try again.` before the profile write. No pre-existing legacy secure
-  provider was available to migrate/edit, Codex API key removal confirmation was
-  not exercised, and the attempted persisted `custom-provider` send-boundary smoke
-  was inconclusive after DevTools focus sent a short message through the Claude
-  auth path. Automated tests and source guards still cover those invariants, but
-  this manual item remains unchecked until a real keychain-backed Electron smoke
-  can run them end-to-end.
+  Follow-up real Electron dev UI smoke run 2026-06-19 after fixing macOS
+  secure-storage preflight used a clean app userData override at
+  `/tmp/locus-provider-smoke-UbBK5Z`. Verified: token-backed Custom Model
+  onboarding created `agent_provider_profiles.id=mqk0xn4ovdeyosir`
+  (`Custom Claude Provider`, `protocol=anthropic`,
+  `base_url=https://provider-smoke.invalid/anthropic`,
+  `default_model=claude-smoke-6-6`, `auth_mode=bearer`,
+  `target_runtimes_json=["claude"]`) and stored a 68-byte encrypted token;
+  `strings` over the temp SQLite DB and Chromium Local/Session Storage found no
+  `sk-ant-smoke-token` plaintext and no `custom-provider`; the chat model
+  selector selected `Custom Claude Provider · claude-smoke-6-6` under the
+  `Claude 提供方配置` Provider Profile group with no `custom-provider` row; a
+  send-boundary smoke to a fake `.invalid` endpoint created a run with
+  `modelSource: 'provider-profile:mqk0xn4ovdeyosir'`,
+  `providerProfileId: 'mqk0xn4ovdeyosir'`, and the Claude runtime used the local
+  gateway URL `/profile/mqk0xn4ovdeyosir/anthropic/v1` with
+  `ANTHROPIC_AUTH_TOKEN: true`; the expected fake-provider run failed after the
+  provider gateway with `server_error`, not before provider-profile routing.
+  Also verified in Settings > Models: no Override Model editor; Anthropic and
+  Codex account cards are aligned; Codex subscription and API key are in the
+  same Codex block; Provider Profiles is expanded; protocol/auth controls render
+  as app `Select` combo boxes; the created Provider Profile is editable; a seeded
+  fake local `codex-api-key.json` made the Codex API key row active, clicking the
+  trash action opened the app confirmation dialog (`移除 Codex API 密钥` /
+  `要从这台设备移除已保存的 Codex API 密钥吗？`), and confirming removed it.
+  Remaining manual-only gap: no real pre-existing legacy keychain-bound
+  `claude_provider_config` fixture is available in this environment. Attempting
+  to synthesize one with a separate Electron `safeStorage` process produced a
+  ciphertext that the dev app correctly refused to decrypt, so the manual legacy
+  editability subcase remains unclosed here. Automated storage/migration tests
+  and source guards still cover the legacy invariant, but this manual item stays
+  unchecked until it can be run against a real legacy dev profile or an app-owned
+  fixture generated inside the same Electron main process.
 - [x] 6.7 Mark the Models section resolved in `docs/ideas/settings-per-tab-audit.md`.

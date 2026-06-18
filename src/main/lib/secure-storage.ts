@@ -1,7 +1,7 @@
+import { execFileSync } from "node:child_process"
+import { existsSync } from "node:fs"
+import { homedir } from "node:os"
 import * as electron from "electron"
-import { execFileSync } from "child_process"
-import { existsSync } from "fs"
-import { homedir } from "os"
 
 const FALLBACK_PREFIX = "locus:v1:base64:"
 const SECURE_STORAGE_UNAVAILABLE_MESSAGE =
@@ -16,14 +16,21 @@ type ElectronSafeStorage = {
 let unavailableWarningShown = false
 let decryptWarningShown = false
 let encryptWarningShown = false
+let macKeychainPreflightWarningShown = false
 let macKeychainPreflight: boolean | null = null
+let macKeychainPreflightForTest: boolean | null = null
+let electronSafeStorageForTest: ElectronSafeStorage | null = null
 
 function getElectronSafeStorage(): ElectronSafeStorage | null {
+  if (electronSafeStorageForTest) return electronSafeStorageForTest
+
   const electronModule = electron as unknown as {
     safeStorage?: ElectronSafeStorage
     default?: { safeStorage?: ElectronSafeStorage }
   }
-  return electronModule.safeStorage ?? electronModule.default?.safeStorage ?? null
+  return (
+    electronModule.safeStorage ?? electronModule.default?.safeStorage ?? null
+  )
 }
 
 function safeStorageDisabled(): boolean {
@@ -34,6 +41,9 @@ function safeStorageDisabled(): boolean {
 }
 
 function hasUsableMacDefaultKeychain(): boolean {
+  if (macKeychainPreflightForTest !== null) {
+    return macKeychainPreflightForTest
+  }
   if (process.platform !== "darwin") return true
   if (macKeychainPreflight !== null) return macKeychainPreflight
 
@@ -55,16 +65,45 @@ function hasUsableMacDefaultKeychain(): boolean {
   return macKeychainPreflight
 }
 
-function warnOnce(kind: "unavailable" | "decrypt" | "encrypt", message: string, error?: unknown): void {
+function resetSecureStorageWarningsForTest(): void {
+  macKeychainPreflight = null
+  macKeychainPreflightWarningShown = false
+  unavailableWarningShown = false
+  decryptWarningShown = false
+  encryptWarningShown = false
+}
+
+export function setSecureStorageMacKeychainPreflightForTest(
+  value: boolean | null,
+): void {
+  macKeychainPreflightForTest = value
+  resetSecureStorageWarningsForTest()
+}
+
+export function setElectronSafeStorageForTest(
+  value: ElectronSafeStorage | null,
+): void {
+  electronSafeStorageForTest = value
+  resetSecureStorageWarningsForTest()
+}
+
+function warnOnce(
+  kind: "unavailable" | "decrypt" | "encrypt" | "mac-keychain-preflight",
+  message: string,
+  error?: unknown,
+): void {
   if (kind === "unavailable") {
     if (unavailableWarningShown) return
     unavailableWarningShown = true
   } else if (kind === "decrypt") {
     if (decryptWarningShown) return
     decryptWarningShown = true
-  } else {
+  } else if (kind === "encrypt") {
     if (encryptWarningShown) return
     encryptWarningShown = true
+  } else {
+    if (macKeychainPreflightWarningShown) return
+    macKeychainPreflightWarningShown = true
   }
 
   console.warn(message, error)
@@ -74,10 +113,9 @@ export function isSecureStorageAvailable(): boolean {
   if (safeStorageDisabled()) return false
   if (!hasUsableMacDefaultKeychain()) {
     warnOnce(
-      "unavailable",
-      "[SecureStorage] macOS default keychain is unavailable; continuing without blocking startup.",
+      "mac-keychain-preflight",
+      "[SecureStorage] macOS default keychain preflight failed; checking Electron safeStorage before refusing credential writes.",
     )
-    return false
   }
 
   try {
@@ -116,9 +154,10 @@ export function encryptStringForStorage(value: string): string {
 
 export function decryptStringFromStorage(encrypted: string): string | null {
   if (encrypted.startsWith(FALLBACK_PREFIX)) {
-    return Buffer.from(encrypted.slice(FALLBACK_PREFIX.length), "base64").toString(
-      "utf-8",
-    )
+    return Buffer.from(
+      encrypted.slice(FALLBACK_PREFIX.length),
+      "base64",
+    ).toString("utf-8")
   }
 
   if (!isSecureStorageAvailable()) {

@@ -7,6 +7,7 @@ import { join } from "node:path"
 let encryptionAvailable = false
 let userDataDir = ""
 const originalConsoleError = console.error
+const originalConsoleWarn = console.warn
 
 mock.module("electron", () => ({
   app: {
@@ -45,10 +46,14 @@ describe("provider credential storage hardening", () => {
     encryptionAvailable = false
     userDataDir = await mkdtemp(join(tmpdir(), "locus-provider-credentials-"))
     console.error = mock(() => {}) as typeof console.error
+    console.warn = mock(() => {}) as typeof console.warn
   })
 
   afterEach(async () => {
     console.error = originalConsoleError
+    console.warn = originalConsoleWarn
+    secureStorage.setSecureStorageMacKeychainPreflightForTest(null)
+    secureStorage.setElectronSafeStorageForTest(null)
     await rm(userDataDir, { force: true, recursive: true })
     userDataDir = ""
     delete process.env.LOCUS_DISABLE_SAFE_STORAGE
@@ -65,6 +70,31 @@ describe("provider credential storage hardening", () => {
     } catch (error) {
       expect(String(error)).not.toContain("locus:v1:base64:")
     }
+  })
+
+  test("macOS keychain preflight warning does not block usable Electron safeStorage", () => {
+    encryptionAvailable = true
+    secureStorage.setSecureStorageMacKeychainPreflightForTest(false)
+    secureStorage.setElectronSafeStorageForTest({
+      isEncryptionAvailable() {
+        return encryptionAvailable
+      },
+      encryptString(value: string) {
+        return Buffer.from(`encrypted:${value}`, "utf-8")
+      },
+      decryptString(value: Buffer) {
+        const raw = value.toString("utf-8")
+        if (!raw.startsWith("encrypted:")) {
+          throw new Error("not encrypted")
+        }
+        return raw.slice("encrypted:".length)
+      },
+    })
+
+    expect(secureStorage.isSecureStorageAvailable()).toBe(true)
+    expect(secureStorage.encryptStringForStorage("sk-secret")).toBe(
+      Buffer.from("encrypted:sk-secret", "utf-8").toString("base64"),
+    )
   })
 
   test("legacy base64 fallback is read-only compatible", () => {
@@ -106,7 +136,10 @@ describe("provider credential storage hardening", () => {
       "utf-8",
     )
     const transportSource = readFileSync(
-      join(process.cwd(), "src/renderer/features/agents/lib/acp-chat-transport.ts"),
+      join(
+        process.cwd(),
+        "src/renderer/features/agents/lib/acp-chat-transport.ts",
+      ),
       "utf-8",
     )
     const codexRouterSource = readFileSync(
@@ -138,9 +171,11 @@ describe("provider credential storage hardening", () => {
       "getOrCreateCodexAcpProvider",
     )
     expect(codexAcpAdapterSource).toContain("buildCodexProviderEnv")
-    expect(codexProviderBindingSource).toContain("\"CODEX_API_KEY\"")
-    expect(codexProviderBindingSource).toContain("\"OPENAI_API_KEY\"")
-    expect(codexProviderBindingSource).toContain("LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN")
+    expect(codexProviderBindingSource).toContain('"CODEX_API_KEY"')
+    expect(codexProviderBindingSource).toContain('"OPENAI_API_KEY"')
+    expect(codexProviderBindingSource).toContain(
+      "LOCUS_CODEX_PROVIDER_GATEWAY_TOKEN",
+    )
   })
 
   test("Codex chat input rejects legacy authConfig API key payloads", () => {
