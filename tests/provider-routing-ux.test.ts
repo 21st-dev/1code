@@ -113,6 +113,21 @@ describe("provider routing UX source guards", () => {
     )
   })
 
+  test("Provider Profile headers use key/value rows instead of raw JSON input", () => {
+    expect(modelsTabSource).toContain("providerHeaderRowsFromMetadata")
+    expect(modelsTabSource).toContain("providerHeadersFromRows")
+    expect(modelsTabSource).toContain("headerRows.map")
+    expect(modelsTabSource).toContain(
+      "settings.models.providerProfiles.addHeader",
+    )
+    expect(modelsTabSource).toContain(
+      "settings.models.providerProfiles.savedHeaderValue",
+    )
+    expect(modelsTabSource).not.toContain("headersText")
+    expect(modelsTabSource).not.toContain("JSON.parse(headers")
+    expect(modelsTabSource).not.toContain('{"HTTP-Referer"')
+  })
+
   test("new chats persist selected provider metadata for transport routing", () => {
     expect(newChatFormSource).toContain(
       "provider: selectedAgent.id as AgentChatProvider",

@@ -563,6 +563,62 @@ function profileStatusClassName(ok: boolean) {
     : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300"
 }
 
+type ProviderHeaderDraftRow = {
+  id: string
+  key: string
+  value: string
+  existing: boolean
+}
+
+let providerHeaderDraftId = 0
+
+function createProviderHeaderDraftRow(
+  input: Partial<Omit<ProviderHeaderDraftRow, "id">> = {},
+): ProviderHeaderDraftRow {
+  providerHeaderDraftId += 1
+  return {
+    id: `provider-header-${providerHeaderDraftId}`,
+    key: input.key ?? "",
+    value: input.value ?? "",
+    existing: input.existing ?? false,
+  }
+}
+
+function providerHeaderRowsFromMetadata(
+  headers: Record<string, string>,
+): ProviderHeaderDraftRow[] {
+  return Object.keys(headers)
+    .sort((a, b) => a.localeCompare(b))
+    .map((key) =>
+      createProviderHeaderDraftRow({
+        key,
+        value: "",
+        existing: true,
+      }),
+    )
+}
+
+function providerHeadersFromRows(
+  rows: ProviderHeaderDraftRow[],
+): Record<string, string> | null {
+  const headers: Record<string, string> = {}
+  const seenKeys = new Set<string>()
+
+  for (const row of rows) {
+    const key = row.key.trim()
+    const value = row.value.trim()
+    if (!key && !value) continue
+    if (!key || !value) return null
+
+    const normalizedKey = key.toLowerCase()
+    if (seenKeys.has(normalizedKey)) return null
+    seenKeys.add(normalizedKey)
+    headers[key] = value
+  }
+
+  return headers
+}
+
 function ProviderProfilesSettingsSection() {
   const { t } = useI18n()
   const setLastSelectedClaudeModelSource = useSetAtom(
@@ -593,7 +649,8 @@ function ProviderProfilesSettingsSection() {
   const [defaultModel, setDefaultModel] = useState("")
   const [authMode, setAuthMode] = useState<ProviderProfileAuthMode>("bearer")
   const [token, setToken] = useState("")
-  const [headersText, setHeadersText] = useState("")
+  const [headerRows, setHeaderRows] = useState<ProviderHeaderDraftRow[]>([])
+  const [headersDirty, setHeadersDirty] = useState(false)
   const [targetRuntimes, setTargetRuntimes] = useState<ProviderProfileTarget[]>(
     ["claude", "codex", "helpers"],
   )
@@ -636,7 +693,8 @@ function ProviderProfilesSettingsSection() {
       setDefaultModel(preset.defaultModel)
       setAuthMode(preset.authMode)
       setToken("")
-      setHeadersText("")
+      setHeaderRows([])
+      setHeadersDirty(false)
       setTargetRuntimes([...preset.targetRuntimes])
     },
     [presets],
@@ -667,8 +725,38 @@ function ProviderProfilesSettingsSection() {
     setDefaultModel(profile.defaultModel)
     setAuthMode(profile.authMode)
     setToken("")
-    setHeadersText("")
+    setHeaderRows(providerHeaderRowsFromMetadata(profile.headers))
+    setHeadersDirty(false)
     setTargetRuntimes([...profile.targetRuntimes])
+  }
+
+  const addHeaderRow = () => {
+    setHeadersDirty(true)
+    setHeaderRows((current) => [...current, createProviderHeaderDraftRow()])
+  }
+
+  const updateHeaderRow = (
+    rowId: string,
+    field: "key" | "value",
+    value: string,
+  ) => {
+    setHeadersDirty(true)
+    setHeaderRows((current) =>
+      current.map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              [field]: value,
+              existing: false,
+            }
+          : row,
+      ),
+    )
+  }
+
+  const removeHeaderRow = (rowId: string) => {
+    setHeadersDirty(true)
+    setHeaderRows((current) => current.filter((row) => row.id !== rowId))
   }
 
   const toggleTarget = (target: ProviderProfileTarget) => {
@@ -695,21 +783,13 @@ function ProviderProfilesSettingsSection() {
     }
 
     let headers: Record<string, string> | undefined
-    if (headersText.trim()) {
-      try {
-        const parsed = JSON.parse(headersText) as unknown
-        if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-          throw new Error("Invalid headers JSON")
-        }
-        headers = Object.fromEntries(
-          Object.entries(parsed as Record<string, unknown>).map(
-            ([key, value]) => [key, String(value)],
-          ),
-        )
-      } catch {
+    if (headersDirty) {
+      const parsedHeaders = providerHeadersFromRows(headerRows)
+      if (parsedHeaders === null) {
         toast.error(t("settings.models.providerProfiles.invalidHeaders"))
         return
       }
+      headers = parsedHeaders
     }
 
     saveProfileMutation.mutate(
@@ -1059,19 +1139,78 @@ function ProviderProfilesSettingsSection() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label
-                htmlFor={`${formIdPrefix}-headers`}
-                className="text-sm font-medium"
-              >
-                {t("settings.models.providerProfiles.headers")}
-              </Label>
-              <Input
-                id={`${formIdPrefix}-headers`}
-                value={headersText}
-                onChange={(e) => setHeadersText(e.target.value)}
-                placeholder='{"HTTP-Referer":"https://example.com"}'
-              />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-sm font-medium">
+                  {t("settings.models.providerProfiles.headers")}
+                </Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={addHeaderRow}
+                  className="h-7 gap-1 px-2 text-xs"
+                >
+                  <Plus className="h-3 w-3" />
+                  {t("settings.models.providerProfiles.addHeader")}
+                </Button>
+              </div>
+              {headerRows.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="hidden grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_2rem] gap-2 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
+                    <span>
+                      {t("settings.models.providerProfiles.headerKey")}
+                    </span>
+                    <span>
+                      {t("settings.models.providerProfiles.headerValue")}
+                    </span>
+                    <span />
+                  </div>
+                  {headerRows.map((row, index) => (
+                    <div
+                      key={row.id}
+                      className="grid gap-2 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_2rem]"
+                    >
+                      <Input
+                        id={`${formIdPrefix}-header-key-${row.id}`}
+                        value={row.key}
+                        onChange={(e) =>
+                          updateHeaderRow(row.id, "key", e.target.value)
+                        }
+                        placeholder="HTTP-Referer"
+                        aria-label={`${t("settings.models.providerProfiles.headerKey")} ${index + 1}`}
+                      />
+                      <Input
+                        id={`${formIdPrefix}-header-value-${row.id}`}
+                        value={row.value}
+                        onChange={(e) =>
+                          updateHeaderRow(row.id, "value", e.target.value)
+                        }
+                        placeholder={
+                          row.existing
+                            ? t(
+                                "settings.models.providerProfiles.savedHeaderValue",
+                              )
+                            : "https://example.com"
+                        }
+                        aria-label={`${t("settings.models.providerProfiles.headerValue")} ${index + 1}`}
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => removeHeaderRow(row.id)}
+                        aria-label={t(
+                          "settings.models.providerProfiles.removeHeader",
+                        )}
+                        className="h-8 w-8 text-muted-foreground hover:bg-red-500/10 hover:text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
                 {t("settings.models.providerProfiles.headersHint")}
               </p>

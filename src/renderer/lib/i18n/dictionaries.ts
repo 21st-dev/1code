@@ -387,6 +387,11 @@ export const en = {
   "settings.models.providerProfiles.headers": "Optional headers",
   "settings.models.providerProfiles.headersHint":
     "Only safe metadata headers are accepted. Store credentials in the API key field.",
+  "settings.models.providerProfiles.headerKey": "Key",
+  "settings.models.providerProfiles.headerValue": "Value",
+  "settings.models.providerProfiles.addHeader": "Add header",
+  "settings.models.providerProfiles.removeHeader": "Remove header",
+  "settings.models.providerProfiles.savedHeaderValue": "Saved value preserved",
   "settings.models.providerProfiles.create": "Create Provider Profile",
   "settings.models.providerProfiles.editing": "Editing Provider Profile",
   "settings.models.providerProfiles.customPreset": "Custom preset",
@@ -402,7 +407,7 @@ export const en = {
   "settings.models.providerProfiles.tokenRefreshRequired":
     "Re-enter the API key after changing endpoint, protocol, or auth mode.",
   "settings.models.providerProfiles.invalidHeaders":
-    "Headers must be a JSON object.",
+    "Headers need complete, unique key/value rows.",
   "settings.models.providerProfiles.deleteConfirm":
     "Delete this Provider Profile?",
   "settings.models.providerProfiles.defaultClaude": "Claude default",
@@ -3634,6 +3639,11 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.providerProfiles.headers": "可选请求头",
   "settings.models.providerProfiles.headersHint":
     "只接受安全的元数据请求头。凭证请放在 API 密钥字段。",
+  "settings.models.providerProfiles.headerKey": "键",
+  "settings.models.providerProfiles.headerValue": "值",
+  "settings.models.providerProfiles.addHeader": "添加请求头",
+  "settings.models.providerProfiles.removeHeader": "移除请求头",
+  "settings.models.providerProfiles.savedHeaderValue": "已保存的值会保留",
   "settings.models.providerProfiles.create": "创建提供方配置",
   "settings.models.providerProfiles.editing": "正在编辑提供方配置",
   "settings.models.providerProfiles.customPreset": "自定义预设",
@@ -3649,7 +3659,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.providerProfiles.tokenRefreshRequired":
     "修改端点、协议或认证方式后，请重新输入 API 密钥。",
   "settings.models.providerProfiles.invalidHeaders":
-    "请求头必须是 JSON 对象。",
+    "请求头需要填写完整且不重复的键值行。",
   "settings.models.providerProfiles.deleteConfirm":
     "确定删除这个提供方配置吗？",
   "settings.models.providerProfiles.defaultClaude": "Claude 默认",
