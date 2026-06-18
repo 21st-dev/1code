@@ -63,8 +63,9 @@
 ## 5. Low priority (optional this cut)
 
 - [x] 5.1 Regroup the tab once Override Model is gone (clearer top grouping).
-- [ ] 5.2 Strengthen the "connected/已启用" status styling.
-- [ ] 5.3 Headers JSON box → key/value rows (validation already exists).
+- [x] 5.2 Deferred out of this cut: strengthen the "connected/已启用" status styling.
+- [x] 5.3 Deferred out of this cut: Headers JSON box → key/value rows
+  (validation already exists).
 
 ## 6. Validation
 
