@@ -126,7 +126,6 @@ interface AgentModelSelectorProps {
     onSelectModel: (modelId: string) => void
     selectedModelSource: ClaudeModelSource
     onSelectModelSource: (source: ClaudeModelSource) => void
-    hasCustomModelConfig: boolean
     isOffline: boolean
     ollamaModels: string[]
     selectedOllamaModel?: string
@@ -152,7 +151,6 @@ type FlatModelItem =
   | { type: "claude"; model: ClaudeModelOption }
   | { type: "codex"; model: CodexModelOption }
   | { type: "ollama"; modelName: string; isRecommended: boolean }
-  | { type: "custom" }
   | {
       type: "provider-profile"
       profile: ProviderProfileOption
@@ -160,7 +158,6 @@ type FlatModelItem =
     }
 
 type ModelGroupId =
-  | "custom"
   | "claude"
   | "claudeProfiles"
   | "codex"
@@ -654,11 +651,7 @@ export function AgentModelSelector({
       (allowProviderSwitch || selectedAgentId === provider),
     [allowProviderSwitch, providerIsAllowed, selectedAgentId],
   )
-  const selectedClaudeModelSource =
-    claude.selectedModelSource === "custom-provider" &&
-    !claude.hasCustomModelConfig
-      ? "claude-oauth"
-      : claude.selectedModelSource
+  const selectedClaudeModelSource = claude.selectedModelSource
   const selectedFirstPartyCodexSource = isFirstPartyCodexModelSource(
     codex.selectedModelSource,
   )
@@ -679,9 +672,6 @@ export function AgentModelSelector({
           })
         }
       } else {
-        if (claude.hasCustomModelConfig) {
-          items.push({ type: "custom" })
-        }
         for (const m of claude.models) {
           items.push({ type: "claude", model: m })
         }
@@ -738,11 +728,6 @@ export function AgentModelSelector({
           return item.model.name.toLowerCase().includes(q)
         case "ollama":
           return item.modelName.toLowerCase().includes(q)
-        case "custom":
-          return (
-            t("agent.model.customProvider").toLowerCase().includes(q) ||
-            t("agent.model.customModel").toLowerCase().includes(q)
-          )
         case "provider-profile":
           return (
             item.profile.name.toLowerCase().includes(q) ||
@@ -755,8 +740,6 @@ export function AgentModelSelector({
 
   const getItemGroup = useCallback((item: FlatModelItem): ModelGroupId => {
     switch (item.type) {
-      case "custom":
-        return "custom"
       case "claude":
         return "claude"
       case "provider-profile":
@@ -773,8 +756,6 @@ export function AgentModelSelector({
   const getGroupHeading = useCallback(
     (group: ModelGroupId): string => {
       switch (group) {
-        case "custom":
-          return t("agent.model.group.customProvider")
         case "claude":
           return t("agent.model.group.claudeCodeOAuth")
         case "claudeProfiles":
@@ -792,7 +773,6 @@ export function AgentModelSelector({
 
   const groupedFilteredModels = useMemo(() => {
     const groups: Record<ModelGroupId, FlatModelItem[]> = {
-      custom: [],
       claude: [],
       claudeProfiles: [],
       codex: [],
@@ -806,7 +786,6 @@ export function AgentModelSelector({
 
     return (
       [
-        "custom",
         "claude",
         "claudeProfiles",
         "codex",
@@ -887,11 +866,6 @@ export function AgentModelSelector({
           selectedAgentId === "claude-code" &&
           claude.selectedOllamaModel === item.modelName
         )
-      case "custom":
-        return (
-          selectedAgentId === "claude-code" &&
-          selectedClaudeModelSource === "custom-provider"
-        )
       case "provider-profile": {
         const source = providerProfileSource(item.profile.id)
         if (item.runtime === "claude") {
@@ -967,8 +941,6 @@ export function AgentModelSelector({
           claudeModelId: item.model.id,
           claudeModelSource: "claude-oauth",
         }
-      case "custom":
-        return { claudeModelSource: "custom-provider" }
       case "codex": {
         const thinking = item.model.thinkings.includes(codex.selectedThinking)
           ? codex.selectedThinking
@@ -1070,11 +1042,6 @@ export function AgentModelSelector({
         onSelectedAgentIdChange("claude-code")
         claude.onSelectOllamaModel(item.modelName)
         break
-      case "custom":
-        if (!canSelectProvider("claude-code")) return
-        onSelectedAgentIdChange("claude-code")
-        claude.onSelectModelSource("custom-provider")
-        break
       case "provider-profile": {
         const source = providerProfileSource(item.profile.id)
         const targetProvider = getItemProvider(item)
@@ -1130,10 +1097,6 @@ export function AgentModelSelector({
         )
       case "ollama":
         return <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
-      case "custom":
-        return (
-          <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        )
       case "provider-profile":
         return item.runtime === "claude" ? (
           <ClaudeCodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -1154,8 +1117,6 @@ export function AgentModelSelector({
           item.modelName +
           (item.isRecommended ? ` ${t("agent.model.recommendedSuffix")}` : "")
         )
-      case "custom":
-        return t("agent.model.customProvider")
       case "provider-profile":
         return `${item.profile.name} · ${item.profile.defaultModel}`
     }
@@ -1167,7 +1128,6 @@ export function AgentModelSelector({
       case "codex":
         return item.model.info ?? null
       case "ollama":
-      case "custom":
       case "provider-profile":
         return null
     }
@@ -1181,8 +1141,6 @@ export function AgentModelSelector({
         return `codex-${item.model.id}`
       case "ollama":
         return `ollama-${item.modelName}`
-      case "custom":
-        return "custom"
       case "provider-profile":
         return `provider-profile-${item.runtime}-${item.profile.id}`
     }

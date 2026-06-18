@@ -24,6 +24,7 @@ import {
   compactingSubChatsAtom,
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
+  type ClaudeModelSource,
   subChatClaudeModelSourceAtomFamily,
   subChatModelIdAtomFamily,
 } from "../atoms"
@@ -37,6 +38,7 @@ import {
   isTextMessagePart,
   toAiSdkTransportChunk,
 } from "./chat-message-ui-adapter"
+import { normalizeClaudeModelSourceForRun } from "./models"
 import {
   applyRuntimeEventStateChunk,
   clearPendingUserQuestionForRuntimeChunk,
@@ -45,7 +47,9 @@ import {
 function tr(key: TranslationKey, values?: Record<string, string | number>) {
   const useZh =
     typeof navigator !== "undefined" &&
-    (navigator.language || navigator.languages?.[0] || "").toLowerCase().startsWith("zh")
+    (navigator.language || navigator.languages?.[0] || "")
+      .toLowerCase()
+      .startsWith("zh")
   const template = (useZh ? zhCN[key] : en[key]) || en[key] || key
 
   return template.replace(/\{(\w+)\}/g, (match, name) => {
@@ -140,8 +144,7 @@ const ERROR_TOAST_CONFIG: Record<
       "The bundled Claude Code runtime is missing. Reinstall the app, or in development run bun run claude:download and restart.",
     action: {
       label: "Copy dev command",
-      onClick: () =>
-        navigator.clipboard.writeText("bun run claude:download"),
+      onClick: () => navigator.clipboard.writeText("bun run claude:download"),
     },
   },
   NETWORK_ERROR: {
@@ -154,7 +157,8 @@ const ERROR_TOAST_CONFIG: Record<
   },
   USAGE_POLICY_VIOLATION: {
     title: "Anthropic API hiccup",
-    description: "The request was rejected by Anthropic's servers. Please try again shortly.",
+    description:
+      "The request was rejected by Anthropic's servers. Please try again shortly.",
   },
   // SDK_ERROR and other unknown errors use chunk.errorText for description
 }
@@ -216,14 +220,44 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const enableTasks = true
 
     // Read model selection dynamically per sub-chat (so split panes stay independent)
-    const selectedModelId = appStore.get(subChatModelIdAtomFamily(this.config.subChatId))
+    const selectedModelId = appStore.get(
+      subChatModelIdAtomFamily(this.config.subChatId),
+    )
     const modelString =
-      MODEL_ID_MAP[selectedModelId] || MODEL_ID_MAP["fable"] || MODEL_ID_MAP["opus"]
+      MODEL_ID_MAP[selectedModelId] ||
+      MODEL_ID_MAP["fable"] ||
+      MODEL_ID_MAP["opus"]
     const selectedModelSource = appStore.get(
       subChatClaudeModelSourceAtomFamily(this.config.subChatId),
     )
-    const modelSource =
+    let modelSource: string =
       selectedModelSource === "auto" ? "claude-oauth" : selectedModelSource
+    if (
+      selectedModelSource === "auto" ||
+      selectedModelSource === "custom-provider"
+    ) {
+      const providerProfiles =
+        selectedModelSource === "custom-provider"
+          ? (await trpcClient.providerProfiles.listProfiles.query()).profiles
+          : []
+      const normalizedSource = normalizeClaudeModelSourceForRun({
+        source: selectedModelSource,
+        providerProfiles,
+      })
+      if (!normalizedSource.ok) {
+        toast.error(normalizedSource.blocker.message, {
+          description: normalizedSource.blocker.hint,
+        })
+        throw new Error(normalizedSource.blocker.message)
+      }
+      modelSource = normalizedSource.source
+      if (normalizedSource.changed) {
+        appStore.set(
+          subChatClaudeModelSourceAtomFamily(this.config.subChatId),
+          normalizedSource.source as ClaudeModelSource,
+        )
+      }
+    }
 
     // Get selected Ollama model for offline mode
     const selectedOllamaModel = appStore.get(selectedOllamaModelAtom)
@@ -242,7 +276,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
     const subId = this.config.subChatId.slice(-8)
     let chunkCount = 0
     let lastChunkType = ""
-    console.log(`[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"}`)
+    console.log(
+      `[SD] R:START sub=${subId} cwd=${this.config.cwd} projectPath=${this.config.projectPath || "(not set)"}`,
+    )
 
     return new ReadableStream({
       start: (controller) => {
@@ -265,7 +301,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
             enableTasks,
             ...(images.length > 0 && { images }),
             ...(longTextAttachments.length > 0 ? { longTextAttachments } : {}),
-            ...(appStore.get(approvedGuardedRunContractsAtom).get(this.config.subChatId)
+            ...(appStore
+              .get(approvedGuardedRunContractsAtom)
+              .get(this.config.subChatId)
               ? {
                   scopeContract: appStore
                     .get(approvedGuardedRunContractsAtom)
@@ -288,8 +326,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
               // Handle compacting status - track in atom for UI display
               if (
-                (chunk.type === "tool-input-start" && chunk.toolName === "Compact") ||
-                (chunk.type === "tool-input-available" && chunk.toolName === "Compact")
+                (chunk.type === "tool-input-start" &&
+                  chunk.toolName === "Compact") ||
+                (chunk.type === "tool-input-available" &&
+                  chunk.toolName === "Compact")
               ) {
                 const compacting = appStore.get(compactingSubChatsAtom)
                 const newCompacting = new Set(compacting)
@@ -298,8 +338,10 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 appStore.set(compactingSubChatsAtom, newCompacting)
               }
               if (
-                (chunk.type === "tool-output-available" && chunk.toolCallId?.startsWith("compact-")) ||
-                (chunk.type === "tool-output-error" && chunk.toolCallId?.startsWith("compact-"))
+                (chunk.type === "tool-output-available" &&
+                  chunk.toolCallId?.startsWith("compact-")) ||
+                (chunk.type === "tool-output-error" &&
+                  chunk.toolCallId?.startsWith("compact-"))
               ) {
                 const compacting = appStore.get(compactingSubChatsAtom)
                 const newCompacting = new Set(compacting)
@@ -341,7 +383,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   provider: "claude-code",
                   prompt,
                   ...(images.length > 0 && { images }),
-                  ...(longTextAttachments.length > 0 && { longTextAttachments }),
+                  ...(longTextAttachments.length > 0 && {
+                    longTextAttachments,
+                  }),
                   readyToRetry: false,
                 })
                 appStore.set(claudeLoginModalConfigAtom, {
@@ -355,7 +399,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               }
 
               if (chunk.type === "finish") {
-                const approvedContracts = appStore.get(approvedGuardedRunContractsAtom)
+                const approvedContracts = appStore.get(
+                  approvedGuardedRunContractsAtom,
+                )
                 if (approvedContracts.has(this.config.subChatId)) {
                   const nextContracts = new Map(approvedContracts)
                   nextContracts.delete(this.config.subChatId)
@@ -366,7 +412,8 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               // Handle retry notification - show friendly toast instead of scary error
               if (chunk.type === "retry-notification") {
                 toast.info(tr("agent.transport.retryingRequest"), {
-                  description: chunk.message || tr("agent.transport.requestRetrying"),
+                  description:
+                    chunk.message || tr("agent.transport.requestRetrying"),
                   duration: 4000,
                 })
                 return // don't enqueue retry-notification as a stream chunk
@@ -378,18 +425,30 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 const category = debugInfo?.category || "UNKNOWN"
 
                 // Detailed SDK error logging for debugging
-                console.error(`[SDK ERROR] ========================================`)
+                console.error(
+                  `[SDK ERROR] ========================================`,
+                )
                 console.error(`[SDK ERROR] Category: ${category}`)
                 console.error(`[SDK ERROR] Error text: ${chunk.errorText}`)
                 console.error(`[SDK ERROR] Chat ID: ${this.config.chatId}`)
-                console.error(`[SDK ERROR] SubChat ID: ${this.config.subChatId}`)
+                console.error(
+                  `[SDK ERROR] SubChat ID: ${this.config.subChatId}`,
+                )
                 console.error(`[SDK ERROR] CWD: ${this.config.cwd}`)
                 console.error(`[SDK ERROR] Mode: ${currentMode}`)
                 if (debugInfo) {
-                  console.error(`[SDK ERROR] Debug info:`, JSON.stringify(debugInfo, null, 2))
+                  console.error(
+                    `[SDK ERROR] Debug info:`,
+                    JSON.stringify(debugInfo, null, 2),
+                  )
                 }
-                console.error(`[SDK ERROR] Full chunk:`, JSON.stringify(chunk, null, 2))
-                console.error(`[SDK ERROR] ========================================`)
+                console.error(
+                  `[SDK ERROR] Full chunk:`,
+                  JSON.stringify(chunk, null, 2),
+                )
+                console.error(
+                  `[SDK ERROR] ========================================`,
+                )
 
                 // Build detailed error string for copying (available for ALL errors)
                 const errorDetails = [
@@ -400,8 +459,12 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   `CWD: ${this.config.cwd}`,
                   `Mode: ${currentMode}`,
                   `Timestamp: ${new Date().toISOString()}`,
-                  debugInfo ? `Debug Info: ${JSON.stringify(debugInfo, null, 2)}` : null,
-                ].filter(Boolean).join("\n")
+                  debugInfo
+                    ? `Debug Info: ${JSON.stringify(debugInfo, null, 2)}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join("\n")
 
                 // Show toast based on error category
                 const config = ERROR_TOAST_CONFIG[category]
@@ -413,12 +476,17 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                   category === "INVALID_API_KEY"
                 // Use config description if set, otherwise fall back to errorText
                 const rawDescription = preferOriginalError
-                  ? chunk.errorText || config?.description || tr("agent.transport.unexpectedError")
-                  : config?.description || chunk.errorText || tr("agent.transport.unexpectedError")
+                  ? chunk.errorText ||
+                    config?.description ||
+                    tr("agent.transport.unexpectedError")
+                  : config?.description ||
+                    chunk.errorText ||
+                    tr("agent.transport.unexpectedError")
                 // Truncate long descriptions for toast (keep first 300 chars)
-                const description = rawDescription.length > 300
-                  ? rawDescription.slice(0, 300) + "..."
-                  : rawDescription
+                const description =
+                  rawDescription.length > 300
+                    ? rawDescription.slice(0, 300) + "..."
+                    : rawDescription
 
                 toast.error(title, {
                   description,
@@ -438,7 +506,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
                 controller.enqueue(toAiSdkTransportChunk(chunk))
               } catch (e) {
                 // CRITICAL: Log when enqueue fails - this could explain missing chunks!
-                console.log(`[SD] R:ENQUEUE_ERR sub=${subId} type=${chunk.type} n=${chunkCount} err=${e}`)
+                console.log(
+                  `[SD] R:ENQUEUE_ERR sub=${subId} type=${chunk.type} n=${chunkCount} err=${e}`,
+                )
               }
 
               if (chunk.type === "finish") {
@@ -451,11 +521,15 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
               }
             },
             onError: (err: Error) => {
-              console.log(`[SD] R:ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`)
+              console.log(
+                `[SD] R:ERROR sub=${subId} n=${chunkCount} last=${lastChunkType} err=${err.message}`,
+              )
               controller.error(err)
             },
             onComplete: () => {
-              console.log(`[SD] R:COMPLETE sub=${subId} n=${chunkCount} last=${lastChunkType}`)
+              console.log(
+                `[SD] R:COMPLETE sub=${subId} n=${chunkCount} last=${lastChunkType}`,
+              )
               // Note: Don't clear pending questions here - let active-chat.tsx handle it
               // via the stream stop detection effect. Clearing here causes race conditions
               // where sync effect immediately restores from messages.
@@ -470,7 +544,9 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
 
         // Handle abort
         options.abortSignal?.addEventListener("abort", () => {
-          console.log(`[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`)
+          console.log(
+            `[SD] R:ABORT sub=${subId} n=${chunkCount} last=${lastChunkType}`,
+          )
           sub.unsubscribe()
           // trpcClient.claude.cancel.mutate({ subChatId: this.config.subChatId })
           try {
@@ -548,7 +624,7 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
   }
 
   private extractLongTextAttachments(
-    msg: UIMessage | undefined
+    msg: UIMessage | undefined,
   ): LongTextAttachmentPart[] {
     return getCanonicalMessageParts(msg).flatMap((part) => {
       const attachment = normalizeLongTextAttachmentPart(part)

@@ -78,8 +78,7 @@ describe("Claude Agent SDK provider startup", () => {
     expect(result.startup.claudeCodeToken).toBeNull()
     expect(result.startup.finalCustomConfig).toMatchObject({
       model: "claude-profile-model",
-      baseUrl:
-        "http://127.0.0.1:45100/profile/profile-1/anthropic/v1",
+      baseUrl: "http://127.0.0.1:45100/profile/profile-1/anthropic/v1",
       token: "gateway-token-profile-1",
       authMode: "auth_token",
     })

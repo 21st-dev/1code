@@ -45,6 +45,7 @@ import {
   selectedProjectAtom,
   getNextMode,
   type AgentMode,
+  type ClaudeModelSource,
   type SelectedProject,
   subChatClaudeModelSourceAtomFamily,
   subChatCodexModelSourceAtomFamily,
@@ -136,6 +137,7 @@ import {
   CLAUDE_MODELS,
   CODEX_MODELS,
   getCodexModelsForSource,
+  normalizeClaudeModelSourceForRun,
   type CodexThinkingLevel,
 } from "../lib/models"
 // import type { PlanType } from "@/lib/config/subscription-plans"
@@ -283,7 +285,9 @@ export function NewChatForm({
 
   useEffect(() => {
     if (newChatTarget.type !== "project" || !projectsList) return
-    if (projectsList.some((project) => project.id === newChatTarget.projectId)) {
+    if (
+      projectsList.some((project) => project.id === newChatTarget.projectId)
+    ) {
       return
     }
     setNewChatTarget({ type: "quick" })
@@ -322,19 +326,50 @@ export function NewChatForm({
   const [worktreeCreateState, setWorktreeCreateState] = useState<
     "idle" | "creating"
   >("idle")
-  const { data: providerConfigData } = trpc.claudeProviderConfig.get.useQuery()
   const { data: providerProfilesData } =
     trpc.providerProfiles.listProfiles.useQuery(undefined, {
       staleTime: 30_000,
     })
   const providerProfiles = providerProfilesData?.profiles ?? []
-  const providerConfigKnown = providerConfigData !== undefined
-  const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
   const [selectedClaudeModelSource, setSelectedClaudeModelSource] = useAtom(
     lastSelectedClaudeModelSourceAtom,
   )
-  const selectedClaudeProfileId = parseProviderProfileSource(
+  // Connection status for providers
+  const anthropicOnboardingCompleted = useAtomValue(
+    anthropicOnboardingCompletedAtom,
+  )
+  const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
+  const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
+  const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
+  const { data: claudeCodeIntegration } =
+    trpc.claudeCode.getIntegration.useQuery()
+  const canUseClaudeOAuth =
+    Boolean(claudeCodeIntegration?.isConnected) ||
+    anthropicOnboardingCompleted ||
+    apiKeyOnboardingCompleted
+  const claudeSourceNormalization = useMemo(() => {
+    if (
+      selectedClaudeModelSource === "custom-provider" &&
+      !providerProfilesData
+    ) {
+      return null
+    }
+    return normalizeClaudeModelSourceForRun({
+      source: selectedClaudeModelSource,
+      providerProfiles,
+      canUseClaudeOAuth,
+    })
+  }, [
+    canUseClaudeOAuth,
+    providerProfiles,
+    providerProfilesData,
     selectedClaudeModelSource,
+  ])
+  const normalizedClaudeModelSource = claudeSourceNormalization?.ok
+    ? (claudeSourceNormalization.source as ClaudeModelSource)
+    : "claude-oauth"
+  const selectedClaudeProfileId = parseProviderProfileSource(
+    normalizedClaudeModelSource,
   )
   const selectedClaudeProviderProfile = selectedClaudeProfileId
     ? providerProfiles.find(
@@ -346,31 +381,13 @@ export function NewChatForm({
   const selectedClaudeProfileIsPending =
     Boolean(selectedClaudeProfileId) && !providerProfilesData
   const effectiveClaudeModelSource =
-    selectedClaudeModelSource === "auto"
+    selectedClaudeProfileId &&
+    !selectedClaudeProviderProfile &&
+    !selectedClaudeProfileIsPending
       ? "claude-oauth"
-      : selectedClaudeModelSource === "custom-provider" &&
-          providerConfigKnown &&
-          !hasCustomClaudeConfig
-        ? "claude-oauth"
-        : selectedClaudeProfileId &&
-            !selectedClaudeProviderProfile &&
-            !selectedClaudeProfileIsPending
-          ? "claude-oauth"
-          : selectedClaudeModelSource
-  // Connection status for providers
-  const anthropicOnboardingCompleted = useAtomValue(
-    anthropicOnboardingCompletedAtom,
-  )
-  const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
-  const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
-  const { data: claudeCodeIntegration } =
-    trpc.claudeCode.getIntegration.useQuery()
+      : normalizedClaudeModelSource
   const isClaudeConnected =
-    Boolean(claudeCodeIntegration?.isConnected) ||
-    anthropicOnboardingCompleted ||
-    apiKeyOnboardingCompleted ||
-    hasCustomClaudeConfig ||
+    canUseClaudeOAuth ||
     providerProfiles.some(
       (profile) =>
         profile.targetRuntimes.includes("claude") &&
@@ -603,14 +620,9 @@ export function NewChatForm({
     if (selectedClaudeProviderProfile) {
       return selectedClaudeProviderProfile.defaultModel
     }
-    if (effectiveClaudeModelSource === "custom-provider") {
-      return providerConfigData?.config?.model ?? "custom-provider"
-    }
     return selectedModel?.id ?? "opus"
   }, [
-    effectiveClaudeModelSource,
     lastSelectedCodexModelSource,
-    providerConfigData?.config?.model,
     providerProfiles,
     selectedAgent.id,
     selectedClaudeProviderProfile,
@@ -648,10 +660,6 @@ export function NewChatForm({
       return `${selectedClaudeProviderProfile.name} · ${selectedClaudeProviderProfile.defaultModel}`
     }
 
-    if (effectiveClaudeModelSource === "custom-provider") {
-      return t("agent.model.customProvider")
-    }
-
     if (!selectedModel) {
       return "Select model"
     }
@@ -664,18 +672,14 @@ export function NewChatForm({
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
-    effectiveClaudeModelSource,
     selectedClaudeProviderProfile,
     selectedModel,
-    t,
   ])
   useEffect(() => {
-    if (
-      selectedClaudeModelSource === "custom-provider" &&
-      providerConfigKnown &&
-      !hasCustomClaudeConfig
-    ) {
-      setSelectedClaudeModelSource("claude-oauth")
+    if (claudeSourceNormalization?.ok && claudeSourceNormalization.changed) {
+      setSelectedClaudeModelSource(
+        claudeSourceNormalization.source as ClaudeModelSource,
+      )
       return
     }
     if (
@@ -686,8 +690,7 @@ export function NewChatForm({
       setSelectedClaudeModelSource("claude-oauth")
     }
   }, [
-    hasCustomClaudeConfig,
-    providerConfigKnown,
+    claudeSourceNormalization,
     selectedClaudeModelSource,
     selectedClaudeProviderProfile,
     selectedClaudeProfileIsPending,
@@ -1246,6 +1249,24 @@ export function NewChatForm({
       })
       return
     }
+    if (
+      selectedAgent.id === "claude-code" &&
+      selectedClaudeModelSource === "custom-provider" &&
+      !claudeSourceNormalization
+    ) {
+      toast.error("Provider Profiles are still loading.")
+      return
+    }
+    if (
+      selectedAgent.id === "claude-code" &&
+      claudeSourceNormalization &&
+      !claudeSourceNormalization.ok
+    ) {
+      toast.error(claudeSourceNormalization.blocker.message, {
+        description: claudeSourceNormalization.blocker.hint,
+      })
+      return
+    }
 
     if (projectForChat) {
       message = await expandCustomSlashCommand(message, projectForChat.path)
@@ -1303,6 +1324,8 @@ export function NewChatForm({
     selectedAgent.id,
     lastSelectedCodexModelSource,
     effectiveClaudeModelSource,
+    claudeSourceNormalization,
+    selectedClaudeModelSource,
     selectedCodexProfileId,
     selectedClaudeProfileId,
     effectiveMode,
@@ -2138,7 +2161,6 @@ export function NewChatForm({
                           },
                           selectedModelSource: effectiveClaudeModelSource,
                           onSelectModelSource: setSelectedClaudeModelSource,
-                          hasCustomModelConfig: hasCustomClaudeConfig,
                           isOffline:
                             availableModels.isOffline &&
                             availableModels.hasOllama,

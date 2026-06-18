@@ -69,6 +69,7 @@ import { cn } from "../../../lib/utils"
 import { VoiceInputControl } from "../../../lib/voice/voice-input-control"
 import {
   type AgentMode,
+  type ClaudeModelSource,
   approvedGuardedRunContractsAtom,
   getNextMode,
   lastSelectedClaudeModelSourceAtom,
@@ -111,6 +112,7 @@ import {
   CODEX_MODELS,
   type CodexThinkingLevel,
   getCodexModelsForSource,
+  normalizeClaudeModelSourceForRun,
 } from "../lib/models"
 import type { DiffTextContext, SelectedTextContext } from "../lib/queue-utils"
 import { useRuntimeCapabilitySupported } from "../lib/runtime-manifest-store"
@@ -719,11 +721,33 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatCodexModelSource,
   ])
 
-  const { data: providerConfigData } = trpc.claudeProviderConfig.get.useQuery()
-  const providerConfigKnown = providerConfigData !== undefined
-  const hasCustomClaudeConfig = Boolean(providerConfigData?.config?.hasToken)
-  const selectedClaudeProfileId = parseProviderProfileSource(
+  const canUseClaudeOAuth =
+    Boolean(claudeCodeIntegration?.isConnected) ||
+    anthropicOnboardingCompleted ||
+    apiKeyOnboardingCompleted
+  const claudeSourceNormalization = useMemo(() => {
+    if (
+      selectedClaudeModelSource === "custom-provider" &&
+      !providerProfilesData
+    ) {
+      return null
+    }
+    return normalizeClaudeModelSourceForRun({
+      source: selectedClaudeModelSource,
+      providerProfiles,
+      canUseClaudeOAuth,
+    })
+  }, [
+    canUseClaudeOAuth,
+    providerProfiles,
+    providerProfilesData,
     selectedClaudeModelSource,
+  ])
+  const normalizedClaudeModelSource = claudeSourceNormalization?.ok
+    ? (claudeSourceNormalization.source as ClaudeModelSource)
+    : "claude-oauth"
+  const selectedClaudeProfileId = parseProviderProfileSource(
+    normalizedClaudeModelSource,
   )
   const selectedClaudeProviderProfile = selectedClaudeProfileId
     ? providerProfiles.find(
@@ -735,22 +759,13 @@ export const ChatInputArea = memo(function ChatInputArea({
   const selectedClaudeProfileIsPending =
     Boolean(selectedClaudeProfileId) && !providerProfilesData
   const effectiveClaudeModelSource =
-    selectedClaudeModelSource === "auto"
+    selectedClaudeProfileId &&
+    !selectedClaudeProviderProfile &&
+    !selectedClaudeProfileIsPending
       ? "claude-oauth"
-      : selectedClaudeModelSource === "custom-provider" &&
-          providerConfigKnown &&
-          !hasCustomClaudeConfig
-        ? "claude-oauth"
-        : selectedClaudeProfileId &&
-            !selectedClaudeProviderProfile &&
-            !selectedClaudeProfileIsPending
-          ? "claude-oauth"
-          : selectedClaudeModelSource
+      : normalizedClaudeModelSource
   const isClaudeConnected =
-    Boolean(claudeCodeIntegration?.isConnected) ||
-    anthropicOnboardingCompleted ||
-    apiKeyOnboardingCompleted ||
-    hasCustomClaudeConfig ||
+    canUseClaudeOAuth ||
     providerProfiles.some(
       (profile) =>
         profile.targetRuntimes.includes("claude") &&
@@ -758,13 +773,11 @@ export const ChatInputArea = memo(function ChatInputArea({
     )
 
   useEffect(() => {
-    if (
-      selectedClaudeModelSource === "custom-provider" &&
-      providerConfigKnown &&
-      !hasCustomClaudeConfig
-    ) {
-      setSelectedClaudeModelSource("claude-oauth")
-      setLastSelectedClaudeModelSource("claude-oauth")
+    if (claudeSourceNormalization?.ok && claudeSourceNormalization.changed) {
+      const normalizedSource =
+        claudeSourceNormalization.source as ClaudeModelSource
+      setSelectedClaudeModelSource(normalizedSource)
+      setLastSelectedClaudeModelSource(normalizedSource)
       return
     }
     if (
@@ -776,8 +789,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       setLastSelectedClaudeModelSource("claude-oauth")
     }
   }, [
-    hasCustomClaudeConfig,
-    providerConfigKnown,
+    claudeSourceNormalization,
     selectedClaudeModelSource,
     selectedClaudeProviderProfile,
     selectedClaudeProfileIsPending,
@@ -827,10 +839,6 @@ export const ChatInputArea = memo(function ChatInputArea({
       return `${selectedClaudeProviderProfile.name} · ${selectedClaudeProviderProfile.defaultModel}`
     }
 
-    if (effectiveClaudeModelSource === "custom-provider") {
-      return t("agent.model.customProvider")
-    }
-
     if (!selectedModel) {
       return "Select model"
     }
@@ -843,10 +851,8 @@ export const ChatInputArea = memo(function ChatInputArea({
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
-    effectiveClaudeModelSource,
     selectedClaudeProviderProfile,
     selectedModel,
-    t,
   ])
   const readyImageCount = images.filter(
     (image) =>
@@ -1687,13 +1693,37 @@ export const ChatInputArea = memo(function ChatInputArea({
     })
     return true
   }, [imageAttachmentBlocked, t])
+  const blockInvalidClaudeModelSource = useCallback(() => {
+    if (provider !== "claude-code") return false
+    if (
+      selectedClaudeModelSource === "custom-provider" &&
+      !claudeSourceNormalization
+    ) {
+      toast.error("Provider Profiles are still loading.")
+      return true
+    }
+    if (claudeSourceNormalization && !claudeSourceNormalization.ok) {
+      toast.error(claudeSourceNormalization.blocker.message, {
+        description: claudeSourceNormalization.blocker.hint,
+      })
+      return true
+    }
+    return false
+  }, [claudeSourceNormalization, provider, selectedClaudeModelSource])
   const guardedSend = useCallback(() => {
     if (blockUnsupportedImageSend()) return
+    if (blockInvalidClaudeModelSource()) return
     if (!ensureGuardedRunReady()) return
     onSend()
-  }, [blockUnsupportedImageSend, ensureGuardedRunReady, onSend])
+  }, [
+    blockInvalidClaudeModelSource,
+    blockUnsupportedImageSend,
+    ensureGuardedRunReady,
+    onSend,
+  ])
   const guardedEditorSubmit = useCallback(() => {
     if (blockUnsupportedImageSend()) return
+    if (blockInvalidClaudeModelSource()) return
     if (!ensureGuardedRunReady()) return
     if (onSubmitWithQuestionAnswer) {
       onSubmitWithQuestionAnswer()
@@ -1701,6 +1731,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       void handleEditorSubmit()
     }
   }, [
+    blockInvalidClaudeModelSource,
     blockUnsupportedImageSend,
     ensureGuardedRunReady,
     handleEditorSubmit,
@@ -1708,9 +1739,15 @@ export const ChatInputArea = memo(function ChatInputArea({
   ])
   const guardedForceSend = useCallback(() => {
     if (blockUnsupportedImageSend()) return
+    if (blockInvalidClaudeModelSource()) return
     if (!ensureGuardedRunReady()) return
     onForceSend()
-  }, [blockUnsupportedImageSend, ensureGuardedRunReady, onForceSend])
+  }, [
+    blockInvalidClaudeModelSource,
+    blockUnsupportedImageSend,
+    ensureGuardedRunReady,
+    onForceSend,
+  ])
   const stablePromptSubmit = useStableCallback(guardedSend)
   const stableEditorSubmit = useStableCallback(guardedEditorSubmit)
   const stableForceSend = useStableCallback(guardedForceSend)
@@ -1719,6 +1756,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   }, [editorRef])
   const handleSendButtonClick = useCallback(() => {
     if (blockUnsupportedImageSend()) return
+    if (blockInvalidClaudeModelSource()) return
     if (!ensureGuardedRunReady()) return
     // If input is empty and queue has items, send first queue item
     if (
@@ -1734,6 +1772,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       onSend()
     }
   }, [
+    blockInvalidClaudeModelSource,
     blockUnsupportedImageSend,
     ensureGuardedRunReady,
     firstQueueItemId,
@@ -2158,7 +2197,6 @@ export const ChatInputArea = memo(function ChatInputArea({
                           setSelectedClaudeModelSource(source)
                           setLastSelectedClaudeModelSource(source)
                         },
-                        hasCustomModelConfig: hasCustomClaudeConfig,
                         isOffline:
                           availableModels.isOffline &&
                           availableModels.hasOllama,

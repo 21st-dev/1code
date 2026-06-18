@@ -123,9 +123,7 @@ const defaultDependencies: ClaudeAgentSdkProviderStartupDependencies = {
 }
 
 function withDefaultDependencies(
-  dependencies:
-    | Partial<ClaudeAgentSdkProviderStartupDependencies>
-    | undefined,
+  dependencies: Partial<ClaudeAgentSdkProviderStartupDependencies> | undefined,
 ): ClaudeAgentSdkProviderStartupDependencies {
   return { ...defaultDependencies, ...dependencies }
 }
@@ -138,9 +136,8 @@ export async function resolveClaudeAgentSdkProviderStartup(input: {
   const dependencies = withDefaultDependencies(input.dependencies)
   let providerConfig: ClaudeProviderRuntimeConfig | undefined
 
-  const selectedProviderProfileId = await dependencies.parseProviderProfileSource(
-    input.modelSource,
-  )
+  const selectedProviderProfileId =
+    await dependencies.parseProviderProfileSource(input.modelSource)
 
   if (selectedProviderProfileId) {
     const profile = await dependencies.getProviderProfileRuntimeConfig(
@@ -185,8 +182,7 @@ export async function resolveClaudeAgentSdkProviderStartup(input: {
 
   if (!providerConfig) {
     try {
-      const credentialResult =
-        await dependencies.getValidClaudeCodeCredential()
+      const credentialResult = await dependencies.getValidClaudeCodeCredential()
       claudeCodeToken = credentialResult.accessToken
       claudeCredentialMetadata = credentialResult.metadata
     } catch (credentialError) {
