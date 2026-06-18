@@ -130,6 +130,13 @@ describe("plugin safe mode runtime source guards", () => {
     expect(pluginsRouterSource).toContain("safetyGate")
   })
 
+  test("reports Claude runtime-native activation from staged config and MCP approvals", () => {
+    expect(pluginsRouterSource).toContain("getApprovedPluginMcpServers")
+    expect(pluginsRouterSource).toContain("areScannedPluginMcpServersApproved")
+    expect(pluginsRouterSource).toContain("input.plugin.runtime === \"claude\"")
+    expect(pluginsRouterSource).not.toContain("supportsCodexNativeLoading")
+  })
+
   test("gates plugin commands, skills, and agents before runtime discovery", () => {
     expect(runtimeGatesSource).toContain("discoverAllowedClaudePluginRuntimeComponents")
     expect(runtimeGatesSource).toContain("safetyGate.status !== \"allowed\"")

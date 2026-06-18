@@ -117,7 +117,7 @@ import {
   trustDeveloperPluginFingerprint,
 } from "../../plugins/update-review-state"
 import { publicProcedure, router } from "../index"
-import { getEnabledPlugins } from "./claude-settings"
+import { getApprovedPluginMcpServers, getEnabledPlugins } from "./claude-settings"
 
 export interface PluginWithComponents {
   runtime: PluginRuntime
@@ -392,6 +392,7 @@ async function getControlledUiSettingsValuesByContribution(input: {
 async function toPluginWithComponents(input: {
   scanned: ScannedPlugin
   enabledPlugins: string[]
+  approvedPluginMcpServers: string[]
   runtimeNativePluginEnablement: Record<
     string,
     { enabled: boolean; updatedAt: string }
@@ -473,6 +474,7 @@ async function toPluginWithComponents(input: {
     updateReview,
     safeMode: input.safeMode,
     pluginEnabled: !isDisabled,
+    approvedPluginMcpServers: input.approvedPluginMcpServers,
   })
 
   return {
@@ -539,16 +541,24 @@ function buildPluginRuntimeNativeActivation(input: {
   updateReview: PluginUpdateReviewMetadata
   safeMode: PluginSafeModeState
   pluginEnabled: boolean
+  approvedPluginMcpServers: string[]
 }): PluginWithComponents["runtimeNativeActivation"] {
   const hasMcpServers = input.scanned.components.mcpServers.length > 0
-  const supportsCodexNativeLoading = input.plugin.runtime === "codex"
+  const supportsNativeLoading =
+    input.plugin.sourceKind !== "developer-local" &&
+    (input.plugin.runtime === "claude" || input.plugin.runtime === "codex")
   const mcpServersApprovedOrFiltered =
-    input.plugin.runtime === "codex" ? !hasMcpServers : false
+    input.plugin.runtime === "claude"
+      ? areScannedPluginMcpServersApproved({
+          scanned: input.scanned,
+          approvedPluginMcpServers: input.approvedPluginMcpServers,
+        })
+      : !hasMcpServers
   const sharedPolicyInput = {
     safeModeEnabled: input.safeMode.enabled,
     manifestReviewStatus: input.updateReview.status,
-    runtimeSupportsNativeLoading: supportsCodexNativeLoading,
-    runtimeSupportsPerRunPluginControl: supportsCodexNativeLoading,
+    runtimeSupportsNativeLoading: supportsNativeLoading,
+    runtimeSupportsPerRunPluginControl: supportsNativeLoading,
     identity: input.scanned.runtimeNativeActivationIdentity,
     reviewedIdentityFingerprint:
       input.updateReview.runtimeNativeActivation
@@ -567,6 +577,19 @@ function buildPluginRuntimeNativeActivation(input: {
       pluginEnabled: true,
     }),
   }
+}
+
+function areScannedPluginMcpServersApproved(input: {
+  scanned: ScannedPlugin
+  approvedPluginMcpServers: string[]
+}): boolean {
+  if (input.scanned.components.mcpServers.length === 0) return true
+
+  const approved = new Set(input.approvedPluginMcpServers)
+  return input.scanned.components.mcpServers.every((serverName) => {
+    const identifier = input.scanned.mcpApprovalIdentifiers[serverName]
+    return Boolean(identifier && approved.has(identifier))
+  })
 }
 
 function getDeveloperTrustContext(input: {
@@ -1013,12 +1036,14 @@ export const pluginsRouter = router({
     const [
       installedPlugins,
       enabledPlugins,
+      approvedPluginMcpServers,
       runtimeNativePluginEnablement,
       safeMode,
       developerMode,
     ] = await Promise.all([
       discoverAllRuntimePlugins(),
       getEnabledPlugins(),
+      getApprovedPluginMcpServers(),
       getRuntimeNativePluginEnablementState(),
       getPluginSafeModeState(),
       getPluginDeveloperModeState(),
@@ -1041,6 +1066,7 @@ export const pluginsRouter = router({
         toPluginWithComponents({
           scanned,
           enabledPlugins,
+          approvedPluginMcpServers,
           runtimeNativePluginEnablement,
           updateReview:
             reviewResult.metadataByPluginKey[scanned.plugin.reviewKey],
@@ -1217,12 +1243,14 @@ export const pluginsRouter = router({
       const [
         installedPlugins,
         enabledPlugins,
+        approvedPluginMcpServers,
         runtimeNativePluginEnablement,
         safeMode,
         developerMode,
       ] = await Promise.all([
         discoverAllRuntimePlugins(),
         getEnabledPlugins(),
+        getApprovedPluginMcpServers(),
         getRuntimeNativePluginEnablementState(),
         getPluginSafeModeState(),
         getPluginDeveloperModeState(),
@@ -1248,6 +1276,7 @@ export const pluginsRouter = router({
       return toPluginWithComponents({
         scanned,
         enabledPlugins,
+        approvedPluginMcpServers,
         runtimeNativePluginEnablement,
         updateReview,
         safeMode,
@@ -1307,6 +1336,7 @@ export const pluginsRouter = router({
         updateReview,
         safeMode: reviewResult.safeMode,
         pluginEnabled: input.enabled,
+        approvedPluginMcpServers: [],
       })
 
       if (
@@ -1331,6 +1361,7 @@ export const pluginsRouter = router({
       return toPluginWithComponents({
         scanned,
         enabledPlugins,
+        approvedPluginMcpServers: [],
         runtimeNativePluginEnablement,
         updateReview,
         safeMode: reviewResult.safeMode,
@@ -1341,12 +1372,17 @@ export const pluginsRouter = router({
   trustDeveloperPlugin: publicProcedure
     .input(z.object({ reviewKey: z.string().min(1) }))
     .mutation(async ({ input }) => {
-      const [installedPlugins, enabledPlugins, runtimeNativePluginEnablement] =
-        await Promise.all([
-          discoverAllRuntimePlugins(),
-          getEnabledPlugins(),
-          getRuntimeNativePluginEnablementState(),
-        ])
+      const [
+        installedPlugins,
+        enabledPlugins,
+        approvedPluginMcpServers,
+        runtimeNativePluginEnablement,
+      ] = await Promise.all([
+        discoverAllRuntimePlugins(),
+        getEnabledPlugins(),
+        getApprovedPluginMcpServers(),
+        getRuntimeNativePluginEnablementState(),
+      ])
       const plugin = installedPlugins.find(
         (candidate) => candidate.reviewKey === input.reviewKey,
       )
@@ -1411,6 +1447,7 @@ export const pluginsRouter = router({
       return toPluginWithComponents({
         scanned,
         enabledPlugins,
+        approvedPluginMcpServers,
         runtimeNativePluginEnablement,
         updateReview,
         safeMode: reviewResult.safeMode,
