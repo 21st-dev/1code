@@ -34,14 +34,14 @@
 
 ## 2. Phase 2 - Shared Policy Owner
 
-- [ ] 2.1 Add `src/main/lib/plugins/runtime-native-activation.ts` as the shared owner
+- [x] 2.1 Add `src/main/lib/plugins/runtime-native-activation.ts` as the shared owner
   for activation decisions, activation identity, blocked reasons, recovery posture,
   and capability-matrix inputs.
 - [ ] 2.2 Keep route code limited to request validation and owner calls; do not copy
   review/safe-mode/MCP/loadability logic into route handlers.
-- [ ] 2.3 Add tests for reviewed/enabled, unreviewed, disabled, safe-mode, failed-load,
+- [x] 2.3 Add tests for reviewed/enabled, unreviewed, disabled, safe-mode, failed-load,
   drifted identity, identity-incomplete, and MCP-approval combinations.
-- [ ] 2.4 Ensure marking a plugin reviewed only stores review/activation-identity state
+- [x] 2.4 Ensure marking a plugin reviewed only stores review/activation-identity state
   and triggers recomputation of effective activation status; it does not directly
   mutate enablement, MCP approval, or target mode.
 
@@ -49,37 +49,37 @@
 
 - [ ] 3.1 Replace raw plugin-dir removal with review-gated plugin staging into the
   isolated Claude config directory for component types proven in Phase 1.
-- [ ] 3.2 Replace raw `settings.json` symlink behavior for plugin activation with a
+- [x] 3.2 Replace raw `settings.json` symlink behavior for plugin activation with a
   filtered settings/activation manifest whose `enabledPlugins` only includes
   reviewed+enabled plugins.
-- [ ] 3.3 Bind Claude native activation to the reviewed activation identity; block or
+- [x] 3.3 Bind Claude native activation to the reviewed activation identity; block or
   require explicit high-risk acknowledgement when stable identity is missing, and
   block when identity drifts after review.
-- [ ] 3.4 Ensure safe mode writes an empty plugin activation set and exposes no plugin
+- [x] 3.4 Ensure safe mode writes an empty plugin activation set and exposes no plugin
   commands, skills, agents, hooks, or MCP servers.
-- [ ] 3.5 Ensure native-loaded plugin MCP servers are not active tool connections until
+- [x] 3.5 Ensure native-loaded plugin MCP servers are not active tool connections until
   the current redacted MCP configuration fingerprint is approved.
 - [ ] 3.6 Ensure plugin staging/load failures block the offending plugin/component,
   preserve non-plugin runtime startup, and surface Doctor/Debug diagnostics.
-- [ ] 3.7 Preserve non-plugin settings and non-plugin MCP behavior.
-- [ ] 3.8 `bun run ts:check` passes.
+- [x] 3.7 Preserve non-plugin settings and non-plugin MCP behavior.
+- [x] 3.8 `bun run ts:check` passes.
 
 ## 4. Phase 4 - Codex Controlled Native Execution
 
-- [ ] 4.1 If Phase 1 proves app-server supports per-run filtering, wire Codex plugin
+- [x] 4.1 If Phase 1 proves app-server supports per-run filtering, wire Codex plugin
   lifecycle/status and pass only reviewed+enabled plugins to that managed thread.
 - [ ] 4.2 If Phase 1 proves app-server has no per-run filtering, stop Codex native
   execution work for this change, keep Codex marked unsupported or explicitly
   MCP-only, and prepare a follow-up proposal. Do not mark Codex native execution
   complete.
-- [ ] 4.3 Do not show Codex enable/disable/install/uninstall controls unless the
+- [x] 4.3 Do not show Codex enable/disable/install/uninstall controls unless the
   runtime exposes those actions and Locus can preserve review/safe-mode/MCP gates.
-- [ ] 4.4 Bind Codex native activation to the reviewed activation identity; block or
+- [x] 4.4 Bind Codex native activation to the reviewed activation identity; block or
   require explicit high-risk acknowledgement when stable identity is missing, and
   block when identity drifts after review.
 - [ ] 4.5 Ensure Codex plugin staging/load failures fail closed and do not drag down
   non-plugin Codex app-server behavior.
-- [ ] 4.6 `bun run ts:check` passes.
+- [x] 4.6 `bun run ts:check` passes.
 
 ## 5. Phase 5 - UI Truth And Plugins-Tab Cleanup
 
@@ -101,14 +101,14 @@
 
 ## 6. Validation
 
-- [ ] 6.1 `bun run ts:check`.
+- [x] 6.1 `bun run ts:check`.
 - [ ] 6.2 `bun run lint`.
 - [ ] 6.3 Full test suite, including filtered settings, safe mode, review gates,
   activation-identity drift, identity-incomplete behavior, MCP-approval gates,
   review-state recomputation, failed-load recovery, Codex version probe, and Codex
   no-filter blocker behavior.
 - [ ] 6.4 Architecture guard.
-- [ ] 6.5 `openspec validate add-runtime-native-plugin-execution --strict --no-interactive`.
+- [x] 6.5 `openspec validate add-runtime-native-plugin-execution --strict --no-interactive`.
 - [ ] 6.6 Manual managed-run proof: reviewed plugin components activate; unreviewed
   globally enabled plugins do not; activation identity drift blocks activation;
   identity-incomplete plugins are blocked or explicitly high-risk acknowledged; safe
