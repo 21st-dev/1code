@@ -77,24 +77,24 @@
 - [x] 4.4 Bind Codex native activation to the reviewed activation identity; block or
   require explicit high-risk acknowledgement when stable identity is missing, and
   block when identity drifts after review.
-- [ ] 4.5 Ensure Codex plugin staging/load failures fail closed and do not drag down
+- [x] 4.5 Ensure Codex plugin staging/load failures fail closed and do not drag down
   non-plugin Codex app-server behavior.
 - [x] 4.6 `bun run ts:check` passes.
 
 ## 5. Phase 5 - UI Truth And Plugins-Tab Cleanup
 
-- [ ] 5.1 Settings > Plugins shows per-plugin installed, enabled, reviewed,
+- [x] 5.1 Settings > Plugins shows per-plugin installed, enabled, reviewed,
   runtime-loadable, component status, activation identity status, MCP approval state,
   recovery state, and blocked reasons from the activation matrix.
-- [ ] 5.2 Keep Plugins inside Settings; do not promote it to a standalone extension
+- [x] 5.2 Keep Plugins inside Settings; do not promote it to a standalone extension
   surface in this change.
-- [ ] 5.3 Clarify plugin-provided MCP ownership by bridging to the MCP tab or making
+- [x] 5.3 Clarify plugin-provided MCP ownership by bridging to the MCP tab or making
   ownership explicit, and remove unused/dead `setActiveTab` state.
-- [ ] 5.4 Add proportional confirmation for destructive or security-sensitive plugin
+- [x] 5.4 Add proportional confirmation for destructive or security-sensitive plugin
   actions, including developer trust revocation and developer source removal.
-- [ ] 5.5 Hide dead unsupported Codex rows or explain blocked/native-loadable state
+- [x] 5.5 Hide dead unsupported Codex rows or explain blocked/native-loadable state
   directly from the Phase-1 matrix.
-- [ ] 5.6 Update `agent-runtime-capabilities.ts` from the proof matrix.
+- [x] 5.6 Update `agent-runtime-capabilities.ts` from the proof matrix.
 - [ ] 5.7 Update `docs/ideas/settings-per-tab-audit.md` to mark execution-truth and
   in-tab trust fixes as folded into this change, while the standalone navigation
   decision remains deferred.
