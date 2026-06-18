@@ -11,14 +11,16 @@ entities with retired synonyms ("sub-chat"/"subchat"/"子对话" for the Chat
 entity, or "agent"/"chat" for the Workspace layer). The terms are defined in
 `docs/ideas/canonical-vocabulary.md`.
 
-#### Scenario: A retired Chat synonym does not label the Chat entity
+#### Scenario: A retired Chat synonym does not appear in i18n values
 
-- **WHEN** an i18n value (en or zh-CN) names the Chat entity backed by `sub_chats`
-- **THEN** it does not use a retired synonym ("sub-chat" / "Sub-chat" / "subchat" /
-  "子对话") as the user-facing noun
-- **AND** domain-specific text such as GitHub review threads, provider
-  conversation history, or generic prose is allowed when it is not naming the
-  `sub_chats` entity
+- **WHEN** the architecture guard checks the English and Simplified Chinese
+  dictionaries
+- **THEN** it parses dictionary entries structurally rather than by
+  formatting-sensitive regular-expression slicing
+- **AND** it fails if any dictionary value contains a retired Chat synonym
+  ("sub-chat" / "Sub-chat" / "subchat" / "子对话")
+- **AND** any intentional exception requires an explicit allowlist entry in the
+  guard with a reason
 
 #### Scenario: The worktree layer is called Workspace, not chat/agent
 
@@ -76,4 +78,3 @@ job API contract.
 - **WHEN** a mislabeled i18n entry is corrected
 - **THEN** the key identifier is preserved and only its value changes (unless a key
   rename is trivially safe)
-

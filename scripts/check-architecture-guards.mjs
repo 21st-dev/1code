@@ -3,6 +3,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import ts from "typescript"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const failures = []
@@ -31,37 +32,108 @@ function assertIncludes(filePath, text, label) {
   }
 }
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+function unwrapExpression(expression) {
+  let current = expression
+  while (
+    current &&
+    (ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current) ||
+      ts.isTypeAssertionExpression(current) ||
+      ts.isParenthesizedExpression(current))
+  ) {
+    current = current.expression
+  }
+  return current
 }
 
-function dictionaryEntriesForKey(content, key) {
-  const keyPattern = escapeRegExp(key)
-  const entryPattern = new RegExp(
-    `"${keyPattern}"\\s*:\\s*([\\s\\S]*?)(?=,\\n\\s*"[^"]+"\\s*:)`,
-    "g",
+function objectPropertyName(propertyName) {
+  if (ts.isIdentifier(propertyName)) return propertyName.text
+  if (ts.isStringLiteralLike(propertyName)) return propertyName.text
+  if (ts.isNumericLiteral(propertyName)) return propertyName.text
+  return null
+}
+
+function stringLiteralValue(expression) {
+  const unwrapped = unwrapExpression(expression)
+  if (!unwrapped) return null
+  if (ts.isStringLiteralLike(unwrapped)) return unwrapped.text
+  if (ts.isNoSubstitutionTemplateLiteral(unwrapped)) return unwrapped.text
+  return null
+}
+
+function parseI18nDictionaries(relativePath) {
+  const content = readText(relativePath)
+  const sourceFile = ts.createSourceFile(
+    relativePath,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
   )
-  return [...content.matchAll(entryPattern)].map((match) => match[1])
+  const entries = []
+  const expectedDictionaryNames = new Set(["en", "zhCN"])
+  const foundDictionaryNames = new Set()
+
+  function visit(node) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      expectedDictionaryNames.has(node.name.text)
+    ) {
+      foundDictionaryNames.add(node.name.text)
+      const initializer = unwrapExpression(node.initializer)
+      if (!initializer || !ts.isObjectLiteralExpression(initializer)) {
+        fail(`${relativePath} ${node.name.text} must be an object literal dictionary.`)
+        return
+      }
+
+      for (const property of initializer.properties) {
+        if (!ts.isPropertyAssignment(property)) {
+          continue
+        }
+
+        const key = objectPropertyName(property.name)
+        const value = stringLiteralValue(property.initializer)
+        if (key && value !== null) {
+          entries.push({ locale: node.name.text, key, value })
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+
+  for (const name of expectedDictionaryNames) {
+    if (!foundDictionaryNames.has(name)) {
+      fail(`${relativePath} must export a ${name} dictionary.`)
+    }
+  }
+
+  return entries
 }
 
-function assertDictionaryContainsValue(content, key, expectedValue) {
-  const entries = dictionaryEntriesForKey(content, key)
-  if (!entries.some((entry) => entry.includes(JSON.stringify(expectedValue)))) {
+function dictionaryEntriesForKey(entries, key) {
+  return entries.filter((entry) => entry.key === key)
+}
+
+function formatDictionaryEntry(entry) {
+  return `${entry.locale}.${entry.key}`
+}
+
+function assertDictionaryContainsValue(entries, key, expectedValue) {
+  const matchingEntries = dictionaryEntriesForKey(entries, key)
+  if (!matchingEntries.some((entry) => entry.value === expectedValue)) {
     fail(`src/renderer/lib/i18n/dictionaries.ts must set ${key} to ${JSON.stringify(expectedValue)} in at least one locale.`)
   }
 }
 
-function assertDictionaryValueExcludes(content, key, forbiddenValues) {
-  const entries = dictionaryEntriesForKey(content, key)
-  if (entries.length === 0) {
-    fail(`src/renderer/lib/i18n/dictionaries.ts must define ${key}.`)
-    return
-  }
-
+function assertDictionaryValuesExclude(entries, forbiddenValues) {
   for (const entry of entries) {
     for (const forbiddenValue of forbiddenValues) {
-      if (entry.includes(forbiddenValue)) {
-        fail(`src/renderer/lib/i18n/dictionaries.ts ${key} must not use retired Chat vocabulary ${JSON.stringify(forbiddenValue)}.`)
+      if (entry.value.includes(forbiddenValue)) {
+        fail(`src/renderer/lib/i18n/dictionaries.ts ${formatDictionaryEntry(entry)} must not use retired Chat vocabulary ${JSON.stringify(forbiddenValue)}.`)
       }
     }
   }
@@ -321,7 +393,9 @@ function assertNoDeadSettingsState() {
 }
 
 function assertCanonicalVocabularyI18n() {
-  const dictionary = readText("src/renderer/lib/i18n/dictionaries.ts")
+  const dictionaryEntries = parseI18nDictionaries(
+    "src/renderer/lib/i18n/dictionaries.ts",
+  )
 
   const expectedValues = [
     ["sidebar.newChat", "New Quick chat"],
@@ -351,27 +425,13 @@ function assertCanonicalVocabularyI18n() {
   ]
 
   for (const [key, expectedValue] of expectedValues) {
-    assertDictionaryContainsValue(dictionary, key, expectedValue)
+    assertDictionaryContainsValue(dictionaryEntries, key, expectedValue)
   }
 
-  const chatEntityLabelKeys = [
-    "onboarding.customModel.utilityApisBody",
-    "settings.models.subChatTitle.title",
-    "settings.models.subChatTitle.description",
-    "settings.models.subChatTitle.modelHint",
-    "settings.commands.builtin.clear",
-    "settings.debug.subChats",
-    "toast.models.subChatTitleSettingsSaved",
-    "toast.models.subChatTitleSettingsReset",
-    "toast.models.failedToSaveSubChatTitleSettings",
-    "toast.models.failedToResetSubChatTitleSettings",
-    "workbench.error.chat_context_missing.body",
-  ]
   const retiredChatTerms = ["sub-chat", "Sub-chat", "subchat", "子对话"]
-
-  for (const key of chatEntityLabelKeys) {
-    assertDictionaryValueExcludes(dictionary, key, retiredChatTerms)
-  }
+  // Scan every dictionary value, not just today's known Chat labels. This keeps
+  // future keys from quietly reintroducing retired user-facing vocabulary.
+  assertDictionaryValuesExclude(dictionaryEntries, retiredChatTerms)
 }
 
 assertOwnershipDocs()
