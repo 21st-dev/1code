@@ -470,7 +470,11 @@ export const en = {
   "settings.models.overrideModel.authHint":
     "Select how Claude Code receives the provider token",
   "settings.models.removeCodexApiKey": "Remove Codex API key",
+  "settings.models.removeCodexApiKeyConfirm":
+    "Remove the saved Codex API key from this device?",
   "settings.models.codexLogoutConfirm": "Log out from Codex on this device?",
+  "settings.models.resetProviderConfirm":
+    "Reset this provider configuration? Saved endpoint metadata and token will be removed.",
 
   "settings.commands.title": "Command Guide",
   "settings.commands.subtitle":
@@ -3717,7 +3721,11 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.overrideModel.authHint":
     "选择 Claude Code 接收提供方令牌的方式",
   "settings.models.removeCodexApiKey": "移除 Codex API 密钥",
+  "settings.models.removeCodexApiKeyConfirm":
+    "要从这台设备移除已保存的 Codex API 密钥吗？",
   "settings.models.codexLogoutConfirm": "要在这台设备上退出 Codex 吗？",
+  "settings.models.resetProviderConfirm":
+    "要重置这个提供方配置吗？已保存的端点信息和密钥都会被移除。",
 
   "settings.commands.title": "命令指南",
   "settings.commands.subtitle":

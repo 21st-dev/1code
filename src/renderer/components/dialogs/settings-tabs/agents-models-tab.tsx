@@ -37,7 +37,6 @@ import {
   normalizeCodexApiKey,
   OPENAI_TRANSCRIPTION_BASE_URL,
   OPENAI_TRANSCRIPTION_MODEL,
-  type ClaudeProviderAuthMode,
 } from "../../../lib/atoms"
 import {
   lastSelectedClaudeModelSourceAtom,
@@ -47,10 +46,23 @@ import {
 } from "../../../features/agents/atoms"
 import { useI18n, type TranslationKey } from "../../../lib/i18n"
 import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
-import { CLAUDE_MODELS, CODEX_MODELS } from "../../../features/agents/lib/models"
+import {
+  CLAUDE_MODELS,
+  CODEX_MODELS,
+} from "../../../features/agents/lib/models"
 import { trpc } from "../../../lib/trpc"
 import { Badge } from "../../ui/badge"
 import { Button } from "../../ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog"
 import {
   Collapsible,
   CollapsibleContent,
@@ -64,6 +76,13 @@ import {
 } from "../../ui/dropdown-menu"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select"
 import { Switch } from "../../ui/switch"
 import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
 import { cn } from "../../../lib/utils"
@@ -189,20 +208,66 @@ function AccountRow({
   )
 }
 
+type ConfirmActionState = {
+  title: string
+  description: string
+  actionLabel: string
+  onConfirm: () => void | Promise<void>
+} | null
+
+function ConfirmActionDialog({
+  action,
+  onOpenChange,
+}: {
+  action: ConfirmActionState
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useI18n()
+
+  return (
+    <AlertDialog open={Boolean(action)} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{action?.title}</AlertDialogTitle>
+          <AlertDialogDescription>{action?.description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-red-600 text-white hover:bg-red-700"
+            onClick={() => {
+              const onConfirm = action?.onConfirm
+              onOpenChange(false)
+              void onConfirm?.()
+            }}
+          >
+            {action?.actionLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 // Anthropic accounts section component
 function AnthropicAccountsSection() {
   const { t } = useI18n()
-  const { data: accounts, isLoading: isAccountsLoading, refetch: refetchList } =
-    trpc.anthropicAccounts.list.useQuery(undefined, {
-      refetchOnMount: true,
-      staleTime: 0,
-    })
+  const [confirmAction, setConfirmAction] = useState<ConfirmActionState>(null)
+  const {
+    data: accounts,
+    isLoading: isAccountsLoading,
+    refetch: refetchList,
+  } = trpc.anthropicAccounts.list.useQuery(undefined, {
+    refetchOnMount: true,
+    staleTime: 0,
+  })
   const { data: activeAccount, refetch: refetchActive } =
     trpc.anthropicAccounts.getActive.useQuery(undefined, {
       refetchOnMount: true,
       staleTime: 0,
     })
-  const { data: claudeCodeIntegration } = trpc.claudeCode.getIntegration.useQuery()
+  const { data: claudeCodeIntegration } =
+    trpc.claudeCode.getIntegration.useQuery()
   const trpcUtils = trpc.useUtils()
 
   // Auto-migrate legacy account if needed
@@ -264,7 +329,7 @@ function AnthropicAccountsSection() {
   const handleRename = (accountId: string, currentName: string | null) => {
     const newName = window.prompt(
       t("settings.models.renamePrompt"),
-      currentName || t("settings.models.accountFallback")
+      currentName || t("settings.models.accountFallback"),
     )
     if (newName && newName.trim()) {
       renameMutation.mutate({ accountId, displayName: newName.trim() })
@@ -272,14 +337,14 @@ function AnthropicAccountsSection() {
   }
 
   const handleRemove = (accountId: string, displayName: string | null) => {
-    const confirmed = window.confirm(
-      t("settings.models.removeConfirm", {
+    setConfirmAction({
+      title: t("common.remove"),
+      description: t("settings.models.removeConfirm", {
         name: displayName || t("settings.models.accountFallback"),
-      })
-    )
-    if (confirmed) {
-      removeMutation.mutate({ accountId })
-    }
+      }),
+      actionLabel: t("common.remove"),
+      onConfirm: () => removeMutation.mutate({ accountId }),
+    })
   }
 
   const isLoading =
@@ -294,23 +359,31 @@ function AnthropicAccountsSection() {
 
   return (
     <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
-        {isAccountsLoading ? (
-          <div className="p-4 text-center text-sm text-muted-foreground">
-            {t("settings.models.accountsLoading")}
-          </div>
-        ) : (
-          accounts?.map((account) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              isActive={activeAccount?.id === account.id}
-              onSetActive={() => setActiveMutation.mutate({ accountId: account.id })}
-              onRename={() => handleRename(account.id, account.displayName)}
-              onRemove={() => handleRemove(account.id, account.displayName)}
-              isLoading={isLoading}
-            />
-          ))
-        )}
+      {isAccountsLoading ? (
+        <div className="p-4 text-center text-sm text-muted-foreground">
+          {t("settings.models.accountsLoading")}
+        </div>
+      ) : (
+        accounts?.map((account) => (
+          <AccountRow
+            key={account.id}
+            account={account}
+            isActive={activeAccount?.id === account.id}
+            onSetActive={() =>
+              setActiveMutation.mutate({ accountId: account.id })
+            }
+            onRename={() => handleRename(account.id, account.displayName)}
+            onRemove={() => handleRemove(account.id, account.displayName)}
+            isLoading={isLoading}
+          />
+        ))
+      )}
+      <ConfirmActionDialog
+        action={confirmAction}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
+      />
     </div>
   )
 }
@@ -353,20 +426,29 @@ function purposeMatchesProfile(
   }
 }
 
-const PROVIDER_TARGET_LABEL_KEYS: Record<ProviderProfileTarget, TranslationKey> = {
+const PROVIDER_TARGET_LABEL_KEYS: Record<
+  ProviderProfileTarget,
+  TranslationKey
+> = {
   claude: "settings.models.providerProfiles.targetClaude",
   codex: "settings.models.providerProfiles.targetCodex",
   helpers: "settings.models.providerProfiles.targetHelpers",
   local: "settings.models.providerProfiles.targetLocal",
 }
 
-const PROVIDER_AUTH_MODE_LABEL_KEYS: Record<ProviderProfileAuthMode, TranslationKey> = {
+const PROVIDER_AUTH_MODE_LABEL_KEYS: Record<
+  ProviderProfileAuthMode,
+  TranslationKey
+> = {
   bearer: "settings.models.providerProfiles.authBearer",
   "x-api-key": "settings.models.providerProfiles.authXApiKey",
   none: "settings.models.providerProfiles.authNone",
 }
 
-const DIAGNOSTIC_CHECK_LABEL_KEYS: Record<ProviderDiagnosticCheckId, TranslationKey> = {
+const DIAGNOSTIC_CHECK_LABEL_KEYS: Record<
+  ProviderDiagnosticCheckId,
+  TranslationKey
+> = {
   endpoint: "settings.models.providerProfiles.diagnostic.endpoint",
   auth: "settings.models.providerProfiles.diagnostic.auth",
   model: "settings.models.providerProfiles.diagnostic.model",
@@ -380,7 +462,10 @@ const DIAGNOSTIC_CHECK_LABEL_KEYS: Record<ProviderDiagnosticCheckId, Translation
     "settings.models.providerProfiles.diagnostic.codexAppServer",
 }
 
-const DIAGNOSTIC_STATUS_LABEL_KEYS: Record<ProviderDiagnosticStatus, TranslationKey> = {
+const DIAGNOSTIC_STATUS_LABEL_KEYS: Record<
+  ProviderDiagnosticStatus,
+  TranslationKey
+> = {
   ok: "settings.models.providerProfiles.statusOk",
   failed: "settings.models.providerProfiles.statusFailed",
   unsupported: "settings.models.providerProfiles.statusUnsupported",
@@ -415,7 +500,10 @@ function getDiagnosticStatusLabel(
   return t(DIAGNOSTIC_STATUS_LABEL_KEYS[status])
 }
 
-function getPresetRegionLabel(region: string, t: (key: TranslationKey) => string) {
+function getPresetRegionLabel(
+  region: string,
+  t: (key: TranslationKey) => string,
+) {
   switch (region) {
     case "china":
       return t("settings.models.providerProfiles.regionChina")
@@ -471,7 +559,8 @@ function ProviderProfilesSettingsSection() {
   const { data: profilesData } = trpc.providerProfiles.listProfiles.useQuery()
   const { data: defaultsData } = trpc.providerProfiles.getDefaults.useQuery()
   const saveProfileMutation = trpc.providerProfiles.saveProfile.useMutation()
-  const deleteProfileMutation = trpc.providerProfiles.deleteProfile.useMutation()
+  const deleteProfileMutation =
+    trpc.providerProfiles.deleteProfile.useMutation()
   const testProfileMutation = trpc.providerProfiles.testProfile.useMutation()
   const setDefaultMutation = trpc.providerProfiles.setDefault.useMutation()
 
@@ -488,12 +577,11 @@ function ProviderProfilesSettingsSection() {
   const [authMode, setAuthMode] = useState<ProviderProfileAuthMode>("bearer")
   const [token, setToken] = useState("")
   const [headersText, setHeadersText] = useState("")
-  const [targetRuntimes, setTargetRuntimes] = useState<ProviderProfileTarget[]>([
-    "claude",
-    "codex",
-    "helpers",
-  ])
+  const [targetRuntimes, setTargetRuntimes] = useState<ProviderProfileTarget[]>(
+    ["claude", "codex", "helpers"],
+  )
   const [testingProfileId, setTestingProfileId] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<ConfirmActionState>(null)
 
   const selectedPreset = useMemo(
     () => presets.find((preset) => preset.id === presetId),
@@ -576,11 +664,11 @@ function ProviderProfilesSettingsSection() {
 
   const canSaveProfile = Boolean(
     name.trim() &&
-    baseUrl.trim() &&
-    defaultModel.trim() &&
-    targetRuntimes.length > 0 &&
-    (authMode === "none" || token.trim() || editingProfile?.hasToken) &&
-    !tokenRefreshRequired,
+      baseUrl.trim() &&
+      defaultModel.trim() &&
+      targetRuntimes.length > 0 &&
+      (authMode === "none" || token.trim() || editingProfile?.hasToken) &&
+      !tokenRefreshRequired,
   )
 
   const handleSaveProfile = () => {
@@ -597,10 +685,9 @@ function ProviderProfilesSettingsSection() {
           throw new Error("Invalid headers JSON")
         }
         headers = Object.fromEntries(
-          Object.entries(parsed as Record<string, unknown>).map(([key, value]) => [
-            key,
-            String(value),
-          ]),
+          Object.entries(parsed as Record<string, unknown>).map(
+            ([key, value]) => [key, String(value)],
+          ),
         )
       } catch {
         toast.error(t("settings.models.providerProfiles.invalidHeaders"))
@@ -621,7 +708,9 @@ function ProviderProfilesSettingsSection() {
         ...(headers !== undefined ? { headers } : {}),
         targetRuntimes,
         capabilities: {
-          ...(selectedPreset?.capabilities ?? editingProfile?.capabilities ?? {}),
+          ...(selectedPreset?.capabilities ??
+            editingProfile?.capabilities ??
+            {}),
           claude: targetRuntimes.includes("claude"),
           codex: targetRuntimes.includes("codex"),
           helpers: targetRuntimes.includes("helpers"),
@@ -639,33 +728,40 @@ function ProviderProfilesSettingsSection() {
           toast.success(t("toast.models.providerProfileSaved"))
         },
         onError: (error) => {
-          toast.error(error.message || t("toast.models.failedToSaveProviderProfile"))
+          toast.error(
+            error.message || t("toast.models.failedToSaveProviderProfile"),
+          )
         },
       },
     )
   }
 
   const handleDeleteProfile = (profileId: string) => {
-    const confirmed = window.confirm(
-      t("settings.models.providerProfiles.deleteConfirm"),
-    )
-    if (!confirmed) return
-    deleteProfileMutation.mutate(
-      { id: profileId },
-      {
-        onSuccess: async () => {
-          if (editingId === profileId) resetForm()
-          await Promise.all([
-            trpcUtils.providerProfiles.listProfiles.invalidate(),
-            trpcUtils.providerProfiles.getDefaults.invalidate(),
-          ])
-          toast.success(t("toast.models.providerProfileDeleted"))
-        },
-        onError: (error) => {
-          toast.error(error.message || t("toast.models.failedToDeleteProviderProfile"))
-        },
-      },
-    )
+    setConfirmAction({
+      title: t("common.delete"),
+      description: t("settings.models.providerProfiles.deleteConfirm"),
+      actionLabel: t("common.delete"),
+      onConfirm: () =>
+        deleteProfileMutation.mutate(
+          { id: profileId },
+          {
+            onSuccess: async () => {
+              if (editingId === profileId) resetForm()
+              await Promise.all([
+                trpcUtils.providerProfiles.listProfiles.invalidate(),
+                trpcUtils.providerProfiles.getDefaults.invalidate(),
+              ])
+              toast.success(t("toast.models.providerProfileDeleted"))
+            },
+            onError: (error) => {
+              toast.error(
+                error.message ||
+                  t("toast.models.failedToDeleteProviderProfile"),
+              )
+            },
+          },
+        ),
+    })
   }
 
   const handleTestProfile = (profileId: string) => {
@@ -682,10 +778,14 @@ function ProviderProfilesSettingsSection() {
           }
         },
         onError: (error) => {
-          toast.error(error.message || t("toast.models.providerProfileTestFailed"))
+          toast.error(
+            error.message || t("toast.models.providerProfileTestFailed"),
+          )
         },
         onSettled: () => {
-          setTestingProfileId((current) => (current === profileId ? null : current))
+          setTestingProfileId((current) =>
+            current === profileId ? null : current,
+          )
         },
       },
     )
@@ -721,7 +821,9 @@ function ProviderProfilesSettingsSection() {
           toast.success(t("toast.models.providerDefaultSaved"))
         },
         onError: (error) => {
-          toast.error(error.message || t("toast.models.failedToSaveProviderDefault"))
+          toast.error(
+            error.message || t("toast.models.failedToSaveProviderDefault"),
+          )
         },
       },
     )
@@ -791,7 +893,10 @@ function ProviderProfilesSettingsSection() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor={`${formIdPrefix}-name`} className="text-sm font-medium">
+                <Label
+                  htmlFor={`${formIdPrefix}-name`}
+                  className="text-sm font-medium"
+                >
                   {t("settings.models.providerProfiles.name")}
                 </Label>
                 <Input
@@ -801,7 +906,10 @@ function ProviderProfilesSettingsSection() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={`${formIdPrefix}-base-url`} className="text-sm font-medium">
+                <Label
+                  htmlFor={`${formIdPrefix}-base-url`}
+                  className="text-sm font-medium"
+                >
                   {t("common.baseUrl")}
                 </Label>
                 <Input
@@ -815,7 +923,10 @@ function ProviderProfilesSettingsSection() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor={`${formIdPrefix}-model`} className="text-sm font-medium">
+                <Label
+                  htmlFor={`${formIdPrefix}-model`}
+                  className="text-sm font-medium"
+                >
                   {t("onboarding.customModel.modelName")}
                 </Label>
                 <Input
@@ -826,48 +937,66 @@ function ProviderProfilesSettingsSection() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={`${formIdPrefix}-protocol`} className="text-sm font-medium">
+                <Label
+                  htmlFor={`${formIdPrefix}-protocol`}
+                  className="text-sm font-medium"
+                >
                   {t("common.protocol")}
                 </Label>
-                <select
-                  id={`${formIdPrefix}-protocol`}
+                <Select
                   value={protocol}
-                  onChange={(event) =>
-                    setProtocol(event.target.value as ProviderProfileProtocol)
+                  onValueChange={(value) =>
+                    setProtocol(value as ProviderProfileProtocol)
                   }
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
                 >
-                  {providerProfileProtocols.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    id={`${formIdPrefix}-protocol`}
+                    className="h-8"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {providerProfileProtocols.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor={`${formIdPrefix}-auth`} className="text-sm font-medium">
+                <Label
+                  htmlFor={`${formIdPrefix}-auth`}
+                  className="text-sm font-medium"
+                >
                   {t("common.auth")}
                 </Label>
-                <select
-                  id={`${formIdPrefix}-auth`}
+                <Select
                   value={authMode}
-                  onChange={(event) =>
-                    setAuthMode(event.target.value as ProviderProfileAuthMode)
+                  onValueChange={(value) =>
+                    setAuthMode(value as ProviderProfileAuthMode)
                   }
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
                 >
-                  {providerProfileAuthModes.map((item) => (
-                    <option key={item} value={item}>
-                      {getProviderAuthModeLabel(item, t)}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id={`${formIdPrefix}-auth`} className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {providerProfileAuthModes.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {getProviderAuthModeLabel(item, t)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={`${formIdPrefix}-token`} className="text-sm font-medium">
+                <Label
+                  htmlFor={`${formIdPrefix}-token`}
+                  className="text-sm font-medium"
+                >
                   {t("common.apiKey")}
                 </Label>
                 <Input
@@ -914,7 +1043,10 @@ function ProviderProfilesSettingsSection() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor={`${formIdPrefix}-headers`} className="text-sm font-medium">
+              <Label
+                htmlFor={`${formIdPrefix}-headers`}
+                className="text-sm font-medium"
+              >
                 {t("settings.models.providerProfiles.headers")}
               </Label>
               <Input
@@ -1049,12 +1181,19 @@ function ProviderProfilesSettingsSection() {
                               )}
                               {status.ok
                                 ? t("settings.models.providerProfiles.statusOk")
-                                : t("settings.models.providerProfiles.statusFailed")}
+                                : t(
+                                    "settings.models.providerProfiles.statusFailed",
+                                  )}
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground">
+                            <Badge
+                              variant="outline"
+                              className="gap-1 text-[10px] text-muted-foreground"
+                            >
                               <AlertTriangle className="h-3 w-3" />
-                              {t("settings.models.providerProfiles.statusUntested")}
+                              {t(
+                                "settings.models.providerProfiles.statusUntested",
+                              )}
                             </Badge>
                           )}
                         </div>
@@ -1094,10 +1233,15 @@ function ProviderProfilesSettingsSection() {
                               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
                             )}
                             <div className="min-w-0">
-                              <div className="break-words">{status.message}</div>
+                              <div className="break-words">
+                                {status.message}
+                              </div>
                               {status.checkedAt && (
                                 <div className="mt-0.5 text-[10px] text-muted-foreground/80">
-                                  {t("settings.models.providerProfiles.checkedAt")}:{" "}
+                                  {t(
+                                    "settings.models.providerProfiles.checkedAt",
+                                  )}
+                                  :{" "}
                                   {new Date(status.checkedAt).toLocaleString()}
                                 </div>
                               )}
@@ -1148,7 +1292,8 @@ function ProviderProfilesSettingsSection() {
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     {PROVIDER_DEFAULT_PURPOSES.map((purpose) => {
-                      const active = defaults?.[purpose]?.profileId === profile.id
+                      const active =
+                        defaults?.[purpose]?.profileId === profile.id
                       const supported = purposeMatchesProfile(
                         purpose,
                         profile.targetRuntimes,
@@ -1203,6 +1348,12 @@ function ProviderProfilesSettingsSection() {
           )}
         </div>
       </div>
+      <ConfirmActionDialog
+        action={confirmAction}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
+      />
     </div>
   )
 }
@@ -1251,6 +1402,7 @@ function LocalApiProviderSettingsSection({
   const [model, setModel] = useState("")
   const [baseUrl, setBaseUrl] = useState("")
   const [token, setToken] = useState("")
+  const [confirmAction, setConfirmAction] = useState<ConfirmActionState>(null)
 
   useEffect(() => {
     if (!providerData) return
@@ -1326,7 +1478,7 @@ function LocalApiProviderSettingsSection({
     trpcUtils.localApiProviderConfig.get,
   ])
 
-  const handleReset = () => {
+  const performReset = () => {
     clearProviderMutation.mutate(
       { purpose },
       {
@@ -1344,6 +1496,15 @@ function LocalApiProviderSettingsSection({
     )
   }
 
+  const handleReset = () => {
+    setConfirmAction({
+      title: t("common.reset"),
+      description: t("settings.models.resetProviderConfirm"),
+      actionLabel: t("common.reset"),
+      onConfirm: performReset,
+    })
+  }
+
   const canReset = Boolean(
     model.trim() ||
       baseUrl.trim() ||
@@ -1355,12 +1516,8 @@ function LocalApiProviderSettingsSection({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <div>
-          <h4 className="text-sm font-medium text-foreground">
-            {t(titleKey)}
-          </h4>
-          <p className="text-xs text-muted-foreground">
-            {t(descriptionKey)}
-          </p>
+          <h4 className="text-sm font-medium text-foreground">{t(titleKey)}</h4>
+          <p className="text-xs text-muted-foreground">{t(descriptionKey)}</p>
         </div>
         {canReset && (
           <Button
@@ -1381,9 +1538,7 @@ function LocalApiProviderSettingsSection({
             <Label className="text-sm font-medium">
               {t("onboarding.customModel.modelName")}
             </Label>
-            <p className="text-xs text-muted-foreground">
-              {t(modelHintKey)}
-            </p>
+            <p className="text-xs text-muted-foreground">{t(modelHintKey)}</p>
           </div>
           <div className="flex-shrink-0 w-80">
             <Input
@@ -1402,9 +1557,7 @@ function LocalApiProviderSettingsSection({
             <Label className="text-sm font-medium">
               {t("onboarding.customModel.apiToken")}
             </Label>
-            <p className="text-xs text-muted-foreground">
-              {t(tokenHintKey)}
-            </p>
+            <p className="text-xs text-muted-foreground">{t(tokenHintKey)}</p>
           </div>
           <div className="flex-shrink-0 w-80">
             <Input
@@ -1415,7 +1568,9 @@ function LocalApiProviderSettingsSection({
               disabled={saveProviderMutation.isPending}
               className="w-full"
               placeholder={
-                providerData?.config?.hasToken ? t("common.savedToken") : "sk-..."
+                providerData?.config?.hasToken
+                  ? t("common.savedToken")
+                  : "sk-..."
               }
             />
           </div>
@@ -1424,9 +1579,7 @@ function LocalApiProviderSettingsSection({
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex-1">
             <Label className="text-sm font-medium">{t("common.baseUrl")}</Label>
-            <p className="text-xs text-muted-foreground">
-              {t(baseUrlHintKey)}
-            </p>
+            <p className="text-xs text-muted-foreground">{t(baseUrlHintKey)}</p>
           </div>
           <div className="flex-shrink-0 w-80">
             <Input
@@ -1440,36 +1593,35 @@ function LocalApiProviderSettingsSection({
           </div>
         </div>
       </div>
+      <ConfirmActionDialog
+        action={confirmAction}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
+      />
     </div>
   )
 }
 
 export function AgentsModelsTab() {
   const { t } = useI18n()
-  const [model, setModel] = useState("")
-  const [baseUrl, setBaseUrl] = useState("")
-  const [token, setToken] = useState("")
   const [isAdvancedRoutingOpen, setIsAdvancedRoutingOpen] = useState(true)
+  const [confirmAction, setConfirmAction] = useState<ConfirmActionState>(null)
   const helperApisSectionRef = useRef<HTMLDivElement | null>(null)
   const [modelsSettingsTarget, setModelsSettingsTarget] = useAtom(
     modelsSettingsTargetAtom,
   )
-  const [authMode, setAuthMode] =
-    useState<ClaudeProviderAuthMode>("auth_token")
   const setClaudeLoginModalConfig = useSetAtom(claudeLoginModalConfigAtom)
   const setClaudeLoginModalOpen = useSetAtom(agentsLoginModalOpenAtom)
   const setCodexLoginModalOpen = useSetAtom(codexLoginModalOpenAtom)
   const isNarrowScreen = useIsNarrowScreen()
   const isLocalOnly = useLocalOnlyMode()
-  const { data: providerConfigData } =
-    trpc.claudeProviderConfig.get.useQuery()
   const { data: claudeCodeIntegration, isLoading: isClaudeCodeLoading } =
     trpc.claudeCode.getIntegration.useQuery()
   const isClaudeCodeConnected = claudeCodeIntegration?.isConnected
   const { data: codexIntegration, isLoading: isCodexLoading } =
     trpc.codex.getIntegration.useQuery()
-  const { data: codexApiKeyStatus } =
-    trpc.codex.getCodexApiKeyStatus.useQuery()
+  const { data: codexApiKeyStatus } = trpc.codex.getCodexApiKeyStatus.useQuery()
 
   // OpenAI API key state
   const [codexApiKey, setCodexApiKey] = useState("")
@@ -1485,18 +1637,6 @@ export function AgentsModelsTab() {
   const saveCodexApiKeyMutation = trpc.codex.saveCodexApiKey.useMutation()
   const removeCodexApiKeyMutation = trpc.codex.removeCodexApiKey.useMutation()
   const trpcUtils = trpc.useUtils()
-  const saveProviderConfigMutation = trpc.claudeProviderConfig.save.useMutation()
-  const clearProviderConfigMutation = trpc.claudeProviderConfig.clear.useMutation()
-
-  useEffect(() => {
-    if (!providerConfigData) return
-
-    const config = providerConfigData.config
-    setModel(config?.model ?? "")
-    setBaseUrl(config?.baseUrl ?? "")
-    setAuthMode(config?.authMode ?? "auth_token")
-    setToken("")
-  }, [providerConfigData])
 
   useEffect(() => {
     if (modelsSettingsTarget !== "helper-apis") return
@@ -1512,93 +1652,6 @@ export function AgentsModelsTab() {
 
     return () => window.clearTimeout(timeoutId)
   }, [modelsSettingsTarget, setModelsSettingsTarget])
-
-  const handleBlurSave = useCallback((nextAuthMode: ClaudeProviderAuthMode = authMode) => {
-    const trimmedModel = model.trim()
-    const trimmedBaseUrl = baseUrl.trim()
-    const trimmedToken = token.trim()
-    const storedConfig = providerConfigData?.config
-    const hasStoredToken = Boolean(storedConfig?.hasToken)
-
-    if (trimmedModel && trimmedBaseUrl && (trimmedToken || hasStoredToken)) {
-      const metadataChanged =
-        !storedConfig ||
-        storedConfig.model !== trimmedModel ||
-        storedConfig.baseUrl !== trimmedBaseUrl ||
-        storedConfig.authMode !== nextAuthMode
-
-      if (!metadataChanged && !trimmedToken) return
-
-      saveProviderConfigMutation.mutate(
-        {
-          model: trimmedModel,
-          baseUrl: trimmedBaseUrl,
-          authMode: nextAuthMode,
-          ...(trimmedToken && { token: trimmedToken }),
-        },
-        {
-          onSuccess: async () => {
-            setToken("")
-            await trpcUtils.claudeProviderConfig.get.invalidate()
-            toast.success(t("toast.models.modelSettingsSaved"))
-          },
-          onError: (error) => {
-            toast.error(error.message || t("toast.models.failedToSaveModelSettings"))
-          },
-        },
-      )
-    } else if (!trimmedModel && !trimmedBaseUrl && !trimmedToken) {
-      if (storedConfig) {
-        clearProviderConfigMutation.mutate(undefined, {
-          onSuccess: async () => {
-            await trpcUtils.claudeProviderConfig.get.invalidate()
-            toast.success(t("toast.models.modelSettingsReset"))
-          },
-          onError: (error) => {
-            toast.error(error.message || t("toast.models.failedToResetModelSettings"))
-          },
-        })
-      }
-    }
-  }, [
-    authMode,
-    baseUrl,
-    clearProviderConfigMutation,
-    model,
-    providerConfigData?.config,
-    saveProviderConfigMutation,
-    t,
-    token,
-    trpcUtils.claudeProviderConfig.get,
-  ])
-
-  const handleAuthModeChange = (nextAuthMode: ClaudeProviderAuthMode) => {
-    setAuthMode(nextAuthMode)
-    handleBlurSave(nextAuthMode)
-  }
-
-  const handleReset = () => {
-    clearProviderConfigMutation.mutate(undefined, {
-      onSuccess: async () => {
-        setModel("")
-        setBaseUrl("")
-        setToken("")
-        setAuthMode("auth_token")
-        await trpcUtils.claudeProviderConfig.get.invalidate()
-        toast.success(t("toast.models.modelSettingsReset"))
-      },
-      onError: (error) => {
-        toast.error(error.message || t("toast.models.failedToResetModelSettings"))
-      },
-    })
-  }
-
-  const canReset = Boolean(
-    model.trim() ||
-      baseUrl.trim() ||
-      token.trim() ||
-      providerConfigData?.config?.hasToken,
-  )
 
   const handleClaudeCodeSetup = async () => {
     if (isLocalOnly) {
@@ -1622,20 +1675,24 @@ export function AgentsModelsTab() {
   }
 
   const handleCodexLogout = async () => {
-    const confirmed = window.confirm(
-      t("settings.models.codexLogoutConfirm"),
-    )
-    if (!confirmed) return
-
-    try {
-      await codexLogoutMutation.mutateAsync()
-      await trpcUtils.codex.getIntegration.invalidate()
-      toast.success(t("toast.models.codexDisconnected"))
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t("toast.models.failedToDisconnectCodex")
-      toast.error(message)
-    }
+    setConfirmAction({
+      title: t("common.remove"),
+      description: t("settings.models.codexLogoutConfirm"),
+      actionLabel: t("common.remove"),
+      onConfirm: async () => {
+        try {
+          await codexLogoutMutation.mutateAsync()
+          await trpcUtils.codex.getIntegration.invalidate()
+          toast.success(t("toast.models.codexDisconnected"))
+        } catch (err) {
+          const message =
+            err instanceof Error
+              ? err.message
+              : t("toast.models.failedToDisconnectCodex")
+          toast.error(message)
+        }
+      },
+    })
   }
 
   const hasAppCodexApiKey = Boolean(codexApiKeyStatus?.hasApiKey)
@@ -1648,14 +1705,17 @@ export function AgentsModelsTab() {
     isCodexSubscriptionConnected && !hasAppCodexApiKey
   const [hiddenModels, setHiddenModels] = useAtom(hiddenModelsAtom)
 
-  const toggleModelVisibility = useCallback((modelId: string) => {
-    setHiddenModels((prev) => {
-      if (prev.includes(modelId)) {
-        return prev.filter((id) => id !== modelId)
-      }
-      return [...prev, modelId]
-    })
-  }, [setHiddenModels])
+  const toggleModelVisibility = useCallback(
+    (modelId: string) => {
+      setHiddenModels((prev) => {
+        if (prev.includes(modelId)) {
+          return prev.filter((id) => id !== modelId)
+        }
+        return [...prev, modelId]
+      })
+    },
+    [setHiddenModels],
+  )
 
   const codexConnectionText = isCodexSubscriptionConnected
     ? t("settings.models.codex.connectedViaChatGPT")
@@ -1681,7 +1741,9 @@ export function AgentsModelsTab() {
 
     setIsSavingCodexApiKey(true)
     try {
-      const saveResult = await saveCodexApiKeyMutation.mutateAsync({ apiKey: normalized })
+      const saveResult = await saveCodexApiKeyMutation.mutateAsync({
+        apiKey: normalized,
+      })
       setCodexApiKey("")
       setCodexOnboardingAuthMethod("api_key")
       setCodexOnboardingCompleted(true)
@@ -1706,7 +1768,7 @@ export function AgentsModelsTab() {
     }
   }
 
-  const handleRemoveCodexApiKey = async () => {
+  const removeCodexApiKey = async () => {
     setIsSavingCodexApiKey(true)
     try {
       await removeCodexApiKeyMutation.mutateAsync()
@@ -1734,11 +1796,25 @@ export function AgentsModelsTab() {
     }
   }
 
+  const handleRemoveCodexApiKey = () => {
+    setConfirmAction({
+      title: t("settings.models.removeCodexApiKey"),
+      description: t("settings.models.removeCodexApiKeyConfirm"),
+      actionLabel: t("common.remove"),
+      onConfirm: removeCodexApiKey,
+    })
+  }
+
   // All models merged into one list for the top section
   const allModels = useMemo(() => {
-    const items: { id: string; name: string; provider: "claude" | "codex" }[] = []
+    const items: { id: string; name: string; provider: "claude" | "codex" }[] =
+      []
     for (const m of CLAUDE_MODELS) {
-      items.push({ id: m.id, name: `${m.name} ${m.version}`, provider: "claude" })
+      items.push({
+        id: m.id,
+        name: `${m.name} ${m.version}`,
+        provider: "claude",
+      })
     }
     for (const m of CODEX_MODELS) {
       items.push({ id: m.id, name: m.name, provider: "codex" })
@@ -1752,8 +1828,6 @@ export function AgentsModelsTab() {
     const q = modelSearch.toLowerCase().trim()
     return allModels.filter((m) => m.name.toLowerCase().includes(q))
   }, [allModels, modelSearch])
-
-  const [isApiKeysOpen, setIsApiKeysOpen] = useState(false)
 
   return (
     <div className="p-6 space-y-6">
@@ -1879,29 +1953,82 @@ export function AgentsModelsTab() {
                       {t("common.active")}
                     </Badge>
                   )}
-                  {isCodexSubscriptionConnected ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        disabled={
+                          isCodexLoading ||
+                          codexLogoutMutation.isPending ||
+                          isSavingCodexApiKey
+                        }
+                        aria-label={t("common.moreOptions")}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {isCodexSubscriptionConnected ? (
+                        <DropdownMenuItem
+                          className="data-[highlighted]:bg-red-500/15 data-[highlighted]:text-red-400"
+                          onClick={() => void handleCodexLogout()}
+                        >
+                          {t("settings.models.codex.logout")}
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          onClick={() => void handleCodexSetup()}
+                        >
+                          {t("common.connect")}
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-6 p-4 hover:bg-muted/50">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium">
+                      {t("common.codexApiKey")}
+                    </Label>
+                    {hasAppCodexApiKey && (
+                      <Badge variant="secondary" className="text-xs">
+                        {t("common.active")}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.models.codexApiKey.priority")}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 w-80 flex items-center gap-2">
+                  <Input
+                    type="password"
+                    value={codexApiKey}
+                    onChange={(e) => setCodexApiKey(e.target.value)}
+                    onBlur={handleCodexApiKeyBlur}
+                    disabled={
+                      isSavingCodexApiKey ||
+                      codexApiKeyStatus?.encryptionAvailable === false
+                    }
+                    className="w-full font-mono"
+                    placeholder={
+                      hasAppCodexApiKey ? t("common.savedToken") : "sk-..."
+                    }
+                  />
+                  {hasAppCodexApiKey && (
                     <Button
-                      size="sm"
+                      size="icon"
                       variant="ghost"
-                      onClick={() => void handleCodexLogout()}
-                      disabled={codexLogoutMutation.isPending}
+                      onClick={() => void handleRemoveCodexApiKey()}
+                      disabled={isSavingCodexApiKey}
+                      aria-label={t("settings.models.removeCodexApiKey")}
+                      className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
                     >
-                      {codexLogoutMutation.isPending
-                        ? t("common.loading")
-                        : t("settings.models.codex.logout")}
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void handleCodexSetup()}
-                      disabled={
-                        isCodexLoading ||
-                        codexLogoutMutation.isPending ||
-                        isSavingCodexApiKey
-                      }
-                    >
-                      {t("common.connect")}
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
@@ -1987,182 +2114,12 @@ export function AgentsModelsTab() {
           </div>
         </CollapsibleContent>
       </Collapsible>
-
-      {/* ===== API Keys Section (Collapsible) ===== */}
-      <Collapsible open={isApiKeysOpen} onOpenChange={setIsApiKeysOpen}>
-        <CollapsibleTrigger className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-foreground/80 transition-colors">
-          <ChevronDown className={`h-4 w-4 transition-transform ${isApiKeysOpen ? "" : "-rotate-90"}`} />
-          {t("settings.models.apiKeys")}
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-4 pt-3">
-          {/* Codex API Key */}
-          <div className="bg-background rounded-lg border border-border overflow-hidden">
-            <div className="flex items-center justify-between gap-6 p-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm font-medium">{t("common.codexApiKey")}</Label>
-                  {hasAppCodexApiKey && (
-                    <Badge variant="secondary" className="text-xs">
-                      {t("common.active")}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {t("settings.models.codexApiKey.priority")}
-                </p>
-              </div>
-              <div className="flex-shrink-0 w-80 flex items-center gap-2">
-                <Input
-                  type="password"
-                  value={codexApiKey}
-                  onChange={(e) => setCodexApiKey(e.target.value)}
-                  onBlur={handleCodexApiKeyBlur}
-                  disabled={
-                    isSavingCodexApiKey ||
-                    codexApiKeyStatus?.encryptionAvailable === false
-                  }
-                  className="w-full font-mono"
-                  placeholder={hasAppCodexApiKey ? t("common.savedToken") : "sk-..."}
-                />
-                {hasAppCodexApiKey && (
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => void handleRemoveCodexApiKey()}
-                    disabled={isSavingCodexApiKey}
-                    aria-label={t("settings.models.removeCodexApiKey")}
-                    className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Override Model */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-foreground">
-                {t("settings.models.overrideModel.title")}
-              </h4>
-              {canReset && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleReset}
-                  disabled={clearProviderConfigMutation.isPending}
-                  className="text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
-                >
-                  {t("common.reset")}
-                </Button>
-              )}
-            </div>
-            <div className="bg-background rounded-lg border border-border overflow-hidden">
-              <div className="flex items-center justify-between p-4">
-                <div className="flex-1">
-                  <Label className="text-sm font-medium">
-                    {t("onboarding.customModel.modelName")}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {t("settings.models.overrideModel.modelHint")}
-                  </p>
-                </div>
-                <div className="flex-shrink-0 w-80">
-                  <Input
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    onBlur={() => handleBlurSave()}
-                    disabled={saveProviderConfigMutation.isPending}
-                    className="w-full"
-                    placeholder="claude-sonnet-4-6"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-4 border-t border-border">
-                <div className="flex-1">
-                  <Label className="text-sm font-medium">
-                    {t("onboarding.customModel.apiToken")}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {authMode === "api_key"
-                      ? "ANTHROPIC_API_KEY env"
-                      : "ANTHROPIC_AUTH_TOKEN env"}
-                  </p>
-                </div>
-                <div className="flex-shrink-0 w-80">
-                  <Input
-                    type="password"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                    onBlur={() => handleBlurSave()}
-                    disabled={saveProviderConfigMutation.isPending}
-                    className="w-full"
-                    placeholder={
-                      providerConfigData?.config?.hasToken
-                        ? t("common.savedToken")
-                        : "sk-ant-..."
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-4 border-t border-border">
-                <div className="flex-1">
-                  <Label className="text-sm font-medium">
-                    {t("onboarding.customModel.authEnv")}
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {t("settings.models.overrideModel.authHint")}
-                  </p>
-                </div>
-                <div className="grid w-80 grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={authMode === "api_key" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleAuthModeChange("api_key")}
-                    disabled={saveProviderConfigMutation.isPending}
-                    className="text-xs"
-                  >
-                    API_KEY
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={authMode === "auth_token" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleAuthModeChange("auth_token")}
-                    disabled={saveProviderConfigMutation.isPending}
-                    className="text-xs"
-                  >
-                    AUTH_TOKEN
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-4 border-t border-border">
-                <div className="flex-1">
-                  <Label className="text-sm font-medium">{t("common.baseUrl")}</Label>
-                  <p className="text-xs text-muted-foreground">
-                    ANTHROPIC_BASE_URL env
-                  </p>
-                </div>
-                <div className="flex-shrink-0 w-80">
-                  <Input
-                    value={baseUrl}
-                    onChange={(e) => setBaseUrl(e.target.value)}
-                    onBlur={() => handleBlurSave()}
-                    disabled={saveProviderConfigMutation.isPending}
-                    className="w-full"
-                    placeholder="https://api.anthropic.com"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+      <ConfirmActionDialog
+        action={confirmAction}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
+      />
     </div>
   )
 }
