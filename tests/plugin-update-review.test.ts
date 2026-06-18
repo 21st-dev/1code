@@ -5,8 +5,8 @@ import { join } from "node:path"
 import {
   buildPluginManifestReviewDocument,
   diffPluginManifestReviewDocuments,
-  stableJsonStringify,
   type PluginManifestReviewDocument,
+  stableJsonStringify,
 } from "../src/shared/plugin-update-review"
 
 let userDataDir = ""
@@ -23,7 +23,9 @@ mock.module("electron", () => ({
 }))
 
 const reviewState = await import("../src/main/lib/plugins/update-review-state")
-const runtimeNativeActivation = await import("../src/main/lib/plugins/runtime-native-activation")
+const runtimeNativeActivation = await import(
+  "../src/main/lib/plugins/runtime-native-activation"
+)
 
 function reviewDocument(overrides: Partial<PluginManifestReviewDocument> = {}) {
   return buildPluginManifestReviewDocument({
@@ -48,12 +50,14 @@ function reviewDocument(overrides: Partial<PluginManifestReviewDocument> = {}) {
       agents: 0,
       mcpServers: ["figma"],
     },
-    sourcePins: overrides.sourcePins ?? [{
-      kind: "lock-source-ref",
-      value: "500e8738438ed1204eaf23e61280d872f47534fd",
-      repo: "figma/mcp-server-guide",
-      path: "skills/figma-use",
-    }],
+    sourcePins: overrides.sourcePins ?? [
+      {
+        kind: "lock-source-ref",
+        value: "500e8738438ed1204eaf23e61280d872f47534fd",
+        repo: "figma/mcp-server-guide",
+        path: "skills/figma-use",
+      },
+    ],
     developerTrusted: overrides.developerTrusted,
   })
 }
@@ -99,8 +103,9 @@ describe("plugin update review documents", () => {
       { field: "mcpServers", previous: "figma", current: "figma, figma-write" },
       {
         field: "sourcePins",
-        previous: "{\"kind\":\"lock-source-ref\",\"path\":\"skills/figma-use\",\"repo\":\"figma/mcp-server-guide\",\"value\":\"500e8738438ed1204eaf23e61280d872f47534fd\"}",
-        current: "{\"kind\":\"cache-version\",\"value\":\"next-pin\"}",
+        previous:
+          '{"kind":"lock-source-ref","path":"skills/figma-use","repo":"figma/mcp-server-guide","value":"500e8738438ed1204eaf23e61280d872f47534fd"}',
+        current: '{"kind":"cache-version","value":"next-pin"}',
       },
     ])
   })
@@ -144,9 +149,11 @@ describe("plugin update review documents", () => {
     })
 
     expect(stableJsonStringify(previous)).toContain("entryContentHash")
-    expect(diffPluginManifestReviewDocuments(previous, current)).toContainEqual(expect.objectContaining({
-      field: "developerTrusted",
-    }))
+    expect(diffPluginManifestReviewDocuments(previous, current)).toContainEqual(
+      expect.objectContaining({
+        field: "developerTrusted",
+      }),
+    )
   })
 
   test("builds MCP approval identifiers from redacted current config metadata", () => {
@@ -173,32 +180,39 @@ describe("plugin update review documents", () => {
     expect(serialized).not.toContain("raw-env-secret")
     expect(serialized).not.toContain("raw-header-secret")
     expect(serialized).not.toContain("raw-url-secret")
-    expect(document.env).toEqual([{
-      key: "OPENAI_API_KEY",
-      hasValue: true,
-      valueSource: "inline",
-    }])
-    expect(document.headers).toEqual([{
-      key: "Authorization",
-      hasValue: true,
-      valueSource: "inline",
-    }])
+    expect(document.env).toEqual([
+      {
+        key: "OPENAI_API_KEY",
+        hasValue: true,
+        valueSource: "inline",
+      },
+    ])
+    expect(document.headers).toEqual([
+      {
+        key: "Authorization",
+        hasValue: true,
+        valueSource: "inline",
+      },
+    ])
 
     const identifier = reviewState.buildCurrentPluginMcpApprovalIdentifier({
       pluginSource: "market:plugin",
       serverName: "context",
       config,
     })
-    const changedIdentifier = reviewState.buildCurrentPluginMcpApprovalIdentifier({
-      pluginSource: "market:plugin",
-      serverName: "context",
-      config: {
-        ...config,
-        command: "python",
-      },
-    })
+    const changedIdentifier =
+      reviewState.buildCurrentPluginMcpApprovalIdentifier({
+        pluginSource: "market:plugin",
+        serverName: "context",
+        config: {
+          ...config,
+          command: "python",
+        },
+      })
 
-    expect(identifier.startsWith("market:plugin:context#mcp-sha256:")).toBe(true)
+    expect(identifier.startsWith("market:plugin:context#mcp-sha256:")).toBe(
+      true,
+    )
     expect(identifier).not.toBe("market:plugin:context")
     expect(changedIdentifier).not.toBe(identifier)
   })
@@ -266,25 +280,28 @@ describe("plugin update review state", () => {
       marketplace: "anthropic",
       version: "0.1.0",
     })
-    const reviewFingerprint = reviewState.hashPluginManifestReviewDocument(document)
-    const identity = runtimeNativeActivation.buildRuntimeNativeActivationIdentity({
-      reviewDocument: document,
-      reviewFingerprint,
-      packageHash: "sha256:package-a",
-    })
+    const reviewFingerprint =
+      reviewState.hashPluginManifestReviewDocument(document)
+    const identity =
+      runtimeNativeActivation.buildRuntimeNativeActivationIdentity({
+        reviewDocument: document,
+        reviewFingerprint,
+        packageHash: "sha256:package-a",
+      })
 
     const firstScan = await reviewState.recordPluginReviewScans(
       [{ pluginKey, document, runtimeNativeActivationIdentity: identity }],
       statePath,
       new Date("2026-06-02T00:00:00Z"),
     )
-    expect(firstScan.metadataByPluginKey[pluginKey].runtimeNativeActivation)
-      .toMatchObject({
-        identityFingerprint: identity.identityFingerprint,
-        identityStatus: "complete",
-        reviewStatus: "identity-unreviewed",
-        missingFields: [],
-      })
+    expect(
+      firstScan.metadataByPluginKey[pluginKey].runtimeNativeActivation,
+    ).toMatchObject({
+      identityFingerprint: identity.identityFingerprint,
+      identityStatus: "complete",
+      reviewStatus: "identity-unreviewed",
+      missingFields: [],
+    })
 
     const reviewed = await reviewState.markPluginFingerprintReviewed(
       { pluginKey, document, runtimeNativeActivationIdentity: identity },
@@ -298,13 +315,20 @@ describe("plugin update review state", () => {
       lastReviewedIdentityFingerprint: identity.identityFingerprint,
     })
 
-    const driftedIdentity = runtimeNativeActivation.buildRuntimeNativeActivationIdentity({
-      reviewDocument: document,
-      reviewFingerprint,
-      packageHash: "sha256:package-b",
-    })
+    const driftedIdentity =
+      runtimeNativeActivation.buildRuntimeNativeActivationIdentity({
+        reviewDocument: document,
+        reviewFingerprint,
+        packageHash: "sha256:package-b",
+      })
     const driftedScan = await reviewState.recordPluginReviewScans(
-      [{ pluginKey, document, runtimeNativeActivationIdentity: driftedIdentity }],
+      [
+        {
+          pluginKey,
+          document,
+          runtimeNativeActivationIdentity: driftedIdentity,
+        },
+      ],
       statePath,
       new Date("2026-06-02T00:02:00Z"),
     )
@@ -327,10 +351,12 @@ describe("plugin update review state", () => {
       source: "local:missing-pins",
       sourcePins: [],
     })
-    const identity = runtimeNativeActivation.buildRuntimeNativeActivationIdentity({
-      reviewDocument: document,
-      reviewFingerprint: reviewState.hashPluginManifestReviewDocument(document),
-    })
+    const identity =
+      runtimeNativeActivation.buildRuntimeNativeActivationIdentity({
+        reviewDocument: document,
+        reviewFingerprint:
+          reviewState.hashPluginManifestReviewDocument(document),
+      })
 
     const reviewed = await reviewState.markPluginFingerprintReviewed(
       { pluginKey, document, runtimeNativeActivationIdentity: identity },
@@ -345,6 +371,39 @@ describe("plugin update review state", () => {
       reviewStatus: "identity-incomplete",
       lastReviewedIdentityFingerprint: identity.identityFingerprint,
       missingFields: ["drift-detection-field"],
+    })
+  })
+
+  test("stores runtime-native enablement separately from manifest review", async () => {
+    const statePath = join(userDataDir, "plugin-review-state.json")
+    const pluginKey = "codex:openai-curated:figma"
+    const document = reviewDocument()
+
+    await expect(
+      reviewState.setRuntimeNativePluginEnabled(
+        { pluginReviewKey: pluginKey, enabled: true },
+        statePath,
+        new Date("2026-06-02T00:03:00Z"),
+      ),
+    ).resolves.toEqual({
+      enabled: true,
+      updatedAt: "2026-06-02T00:03:00.000Z",
+    })
+
+    const scan = await reviewState.recordPluginReviewScans(
+      [{ pluginKey, document }],
+      statePath,
+      new Date("2026-06-02T00:04:00Z"),
+    )
+
+    expect(scan.metadataByPluginKey[pluginKey].status).toBe("new")
+    await expect(
+      reviewState.getRuntimeNativePluginEnablementState(statePath),
+    ).resolves.toEqual({
+      [pluginKey]: {
+        enabled: true,
+        updatedAt: "2026-06-02T00:03:00.000Z",
+      },
     })
   })
 
@@ -370,7 +429,9 @@ describe("plugin update review state", () => {
       updatedAt: "2026-06-02T00:03:00.000Z",
     })
 
-    await expect(reviewState.getPluginSafeModeState(statePath)).resolves.toEqual({
+    await expect(
+      reviewState.getPluginSafeModeState(statePath),
+    ).resolves.toEqual({
       enabled: true,
       updatedAt: "2026-06-02T00:03:00.000Z",
     })
@@ -399,7 +460,9 @@ describe("plugin update review state", () => {
         enabled: true,
         updatedAt: "2026-06-02T00:04:00.000Z",
       })
-      expect(await reviewState.getPluginDeveloperModeState(statePath)).toEqual(developerMode)
+      expect(await reviewState.getPluginDeveloperModeState(statePath)).toEqual(
+        developerMode,
+      )
 
       const source = await reviewState.addDeveloperPluginSource(
         sourcePath,
@@ -408,7 +471,9 @@ describe("plugin update review state", () => {
       )
       expect(source.path).toBe(canonicalSourcePath)
       expect(source.id).toMatch(/^[a-f0-9]{16}$/)
-      expect(await reviewState.getDeveloperPluginSources(statePath)).toEqual([source])
+      expect(await reviewState.getDeveloperPluginSources(statePath)).toEqual([
+        source,
+      ])
 
       const replacedSource = await reviewState.addDeveloperPluginSource(
         sourcePath,
@@ -416,7 +481,9 @@ describe("plugin update review state", () => {
         new Date("2026-06-02T00:06:00Z"),
       )
       expect(replacedSource.id).toBe(source.id)
-      expect(await reviewState.getDeveloperPluginSources(statePath)).toHaveLength(1)
+      expect(
+        await reviewState.getDeveloperPluginSources(statePath),
+      ).toHaveLength(1)
 
       const trustInput = {
         pluginReviewKey: `developer:${source.id}`,
@@ -436,24 +503,41 @@ describe("plugin update review state", () => {
         ...trustInput,
         trustedAt: "2026-06-02T00:07:00.000Z",
       })
-      expect(await reviewState.getDeveloperPluginTrustStatus(trustInput, statePath))
-        .toMatchObject({ status: "current", acknowledgement })
-      expect(await reviewState.getDeveloperPluginTrustStatus({
-        ...trustInput,
-        entryContentHash: "entry-hash-b",
-      }, statePath)).toMatchObject({ status: "stale" })
-      expect(await reviewState.getDeveloperPluginTrustStatus({
-        ...trustInput,
-        bundleContentHash: "bundle-hash-b",
-      }, statePath)).toMatchObject({ status: "stale" })
+      expect(
+        await reviewState.getDeveloperPluginTrustStatus(trustInput, statePath),
+      ).toMatchObject({ status: "current", acknowledgement })
+      expect(
+        await reviewState.getDeveloperPluginTrustStatus(
+          {
+            ...trustInput,
+            entryContentHash: "entry-hash-b",
+          },
+          statePath,
+        ),
+      ).toMatchObject({ status: "stale" })
+      expect(
+        await reviewState.getDeveloperPluginTrustStatus(
+          {
+            ...trustInput,
+            bundleContentHash: "bundle-hash-b",
+          },
+          statePath,
+        ),
+      ).toMatchObject({ status: "stale" })
 
-      expect(await reviewState.revokeDeveloperPluginTrust(trustInput.pluginReviewKey, statePath))
-        .toEqual({ revoked: true })
-      expect(await reviewState.getDeveloperPluginTrustStatus(trustInput, statePath))
-        .toEqual({ status: "missing", acknowledgement: undefined })
+      expect(
+        await reviewState.revokeDeveloperPluginTrust(
+          trustInput.pluginReviewKey,
+          statePath,
+        ),
+      ).toEqual({ revoked: true })
+      expect(
+        await reviewState.getDeveloperPluginTrustStatus(trustInput, statePath),
+      ).toEqual({ status: "missing", acknowledgement: undefined })
 
-      expect(await reviewState.removeDeveloperPluginSource(source.id, statePath))
-        .toEqual({ removed: true })
+      expect(
+        await reviewState.removeDeveloperPluginSource(source.id, statePath),
+      ).toEqual({ removed: true })
       expect(await reviewState.getDeveloperPluginSources(statePath)).toEqual([])
     } finally {
       await rm(sourcePath, { recursive: true, force: true })
@@ -466,15 +550,17 @@ describe("plugin update review state", () => {
       await writeFile(
         join(pluginRoot, "plugin.lock.json"),
         JSON.stringify({
-          skills: [{
-            id: "figma-use",
-            source: {
-              type: "github",
-              repo: "figma/mcp-server-guide",
-              path: "skills/figma-use",
-              ref: "500e8738438ed1204eaf23e61280d872f47534fd",
+          skills: [
+            {
+              id: "figma-use",
+              source: {
+                type: "github",
+                repo: "figma/mcp-server-guide",
+                path: "skills/figma-use",
+                ref: "500e8738438ed1204eaf23e61280d872f47534fd",
+              },
             },
-          }],
+          ],
         }),
         "utf-8",
       )

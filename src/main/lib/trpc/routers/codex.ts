@@ -50,6 +50,7 @@ import {
 } from "../../codex/api-key-validation"
 import { createCodexAppServerAdapter } from "../../codex/app-server-adapter"
 import { createCodexAppServerFinishGate } from "../../codex/app-server-finish-gate"
+import { resolveCodexAppServerPluginConfigOverrides } from "../../codex/app-server-plugin-allowlist"
 import type {
   CodexAskUserQuestionApproval,
   CodexAskUserQuestionPending,
@@ -1654,6 +1655,10 @@ export const codexRouter = router({
               },
             })
 
+            const appServerPluginConfig = useCodexAppServerAdapter
+              ? await resolveCodexAppServerPluginConfigOverrides()
+              : undefined
+
             const codexAdapter = useCodexAppServerAdapter
               ? createCodexAppServerAdapter({
                   enabled: true,
@@ -1684,6 +1689,7 @@ export const codexRouter = router({
                   appManagedApiKey: codexProviderProfile
                     ? null
                     : appManagedCodexApiKey,
+                  pluginConfigOverrides: appServerPluginConfig?.config,
                   controlledEditEnabled:
                     process.env
                       .LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR === "1",

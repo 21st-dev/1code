@@ -57,7 +57,14 @@ interface PluginReviewState {
   safeMode?: PluginSafeModeState
   developerMode?: PluginDeveloperModeState
   developerSources?: PluginDeveloperSourceRecord[]
-  developerTrustedPlugins?: Record<string, PluginDeveloperTrustedAcknowledgement>
+  developerTrustedPlugins?: Record<
+    string,
+    PluginDeveloperTrustedAcknowledgement
+  >
+  runtimeNativePluginEnablement?: Record<
+    string,
+    RuntimeNativePluginEnablementRecord
+  >
   storeCandidates?: Record<string, PluginStoreCandidateRecord>
   storeApprovals?: Record<string, PluginStoreCandidateApproval>
   installedStorePackages?: Record<string, PluginStoreInstalledPackageRecord>
@@ -78,6 +85,11 @@ export interface PluginDeveloperSourceRecord {
   id: string
   path: string
   addedAt: string
+}
+
+export interface RuntimeNativePluginEnablementRecord {
+  enabled: boolean
+  updatedAt: string
 }
 
 export interface PluginReviewScanInput {
@@ -125,7 +137,9 @@ export function getPluginReviewStatePath(
   return path.join(userDataPath, PLUGIN_REVIEW_STATE_FILE)
 }
 
-export function hashPluginManifestReviewDocument(document: PluginManifestReviewDocument): string {
+export function hashPluginManifestReviewDocument(
+  document: PluginManifestReviewDocument,
+): string {
   return createHash("sha256")
     .update(stableJsonStringify(document))
     .digest("hex")
@@ -162,7 +176,9 @@ export function buildPluginMcpApprovalDocument(input: {
   }
 }
 
-export function hashPluginMcpApprovalDocument(document: PluginMcpApprovalDocument): string {
+export function hashPluginMcpApprovalDocument(
+  document: PluginMcpApprovalDocument,
+): string {
   return createHash("sha256")
     .update(stableJsonStringify(document))
     .digest("hex")
@@ -214,10 +230,17 @@ export async function readPluginReviewState(
       safeMode: normalizeSafeModeState(state.safeMode),
       developerMode: normalizeDeveloperModeState(state.developerMode),
       developerSources: normalizeDeveloperSources(state.developerSources),
-      developerTrustedPlugins: normalizeDeveloperTrustedPlugins(state.developerTrustedPlugins),
+      developerTrustedPlugins: normalizeDeveloperTrustedPlugins(
+        state.developerTrustedPlugins,
+      ),
+      runtimeNativePluginEnablement: normalizeRuntimeNativePluginEnablement(
+        state.runtimeNativePluginEnablement,
+      ),
       storeCandidates: normalizeStoreCandidates(state.storeCandidates),
       storeApprovals: normalizeStoreApprovals(state.storeApprovals),
-      installedStorePackages: normalizeInstalledStorePackages(state.installedStorePackages),
+      installedStorePackages: normalizeInstalledStorePackages(
+        state.installedStorePackages,
+      ),
       storeBackupRecords: normalizeStoreBackupRecords(state.storeBackupRecords),
     }
   } catch {
@@ -237,18 +260,23 @@ export function normalizeSafeModeState(
 ): PluginSafeModeState {
   return {
     enabled: value?.enabled === true,
-    updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : undefined,
+    updatedAt:
+      typeof value?.updatedAt === "string" ? value.updatedAt : undefined,
   }
 }
 
 export function isForcedPluginSafeModeEnabled(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return env.LOCUS_PLUGIN_SAFE_MODE === "1" ||
+  return (
+    env.LOCUS_PLUGIN_SAFE_MODE === "1" ||
     env.LOCUS_FORCE_PLUGIN_SAFE_MODE === "1"
+  )
 }
 
-function applyForcedPluginSafeMode(state: PluginSafeModeState): PluginSafeModeState {
+function applyForcedPluginSafeMode(
+  state: PluginSafeModeState,
+): PluginSafeModeState {
   if (!isForcedPluginSafeModeEnabled()) return state
   return {
     enabled: true,
@@ -261,7 +289,8 @@ export function normalizeDeveloperModeState(
 ): PluginDeveloperModeState {
   return {
     enabled: value?.enabled === true,
-    updatedAt: typeof value?.updatedAt === "string" ? value.updatedAt : undefined,
+    updatedAt:
+      typeof value?.updatedAt === "string" ? value.updatedAt : undefined,
   }
 }
 
@@ -279,6 +308,15 @@ export async function getPluginDeveloperModeState(
   return normalizeDeveloperModeState(state.developerMode)
 }
 
+export async function getRuntimeNativePluginEnablementState(
+  filePath = getPluginReviewStatePath(),
+): Promise<Record<string, RuntimeNativePluginEnablementRecord>> {
+  const state = await readPluginReviewState(filePath)
+  return normalizeRuntimeNativePluginEnablement(
+    state.runtimeNativePluginEnablement,
+  )
+}
+
 export async function getPluginStoreStateSnapshot(
   filePath = getPluginReviewStatePath(),
 ): Promise<{
@@ -291,7 +329,9 @@ export async function getPluginStoreStateSnapshot(
   return {
     candidates: normalizeStoreCandidates(state.storeCandidates),
     approvals: normalizeStoreApprovals(state.storeApprovals),
-    installedPackages: normalizeInstalledStorePackages(state.installedStorePackages),
+    installedPackages: normalizeInstalledStorePackages(
+      state.installedStorePackages,
+    ),
     backupRecords: normalizeStoreBackupRecords(state.storeBackupRecords),
   }
 }
@@ -389,6 +429,30 @@ export async function setPluginDeveloperModeEnabled(
   return state.developerMode
 }
 
+export async function setRuntimeNativePluginEnabled(
+  input: {
+    pluginReviewKey: string
+    enabled: boolean
+  },
+  filePath = getPluginReviewStatePath(),
+  now = new Date(),
+): Promise<RuntimeNativePluginEnablementRecord> {
+  const state = await readPluginReviewState(filePath)
+  const enablement = normalizeRuntimeNativePluginEnablement(
+    state.runtimeNativePluginEnablement,
+  )
+  const record: RuntimeNativePluginEnablementRecord = {
+    enabled: input.enabled,
+    updatedAt: now.toISOString(),
+  }
+  state.runtimeNativePluginEnablement = {
+    ...enablement,
+    [input.pluginReviewKey]: record,
+  }
+  await writePluginReviewState(state, filePath)
+  return record
+}
+
 export async function getDeveloperPluginSources(
   filePath = getPluginReviewStatePath(),
 ): Promise<PluginDeveloperSourceRecord[]> {
@@ -460,7 +524,9 @@ export async function revokeDeveloperPluginTrust(
   filePath = getPluginReviewStatePath(),
 ): Promise<{ revoked: boolean }> {
   const state = await readPluginReviewState(filePath)
-  const trustedPlugins = normalizeDeveloperTrustedPlugins(state.developerTrustedPlugins)
+  const trustedPlugins = normalizeDeveloperTrustedPlugins(
+    state.developerTrustedPlugins,
+  )
   const revoked = Boolean(trustedPlugins[pluginReviewKey])
   delete trustedPlugins[pluginReviewKey]
   state.developerTrustedPlugins = trustedPlugins
@@ -499,11 +565,16 @@ export async function recordPluginReviewScans(
   now = new Date(),
 ): Promise<PluginReviewScanResult> {
   const state = await readPluginReviewState(filePath)
-  const safeMode = applyForcedPluginSafeMode(normalizeSafeModeState(state.safeMode))
+  const safeMode = applyForcedPluginSafeMode(
+    normalizeSafeModeState(state.safeMode),
+  )
   state.developerMode = normalizeDeveloperModeState(state.developerMode)
   state.developerSources = normalizeDeveloperSources(state.developerSources)
   state.developerTrustedPlugins = normalizeDeveloperTrustedPlugins(
     state.developerTrustedPlugins,
+  )
+  state.runtimeNativePluginEnablement = normalizeRuntimeNativePluginEnablement(
+    state.runtimeNativePluginEnablement,
   )
   const metadataByPluginKey: Record<string, PluginUpdateReviewMetadata> = {}
   const seenAt = now.toISOString()
@@ -512,10 +583,15 @@ export async function recordPluginReviewScans(
     const fingerprint = hashPluginManifestReviewDocument(input.document)
     const previousRecord = state.plugins[input.pluginKey]
     const status = getPluginUpdateReviewStatus(previousRecord, fingerprint)
-    const baselineDocument = previousRecord?.lastReviewedDocument ?? previousRecord?.document
-    const changes = status === "changed"
-      ? diffPluginManifestReviewDocuments(baselineDocument, input.document).slice(0, 12)
-      : []
+    const baselineDocument =
+      previousRecord?.lastReviewedDocument ?? previousRecord?.document
+    const changes =
+      status === "changed"
+        ? diffPluginManifestReviewDocuments(
+            baselineDocument,
+            input.document,
+          ).slice(0, 12)
+        : []
 
     const record: PluginReviewStateRecord = {
       fingerprint,
@@ -575,7 +651,8 @@ export async function markPluginFingerprintReviewed(
     lastReviewedDocument: input.document,
     lastReviewedRuntimeNativeActivationIdentityFingerprint:
       input.runtimeNativeActivationIdentity?.identityFingerprint,
-    lastReviewedRuntimeNativeActivationIdentity: input.runtimeNativeActivationIdentity,
+    lastReviewedRuntimeNativeActivationIdentity:
+      input.runtimeNativeActivationIdentity,
   }
 
   await writePluginReviewState(state, filePath)
@@ -602,7 +679,8 @@ function getPluginUpdateReviewStatus(
   currentFingerprint: string,
 ): PluginUpdateReviewStatus {
   if (!previousRecord) return "new"
-  if (previousRecord.lastReviewedFingerprint === currentFingerprint) return "reviewed"
+  if (previousRecord.lastReviewedFingerprint === currentFingerprint)
+    return "reviewed"
   if (previousRecord.lastReviewedFingerprint) return "changed"
   if (previousRecord.fingerprint === currentFingerprint) return "unchanged"
   return "changed"
@@ -636,7 +714,8 @@ function getRuntimeNativeActivationReviewStatus(input: {
   if (!input.lastReviewedIdentityFingerprint) {
     return "identity-unreviewed"
   }
-  return input.lastReviewedIdentityFingerprint === input.identity.identityFingerprint
+  return input.lastReviewedIdentityFingerprint ===
+    input.identity.identityFingerprint
     ? "reviewed"
     : "identity-drifted"
 }
@@ -691,6 +770,30 @@ function normalizeDeveloperTrustedPlugins(
   return normalized
 }
 
+function normalizeRuntimeNativePluginEnablement(
+  value: Record<string, RuntimeNativePluginEnablementRecord> | undefined,
+): Record<string, RuntimeNativePluginEnablementRecord> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const normalized: Record<string, RuntimeNativePluginEnablementRecord> = {}
+  for (const [key, record] of Object.entries(value)) {
+    if (
+      typeof key !== "string" ||
+      key.trim().length === 0 ||
+      !record ||
+      typeof record !== "object" ||
+      typeof record.enabled !== "boolean" ||
+      typeof record.updatedAt !== "string"
+    ) {
+      continue
+    }
+    normalized[key] = {
+      enabled: record.enabled,
+      updatedAt: record.updatedAt,
+    }
+  }
+  return normalized
+}
+
 function normalizeStoreCandidates(
   value: Record<string, PluginStoreCandidateRecord> | undefined,
 ): Record<string, PluginStoreCandidateRecord> {
@@ -728,7 +831,8 @@ function normalizeStoreApprovals(
       approval.schemaVersion !== 1 ||
       approval.storeEntryId !== key ||
       typeof approval.commit !== "string" ||
-      (approval.packageHash !== undefined && typeof approval.packageHash !== "string") ||
+      (approval.packageHash !== undefined &&
+        typeof approval.packageHash !== "string") ||
       typeof approval.candidateFingerprint !== "string" ||
       typeof approval.approvedAt !== "string"
     ) {
@@ -752,7 +856,8 @@ function normalizeInstalledStorePackages(
       record.storeEntryId !== key ||
       typeof record.pluginReviewKey !== "string" ||
       typeof record.commit !== "string" ||
-      (record.packageHash !== undefined && typeof record.packageHash !== "string") ||
+      (record.packageHash !== undefined &&
+        typeof record.packageHash !== "string") ||
       typeof record.candidateFingerprint !== "string" ||
       typeof record.installedAt !== "string" ||
       typeof record.targetMode !== "string"
@@ -771,14 +876,14 @@ function normalizeStoreBackupRecords(
   return value.filter((record): record is PluginStoreBackupRecord =>
     Boolean(
       record &&
-      typeof record === "object" &&
-      record.schemaVersion === 1 &&
-      typeof record.id === "string" &&
-      typeof record.pluginReviewKey === "string" &&
-      typeof record.storeEntryId === "string" &&
-      typeof record.backupPath === "string" &&
-      typeof record.previousPath === "string" &&
-      typeof record.createdAt === "string",
+        typeof record === "object" &&
+        record.schemaVersion === 1 &&
+        typeof record.id === "string" &&
+        typeof record.pluginReviewKey === "string" &&
+        typeof record.storeEntryId === "string" &&
+        typeof record.backupPath === "string" &&
+        typeof record.previousPath === "string" &&
+        typeof record.createdAt === "string",
     ),
   )
 }
@@ -841,14 +946,21 @@ function collectLockSourceRefs(value: unknown): PluginSourcePin[] {
     const source = record.source
     if (source && typeof source === "object" && !Array.isArray(source)) {
       const sourceRecord = source as Record<string, unknown>
-      const ref = typeof sourceRecord.ref === "string" ? sourceRecord.ref.trim() : ""
+      const ref =
+        typeof sourceRecord.ref === "string" ? sourceRecord.ref.trim() : ""
       if (ref) {
         pins.push({
           kind: "lock-source-ref",
           value: ref,
           label: "Lock source ref",
-          repo: typeof sourceRecord.repo === "string" ? sourceRecord.repo : undefined,
-          path: typeof sourceRecord.path === "string" ? sourceRecord.path : undefined,
+          repo:
+            typeof sourceRecord.repo === "string"
+              ? sourceRecord.repo
+              : undefined,
+          path:
+            typeof sourceRecord.path === "string"
+              ? sourceRecord.path
+              : undefined,
         })
       }
     }
@@ -863,7 +975,10 @@ function collectLockSourceRefs(value: unknown): PluginSourcePin[] {
 function dedupePins(pins: PluginSourcePin[]): PluginSourcePin[] {
   const byKey = new Map<string, PluginSourcePin>()
   for (const pin of pins) {
-    byKey.set(`${pin.kind}:${pin.value}:${pin.repo ?? ""}:${pin.path ?? ""}`, pin)
+    byKey.set(
+      `${pin.kind}:${pin.value}:${pin.repo ?? ""}:${pin.path ?? ""}`,
+      pin,
+    )
   }
   return Array.from(byKey.values()).sort((a, b) => {
     const byKind = a.kind.localeCompare(b.kind)
@@ -885,7 +1000,10 @@ function booleanValue(value: unknown): boolean | undefined {
 function normalizeStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value
-    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .filter(
+      (item): item is string =>
+        typeof item === "string" && item.trim().length > 0,
+    )
     .map((item) => item.trim())
     .sort()
 }
