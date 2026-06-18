@@ -1,48 +1,6 @@
 import { TRPCError } from "@trpc/server"
 import { dialog } from "electron"
-import { router, publicProcedure } from "../index"
 import { z } from "zod"
-import {
-  discoverAllRuntimePlugins,
-  discoverPluginMcpServers,
-  discoverPluginSources,
-  clearPluginCache,
-  type PluginSourceInfo,
-  type PluginRuntime,
-  type PluginSourceKind,
-  type PluginSourceTrust,
-  type PluginInfo,
-} from "../../plugins"
-import {
-  addDeveloperPluginSource,
-  getDeveloperPluginTrustStatus,
-  getPluginDeveloperModeState,
-  getPluginStoreStateSnapshot,
-  getPluginReviewStatePath,
-  getPluginSafeModeState,
-  markPluginFingerprintReviewed,
-  recordPluginReviewScans,
-  removeDeveloperPluginSource,
-  revokeDeveloperPluginTrust,
-  setPluginDeveloperModeEnabled,
-  setPluginSafeModeEnabled,
-  trustDeveloperPluginFingerprint,
-  type PluginDeveloperSourceRecord,
-} from "../../plugins/update-review-state"
-import {
-  scanPluginReviewDocument,
-  type PluginComponent,
-} from "../../plugins/review-scan"
-import {
-  buildPluginDeveloperTrustedGate,
-  type PluginDeveloperModeState,
-  type PluginDeveloperTrustedDiagnostic,
-  type PluginDeveloperTrustedGate,
-  type PluginDeveloperTrustedManifest,
-  type PluginDeveloperTrustedStatus,
-  type PluginDeveloperTrustedAcknowledgement,
-  type PluginDeveloperTrustedLoadState,
-} from "../../../../shared/plugin-developer-trusted"
 import {
   buildPluginControlledUiGate,
   getControlledUiActionPermissionId,
@@ -51,10 +9,27 @@ import {
   type PluginControlledUiGate,
   type PluginControlledUiManifest,
 } from "../../../../shared/plugin-controlled-ui"
-import type {
-  PluginSourcePin,
-  PluginUpdateReviewMetadata,
-} from "../../../../shared/plugin-update-review"
+import {
+  buildPluginDeveloperTrustedGate,
+  type PluginDeveloperModeState,
+  type PluginDeveloperTrustedAcknowledgement,
+  type PluginDeveloperTrustedDiagnostic,
+  type PluginDeveloperTrustedGate,
+  type PluginDeveloperTrustedLoadState,
+  type PluginDeveloperTrustedManifest,
+  type PluginDeveloperTrustedStatus,
+} from "../../../../shared/plugin-developer-trusted"
+import {
+  buildPluginDoctorReport,
+  type PluginDoctorReport,
+} from "../../../../shared/plugin-doctor"
+import {
+  buildPluginSafetyGate,
+  type PluginSafeModeState,
+  type PluginSafetyGate,
+} from "../../../../shared/plugin-safety-gates"
+import type { PluginStoreCatalogEntry } from "../../../../shared/plugin-store-pins"
+import { getPluginStoreApprovalStatus } from "../../../../shared/plugin-store-pins"
 import {
   getPluginDiagnostics,
   getPluginReviewStatus,
@@ -64,51 +39,81 @@ import {
   type PluginTargetMode,
   type PluginUpdatePosture,
 } from "../../../../shared/plugin-target-modes"
+import type {
+  PluginSourcePin,
+  PluginUpdateReviewMetadata,
+} from "../../../../shared/plugin-update-review"
+import type {
+  RuntimePluginMarketplaceSnapshot,
+  RuntimePluginWriteExecutionResult,
+  RuntimePluginWritePreview,
+} from "../../../../shared/runtime-plugin-marketplace"
 import {
-  buildPluginSafetyGate,
-  type PluginSafeModeState,
-  type PluginSafetyGate,
-} from "../../../../shared/plugin-safety-gates"
+  clearPluginCache,
+  discoverAllRuntimePlugins,
+  discoverPluginMcpServers,
+  discoverPluginSources,
+  type PluginInfo,
+  type PluginRuntime,
+  type PluginSourceInfo,
+  type PluginSourceKind,
+  type PluginSourceTrust,
+} from "../../plugins"
 import {
-  buildPluginDoctorReport,
-  type PluginDoctorReport,
-} from "../../../../shared/plugin-doctor"
+  getControlledUiPermissionGrantStatus,
+  getControlledUiSettingsValues,
+  grantControlledUiPermission,
+  type PluginControlledUiSettingValue,
+  setControlledUiSettingValue,
+} from "../../plugins/controlled-ui-state"
 import {
   getDeveloperPluginLoadState,
   getDeveloperPluginLoadStates,
   loadDeveloperTrustedPlugin,
 } from "../../plugins/developer-loader"
-import { getEnabledPlugins } from "./claude-settings"
 import {
-  getControlledUiPermissionGrantStatus,
-  getControlledUiSettingsValues,
-  grantControlledUiPermission,
-  setControlledUiSettingValue,
-  type PluginControlledUiSettingValue,
-} from "../../plugins/controlled-ui-state"
-import {
-  approveCurrentPluginStoreCandidate,
-  installOrUpdateApprovedPluginStoreCandidate,
-  listPluginStoreEntries,
-  previewPluginStoreCandidate,
-  type PluginStoreCandidatePreview,
-  type PluginStoreInstallResult,
-} from "../../plugins/store-pins"
-import type { PluginStoreCatalogEntry } from "../../../../shared/plugin-store-pins"
-import { getPluginStoreApprovalStatus } from "../../../../shared/plugin-store-pins"
+  type PluginComponent,
+  scanPluginReviewDocument,
+} from "../../plugins/review-scan"
 import {
   getAllRuntimePluginMarketplaceSnapshots,
   getRuntimePluginMarketplaceSnapshot,
 } from "../../plugins/runtime-marketplace"
-import type {
-  RuntimePluginWriteExecutionResult,
-  RuntimePluginWritePreview,
-  RuntimePluginMarketplaceSnapshot,
-} from "../../../../shared/runtime-plugin-marketplace"
 import {
   executeRuntimePluginWriteAction,
   previewRuntimePluginWriteAction,
 } from "../../plugins/runtime-marketplace-actions"
+import {
+  buildRuntimeNativeActivationIdentity,
+  type RuntimeNativeActivationIdentity,
+} from "../../plugins/runtime-native-activation"
+import {
+  approveCurrentPluginStoreCandidate,
+  installOrUpdateApprovedPluginStoreCandidate,
+  listPluginStoreEntries,
+  type PluginStoreCandidatePreview,
+  type PluginStoreInstallResult,
+  previewPluginStoreCandidate,
+} from "../../plugins/store-pins"
+import {
+  addDeveloperPluginSource,
+  getDeveloperPluginTrustStatus,
+  getPluginDeveloperModeState,
+  getPluginReviewStatePath,
+  getPluginSafeModeState,
+  getPluginStoreStateSnapshot,
+  hashPluginManifestReviewDocument,
+  markPluginFingerprintReviewed,
+  type PluginDeveloperSourceRecord,
+  recordPluginReviewScans,
+  removeDeveloperPluginSource,
+  revokeDeveloperPluginTrust,
+  setPluginDeveloperModeEnabled,
+  setPluginSafeModeEnabled,
+  trustDeveloperPluginFingerprint,
+} from "../../plugins/update-review-state"
+import { publicProcedure, router } from "../index"
+import { getEnabledPlugins } from "./claude-settings"
 
 export interface PluginWithComponents {
   runtime: PluginRuntime
@@ -223,6 +228,7 @@ interface ScannedPlugin {
   developerTrusted: Awaited<ReturnType<typeof scanPluginReviewDocument>>["developerTrusted"]
   mcpApprovalIdentifiers: Record<string, string>
   reviewDocument: Awaited<ReturnType<typeof scanPluginReviewDocument>>["reviewDocument"]
+  runtimeNativeActivationIdentity: RuntimeNativeActivationIdentity
 }
 
 function makeEmptyUpdateReviewMetadata(plugin: PluginInfo): PluginUpdateReviewMetadata {
@@ -251,7 +257,15 @@ async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlug
     ])
   const { components, controlledUi, reviewDocument, targetModeSummary } = reviewScan
   const { developerTrusted } = reviewScan
-  const { commands, skills, agents, mcpServers } = components
+  const { mcpServers } = components
+  const runtimeNativeActivationIdentity = buildRuntimeNativeActivationIdentity({
+    reviewDocument,
+    reviewFingerprint: hashPluginManifestReviewDocument(reviewDocument),
+    packageIdentity: plugin.source,
+    packageVersion: plugin.version,
+    sourcePins: plugin.sourcePins ?? reviewDocument.sourcePins,
+    packageHash: getPluginPackageHash(plugin),
+  })
 
   const reviewStatus = getPluginReviewStatus({
     runtime: plugin.runtime,
@@ -275,7 +289,13 @@ async function scanPluginWithComponents(plugin: PluginInfo): Promise<ScannedPlug
     developerTrusted,
     mcpApprovalIdentifiers,
     reviewDocument,
+    runtimeNativeActivationIdentity,
   }
+}
+
+function getPluginPackageHash(plugin: PluginInfo): string | undefined {
+  return plugin.sourcePins?.find((pin) => pin.kind === "store-package-sha256")
+    ?.value
 }
 
 async function getControlledUiActionGrantStatuses(input: {
@@ -519,6 +539,7 @@ async function getControlledUiCurrentContext(reviewKey: string) {
   const reviewResult = await recordPluginReviewScans([{
     pluginKey: plugin.reviewKey,
     document: scanned.reviewDocument,
+    runtimeNativeActivationIdentity: scanned.runtimeNativeActivationIdentity,
   }])
   const updateReview =
     reviewResult.metadataByPluginKey[plugin.reviewKey] ??
@@ -871,6 +892,7 @@ export const pluginsRouter = router({
       scannedPlugins.map((scanned) => ({
         pluginKey: scanned.plugin.reviewKey,
         document: scanned.reviewDocument,
+        runtimeNativeActivationIdentity: scanned.runtimeNativeActivationIdentity,
       })),
     )
 
@@ -903,6 +925,7 @@ export const pluginsRouter = router({
       scannedPlugins.map((scanned) => ({
         pluginKey: scanned.plugin.reviewKey,
         document: scanned.reviewDocument,
+        runtimeNativeActivationIdentity: scanned.runtimeNativeActivationIdentity,
       })),
     )
 
@@ -1052,6 +1075,7 @@ export const pluginsRouter = router({
       const updateReview = await markPluginFingerprintReviewed({
         pluginKey: plugin.reviewKey,
         document: scanned.reviewDocument,
+        runtimeNativeActivationIdentity: scanned.runtimeNativeActivationIdentity,
       })
 
       return toPluginWithComponents({
@@ -1082,6 +1106,7 @@ export const pluginsRouter = router({
       const reviewResult = await recordPluginReviewScans([{
         pluginKey: plugin.reviewKey,
         document: scanned.reviewDocument,
+        runtimeNativeActivationIdentity: scanned.runtimeNativeActivationIdentity,
       }])
       const updateReview =
         reviewResult.metadataByPluginKey[plugin.reviewKey] ??
