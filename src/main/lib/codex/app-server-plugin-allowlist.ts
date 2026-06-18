@@ -9,6 +9,7 @@ import {
 import {
   buildCodexAppServerResolvedPluginConfigOverrides,
   type CodexAppServerResolvedPluginConfigOverrides,
+  getCodexAppServerPluginId,
 } from "./app-server-plugin-config"
 
 export async function resolveCodexAppServerPluginConfigOverrides(): Promise<CodexAppServerResolvedPluginConfigOverrides> {
@@ -20,47 +21,97 @@ export async function resolveCodexAppServerPluginConfigOverrides(): Promise<Code
 
   const scannedPlugins = await Promise.all(
     plugins.map(async (plugin) => {
-      const scan = await scanPluginReviewDocument(plugin)
-      const reviewFingerprint = hashPluginManifestReviewDocument(
-        scan.reviewDocument,
-      )
-      const identity = buildRuntimeNativeActivationIdentity({
-        reviewDocument: scan.reviewDocument,
-        reviewFingerprint,
-        packageIdentity: plugin.source,
-        packageVersion: plugin.version,
-        sourcePins: plugin.sourcePins ?? scan.reviewDocument.sourcePins,
-        packageHash: getPluginPackageHash(plugin),
-      })
-      return { plugin, scan, identity }
+      try {
+        const scan = await scanPluginReviewDocument(plugin)
+        const reviewFingerprint = hashPluginManifestReviewDocument(
+          scan.reviewDocument,
+        )
+        const identity = buildRuntimeNativeActivationIdentity({
+          reviewDocument: scan.reviewDocument,
+          reviewFingerprint,
+          packageIdentity: plugin.source,
+          packageVersion: plugin.version,
+          sourcePins: plugin.sourcePins ?? scan.reviewDocument.sourcePins,
+          packageHash: getPluginPackageHash(plugin),
+        })
+        return { status: "scanned" as const, plugin, scan, identity }
+      } catch {
+        return { status: "failed" as const, plugin }
+      }
     }),
+  )
+  const scannedCandidates = scannedPlugins.filter(
+    (candidate) => candidate.status === "scanned",
+  )
+  const failedPlugins = scannedPlugins.filter(
+    (candidate) => candidate.status === "failed",
   )
 
   const reviewResult = await recordPluginReviewScans(
-    scannedPlugins.map(({ plugin, scan, identity }) => ({
+    scannedCandidates.map(({ plugin, scan, identity }) => ({
       pluginKey: plugin.reviewKey,
       document: scan.reviewDocument,
       runtimeNativeActivationIdentity: identity,
     })),
   )
 
-  return buildCodexAppServerResolvedPluginConfigOverrides({
-    candidates: scannedPlugins.map(({ plugin, scan, identity }) => {
-      const updateReview = reviewResult.metadataByPluginKey[plugin.reviewKey]
-      return {
-        plugin,
-        pluginEnabled: enablement[plugin.reviewKey]?.enabled === true,
-        safeModeEnabled: reviewResult.safeMode.enabled,
-        manifestReviewStatus: updateReview?.status,
-        identity,
-        reviewedIdentityFingerprint:
-          updateReview?.runtimeNativeActivation
-            ?.lastReviewedIdentityFingerprint,
-        hasMcpServers: scan.components.mcpServers.length > 0,
-        mcpServersApprovedOrFiltered: scan.components.mcpServers.length === 0,
-      }
+  return mergeFailedCodexPluginEntries(
+    buildCodexAppServerResolvedPluginConfigOverrides({
+      candidates: scannedCandidates.map(({ plugin, scan, identity }) => {
+        const updateReview = reviewResult.metadataByPluginKey[plugin.reviewKey]
+        return {
+          plugin,
+          pluginEnabled: enablement[plugin.reviewKey]?.enabled === true,
+          safeModeEnabled: reviewResult.safeMode.enabled,
+          manifestReviewStatus: updateReview?.status,
+          identity,
+          reviewedIdentityFingerprint:
+            updateReview?.runtimeNativeActivation
+              ?.lastReviewedIdentityFingerprint,
+          hasMcpServers: scan.components.mcpServers.length > 0,
+          mcpServersApprovedOrFiltered: scan.components.mcpServers.length === 0,
+        }
+      }),
     }),
-  })
+    failedPlugins.map(({ plugin }) => plugin),
+  )
+}
+
+function mergeFailedCodexPluginEntries(
+  resolved: CodexAppServerResolvedPluginConfigOverrides,
+  failedPlugins: PluginInfo[],
+): CodexAppServerResolvedPluginConfigOverrides {
+  if (failedPlugins.length === 0) return resolved
+
+  const byPluginId = new Map(
+    resolved.entries.map((entry) => [entry.pluginId, entry]),
+  )
+  for (const plugin of failedPlugins) {
+    const pluginId = getCodexAppServerPluginId(plugin)
+    if (!pluginId || byPluginId.get(pluginId)?.enabled) continue
+
+    byPluginId.set(pluginId, {
+      pluginId,
+      pluginSource: plugin.source,
+      enabled: false,
+      nativeActivationPolicy: {
+        status: "blocked",
+        canActivateNative: false,
+        identityStatus: "identity-unreviewed",
+        reasons: ["native-load-failed"],
+      },
+    })
+  }
+
+  const entries = Array.from(byPluginId.values()).sort((a, b) =>
+    a.pluginId.localeCompare(b.pluginId),
+  )
+  const config: Record<string, boolean> = {}
+  for (const entry of entries) {
+    config[`plugins.${entry.pluginId}.enabled`] = entry.enabled
+  }
+
+  return { config, entries }
 }
 
 function getPluginPackageHash(plugin: PluginInfo): string | undefined {

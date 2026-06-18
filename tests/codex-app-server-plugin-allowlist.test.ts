@@ -42,6 +42,9 @@ mock.module("../src/main/lib/plugins", () => ({
 
 mock.module("../src/main/lib/plugins/review-scan", () => ({
   scanPluginReviewDocument: async (plugin: MockCodexPlugin) => {
+    if (plugin.source.includes("broken")) {
+      throw new Error("broken plugin metadata")
+    }
     const hasMcpServers = plugin.source.includes("cloudflare")
     const reviewDocument = buildPluginManifestReviewDocument({
       runtime: "codex",
@@ -215,5 +218,37 @@ describe("Codex app-server plugin allowlist resolver", () => {
     expect(result.entries[0].nativeActivationPolicy.reasons).toEqual([
       "global-safe-mode",
     ])
+  })
+
+  test("fails closed for a Codex plugin scan failure without blocking other plugins", async () => {
+    plugins = [codexPlugin("figma"), codexPlugin("broken")]
+    enablement = {
+      "codex:openai-curated:figma": {
+        enabled: true,
+        updatedAt: "2026-06-02T00:00:00.000Z",
+      },
+      "codex:openai-curated:broken": {
+        enabled: true,
+        updatedAt: "2026-06-02T00:00:00.000Z",
+      },
+    }
+    reviewStatuses = {
+      "codex:openai-curated:figma": "reviewed",
+    }
+
+    const result = await allowlist.resolveCodexAppServerPluginConfigOverrides()
+
+    expect(result.config).toEqual({
+      "plugins.broken@openai-curated.enabled": false,
+      "plugins.figma@openai-curated.enabled": true,
+    })
+    expect(
+      result.entries.find((entry) => entry.pluginId === "broken@openai-curated")
+        ?.nativeActivationPolicy,
+    ).toMatchObject({
+      status: "blocked",
+      canActivateNative: false,
+      reasons: ["native-load-failed"],
+    })
   })
 })
