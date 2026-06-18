@@ -12,47 +12,53 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { toast } from "sonner"
 import {
-  providerProfileAuthModes,
-  providerProfileProtocols,
-  providerProfileTargets,
-  providerProfileSource,
+  type ProviderDiagnosticCheckId,
+  type ProviderDiagnosticStatus,
   type ProviderProfileAuthMode,
   type ProviderProfileDefaultPurpose,
   type ProviderProfileProtocol,
   type ProviderProfileTarget,
-  type ProviderDiagnosticCheckId,
-  type ProviderDiagnosticStatus,
+  providerProfileAuthModes,
+  providerProfileProtocols,
+  providerProfileSource,
+  providerProfileTargets,
 } from "../../../../shared/provider-profile-types"
+import {
+  type ClaudeModelSource,
+  type CodexModelSource,
+  lastSelectedClaudeModelSourceAtom,
+  lastSelectedCodexModelSourceAtom,
+} from "../../../features/agents/atoms"
+import {
+  CLAUDE_MODELS,
+  CODEX_MODELS,
+} from "../../../features/agents/lib/models"
 import {
   agentsLoginModalOpenAtom,
   claudeLoginModalConfigAtom,
   codexLoginModalOpenAtom,
   codexOnboardingAuthMethodAtom,
   codexOnboardingCompletedAtom,
-  modelsSettingsTargetAtom,
   hiddenModelsAtom,
+  modelsSettingsTargetAtom,
   normalizeCodexApiKey,
   OPENAI_TRANSCRIPTION_BASE_URL,
   OPENAI_TRANSCRIPTION_MODEL,
 } from "../../../lib/atoms"
-import {
-  lastSelectedClaudeModelSourceAtom,
-  lastSelectedCodexModelSourceAtom,
-  type ClaudeModelSource,
-  type CodexModelSource,
-} from "../../../features/agents/atoms"
-import { useI18n, type TranslationKey } from "../../../lib/i18n"
-import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
-import {
-  CLAUDE_MODELS,
-  CODEX_MODELS,
-} from "../../../features/agents/lib/models"
+import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
+import { type TranslationKey, useI18n } from "../../../lib/i18n"
 import { trpc } from "../../../lib/trpc"
-import { Badge } from "../../ui/badge"
-import { Button } from "../../ui/button"
+import { cn } from "../../../lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,6 +69,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../ui/alert-dialog"
+import { Badge } from "../../ui/badge"
+import { Button } from "../../ui/button"
 import {
   Collapsible,
   CollapsibleContent,
@@ -74,6 +82,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu"
+import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import {
@@ -84,8 +93,6 @@ import {
   SelectValue,
 } from "../../ui/select"
 import { Switch } from "../../ui/switch"
-import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
-import { cn } from "../../../lib/utils"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -176,9 +183,7 @@ function AccountRow({
           </Button>
         )}
         {isActive && (
-          <Badge variant="secondary" className="text-xs">
-            {t("common.active")}
-          </Badge>
+          <ActiveStatusBadge>{t("common.active")}</ActiveStatusBadge>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -246,6 +251,18 @@ function ConfirmActionDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  )
+}
+
+function ActiveStatusBadge({ children }: { children: ReactNode }) {
+  return (
+    <Badge
+      variant="outline"
+      className="gap-1 border-emerald-500/25 bg-emerald-500/10 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+    >
+      <CheckCircle2 className="h-3 w-3" />
+      {children}
+    </Badge>
   )
 }
 
@@ -1949,9 +1966,7 @@ export function AgentsModelsTab() {
 
                 <div className="flex items-center gap-2">
                   {isCodexSubscriptionActive && (
-                    <Badge variant="secondary" className="text-xs">
-                      {t("common.active")}
-                    </Badge>
+                    <ActiveStatusBadge>{t("common.active")}</ActiveStatusBadge>
                   )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1995,9 +2010,9 @@ export function AgentsModelsTab() {
                       {t("common.codexApiKey")}
                     </Label>
                     {hasAppCodexApiKey && (
-                      <Badge variant="secondary" className="text-xs">
+                      <ActiveStatusBadge>
                         {t("common.active")}
-                      </Badge>
+                      </ActiveStatusBadge>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">

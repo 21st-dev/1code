@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { readFileSync, readdirSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
 // The chats router is split across `chats*.ts` modules; read them together so
@@ -102,6 +102,15 @@ describe("provider routing UX source guards", () => {
     expect(modelsTabSource).not.toContain("settings.models.overrideModel")
     expect(modelsTabSource).not.toContain("window.confirm")
     expect(modelsTabSource).not.toContain("<select")
+  })
+
+  test("Models connected states use explicit success status styling", () => {
+    expect(modelsTabSource).toContain("function ActiveStatusBadge")
+    expect(modelsTabSource).toContain("border-emerald-500/25")
+    expect(modelsTabSource).toContain("<ActiveStatusBadge>")
+    expect(modelsTabSource).not.toContain(
+      '<Badge variant="secondary" className="text-xs">',
+    )
   })
 
   test("new chats persist selected provider metadata for transport routing", () => {
