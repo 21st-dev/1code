@@ -220,6 +220,8 @@ describe("plugin target mode UI source guards", () => {
       "settings.plugins.doctorCheckRuntimeGate",
       "settings.plugins.doctorCheckCodexReadOnly",
       "settings.plugins.doctorCheckMcpApprovalFingerprint",
+      "settings.plugins.doctorCheckRuntimeNativeActivation",
+      "settings.plugins.doctorCheckRuntimeNativeIdentity",
       "settings.plugins.doctorCheckDeveloperMode",
       "settings.plugins.doctorCheckDeveloperTrustedGate",
       "settings.plugins.doctorCheckDeveloperTrustedLoad",

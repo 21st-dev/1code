@@ -358,6 +358,8 @@ type PluginDoctorCheckCode =
   | "runtime-marketplace"
   | "runtime-marketplace-diagnostic"
   | "runtime-plugin-listing"
+  | "runtime-native-activation"
+  | "runtime-native-identity"
   | "component-path-warning"
   | "review-state"
 
@@ -395,6 +397,7 @@ interface PluginDoctorPluginDebug {
     ignoredUnknownFields: string[]
     gate: PluginControlledUiGate
   }
+  runtimeNativeActivation?: PluginData["runtimeNativeActivation"]
   developerTrusted: {
     isDeveloperSource: boolean
     manifestPresent: boolean
@@ -1753,6 +1756,10 @@ function getDoctorCheckLabel(
       return t("settings.plugins.doctorCheckRuntimeMarketplaceDiagnostic")
     case "runtime-plugin-listing":
       return t("settings.plugins.doctorCheckRuntimePluginListing")
+    case "runtime-native-activation":
+      return t("settings.plugins.doctorCheckRuntimeNativeActivation")
+    case "runtime-native-identity":
+      return t("settings.plugins.doctorCheckRuntimeNativeIdentity")
     case "component-path-warning":
       return t("settings.plugins.doctorCheckComponentPathWarning")
     case "review-state":

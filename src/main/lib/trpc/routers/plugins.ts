@@ -1084,12 +1084,18 @@ export const pluginsRouter = router({
   doctor: publicProcedure.query(async (): Promise<PluginDoctorReport> => {
     const [
       installedPlugins,
+      enabledPlugins,
+      approvedPluginMcpServers,
+      runtimeNativePluginEnablement,
       sources,
       developerMode,
       storeState,
       runtimeMarketplaces,
     ] = await Promise.all([
       discoverAllRuntimePlugins(),
+      getEnabledPlugins(),
+      getApprovedPluginMcpServers(),
+      getRuntimeNativePluginEnablementState(),
       discoverPluginSources(),
       getPluginDeveloperModeState(),
       getPluginStoreStateSnapshot(),
@@ -1119,6 +1125,21 @@ export const pluginsRouter = router({
           hasMcpServers: scanned.components.mcpServers.length > 0,
           updateReviewStatus: updateReview.status,
           safeModeEnabled: reviewResult.safeMode.enabled,
+        })
+        const pluginEnabled =
+          plugin.runtime === "claude" && plugin.sourceKind !== "developer-local"
+            ? enabledPlugins.includes(plugin.source)
+            : plugin.runtime === "codex" &&
+                plugin.sourceKind !== "developer-local"
+              ? runtimeNativePluginEnablement[plugin.reviewKey]?.enabled === true
+              : false
+        const runtimeNativeActivation = buildPluginRuntimeNativeActivation({
+          plugin,
+          scanned,
+          updateReview,
+          safeMode: reviewResult.safeMode,
+          pluginEnabled,
+          approvedPluginMcpServers,
         })
         const developerTrustContext = getDeveloperTrustContext({
           plugin,
@@ -1172,6 +1193,7 @@ export const pluginsRouter = router({
               hasValidManifest: Boolean(scanned.controlledUi.manifest),
             }),
           },
+          runtimeNativeActivation,
           developerTrusted: {
             isDeveloperSource: plugin.sourceKind === "developer-local",
             manifestPresent: Boolean(scanned.developerTrusted.manifest),

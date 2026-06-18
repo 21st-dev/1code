@@ -44,6 +44,23 @@ function emptyDeveloperTrusted(pluginReviewKey = "") {
   }
 }
 
+function blockedRuntimeNativeActivation(reason = "native-load-failed" as const) {
+  return {
+    current: {
+      status: "blocked" as const,
+      canActivateNative: false,
+      identityStatus: "identity-unreviewed" as const,
+      reasons: [reason],
+    },
+    enableCandidate: {
+      status: "blocked" as const,
+      canActivateNative: false,
+      identityStatus: "identity-unreviewed" as const,
+      reasons: [reason],
+    },
+  }
+}
+
 describe("plugin doctor report", () => {
   test("summarizes safe-mode and review blockers without trusting plugin code", () => {
     const report = buildPluginDoctorReport({
@@ -146,6 +163,58 @@ describe("plugin doctor report", () => {
       status: "info",
     }))
     expect(report.summary.blockedPluginCount).toBe(1)
+  })
+
+  test("reports runtime-native activation blockers in Doctor checks", () => {
+    const report = buildPluginDoctorReport({
+      now: new Date("2026-06-02T00:00:00Z"),
+      reviewStatePath: "/userData/plugin-review-state.json",
+      safeMode: { enabled: false },
+      developerMode: { enabled: false },
+      sources: [],
+      plugins: [{
+        runtime: "claude",
+        reviewKey: "claude:local:broken",
+        name: "Broken",
+        source: "local:broken",
+        path: "/home/.claude/plugins/marketplaces/local/broken",
+        updateReview: updateReview("reviewed"),
+        safetyGate: buildPluginSafetyGate({
+          runtime: "claude",
+          hasMcpServers: false,
+          updateReviewStatus: "reviewed",
+          safeModeEnabled: false,
+        }),
+        runtimeNativeActivation: blockedRuntimeNativeActivation(),
+        sourcePins: [],
+        diagnostics: [],
+        componentCounts: {
+          commands: 1,
+          skills: 0,
+          agents: 0,
+          mcpServers: 0,
+        },
+        controlledUi: emptyControlledUi(),
+        developerTrusted: emptyDeveloperTrusted("claude:local:broken"),
+        mcpServers: [],
+        mcpApprovalIdentifiers: {},
+      }],
+    })
+
+    expect(report.plugins[0].runtimeNativeActivation?.current.reasons).toEqual([
+      "native-load-failed",
+    ])
+    expect(report.plugins[0].checks).toContainEqual(expect.objectContaining({
+      code: "runtime-native-activation",
+      status: "blocked",
+      details: expect.objectContaining({
+        currentReasons: "native-load-failed",
+      }),
+    }))
+    expect(report.plugins[0].checks).toContainEqual(expect.objectContaining({
+      code: "runtime-native-identity",
+      status: "blocked",
+    }))
   })
 
   test("reports developer trusted gates and bundle hashes without source code", () => {

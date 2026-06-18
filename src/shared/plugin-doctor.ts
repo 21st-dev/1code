@@ -73,8 +73,36 @@ export type PluginDoctorCheckCode =
   | "runtime-marketplace"
   | "runtime-marketplace-diagnostic"
   | "runtime-plugin-listing"
+  | "runtime-native-activation"
+  | "runtime-native-identity"
   | "component-path-warning"
   | "review-state"
+
+export type PluginDoctorRuntimeNativeBlockedReason =
+  | "plugin-disabled"
+  | "global-safe-mode"
+  | "manifest-review-required"
+  | "runtime-native-unsupported"
+  | "per-run-plugin-control-missing"
+  | "activation-identity-incomplete"
+  | "activation-identity-unreviewed"
+  | "activation-identity-drifted"
+  | "mcp-approval-required"
+  | "native-load-failed"
+
+export type PluginDoctorRuntimeNativeIdentityStatus =
+  | "reviewed"
+  | "identity-incomplete"
+  | "identity-incomplete-acknowledged"
+  | "identity-unreviewed"
+  | "identity-drifted"
+
+export interface PluginDoctorRuntimeNativeActivationPolicy {
+  status: "allowed" | "blocked"
+  canActivateNative: boolean
+  identityStatus: PluginDoctorRuntimeNativeIdentityStatus
+  reasons: PluginDoctorRuntimeNativeBlockedReason[]
+}
 
 export interface PluginDoctorCheck {
   code: PluginDoctorCheckCode
@@ -115,6 +143,10 @@ export interface PluginDoctorPluginInput {
     diagnostics: PluginControlledUiDiagnostic[]
     ignoredUnknownFields: string[]
     gate: PluginControlledUiGate
+  }
+  runtimeNativeActivation?: {
+    current: PluginDoctorRuntimeNativeActivationPolicy
+    enableCandidate: PluginDoctorRuntimeNativeActivationPolicy
   }
   developerTrusted: {
     isDeveloperSource: boolean
@@ -165,6 +197,7 @@ export interface PluginDoctorPluginDebug {
   diagnostics: PluginDiagnostic[]
   componentCounts: PluginDoctorPluginInput["componentCounts"]
   controlledUi: PluginDoctorPluginInput["controlledUi"]
+  runtimeNativeActivation?: PluginDoctorPluginInput["runtimeNativeActivation"]
   developerTrusted: PluginDoctorPluginInput["developerTrusted"]
   mcpServers: string[]
   mcpApprovalIdentifiers: Record<string, string>
@@ -316,6 +349,7 @@ function buildPluginDebug(plugin: PluginDoctorPluginInput): PluginDoctorPluginDe
     diagnostics: plugin.diagnostics,
     componentCounts: plugin.componentCounts,
     controlledUi: plugin.controlledUi,
+    runtimeNativeActivation: plugin.runtimeNativeActivation,
     developerTrusted: plugin.developerTrusted,
     mcpServers: plugin.mcpServers,
     mcpApprovalIdentifiers: plugin.mcpApprovalIdentifiers,
@@ -393,6 +427,38 @@ function buildPluginChecks(plugin: PluginDoctorPluginInput): PluginDoctorCheck[]
       canUseMcp: plugin.safetyGate.canUseMcp,
     },
   })
+
+  if (plugin.runtimeNativeActivation) {
+    checks.push({
+      code: "runtime-native-activation",
+      status: getRuntimeNativeActivationCheckStatus(
+        plugin.runtimeNativeActivation.current,
+      ),
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        currentStatus: plugin.runtimeNativeActivation.current.status,
+        enableCandidateStatus:
+          plugin.runtimeNativeActivation.enableCandidate.status,
+        currentReasons: plugin.runtimeNativeActivation.current.reasons.join(","),
+        enableCandidateReasons:
+          plugin.runtimeNativeActivation.enableCandidate.reasons.join(","),
+      },
+    })
+    checks.push({
+      code: "runtime-native-identity",
+      status: getRuntimeNativeIdentityCheckStatus(
+        plugin.runtimeNativeActivation.current.identityStatus,
+      ),
+      subject: plugin.name,
+      runtime: plugin.runtime,
+      pluginReviewKey: plugin.reviewKey,
+      details: {
+        identityStatus: plugin.runtimeNativeActivation.current.identityStatus,
+      },
+    })
+  }
 
   const componentTotal =
     plugin.componentCounts.commands +
@@ -812,6 +878,24 @@ function getControlledUiGateCheckStatus(
 function getRuntimeGateCheckStatus(plugin: PluginDoctorPluginInput): PluginDoctorCheckStatus {
   if (plugin.runtime === "codex") return "info"
   if (plugin.safetyGate.status === "allowed") return "pass"
+  return "blocked"
+}
+
+function getRuntimeNativeActivationCheckStatus(
+  policy: PluginDoctorRuntimeNativeActivationPolicy,
+): PluginDoctorCheckStatus {
+  if (policy.canActivateNative) return "pass"
+  if (policy.reasons.length === 1 && policy.reasons[0] === "plugin-disabled") {
+    return "info"
+  }
+  return "blocked"
+}
+
+function getRuntimeNativeIdentityCheckStatus(
+  status: PluginDoctorRuntimeNativeIdentityStatus,
+): PluginDoctorCheckStatus {
+  if (status === "reviewed") return "pass"
+  if (status === "identity-incomplete-acknowledged") return "warning"
   return "blocked"
 }
 
