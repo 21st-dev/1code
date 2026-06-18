@@ -1,4 +1,9 @@
 import type { ClaudeModelInfo } from "../../../../shared/custom-agent-models"
+import {
+  parseProviderProfileSource,
+  providerProfileSource,
+  type ProviderProfileMetadata,
+} from "../../../../shared/provider-profile-types"
 
 export {
   CLAUDE_MODELS,
@@ -123,6 +128,92 @@ export function resolveCodexModelForSource<TModel extends { id: string }>({
       isCodexModelSupportedBySource(source, model.id),
     ),
     changed: true,
+  }
+}
+
+export const LEGACY_CLAUDE_PROVIDER_PROFILE_ID = "legacy-claude-provider"
+
+export type ClaudeSourceProviderProfile = Pick<
+  ProviderProfileMetadata,
+  "id" | "targetRuntimes" | "lastTestStatus"
+>
+
+export type ClaudeModelSourceNormalizationResult =
+  | {
+      ok: true
+      source: string
+      changed: boolean
+      reason?: "auto" | "legacy-profile" | "oauth-fallback"
+    }
+  | {
+      ok: false
+      blocker: {
+        code: "provider-profile-required"
+        message: string
+        hint: string
+      }
+    }
+
+export function getLegacyClaudeProviderProfile(
+  profiles: ClaudeSourceProviderProfile[],
+): ClaudeSourceProviderProfile | undefined {
+  return profiles.find(
+    (profile) =>
+      profile.id === LEGACY_CLAUDE_PROVIDER_PROFILE_ID &&
+      profile.targetRuntimes.includes("claude") &&
+      profile.lastTestStatus?.ok !== false,
+  )
+}
+
+export function normalizeClaudeModelSourceForRun(input: {
+  source: string | undefined | null
+  providerProfiles: ClaudeSourceProviderProfile[]
+  canUseClaudeOAuth?: boolean
+}): ClaudeModelSourceNormalizationResult {
+  const rawSource = input.source?.trim()
+  if (!rawSource || rawSource === "auto") {
+    return {
+      ok: true,
+      source: "claude-oauth",
+      changed: rawSource !== "claude-oauth",
+      reason: rawSource === "auto" ? "auto" : undefined,
+    }
+  }
+
+  if (parseProviderProfileSource(rawSource) || rawSource === "claude-oauth") {
+    return { ok: true, source: rawSource, changed: false }
+  }
+
+  if (rawSource !== "custom-provider") {
+    return { ok: true, source: rawSource, changed: false }
+  }
+
+  const legacyProfile = getLegacyClaudeProviderProfile(input.providerProfiles)
+  if (legacyProfile) {
+    return {
+      ok: true,
+      source: providerProfileSource(legacyProfile.id),
+      changed: true,
+      reason: "legacy-profile",
+    }
+  }
+
+  if (input.canUseClaudeOAuth) {
+    return {
+      ok: true,
+      source: "claude-oauth",
+      changed: true,
+      reason: "oauth-fallback",
+    }
+  }
+
+  return {
+    ok: false,
+    blocker: {
+      code: "provider-profile-required",
+      message: "Custom provider is now configured through Provider Profiles.",
+      hint: "Create or select a Claude-capable Provider Profile in Settings > Models.",
+    },
   }
 }
 

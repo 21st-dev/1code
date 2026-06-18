@@ -44,8 +44,6 @@ function dependencies(
       token: `gateway-token-${providerId}`,
       providerId,
     }),
-    getLegacyClaudeProviderProfileId: () => null,
-    getActiveClaudeProviderConfig: () => undefined,
     getValidClaudeCodeCredential: async () => ({
       accessToken: "oauth-token",
       metadata: credentialMetadata,
@@ -106,7 +104,7 @@ describe("Claude Agent SDK provider startup", () => {
     })
   })
 
-  test("blocks custom-provider runs when neither legacy nor active config exists", async () => {
+  test("fails closed when raw legacy custom-provider reaches startup", async () => {
     let credentialCalled = false
     const result = await resolveClaudeAgentSdkProviderStartup({
       modelSource: "custom-provider",
@@ -123,8 +121,8 @@ describe("Claude Agent SDK provider startup", () => {
       ok: false,
       blocker: {
         id: "provider-profile",
-        status: "needs-auth",
-        message: "Custom provider is not configured.",
+        status: "blocked",
+        message: "Legacy custom provider source is no longer runnable.",
       },
     })
   })
@@ -202,15 +200,16 @@ describe("Claude Agent SDK provider startup", () => {
     })
   })
 
-  test("keeps local-only endpoint blocking inside provider startup", async () => {
+  test("keeps local-only endpoint blocking inside provider profile startup", async () => {
     const result = await resolveClaudeAgentSdkProviderStartup({
-      modelSource: "custom-provider",
+      modelSource: "provider-profile:profile-1",
       dependencies: dependencies({
-        getActiveClaudeProviderConfig: () => ({
-          model: "claude",
-          baseUrl: "https://api.anthropic.com",
-          token: "token",
-          authMode: "auth_token",
+        getProviderProfileRuntimeConfig: (id) =>
+          providerProfile({ id, defaultModel: "claude" }),
+        getProviderGatewayEndpoint: async (providerId, kind) => ({
+          baseUrl: "https://api.anthropic.com/v1",
+          token: `gateway-token-${providerId}-${kind}`,
+          providerId,
         }),
         assertOfficialCloudAllowed: () => {
           throw new Error(

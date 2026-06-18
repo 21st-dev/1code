@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import {
   CODEX_MODELS,
+  LEGACY_CLAUDE_PROVIDER_PROFILE_ID,
   getCodexModelsForSource,
   isCodexApiKeySupportedModel,
   isCodexModelSupportedBySource,
   isFirstPartyCodexModelSource,
+  normalizeClaudeModelSourceForRun,
   resolveCodexModelForSource,
 } from "../src/renderer/features/agents/lib/models"
 import { CLAUDE_MODELS } from "../src/shared/custom-agent-models"
@@ -61,5 +63,46 @@ describe("agent model catalog", () => {
         source: "openai-api-key",
       }),
     ).toEqual({ model: CODEX_MODELS[0], changed: true })
+  })
+
+  test("normalizes legacy Claude custom-provider sources before runs", () => {
+    expect(
+      normalizeClaudeModelSourceForRun({
+        source: "auto",
+        providerProfiles: [],
+      }),
+    ).toMatchObject({
+      ok: true,
+      source: "claude-oauth",
+      changed: true,
+    })
+
+    expect(
+      normalizeClaudeModelSourceForRun({
+        source: "custom-provider",
+        providerProfiles: [
+          {
+            id: LEGACY_CLAUDE_PROVIDER_PROFILE_ID,
+            targetRuntimes: ["claude"],
+            lastTestStatus: null,
+          },
+        ],
+      }),
+    ).toMatchObject({
+      ok: true,
+      source: `provider-profile:${LEGACY_CLAUDE_PROVIDER_PROFILE_ID}`,
+      changed: true,
+      reason: "legacy-profile",
+    })
+
+    expect(
+      normalizeClaudeModelSourceForRun({
+        source: "custom-provider",
+        providerProfiles: [],
+      }),
+    ).toMatchObject({
+      ok: false,
+      blocker: { code: "provider-profile-required" },
+    })
   })
 })

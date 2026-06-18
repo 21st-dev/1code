@@ -72,10 +72,6 @@ export type ClaudeAgentSdkProviderStartupDependencies = {
     providerId: string,
     kind: "anthropic",
   ) => Promise<ProviderGatewayEndpoint>
-  getLegacyClaudeProviderProfileId: () => MaybePromise<string | null>
-  getActiveClaudeProviderConfig: () => MaybePromise<
-    ClaudeProviderRuntimeConfig | undefined
-  >
   getValidClaudeCodeCredential: () => Promise<{
     accessToken: string | null
     metadata: ClaudeCodeCredentialMetadata
@@ -101,14 +97,6 @@ const defaultDependencies: ClaudeAgentSdkProviderStartupDependencies = {
   getProviderGatewayEndpoint: async (providerId, kind) => {
     const gateway = await import("../provider-profiles/gateway")
     return gateway.getProviderGatewayEndpoint(providerId, kind)
-  },
-  getLegacyClaudeProviderProfileId: async () => {
-    const storage = await import("../provider-profiles/storage")
-    return storage.getLegacyClaudeProviderProfileId()
-  },
-  getActiveClaudeProviderConfig: async () => {
-    const store = await import("./provider-config-store")
-    return store.getActiveClaudeProviderConfig()
   },
   getValidClaudeCodeCredential: async () => {
     const credentials = await import("../claude-credentials")
@@ -181,40 +169,14 @@ export async function resolveClaudeAgentSdkProviderStartup(input: {
       authMode: "auth_token",
     }
   } else if (input.modelSource === "custom-provider") {
-    const legacyProfileId =
-      await dependencies.getLegacyClaudeProviderProfileId()
-    if (legacyProfileId) {
-      const profile = await dependencies.getProviderProfileRuntimeConfig(
-        legacyProfileId,
-      )
-      if (profile) {
-        const gateway = await dependencies.getProviderGatewayEndpoint(
-          profile.id,
-          "anthropic",
-        )
-        providerConfig = {
-          model: profile.defaultModel,
-          baseUrl: gateway.baseUrl,
-          token: gateway.token,
-          authMode: "auth_token",
-        }
-      }
-    }
-
-    providerConfig =
-      providerConfig ||
-      (await dependencies.getActiveClaudeProviderConfig())
-
-    if (!providerConfig) {
-      return {
-        ok: false,
-        blocker: {
-          id: "provider-profile",
-          status: "needs-auth",
-          message: "Custom provider is not configured.",
-          hint: "Configure a Claude provider profile or use Claude Code auth.",
-        },
-      }
+    return {
+      ok: false,
+      blocker: {
+        id: "provider-profile",
+        status: "blocked",
+        message: "Legacy custom provider source is no longer runnable.",
+        hint: "Select the migrated Provider Profile in Settings > Models.",
+      },
     }
   }
 
