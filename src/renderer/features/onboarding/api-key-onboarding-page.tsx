@@ -15,13 +15,22 @@ import { Logo } from "../../components/ui/logo"
 import { Switch } from "../../components/ui/switch"
 import {
   apiKeyOnboardingCompletedAtom,
-  type ClaudeProviderAuthMode,
   onboardingProviderModeAtom,
 } from "../../lib/atoms"
 import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
-import { lastSelectedClaudeModelSourceAtom } from "../agents/atoms"
+import { providerProfileSource } from "../../../shared/provider-profile-types"
+import {
+  lastSelectedClaudeModelSourceAtom,
+  type ClaudeModelSource,
+} from "../agents/atoms"
+
+type OnboardingProviderAuthMode = "api_key" | "auth_token"
+
+function toProviderProfileAuthMode(mode: OnboardingProviderAuthMode) {
+  return mode === "api_key" ? "x-api-key" : "bearer"
+}
 
 // Check if the key looks like a valid Anthropic API key
 const isValidApiKey = (key: string) => {
@@ -38,8 +47,7 @@ export function ApiKeyOnboardingPage() {
     lastSelectedClaudeModelSourceAtom,
   )
   const trpcUtils = trpc.useUtils()
-  const { data: providerConfigData } = trpc.claudeProviderConfig.get.useQuery()
-  const saveProviderConfig = trpc.claudeProviderConfig.save.useMutation()
+  const saveProviderProfile = trpc.providerProfiles.saveProfile.useMutation()
   const saveLocalApiProviderConfig =
     trpc.localApiProviderConfig.save.useMutation()
 
@@ -50,22 +58,13 @@ export function ApiKeyOnboardingPage() {
   const defaultBaseUrl = "https://api.anthropic.com"
 
   const [apiKey, setApiKey] = useState("")
-  const [model, setModel] = useState("")
+  const [model, setModel] = useState(defaultModel)
   const [token, setToken] = useState("")
-  const [baseUrl, setBaseUrl] = useState("")
-  const [authMode, setAuthMode] = useState<ClaudeProviderAuthMode>("auth_token")
+  const [baseUrl, setBaseUrl] = useState(defaultBaseUrl)
+  const [authMode, setAuthMode] =
+    useState<OnboardingProviderAuthMode>("auth_token")
   const [useForUtilityApis, setUseForUtilityApis] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Sync non-secret metadata from secure provider config.
-  useEffect(() => {
-    const config = providerConfigData?.config
-    if (!config) return
-
-    setModel(config.model)
-    setBaseUrl(config.baseUrl)
-    setAuthMode(config.authMode)
-  }, [providerConfigData?.config])
 
   const handleBack = () => {
     setOnboardingProviderMode(null)
@@ -77,17 +76,29 @@ export function ApiKeyOnboardingPage() {
 
     setIsSubmitting(true)
 
-    saveProviderConfig.mutate(
+    saveProviderProfile.mutate(
       {
-        model: defaultModel,
-        token: key.trim(),
+        name: "Anthropic API Key",
+        presetId: null,
+        protocol: "anthropic",
         baseUrl: defaultBaseUrl,
-        authMode: "api_key",
+        defaultModel,
+        authMode: "x-api-key",
+        token: key.trim(),
+        targetRuntimes: ["claude"],
+        capabilities: {
+          claude: true,
+          streaming: true,
+          tools: true,
+          vision: true,
+        },
       },
       {
-        onSuccess: async () => {
-          await trpcUtils.claudeProviderConfig.get.invalidate()
-          setLastSelectedClaudeModelSource("custom-provider")
+        onSuccess: async ({ profile }) => {
+          await trpcUtils.providerProfiles.listProfiles.invalidate()
+          setLastSelectedClaudeModelSource(
+            providerProfileSource(profile.id) as ClaudeModelSource,
+          )
           setApiKeyOnboardingCompleted(true)
         },
         onSettled: () => setIsSubmitting(false),
@@ -106,11 +117,16 @@ export function ApiKeyOnboardingPage() {
     setIsSubmitting(true)
 
     try {
-      await saveProviderConfig.mutateAsync({
-        model: trimmedModel,
-        token: trimmedToken,
+      const result = await saveProviderProfile.mutateAsync({
+        name: "Custom Claude Provider",
+        presetId: null,
+        protocol: "anthropic",
         baseUrl: trimmedBaseUrl,
-        authMode,
+        defaultModel: trimmedModel,
+        authMode: toProviderProfileAuthMode(authMode),
+        token: trimmedToken,
+        targetRuntimes: ["claude"],
+        capabilities: { claude: true, streaming: true, tools: true },
       })
 
       if (useForUtilityApis) {
@@ -131,8 +147,10 @@ export function ApiKeyOnboardingPage() {
         await trpcUtils.localApiProviderConfig.get.invalidate()
       }
 
-      await trpcUtils.claudeProviderConfig.get.invalidate()
-      setLastSelectedClaudeModelSource("custom-provider")
+      await trpcUtils.providerProfiles.listProfiles.invalidate()
+      setLastSelectedClaudeModelSource(
+        providerProfileSource(result.profile.id) as ClaudeModelSource,
+      )
       setApiKeyOnboardingCompleted(true)
     } finally {
       setIsSubmitting(false)
