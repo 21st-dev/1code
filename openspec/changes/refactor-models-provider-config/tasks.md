@@ -79,6 +79,24 @@
   resolves at send time to `provider-profile:legacy-claude-provider` when available
   or prompts safely; removing the Codex API key now confirms; protocol/auth use the
   app `Select`; the Anthropic and Codex cards match.
-  Not run in this pass; requires an Electron UI smoke with existing/migrated
-  provider data. Source guards and automated tests cover the same invariants.
+  Real Electron dev UI smoke run 2026-06-19 with `bun run dev` and app userData
+  `/Users/ethan/Library/Application Support/Agent Code for Me Dev`. Verified:
+  local mode loaded without hosted login; Models showed no Override Model editor;
+  Anthropic and Codex account cards were aligned; Codex subscription and Codex API
+  key appeared in the same Codex account block; Provider Profiles was expanded;
+  protocol/auth controls rendered as app `Select` combo boxes; a tokenless Ollama
+  Provider Profile was created through the UI and persisted in
+  `agent_provider_profiles` with `auth_mode=none`; the profile was editable and
+  selectable from the chat model selector under the local provider profile group;
+  no `custom-provider` selector row appeared.
+  Still blocked in this environment: token-backed custom-model onboarding cannot
+  create/select a profile because the main process returns
+  `System secure storage is unavailable. Please enable the OS keychain/credential
+  store and try again.` before the profile write. No pre-existing legacy secure
+  provider was available to migrate/edit, Codex API key removal confirmation was
+  not exercised, and the attempted persisted `custom-provider` send-boundary smoke
+  was inconclusive after DevTools focus sent a short message through the Claude
+  auth path. Automated tests and source guards still cover those invariants, but
+  this manual item remains unchecked until a real keychain-backed Electron smoke
+  can run them end-to-end.
 - [x] 6.7 Mark the Models section resolved in `docs/ideas/settings-per-tab-audit.md`.
