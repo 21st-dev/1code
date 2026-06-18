@@ -6,22 +6,13 @@ import {
   sanitizeMcpUrlForPreview,
 } from "../../../shared/mcp-import-preview"
 import {
-  buildPluginManifestReviewDocument,
-  diffPluginManifestReviewDocuments,
-  stableJsonStringify,
-  type PluginManifestReviewDocument,
-  type PluginSourcePin,
-  type PluginUpdateReviewMetadata,
-  type PluginUpdateReviewStatus,
-} from "../../../shared/plugin-update-review"
-import type { PluginSafeModeState } from "../../../shared/plugin-safety-gates"
-import {
   buildDeveloperTrustedAcknowledgement,
   getDeveloperTrustedStatus,
   type PluginDeveloperModeState,
   type PluginDeveloperTrustedAcknowledgement,
   type PluginDeveloperTrustedStatus,
 } from "../../../shared/plugin-developer-trusted"
+import type { PluginSafeModeState } from "../../../shared/plugin-safety-gates"
 import type {
   PluginStoreBackupRecord,
   PluginStoreCandidateApproval,
@@ -30,8 +21,19 @@ import type {
   PluginStoreInstalledPackageRecord,
   PluginStoreValidationIssue,
 } from "../../../shared/plugin-store-pins"
+import {
+  buildPluginManifestReviewDocument,
+  diffPluginManifestReviewDocuments,
+  type PluginManifestReviewDocument,
+  type PluginRuntimeNativeActivationReviewMetadata,
+  type PluginSourcePin,
+  type PluginUpdateReviewMetadata,
+  type PluginUpdateReviewStatus,
+  stableJsonStringify,
+} from "../../../shared/plugin-update-review"
 import type { McpServerConfig } from "../claude-config"
 import { getElectronUserDataPath } from "../electron-app"
+import type { RuntimeNativeActivationIdentity } from "./runtime-native-activation"
 
 const PLUGIN_REVIEW_STATE_VERSION = 1
 const PLUGIN_REVIEW_STATE_FILE = "plugin-review-state.json"
@@ -39,11 +41,14 @@ const PLUGIN_REVIEW_STATE_FILE = "plugin-review-state.json"
 interface PluginReviewStateRecord {
   fingerprint: string
   document: PluginManifestReviewDocument
+  runtimeNativeActivationIdentity?: RuntimeNativeActivationIdentity
   firstSeenAt: string
   lastSeenAt: string
   lastReviewedAt?: string
   lastReviewedFingerprint?: string
   lastReviewedDocument?: PluginManifestReviewDocument
+  lastReviewedRuntimeNativeActivationIdentityFingerprint?: string
+  lastReviewedRuntimeNativeActivationIdentity?: RuntimeNativeActivationIdentity
 }
 
 interface PluginReviewState {
@@ -78,6 +83,7 @@ export interface PluginDeveloperSourceRecord {
 export interface PluginReviewScanInput {
   pluginKey: string
   document: PluginManifestReviewDocument
+  runtimeNativeActivationIdentity?: RuntimeNativeActivationIdentity
 }
 
 export interface PluginReviewScanResult {
@@ -514,11 +520,16 @@ export async function recordPluginReviewScans(
     const record: PluginReviewStateRecord = {
       fingerprint,
       document: input.document,
+      runtimeNativeActivationIdentity: input.runtimeNativeActivationIdentity,
       firstSeenAt: previousRecord?.firstSeenAt ?? seenAt,
       lastSeenAt: seenAt,
       lastReviewedAt: previousRecord?.lastReviewedAt,
       lastReviewedFingerprint: previousRecord?.lastReviewedFingerprint,
       lastReviewedDocument: previousRecord?.lastReviewedDocument,
+      lastReviewedRuntimeNativeActivationIdentityFingerprint:
+        previousRecord?.lastReviewedRuntimeNativeActivationIdentityFingerprint,
+      lastReviewedRuntimeNativeActivationIdentity:
+        previousRecord?.lastReviewedRuntimeNativeActivationIdentity,
     }
 
     state.plugins[input.pluginKey] = record
@@ -529,6 +540,11 @@ export async function recordPluginReviewScans(
       lastSeenAt: record.lastSeenAt,
       lastReviewedAt: record.lastReviewedAt,
       lastReviewedFingerprint: record.lastReviewedFingerprint,
+      runtimeNativeActivation: buildRuntimeNativeActivationReviewMetadata({
+        identity: input.runtimeNativeActivationIdentity,
+        lastReviewedIdentityFingerprint:
+          record.lastReviewedRuntimeNativeActivationIdentityFingerprint,
+      }),
       sourcePins: input.document.sourcePins,
       changes,
     }
@@ -551,11 +567,15 @@ export async function markPluginFingerprintReviewed(
   state.plugins[input.pluginKey] = {
     fingerprint,
     document: input.document,
+    runtimeNativeActivationIdentity: input.runtimeNativeActivationIdentity,
     firstSeenAt: previousRecord?.firstSeenAt ?? reviewedAt,
     lastSeenAt: reviewedAt,
     lastReviewedAt: reviewedAt,
     lastReviewedFingerprint: fingerprint,
     lastReviewedDocument: input.document,
+    lastReviewedRuntimeNativeActivationIdentityFingerprint:
+      input.runtimeNativeActivationIdentity?.identityFingerprint,
+    lastReviewedRuntimeNativeActivationIdentity: input.runtimeNativeActivationIdentity,
   }
 
   await writePluginReviewState(state, filePath)
@@ -567,6 +587,11 @@ export async function markPluginFingerprintReviewed(
     lastSeenAt: reviewedAt,
     lastReviewedAt: reviewedAt,
     lastReviewedFingerprint: fingerprint,
+    runtimeNativeActivation: buildRuntimeNativeActivationReviewMetadata({
+      identity: input.runtimeNativeActivationIdentity,
+      lastReviewedIdentityFingerprint:
+        input.runtimeNativeActivationIdentity?.identityFingerprint,
+    }),
     sourcePins: input.document.sourcePins,
     changes: [],
   }
@@ -581,6 +606,39 @@ function getPluginUpdateReviewStatus(
   if (previousRecord.lastReviewedFingerprint) return "changed"
   if (previousRecord.fingerprint === currentFingerprint) return "unchanged"
   return "changed"
+}
+
+function buildRuntimeNativeActivationReviewMetadata(input: {
+  identity?: RuntimeNativeActivationIdentity
+  lastReviewedIdentityFingerprint?: string
+}): PluginRuntimeNativeActivationReviewMetadata | undefined {
+  if (!input.identity) return undefined
+
+  return {
+    identityFingerprint: input.identity.identityFingerprint,
+    identityStatus: input.identity.status,
+    reviewStatus: getRuntimeNativeActivationReviewStatus({
+      identity: input.identity,
+      lastReviewedIdentityFingerprint: input.lastReviewedIdentityFingerprint,
+    }),
+    lastReviewedIdentityFingerprint: input.lastReviewedIdentityFingerprint,
+    missingFields: input.identity.missingFields,
+  }
+}
+
+function getRuntimeNativeActivationReviewStatus(input: {
+  identity: RuntimeNativeActivationIdentity
+  lastReviewedIdentityFingerprint?: string
+}): PluginRuntimeNativeActivationReviewMetadata["reviewStatus"] {
+  if (input.identity.status === "identity-incomplete") {
+    return "identity-incomplete"
+  }
+  if (!input.lastReviewedIdentityFingerprint) {
+    return "identity-unreviewed"
+  }
+  return input.lastReviewedIdentityFingerprint === input.identity.identityFingerprint
+    ? "reviewed"
+    : "identity-drifted"
 }
 
 function normalizeDeveloperSources(

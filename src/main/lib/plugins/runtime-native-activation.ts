@@ -2,19 +2,18 @@ import { createHash } from "node:crypto"
 import type { PluginRuntime } from "../../../shared/plugin-target-modes"
 import {
   type PluginManifestReviewDocument,
+  type PluginRuntimeNativeActivationIdentityStatus,
+  type PluginRuntimeNativeActivationMissingIdentityField,
   type PluginSourcePin,
   type PluginUpdateReviewStatus,
   stableJsonStringify,
 } from "../../../shared/plugin-update-review"
 
 export type RuntimeNativeActivationMissingIdentityField =
-  | "package-identity"
-  | "package-version"
-  | "drift-detection-field"
+  PluginRuntimeNativeActivationMissingIdentityField
 
 export type RuntimeNativeActivationIdentityStatus =
-  | "complete"
-  | "identity-incomplete"
+  PluginRuntimeNativeActivationIdentityStatus
 
 export interface RuntimeNativeActivationIdentity {
   schemaVersion: 1

@@ -63,6 +63,29 @@ export interface PluginReviewChange {
   current?: string
 }
 
+export type PluginRuntimeNativeActivationMissingIdentityField =
+  | "package-identity"
+  | "package-version"
+  | "drift-detection-field"
+
+export type PluginRuntimeNativeActivationIdentityStatus =
+  | "complete"
+  | "identity-incomplete"
+
+export type PluginRuntimeNativeActivationReviewStatus =
+  | "reviewed"
+  | "identity-unreviewed"
+  | "identity-incomplete"
+  | "identity-drifted"
+
+export interface PluginRuntimeNativeActivationReviewMetadata {
+  identityFingerprint: string
+  identityStatus: PluginRuntimeNativeActivationIdentityStatus
+  reviewStatus: PluginRuntimeNativeActivationReviewStatus
+  lastReviewedIdentityFingerprint?: string
+  missingFields: PluginRuntimeNativeActivationMissingIdentityField[]
+}
+
 export interface PluginUpdateReviewMetadata {
   fingerprint: string
   status: PluginUpdateReviewStatus
@@ -70,6 +93,7 @@ export interface PluginUpdateReviewMetadata {
   lastSeenAt?: string
   lastReviewedAt?: string
   lastReviewedFingerprint?: string
+  runtimeNativeActivation?: PluginRuntimeNativeActivationReviewMetadata
   sourcePins: PluginSourcePin[]
   changes: PluginReviewChange[]
 }

@@ -23,6 +23,7 @@ mock.module("electron", () => ({
 }))
 
 const reviewState = await import("../src/main/lib/plugins/update-review-state")
+const runtimeNativeActivation = await import("../src/main/lib/plugins/runtime-native-activation")
 
 function reviewDocument(overrides: Partial<PluginManifestReviewDocument> = {}) {
   return buildPluginManifestReviewDocument({
@@ -253,6 +254,97 @@ describe("plugin update review state", () => {
       status: "changed",
       lastReviewedAt: "2026-06-02T00:02:00.000Z",
       changes: [{ field: "version", previous: "2.0.7", current: "2.0.8" }],
+    })
+  })
+
+  test("records runtime-native activation identity review state separately", async () => {
+    const statePath = join(userDataDir, "plugin-review-state.json")
+    const pluginKey = "claude:anthropic:context-tools"
+    const document = reviewDocument({
+      runtime: "claude",
+      source: "anthropic:context-tools@0.1.0",
+      marketplace: "anthropic",
+      version: "0.1.0",
+    })
+    const reviewFingerprint = reviewState.hashPluginManifestReviewDocument(document)
+    const identity = runtimeNativeActivation.buildRuntimeNativeActivationIdentity({
+      reviewDocument: document,
+      reviewFingerprint,
+      packageHash: "sha256:package-a",
+    })
+
+    const firstScan = await reviewState.recordPluginReviewScans(
+      [{ pluginKey, document, runtimeNativeActivationIdentity: identity }],
+      statePath,
+      new Date("2026-06-02T00:00:00Z"),
+    )
+    expect(firstScan.metadataByPluginKey[pluginKey].runtimeNativeActivation)
+      .toMatchObject({
+        identityFingerprint: identity.identityFingerprint,
+        identityStatus: "complete",
+        reviewStatus: "identity-unreviewed",
+        missingFields: [],
+      })
+
+    const reviewed = await reviewState.markPluginFingerprintReviewed(
+      { pluginKey, document, runtimeNativeActivationIdentity: identity },
+      statePath,
+      new Date("2026-06-02T00:01:00Z"),
+    )
+    expect(reviewed.runtimeNativeActivation).toMatchObject({
+      identityFingerprint: identity.identityFingerprint,
+      identityStatus: "complete",
+      reviewStatus: "reviewed",
+      lastReviewedIdentityFingerprint: identity.identityFingerprint,
+    })
+
+    const driftedIdentity = runtimeNativeActivation.buildRuntimeNativeActivationIdentity({
+      reviewDocument: document,
+      reviewFingerprint,
+      packageHash: "sha256:package-b",
+    })
+    const driftedScan = await reviewState.recordPluginReviewScans(
+      [{ pluginKey, document, runtimeNativeActivationIdentity: driftedIdentity }],
+      statePath,
+      new Date("2026-06-02T00:02:00Z"),
+    )
+    expect(driftedScan.metadataByPluginKey[pluginKey]).toMatchObject({
+      status: "reviewed",
+      runtimeNativeActivation: {
+        identityFingerprint: driftedIdentity.identityFingerprint,
+        identityStatus: "complete",
+        reviewStatus: "identity-drifted",
+        lastReviewedIdentityFingerprint: identity.identityFingerprint,
+      },
+    })
+  })
+
+  test("keeps identity-incomplete activation state blocked after manifest review", async () => {
+    const statePath = join(userDataDir, "plugin-review-state.json")
+    const pluginKey = "claude:local:missing-pins"
+    const document = reviewDocument({
+      runtime: "claude",
+      source: "local:missing-pins",
+      sourcePins: [],
+    })
+    const identity = runtimeNativeActivation.buildRuntimeNativeActivationIdentity({
+      reviewDocument: document,
+      reviewFingerprint: reviewState.hashPluginManifestReviewDocument(document),
+    })
+
+    const reviewed = await reviewState.markPluginFingerprintReviewed(
+      { pluginKey, document, runtimeNativeActivationIdentity: identity },
+      statePath,
+      new Date("2026-06-02T00:01:00Z"),
+    )
+
+    expect(reviewed.status).toBe("reviewed")
+    expect(reviewed.runtimeNativeActivation).toMatchObject({
+      identityFingerprint: identity.identityFingerprint,
+      identityStatus: "identity-incomplete",
+      reviewStatus: "identity-incomplete",
+      lastReviewedIdentityFingerprint: identity.identityFingerprint,
+      missingFields: ["drift-detection-field"],
     })
   })
 
