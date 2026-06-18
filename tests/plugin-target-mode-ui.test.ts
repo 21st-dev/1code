@@ -4,7 +4,10 @@ import { join } from "node:path"
 
 describe("plugin target mode UI source guards", () => {
   const pluginsTabSource = readFileSync(
-    join(process.cwd(), "src/renderer/components/dialogs/settings-tabs/agents-plugins-tab.tsx"),
+    join(
+      process.cwd(),
+      "src/renderer/components/dialogs/settings-tabs/agents-plugins-tab.tsx",
+    ),
     "utf8",
   )
   const dictionarySource = readFileSync(
@@ -17,15 +20,29 @@ describe("plugin target mode UI source guards", () => {
   )
 
   test("renders target mode, execution, review, and update posture labels", () => {
-    expect(pluginsTabSource).toContain("getTargetModeLabel(plugin.targetMode, t)")
-    expect(pluginsTabSource).toContain("getExecutionStatusLabel(plugin.executionStatus, t)")
-    expect(pluginsTabSource).toContain("getReviewStatusLabel(plugin.reviewStatus, t)")
-    expect(pluginsTabSource).toContain("getUpdatePostureLabel(plugin.updatePosture, t)")
+    expect(pluginsTabSource).toContain(
+      "getTargetModeLabel(plugin.targetMode, t)",
+    )
+    expect(pluginsTabSource).toContain(
+      "getExecutionStatusLabel(plugin.executionStatus, t)",
+    )
+    expect(pluginsTabSource).toContain(
+      "getReviewStatusLabel(plugin.reviewStatus, t)",
+    )
+    expect(pluginsTabSource).toContain(
+      "getUpdatePostureLabel(plugin.updatePosture, t)",
+    )
   })
 
-  test("keeps Codex package handling read-only and avoids fake execution claims", () => {
+  test("keeps Codex package handling behind Locus runtime-native gates", () => {
     expect(pluginsTabSource).toContain("settings.plugins.codexPackageHint")
     expect(pluginsTabSource).toContain("settings.plugins.codexMcpHint")
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.setRuntimeNativeEnabled.useMutation",
+    )
+    expect(pluginsRouterSource).toContain("setRuntimeNativeEnabled")
+    expect(pluginsRouterSource).toContain("buildPluginRuntimeNativeActivation")
+    expect(pluginsRouterSource).toContain("setRuntimeNativePluginEnabled")
     expect(pluginsTabSource).not.toContain("codexSettings.setPluginEnabled")
     expect(pluginsTabSource).not.toContain("executeCodexPlugin")
   })
@@ -66,8 +83,12 @@ describe("plugin target mode UI source guards", () => {
   })
 
   test("localizes plugin source detail descriptions and install hints", () => {
-    expect(pluginsTabSource).toContain("getSourceDescriptionLabel(source.runtime, t)")
-    expect(pluginsTabSource).toContain("getSourceInstallHintLabel(source.runtime, t)")
+    expect(pluginsTabSource).toContain(
+      "getSourceDescriptionLabel(source.runtime, t)",
+    )
+    expect(pluginsTabSource).toContain(
+      "getSourceInstallHintLabel(source.runtime, t)",
+    )
 
     for (const key of [
       "settings.plugins.sourceDescriptionClaude",
@@ -109,7 +130,9 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("trpc.plugins.setSafeMode.useMutation")
     expect(pluginsTabSource).toContain("plugin.safetyGate.canApproveMcp")
     expect(pluginsTabSource).toContain("plugin.safetyGate.canUseMcp")
-    expect(pluginsTabSource).not.toContain("identifiers: plugin.components.mcpServers")
+    expect(pluginsTabSource).not.toContain(
+      "identifiers: plugin.components.mcpServers",
+    )
 
     for (const key of [
       "settings.plugins.safeMode",
@@ -129,11 +152,19 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("PluginControlledUiPanel")
     expect(pluginsTabSource).toContain("plugin.controlledUi.manifest?.surfaces")
     expect(pluginsTabSource).toContain("!plugin.controlledUi.manifestPresent")
-    expect(pluginsTabSource).toContain("trpc.plugins.setControlledSetting.useMutation")
-    expect(pluginsTabSource).toContain("trpc.plugins.grantControlledAction.useMutation")
-    expect(pluginsTabSource).toContain("trpc.plugins.invokeControlledAction.useMutation")
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.setControlledSetting.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.grantControlledAction.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.invokeControlledAction.useMutation",
+    )
     expect(pluginsTabSource).toContain("plugin.controlledUi.settingsValues")
-    expect(pluginsTabSource).toContain("navigator.clipboard.writeText(result.prompt)")
+    expect(pluginsTabSource).toContain(
+      "navigator.clipboard.writeText(result.prompt)",
+    )
     expect(pluginsRouterSource).toContain("setControlledSetting")
     expect(pluginsRouterSource).toContain("setControlledUiSettingValue")
     expect(pluginsRouterSource).toContain("grantControlledAction")
@@ -171,8 +202,12 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("settings.plugins.doctor")
     expect(pluginsTabSource).toContain("settings.plugins.debug")
     expect(pluginsTabSource).toContain("debug.developerTrusted.trustStatus")
-    expect(pluginsTabSource).toContain("debug.developerTrusted.loadState.status")
-    expect(pluginsTabSource).toContain("debug.developerTrusted.bundleContentHash")
+    expect(pluginsTabSource).toContain(
+      "debug.developerTrusted.loadState.status",
+    )
+    expect(pluginsTabSource).toContain(
+      "debug.developerTrusted.bundleContentHash",
+    )
     expect(pluginsTabSource).toContain("settings.plugins.doctorDeveloperTrust")
     expect(pluginsTabSource).not.toContain("installPluginUpdate")
     expect(pluginsTabSource).not.toContain("executeCodexPlugin")
@@ -193,7 +228,9 @@ describe("plugin target mode UI source guards", () => {
       expect(dictionarySource).toContain(`"${key}"`)
     }
 
-    expect(dictionarySource).toContain("This is not a sandbox or trust certificate")
+    expect(dictionarySource).toContain(
+      "This is not a sandbox or trust certificate",
+    )
     expect(dictionarySource).toContain("不是沙箱或可信证书")
   })
 
@@ -201,15 +238,26 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("PluginStoreCandidateDetail")
     expect(pluginsTabSource).toContain("PluginStoreListItem")
     expect(pluginsTabSource).toContain("trpc.plugins.storeCatalog.useQuery")
-    expect(pluginsTabSource).toContain("trpc.plugins.previewStoreCandidate.useQuery")
-    expect(pluginsTabSource).toContain("trpc.plugins.approveStoreCandidate.useMutation")
-    expect(pluginsTabSource).toContain("trpc.plugins.installOrUpdateStoreCandidate.useMutation")
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.previewStoreCandidate.useQuery",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.approveStoreCandidate.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.installOrUpdateStoreCandidate.useMutation",
+    )
     expect(pluginsTabSource).toContain("selectedStorePreview")
     expect(pluginsTabSource).toContain("settings.plugins.storePinWarning")
     expect(pluginsTabSource).toContain("settings.plugins.storeApproveExact")
-    expect(pluginsTabSource).toContain("settings.plugins.storeInstallGateBlocksAction")
-    expect(pluginsTabSource).toContain("const isInstalledCurrent = review?.status === \"installed-current\"")
-    expect(pluginsTabSource).toContain("review.approvalStatus === \"current\" && !isInstalledCurrent")
+    expect(pluginsTabSource).toContain(
+      "settings.plugins.storeInstallGateBlocksAction",
+    )
+    expect(pluginsTabSource).toContain(
+      'const isInstalledCurrent = review?.status === "installed-current"',
+    )
+    expect(pluginsTabSource).toContain('review.approvalStatus === "current"')
+    expect(pluginsTabSource).toContain("!isInstalledCurrent")
     expect(pluginsTabSource).not.toContain("trustedMarketplace")
     expect(pluginsTabSource).not.toContain("verifiedSafe")
 
@@ -246,25 +294,45 @@ describe("plugin target mode UI source guards", () => {
   test("renders runtime marketplaces separately from Locus store with confirmed runtime-owned actions", () => {
     expect(pluginsTabSource).toContain("RuntimeMarketplaceListItem")
     expect(pluginsTabSource).toContain("RuntimeMarketplaceDetail")
-    expect(pluginsTabSource).toContain("trpc.plugins.runtimeMarketplaces.useQuery")
-    expect(pluginsTabSource).toContain("trpc.plugins.previewRuntimePluginWriteAction.useMutation")
-    expect(pluginsTabSource).toContain("trpc.plugins.executeRuntimePluginWriteAction.useMutation")
-    expect(pluginsTabSource).toContain("viewMode === \"marketplaces\"")
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.runtimeMarketplaces.useQuery",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.previewRuntimePluginWriteAction.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.executeRuntimePluginWriteAction.useMutation",
+    )
+    expect(pluginsTabSource).toContain('viewMode === "marketplaces"')
     expect(pluginsTabSource).toContain("settings.plugins.viewMarketplaces")
     expect(pluginsTabSource).toContain("settings.plugins.viewLocusStore")
     expect(pluginsTabSource).toContain("grid grid-cols-2 gap-1")
     expect(pluginsTabSource).toContain("whitespace-nowrap")
-    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceActionBoundaryHint")
-    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceActionPreview")
-    expect(pluginsTabSource).toContain("runtimeActionConfirmation === actionPreview.targetLabel")
+    expect(pluginsTabSource).toContain(
+      "settings.plugins.runtimeMarketplaceActionBoundaryHint",
+    )
+    expect(pluginsTabSource).toContain(
+      "settings.plugins.runtimeMarketplaceActionPreview",
+    )
+    expect(pluginsTabSource).toContain("runtimeActionConfirmation ===")
+    expect(pluginsTabSource).toContain("actionPreview.targetLabel")
     expect(pluginsTabSource).toContain("getRuntimePluginWriteActions(plugin)")
-    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceNoCodexEnableDisable")
-    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceReportedPlugins")
+    expect(pluginsTabSource).toContain(
+      "settings.plugins.runtimeMarketplaceNoCodexEnableDisable",
+    )
+    expect(pluginsTabSource).toContain(
+      "settings.plugins.runtimeMarketplaceReportedPlugins",
+    )
     expect(pluginsTabSource).toContain("canTargetExistingMarketplace")
-    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplaceEmptyActionsHint")
+    expect(pluginsTabSource).toContain(
+      "settings.plugins.runtimeMarketplaceEmptyActionsHint",
+    )
     expect(pluginsTabSource).toContain(":empty-marketplaces")
-    expect(pluginsTabSource).toContain("settings.plugins.runtimeMarketplacePluginSummary")
-    expect(pluginsTabSource).toContain("getRuntimePluginListingStatusLabel(plugin.status, t)")
+    expect(pluginsTabSource).toContain(
+      "settings.plugins.runtimeMarketplacePluginSummary",
+    )
+    expect(pluginsTabSource).toContain("getRuntimePluginListingStatusLabel")
+    expect(pluginsTabSource).toContain("plugin.status")
     expect(pluginsTabSource).toContain("runtime-reported-plugins")
     expect(pluginsTabSource).not.toContain("installRuntimePlugin")
     expect(pluginsTabSource).not.toContain("updateRuntimePlugin")
@@ -296,7 +364,9 @@ describe("plugin target mode UI source guards", () => {
 
     expect(dictionarySource).toContain("Locus Store")
     expect(dictionarySource).toContain("Locus 商店")
-    expect(dictionarySource).toContain("Locus previews the exact runtime CLI command")
+    expect(dictionarySource).toContain(
+      "Locus previews the exact runtime CLI command",
+    )
     expect(dictionarySource).toContain("预览精确的运行时 CLI 命令")
   })
 
@@ -304,13 +374,27 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain("PluginDeveloperModeControl")
     expect(pluginsTabSource).toContain("PluginDeveloperTrustPanel")
     expect(pluginsTabSource).toContain("trpc.plugins.developerMode.useQuery")
-    expect(pluginsTabSource).toContain("trpc.plugins.setDeveloperMode.useMutation")
-    expect(pluginsTabSource).toContain("trpc.plugins.chooseDeveloperSourceDirectory.useMutation")
-    expect(pluginsTabSource).toContain("trpc.plugins.removeDeveloperSource.useMutation")
-    expect(pluginsTabSource).toContain("trpc.plugins.trustDeveloperPlugin.useMutation")
-    expect(pluginsTabSource).toContain("trpc.plugins.revokeDeveloperPluginTrust.useMutation")
-    expect(pluginsTabSource).toContain("trpc.plugins.loadDeveloperPlugin.useMutation")
-    expect(pluginsTabSource).toContain("developer.gate.canTrustCurrentFingerprint")
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.setDeveloperMode.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.chooseDeveloperSourceDirectory.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.removeDeveloperSource.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.trustDeveloperPlugin.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.revokeDeveloperPluginTrust.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.loadDeveloperPlugin.useMutation",
+    )
+    expect(pluginsTabSource).toContain(
+      "developer.gate.canTrustCurrentFingerprint",
+    )
     expect(pluginsTabSource).toContain("developer.gate.canLoadTrustedCode")
     expect(pluginsTabSource).not.toContain("trpc.plugins.addDeveloperSource")
     expect(pluginsTabSource).not.toContain("showOpenDialog")
@@ -334,7 +418,9 @@ describe("plugin target mode UI source guards", () => {
       expect(dictionarySource).toContain(`"${key}"`)
     }
 
-    expect(dictionarySource).toContain("This can run local plugin code on this machine")
+    expect(dictionarySource).toContain(
+      "This can run local plugin code on this machine",
+    )
     expect(dictionarySource).toContain("这会在本机运行本地插件代码")
   })
 })

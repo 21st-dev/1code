@@ -1,26 +1,54 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { useSetAtom } from "jotai"
-import { useListKeyboardNav } from "./use-list-keyboard-nav"
+import {
+  ChevronRight,
+  Code2,
+  Download,
+  FileCheck2,
+  FolderPlus,
+  Loader2,
+  PackageCheck,
+  Play,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+  Stethoscope,
+  Terminal,
+  Trash2,
+} from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { toast } from "sonner"
 import { settingsPluginsSidebarWidthAtom } from "../../../features/agents/atoms"
-import { agentsSettingsDialogActiveTabAtom, type SettingsTab } from "../../../lib/atoms"
+import {
+  agentsSettingsDialogActiveTabAtom,
+  type SettingsTab,
+} from "../../../lib/atoms"
+import { useI18n } from "../../../lib/i18n"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
-import { useI18n } from "../../../lib/i18n"
-import { Terminal, ChevronRight, Loader2, RefreshCw, ShieldCheck, FileCheck2, ShieldAlert, Stethoscope, Code2, FolderPlus, Play, ShieldOff, Trash2, PackageCheck, Download } from "lucide-react"
-import { PluginFilledIcon, SkillIconFilled, CustomAgentIconFilled, OriginalMCPIcon } from "../../ui/icons"
 import { Button } from "../../ui/button"
+import {
+  CustomAgentIconFilled,
+  OriginalMCPIcon,
+  PluginFilledIcon,
+  SkillIconFilled,
+} from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select"
-import { Switch } from "../../ui/switch"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
-import { toast } from "sonner"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select"
+import { Switch } from "../../ui/switch"
+import { useListKeyboardNav } from "./use-list-keyboard-nav"
 
 /** Format plugin name: "pyright-lsp" → "Pyright Lsp" */
 function formatPluginName(name: string): string {
-  return name
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  return name.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 interface PluginComponent {
@@ -35,12 +63,27 @@ type PluginSourceKind = "local-marketplace" | "cache" | "developer-local"
 type PluginSourceTrust = "official" | "local" | "external"
 type PluginSourceStatus = "available" | "empty" | "missing"
 const CONTROLLED_UI_SELECT_UNSET_VALUE = "__locus_controlled_ui_unset__"
-type PluginTargetMode = "manifest-only" | "controlled-ui" | "developer-trusted-code"
-type PluginExecutionStatus = "not-run-by-locus" | "locus-controlled" | "locus-controlled-planned" | "trusted-code-planned" | "developer-trusted-code"
-type PluginReviewStatus = "metadata-only" | "mcp-review-required" | "read-only-cache"
+type PluginTargetMode =
+  | "manifest-only"
+  | "controlled-ui"
+  | "developer-trusted-code"
+type PluginExecutionStatus =
+  | "not-run-by-locus"
+  | "locus-controlled"
+  | "locus-controlled-planned"
+  | "trusted-code-planned"
+  | "developer-trusted-code"
+type PluginReviewStatus =
+  | "metadata-only"
+  | "mcp-review-required"
+  | "read-only-cache"
 type PluginUpdatePosture = "advisory-only" | "review-before-enable"
 type PluginUpdateReviewStatus = "new" | "unchanged" | "changed" | "reviewed"
-type PluginSafetyGateStatus = "allowed" | "safe-mode" | "review-required" | "read-only"
+type PluginSafetyGateStatus =
+  | "allowed"
+  | "safe-mode"
+  | "review-required"
+  | "read-only"
 type PluginSafetyGateReason =
   | "global-safe-mode"
   | "review-new"
@@ -48,6 +91,23 @@ type PluginSafetyGateReason =
   | "review-unreviewed"
   | "codex-read-only-cache"
   | "no-mcp-servers"
+type RuntimeNativeActivationBlockedReason =
+  | "plugin-disabled"
+  | "global-safe-mode"
+  | "manifest-review-required"
+  | "runtime-native-unsupported"
+  | "per-run-plugin-control-missing"
+  | "activation-identity-incomplete"
+  | "activation-identity-unreviewed"
+  | "activation-identity-drifted"
+  | "mcp-approval-required"
+  | "native-load-failed"
+type RuntimeNativeActivationIdentityStatus =
+  | "reviewed"
+  | "identity-incomplete"
+  | "identity-incomplete-acknowledged"
+  | "identity-unreviewed"
+  | "identity-drifted"
 type PluginControlledUiGateReason =
   | "safe-mode"
   | "review-required"
@@ -64,7 +124,11 @@ type PluginControlledUiGateReason =
 type PluginControlledUiGrantStatus = "current" | "stale" | "mismatch"
 type PluginControlledUiSettingValue = string | boolean
 type PluginDeveloperTrustedStatus = "current" | "stale" | "missing" | "mismatch"
-type PluginDeveloperTrustedLoadStatus = "not-loaded" | "blocked" | "loaded" | "failed"
+type PluginDeveloperTrustedLoadStatus =
+  | "not-loaded"
+  | "blocked"
+  | "loaded"
+  | "failed"
 type PluginDeveloperTrustedGateReason =
   | "developer-mode-disabled"
   | "safe-mode"
@@ -99,7 +163,11 @@ interface PluginDiagnostic {
 }
 
 interface PluginSourcePin {
-  kind: "cache-version" | "lock-source-ref" | "store-git-commit" | "store-package-sha256"
+  kind:
+    | "cache-version"
+    | "lock-source-ref"
+    | "store-git-commit"
+    | "store-package-sha256"
   value: string
   label?: string
   repo?: string
@@ -129,6 +197,13 @@ interface PluginSafetyGate {
   canApproveMcp: boolean
   canUseMcp: boolean
   reasons: PluginSafetyGateReason[]
+}
+
+interface RuntimeNativeActivationPolicy {
+  status: "allowed" | "blocked"
+  canActivateNative: boolean
+  identityStatus: RuntimeNativeActivationIdentityStatus
+  reasons: RuntimeNativeActivationBlockedReason[]
 }
 
 interface PluginControlledUiGate {
@@ -172,17 +247,20 @@ interface PluginControlledUiSurfaceBase {
   description?: string
 }
 
-interface PluginControlledUiSettingsSection extends PluginControlledUiSurfaceBase {
+interface PluginControlledUiSettingsSection
+  extends PluginControlledUiSurfaceBase {
   type: "settings-section"
   fields: PluginControlledUiField[]
 }
 
-interface PluginControlledUiWorkbenchPanel extends PluginControlledUiSurfaceBase {
+interface PluginControlledUiWorkbenchPanel
+  extends PluginControlledUiSurfaceBase {
   type: "workbench-panel"
   items: PluginControlledUiItem[]
 }
 
-interface PluginControlledUiCommandButton extends PluginControlledUiSurfaceBase {
+interface PluginControlledUiCommandButton
+  extends PluginControlledUiSurfaceBase {
   type: "command-button"
   label: string
   action: PluginControlledUiAction
@@ -629,6 +707,10 @@ interface PluginData {
   updatePosture: PluginUpdatePosture
   updateReview: PluginUpdateReviewMetadata
   safetyGate: PluginSafetyGate
+  runtimeNativeActivation: {
+    current: RuntimeNativeActivationPolicy
+    enableCandidate: RuntimeNativeActivationPolicy
+  }
   sourcePins: PluginSourcePin[]
   diagnostics: PluginDiagnostic[]
   controlledUi: {
@@ -638,7 +720,10 @@ interface PluginData {
     diagnostics: PluginControlledUiDiagnostic[]
     ignoredUnknownFields: string[]
     actionGrantStatuses: Record<string, PluginControlledUiGrantStatus>
-    settingsValues: Record<string, Record<string, PluginControlledUiSettingValue>>
+    settingsValues: Record<
+      string,
+      Record<string, PluginControlledUiSettingValue>
+    >
     gate: PluginControlledUiGate
   }
   developerTrusted: {
@@ -699,34 +784,61 @@ function getPluginKey(plugin: Pick<PluginData, "reviewKey" | "path">): string {
   return `${plugin.reviewKey}:${plugin.path}`
 }
 
-function getRuntimeLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["t"]): string {
+function getRuntimeLabel(
+  runtime: PluginRuntime,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   return runtime === "claude"
     ? t("settings.plugins.runtimeClaude")
     : t("settings.plugins.runtimeCodex")
 }
 
-function getRuntimeFilterLabel(filter: RuntimeFilter, t: ReturnType<typeof useI18n>["t"]): string {
+function getRuntimeFilterLabel(
+  filter: RuntimeFilter,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   if (filter === "all") return t("settings.plugins.runtimeAll")
   if (filter === "claude") return "Claude"
   return getRuntimeLabel(filter, t)
 }
 
-function getPluginStatusLabel(plugin: PluginData, t: ReturnType<typeof useI18n>["t"]): string {
+function getPluginStatusLabel(
+  plugin: PluginData,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   if (!plugin.canToggle) return t("settings.plugins.installed")
   return plugin.isDisabled ? t("common.disabled") : t("common.active")
 }
 
-const RUNTIME_FILTERS: RuntimeFilter[] = ["all", "claude", "codex"]
-const VIEW_MODES: PluginViewMode[] = ["installed", "sources", "marketplaces", "store"]
+function canEnablePlugin(plugin: PluginData): boolean {
+  if (plugin.runtime === "codex") {
+    return plugin.runtimeNativeActivation.enableCandidate.canActivateNative
+  }
+  return plugin.safetyGate.canEnable
+}
 
-function getViewModeLabel(viewMode: PluginViewMode, t: ReturnType<typeof useI18n>["t"]): string {
+const RUNTIME_FILTERS: RuntimeFilter[] = ["all", "claude", "codex"]
+const VIEW_MODES: PluginViewMode[] = [
+  "installed",
+  "sources",
+  "marketplaces",
+  "store",
+]
+
+function getViewModeLabel(
+  viewMode: PluginViewMode,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   if (viewMode === "installed") return t("settings.plugins.viewInstalled")
   if (viewMode === "sources") return t("settings.plugins.viewSources")
   if (viewMode === "marketplaces") return t("settings.plugins.viewMarketplaces")
   return t("settings.plugins.viewLocusStore")
 }
 
-function getSourceKindLabel(kind: PluginSourceKind, t: ReturnType<typeof useI18n>["t"]): string {
+function getSourceKindLabel(
+  kind: PluginSourceKind,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (kind) {
     case "local-marketplace":
       return t("settings.plugins.sourceKindLocalMarketplace")
@@ -737,7 +849,10 @@ function getSourceKindLabel(kind: PluginSourceKind, t: ReturnType<typeof useI18n
   }
 }
 
-function getSourceTrustLabel(trust: PluginSourceTrust, t: ReturnType<typeof useI18n>["t"]): string {
+function getSourceTrustLabel(
+  trust: PluginSourceTrust,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (trust) {
     case "official":
       return t("settings.plugins.sourceTrustOfficial")
@@ -748,7 +863,10 @@ function getSourceTrustLabel(trust: PluginSourceTrust, t: ReturnType<typeof useI
   }
 }
 
-function getSourceStatusLabel(status: PluginSourceStatus, t: ReturnType<typeof useI18n>["t"]): string {
+function getSourceStatusLabel(
+  status: PluginSourceStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (status) {
     case "available":
       return t("settings.plugins.sourceStatusAvailable")
@@ -759,13 +877,19 @@ function getSourceStatusLabel(status: PluginSourceStatus, t: ReturnType<typeof u
   }
 }
 
-function getSourceDescriptionLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["t"]): string {
+function getSourceDescriptionLabel(
+  runtime: PluginRuntime,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   return runtime === "claude"
     ? t("settings.plugins.sourceDescriptionClaude")
     : t("settings.plugins.sourceDescriptionCodex")
 }
 
-function getSourceInstallHintLabel(runtime: PluginRuntime, t: ReturnType<typeof useI18n>["t"]): string {
+function getSourceInstallHintLabel(
+  runtime: PluginRuntime,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   return runtime === "claude"
     ? t("settings.plugins.sourceInstallHintClaude")
     : t("settings.plugins.sourceInstallHintCodex")
@@ -800,7 +924,9 @@ function getRuntimeMarketplaceStatusLabel(
   }
 }
 
-function getRuntimeMarketplaceStatusClass(status: RuntimeMarketplaceInventoryStatus): string {
+function getRuntimeMarketplaceStatusClass(
+  status: RuntimeMarketplaceInventoryStatus,
+): string {
   switch (status) {
     case "available":
       return "text-emerald-500"
@@ -833,7 +959,9 @@ function getRuntimePluginListingStatusLabel(
   }
 }
 
-function getRuntimePluginListingStatusClass(status: RuntimePluginListingStatus): string {
+function getRuntimePluginListingStatusClass(
+  status: RuntimePluginListingStatus,
+): string {
   switch (status) {
     case "installed-enabled":
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
@@ -879,7 +1007,9 @@ function getRuntimePluginWriteActionLabel(
   }
 }
 
-function getRuntimePluginWriteActions(plugin: RuntimePluginListing): RuntimePluginWriteActionId[] {
+function getRuntimePluginWriteActions(
+  plugin: RuntimePluginListing,
+): RuntimePluginWriteActionId[] {
   if (plugin.runtime === "codex") {
     return plugin.installed ? ["codex.plugin.remove"] : ["codex.plugin.add"]
   }
@@ -894,7 +1024,10 @@ function getRuntimePluginWriteActions(plugin: RuntimePluginListing): RuntimePlug
   return actions
 }
 
-function getTargetModeLabel(mode: PluginTargetMode, t: ReturnType<typeof useI18n>["t"]): string {
+function getTargetModeLabel(
+  mode: PluginTargetMode,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (mode) {
     case "manifest-only":
       return t("settings.plugins.targetModeManifestOnly")
@@ -905,7 +1038,10 @@ function getTargetModeLabel(mode: PluginTargetMode, t: ReturnType<typeof useI18n
   }
 }
 
-function getTargetModeDescription(mode: PluginTargetMode, t: ReturnType<typeof useI18n>["t"]): string {
+function getTargetModeDescription(
+  mode: PluginTargetMode,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (mode) {
     case "manifest-only":
       return t("settings.plugins.targetModeManifestOnlyDescription")
@@ -916,7 +1052,10 @@ function getTargetModeDescription(mode: PluginTargetMode, t: ReturnType<typeof u
   }
 }
 
-function getExecutionStatusLabel(status: PluginExecutionStatus, t: ReturnType<typeof useI18n>["t"]): string {
+function getExecutionStatusLabel(
+  status: PluginExecutionStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (status) {
     case "not-run-by-locus":
       return t("settings.plugins.executionNotRunByLocus")
@@ -931,7 +1070,10 @@ function getExecutionStatusLabel(status: PluginExecutionStatus, t: ReturnType<ty
   }
 }
 
-function getReviewStatusLabel(status: PluginReviewStatus, t: ReturnType<typeof useI18n>["t"]): string {
+function getReviewStatusLabel(
+  status: PluginReviewStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (status) {
     case "metadata-only":
       return t("settings.plugins.reviewMetadataOnly")
@@ -942,7 +1084,10 @@ function getReviewStatusLabel(status: PluginReviewStatus, t: ReturnType<typeof u
   }
 }
 
-function getUpdateReviewStatusLabel(status: PluginUpdateReviewStatus, t: ReturnType<typeof useI18n>["t"]): string {
+function getUpdateReviewStatusLabel(
+  status: PluginUpdateReviewStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (status) {
     case "new":
       return t("settings.plugins.updateReviewNew")
@@ -955,7 +1100,10 @@ function getUpdateReviewStatusLabel(status: PluginUpdateReviewStatus, t: ReturnT
   }
 }
 
-function getUpdatePostureLabel(posture: PluginUpdatePosture, t: ReturnType<typeof useI18n>["t"]): string {
+function getUpdatePostureLabel(
+  posture: PluginUpdatePosture,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (posture) {
     case "advisory-only":
       return t("settings.plugins.updateAdvisoryOnly")
@@ -1025,7 +1173,9 @@ function getStoreCandidateStatusLabel(
   }
 }
 
-function getStoreCandidateStatusClass(status: PluginStoreCandidateStatus): string {
+function getStoreCandidateStatusClass(
+  status: PluginStoreCandidateStatus,
+): string {
   if (status.startsWith("blocked")) {
     return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
   }
@@ -1057,7 +1207,9 @@ function getStoreApprovalStatusLabel(
   }
 }
 
-function getStoreApprovalStatusClass(status: PluginStoreApprovalStatus): string {
+function getStoreApprovalStatusClass(
+  status: PluginStoreApprovalStatus,
+): string {
   switch (status) {
     case "current":
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
@@ -1068,7 +1220,10 @@ function getStoreApprovalStatusClass(status: PluginStoreApprovalStatus): string 
   }
 }
 
-function getSafetyGateStatusLabel(status: PluginSafetyGateStatus, t: ReturnType<typeof useI18n>["t"]): string {
+function getSafetyGateStatusLabel(
+  status: PluginSafetyGateStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (status) {
     case "allowed":
       return t("settings.plugins.safetyGateAllowed")
@@ -1081,7 +1236,10 @@ function getSafetyGateStatusLabel(status: PluginSafetyGateStatus, t: ReturnType<
   }
 }
 
-function getSafetyGateReasonLabel(reason: PluginSafetyGateReason, t: ReturnType<typeof useI18n>["t"]): string {
+function getSafetyGateReasonLabel(
+  reason: PluginSafetyGateReason,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (reason) {
     case "global-safe-mode":
       return t("settings.plugins.safetyReasonGlobalSafeMode")
@@ -1171,7 +1329,9 @@ function getControlledUiGateReasonLabel(
   }
 }
 
-function getControlledUiActionKey(surface: PluginControlledUiCommandButton): string {
+function getControlledUiActionKey(
+  surface: PluginControlledUiCommandButton,
+): string {
   return `${surface.id}:${surface.action.id}`
 }
 
@@ -1180,7 +1340,11 @@ function getControlledUiContributionStatus(
   surface: PluginControlledUiSurface,
   t: ReturnType<typeof useI18n>["t"],
 ): string {
-  if (plugin.controlledUi.diagnostics.some((diagnostic) => diagnostic.severity === "blocked")) {
+  if (
+    plugin.controlledUi.diagnostics.some(
+      (diagnostic) => diagnostic.severity === "blocked",
+    )
+  ) {
     return t("settings.plugins.contributionStatusUnavailable")
   }
   if (surface.type === "workbench-panel") {
@@ -1202,18 +1366,26 @@ function getControlledUiContributionStatus(
     return t("settings.plugins.contributionStatusReadOnly")
   }
   if (surface.type === "command-button") {
-    const grantStatus = plugin.controlledUi.actionGrantStatuses[getControlledUiActionKey(surface)]
-    if (grantStatus === "stale") return t("settings.plugins.contributionStatusPermissionStale")
-    if (grantStatus !== "current") return t("settings.plugins.contributionStatusPermissionRequired")
+    const grantStatus =
+      plugin.controlledUi.actionGrantStatuses[getControlledUiActionKey(surface)]
+    if (grantStatus === "stale")
+      return t("settings.plugins.contributionStatusPermissionStale")
+    if (grantStatus !== "current")
+      return t("settings.plugins.contributionStatusPermissionRequired")
   }
   return plugin.controlledUi.gate.canRenderControlledUi
     ? t("settings.plugins.contributionStatusAvailable")
     : t("settings.plugins.contributionStatusUnavailable")
 }
 
-function getControlledUiContributionStatusClass(plugin: PluginData, surface: PluginControlledUiSurface): string {
+function getControlledUiContributionStatusClass(
+  plugin: PluginData,
+  surface: PluginControlledUiSurface,
+): string {
   if (
-    plugin.controlledUi.diagnostics.some((diagnostic) => diagnostic.severity === "blocked") ||
+    plugin.controlledUi.diagnostics.some(
+      (diagnostic) => diagnostic.severity === "blocked",
+    ) ||
     plugin.controlledUi.gate.reasons.includes("safe-mode") ||
     plugin.controlledUi.gate.reasons.includes("review-changed") ||
     plugin.controlledUi.gate.reasons.includes("review-required") ||
@@ -1221,7 +1393,10 @@ function getControlledUiContributionStatusClass(plugin: PluginData, surface: Plu
   ) {
     return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
   }
-  if (surface.type === "workbench-panel" || plugin.controlledUi.gate.reasons.includes("codex-read-only-cache")) {
+  if (
+    surface.type === "workbench-panel" ||
+    plugin.controlledUi.gate.reasons.includes("codex-read-only-cache")
+  ) {
     return "border-border bg-background text-muted-foreground"
   }
   if (plugin.controlledUi.gate.canRenderControlledUi) {
@@ -1262,7 +1437,9 @@ function getDeveloperLoadStatusLabel(
   }
 }
 
-function getDeveloperTrustStatusClass(status: PluginDeveloperTrustedStatus): string {
+function getDeveloperTrustStatusClass(
+  status: PluginDeveloperTrustedStatus,
+): string {
   switch (status) {
     case "current":
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
@@ -1274,7 +1451,9 @@ function getDeveloperTrustStatusClass(status: PluginDeveloperTrustedStatus): str
   }
 }
 
-function getDeveloperLoadStatusClass(status: PluginDeveloperTrustedLoadStatus): string {
+function getDeveloperLoadStatusClass(
+  status: PluginDeveloperTrustedLoadStatus,
+): string {
   switch (status) {
     case "loaded":
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
@@ -1331,14 +1510,20 @@ function formatBundleSize(bytes: number | undefined): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatReviewTimestamp(value: string | undefined, t: ReturnType<typeof useI18n>["t"]): string {
+function formatReviewTimestamp(
+  value: string | undefined,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   if (!value) return t("settings.plugins.neverReviewed")
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString()
 }
 
-function getSourcePinLabel(pin: PluginSourcePin, t: ReturnType<typeof useI18n>["t"]): string {
+function getSourcePinLabel(
+  pin: PluginSourcePin,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (pin.kind) {
     case "cache-version":
       return t("settings.plugins.sourcePinCacheVersion")
@@ -1351,7 +1536,10 @@ function getSourcePinLabel(pin: PluginSourcePin, t: ReturnType<typeof useI18n>["
   }
 }
 
-function getDiagnosticLabel(code: PluginDiagnosticCode, t: ReturnType<typeof useI18n>["t"]): string {
+function getDiagnosticLabel(
+  code: PluginDiagnosticCode,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (code) {
     case "metadata-only-no-execution":
       return t("settings.plugins.diagnosticMetadataOnlyNoExecution")
@@ -1384,7 +1572,10 @@ function getDiagnosticClass(severity: PluginDiagnosticSeverity): string {
     : "border-border bg-background text-muted-foreground"
 }
 
-function getDoctorStatusLabel(status: PluginDoctorCheckStatus, t: ReturnType<typeof useI18n>["t"]): string {
+function getDoctorStatusLabel(
+  status: PluginDoctorCheckStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (status) {
     case "pass":
       return t("settings.plugins.doctorStatusPass")
@@ -1410,14 +1601,19 @@ function getDoctorStatusClass(status: PluginDoctorCheckStatus): string {
   }
 }
 
-function getWorstDoctorStatus(checks: PluginDoctorCheck[]): PluginDoctorCheckStatus {
+function getWorstDoctorStatus(
+  checks: PluginDoctorCheck[],
+): PluginDoctorCheckStatus {
   if (checks.some((check) => check.status === "blocked")) return "blocked"
   if (checks.some((check) => check.status === "warning")) return "warning"
   if (checks.some((check) => check.status === "info")) return "info"
   return "pass"
 }
 
-function getDoctorCheckLabel(code: PluginDoctorCheckCode, t: ReturnType<typeof useI18n>["t"]): string {
+function getDoctorCheckLabel(
+  code: PluginDoctorCheckCode,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (code) {
     case "source-available":
       return t("settings.plugins.doctorCheckSourceAvailable")
@@ -1515,14 +1711,16 @@ function PluginDoctorSummaryPanel({
             </p>
           </div>
         </div>
-        <span className={cn(
-          "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
-          report && report.summary.blocked > 0
-            ? getDoctorStatusClass("blocked")
-            : report && report.summary.warning > 0
-              ? getDoctorStatusClass("warning")
-              : getDoctorStatusClass("pass"),
-        )}>
+        <span
+          className={cn(
+            "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+            report && report.summary.blocked > 0
+              ? getDoctorStatusClass("blocked")
+              : report && report.summary.warning > 0
+                ? getDoctorStatusClass("warning")
+                : getDoctorStatusClass("pass"),
+          )}
+        >
           {report && report.summary.blocked > 0
             ? getDoctorStatusLabel("blocked", t)
             : report && report.summary.warning > 0
@@ -1563,29 +1761,40 @@ function PluginDebugPanel({
             {t("settings.plugins.debugHint")}
           </p>
         </div>
-        <span className={cn(
-          "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-          getDoctorStatusClass(debugStatus),
-        )}>
+        <span
+          className={cn(
+            "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+            getDoctorStatusClass(debugStatus),
+          )}
+        >
           {getDoctorStatusLabel(debugStatus, t)}
         </span>
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div className="space-y-1">
-          <p className="text-muted-foreground">{t("settings.plugins.doctorFingerprint")}</p>
+          <p className="text-muted-foreground">
+            {t("settings.plugins.doctorFingerprint")}
+          </p>
           <p className="font-mono text-foreground" title={debug.fingerprint}>
             sha256:{shortFingerprint(debug.fingerprint)}
           </p>
         </div>
         <div className="space-y-1">
-          <p className="text-muted-foreground">{t("settings.plugins.doctorLastReviewedFingerprint")}</p>
-          <p className="font-mono text-foreground" title={debug.lastReviewedFingerprint}>
+          <p className="text-muted-foreground">
+            {t("settings.plugins.doctorLastReviewedFingerprint")}
+          </p>
+          <p
+            className="font-mono text-foreground"
+            title={debug.lastReviewedFingerprint}
+          >
             sha256:{shortFingerprint(debug.lastReviewedFingerprint ?? "")}
           </p>
         </div>
         <div className="space-y-1">
-          <p className="text-muted-foreground">{t("settings.plugins.doctorComponentCounts")}</p>
+          <p className="text-muted-foreground">
+            {t("settings.plugins.doctorComponentCounts")}
+          </p>
           <p className="text-foreground">
             {[
               `${t("settings.plugins.doctorCommandsShort")}:${debug.componentCounts.commands}`,
@@ -1596,7 +1805,9 @@ function PluginDebugPanel({
           </p>
         </div>
         <div className="space-y-1">
-          <p className="text-muted-foreground">{t("settings.plugins.doctorMcpApprovals")}</p>
+          <p className="text-muted-foreground">
+            {t("settings.plugins.doctorMcpApprovals")}
+          </p>
           <p className="text-foreground">
             {approvalCount} / {plugin.components.mcpServers.length}
           </p>
@@ -1609,11 +1820,20 @@ function PluginDebugPanel({
             <p className="font-medium text-amber-900 dark:text-amber-100">
               {t("settings.plugins.doctorDeveloperTrust")}
             </p>
-            <span className={cn(
-              "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-              getDoctorStatusClass(debug.developerTrusted.gate.canLoadTrustedCode ? "pass" : "blocked"),
-            )}>
-              {getDeveloperLoadStatusLabel(debug.developerTrusted.loadState.status, t)}
+            <span
+              className={cn(
+                "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                getDoctorStatusClass(
+                  debug.developerTrusted.gate.canLoadTrustedCode
+                    ? "pass"
+                    : "blocked",
+                ),
+              )}
+            >
+              {getDeveloperLoadStatusLabel(
+                debug.developerTrusted.loadState.status,
+                t,
+              )}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -1622,7 +1842,10 @@ function PluginDebugPanel({
                 {t("settings.plugins.doctorDeveloperTrustStatus")}
               </p>
               <p className="font-medium text-amber-950 dark:text-amber-50">
-                {getDeveloperTrustStatusLabel(debug.developerTrusted.trustStatus, t)}
+                {getDeveloperTrustStatusLabel(
+                  debug.developerTrusted.trustStatus,
+                  t,
+                )}
               </p>
             </div>
             <div className="space-y-1">
@@ -1630,7 +1853,10 @@ function PluginDebugPanel({
                 {t("settings.plugins.doctorDeveloperLoadStatus")}
               </p>
               <p className="font-medium text-amber-950 dark:text-amber-50">
-                {getDeveloperLoadStatusLabel(debug.developerTrusted.loadState.status, t)}
+                {getDeveloperLoadStatusLabel(
+                  debug.developerTrusted.loadState.status,
+                  t,
+                )}
               </p>
             </div>
             <div className="space-y-1">
@@ -1641,16 +1867,24 @@ function PluginDebugPanel({
                 className="font-mono text-amber-950 dark:text-amber-50"
                 title={debug.developerTrusted.bundleContentHash}
               >
-                sha256:{shortFingerprint(debug.developerTrusted.bundleContentHash ?? "")}
+                sha256:
+                {shortFingerprint(
+                  debug.developerTrusted.bundleContentHash ?? "",
+                )}
               </p>
             </div>
             <div className="space-y-1">
               <p className="text-amber-900/70 dark:text-amber-100/70">
                 {t("settings.plugins.doctorDeveloperGateReasons")}
               </p>
-              <p className="truncate text-amber-950 dark:text-amber-50" title={developerGateReasons}>
+              <p
+                className="truncate text-amber-950 dark:text-amber-50"
+                title={developerGateReasons}
+              >
                 {debug.developerTrusted.gate.reasons.length > 0
-                  ? debug.developerTrusted.gate.reasons.map((reason) => getDeveloperGateReasonLabel(reason, t)).join(", ")
+                  ? debug.developerTrusted.gate.reasons
+                      .map((reason) => getDeveloperGateReasonLabel(reason, t))
+                      .join(", ")
                   : "-"}
               </p>
             </div>
@@ -1659,7 +1893,9 @@ function PluginDebugPanel({
       ) : null}
 
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">{t("settings.plugins.doctorChecks")}</p>
+        <p className="text-xs font-medium text-muted-foreground">
+          {t("settings.plugins.doctorChecks")}
+        </p>
         <div className="space-y-1">
           {visibleChecks.map((check, index) => (
             <div
@@ -1667,15 +1903,22 @@ function PluginDebugPanel({
               className="grid grid-cols-[1fr_auto] items-start gap-2 rounded border border-border bg-muted/20 px-2 py-1.5 text-xs"
             >
               <div className="min-w-0">
-                <p className="font-medium text-foreground">{getDoctorCheckLabel(check.code, t)}</p>
-                <p className="truncate text-[11px] text-muted-foreground" title={check.subject}>
+                <p className="font-medium text-foreground">
+                  {getDoctorCheckLabel(check.code, t)}
+                </p>
+                <p
+                  className="truncate text-[11px] text-muted-foreground"
+                  title={check.subject}
+                >
                   {check.subject}
                 </p>
               </div>
-              <span className={cn(
-                "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-                getDoctorStatusClass(check.status),
-              )}>
+              <span
+                className={cn(
+                  "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                  getDoctorStatusClass(check.status),
+                )}
+              >
                 {getDoctorStatusLabel(check.status, t)}
               </span>
             </div>
@@ -1686,7 +1929,11 @@ function PluginDebugPanel({
   )
 }
 
-function DiagnosticsPanel({ diagnostics }: { diagnostics: PluginDiagnostic[] }) {
+function DiagnosticsPanel({
+  diagnostics,
+}: {
+  diagnostics: PluginDiagnostic[]
+}) {
   const { t } = useI18n()
   if (diagnostics.length === 0) return null
 
@@ -1699,13 +1946,17 @@ function DiagnosticsPanel({ diagnostics }: { diagnostics: PluginDiagnostic[] }) 
             key={`${diagnostic.code}-${index}`}
             className={cn(
               "flex items-start gap-2 rounded border px-2 py-1.5 text-xs leading-relaxed",
-              getDiagnosticClass(diagnostic.severity)
+              getDiagnosticClass(diagnostic.severity),
             )}
           >
-            <span className={cn(
-              "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-              diagnostic.severity === "warning" ? "bg-amber-500" : "bg-muted-foreground/50"
-            )} />
+            <span
+              className={cn(
+                "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                diagnostic.severity === "warning"
+                  ? "bg-amber-500"
+                  : "bg-muted-foreground/50",
+              )}
+            />
             <span>{getDiagnosticLabel(diagnostic.code, t)}</span>
           </div>
         ))}
@@ -1725,18 +1976,22 @@ function PluginSafeModeControl({
 }) {
   const { t } = useI18n()
   return (
-    <div className={cn(
-      "rounded-lg border px-2.5 py-2",
-      safeMode.enabled
-        ? "border-amber-500/30 bg-amber-500/10"
-        : "border-border bg-background"
-    )}>
+    <div
+      className={cn(
+        "rounded-lg border px-2.5 py-2",
+        safeMode.enabled
+          ? "border-amber-500/30 bg-amber-500/10"
+          : "border-border bg-background",
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <ShieldAlert className={cn(
-            "h-3.5 w-3.5 shrink-0",
-            safeMode.enabled ? "text-amber-500" : "text-muted-foreground"
-          )} />
+          <ShieldAlert
+            className={cn(
+              "h-3.5 w-3.5 shrink-0",
+              safeMode.enabled ? "text-amber-500" : "text-muted-foreground",
+            )}
+          />
           <div className="min-w-0">
             <p className="truncate text-xs font-medium text-foreground">
               {t("settings.plugins.safeMode")}
@@ -1773,18 +2028,24 @@ function PluginDeveloperModeControl({
 }) {
   const { t } = useI18n()
   return (
-    <div className={cn(
-      "rounded-lg border px-2.5 py-2",
-      developerMode.enabled
-        ? "border-amber-500/30 bg-amber-500/10"
-        : "border-border bg-background"
-    )}>
+    <div
+      className={cn(
+        "rounded-lg border px-2.5 py-2",
+        developerMode.enabled
+          ? "border-amber-500/30 bg-amber-500/10"
+          : "border-border bg-background",
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-2">
-          <Code2 className={cn(
-            "mt-0.5 h-3.5 w-3.5 shrink-0",
-            developerMode.enabled ? "text-amber-500" : "text-muted-foreground"
-          )} />
+          <Code2
+            className={cn(
+              "mt-0.5 h-3.5 w-3.5 shrink-0",
+              developerMode.enabled
+                ? "text-amber-500"
+                : "text-muted-foreground",
+            )}
+          />
           <div className="min-w-0">
             <p className="truncate text-xs font-medium text-foreground">
               {t("settings.plugins.developerMode")}
@@ -1830,16 +2091,20 @@ function PluginDeveloperModeControl({
 function PluginSafetyGatePanel({ plugin }: { plugin: PluginData }) {
   const { t } = useI18n()
   const gate = plugin.safetyGate
-  const visibleReasons = gate.reasons.filter((reason) => reason !== "no-mcp-servers")
+  const visibleReasons = gate.reasons.filter(
+    (reason) => reason !== "no-mcp-servers",
+  )
 
   return (
     <div className="rounded-md border border-border bg-background p-3 space-y-2">
       <div className="flex items-center justify-between gap-3">
         <Label>{t("settings.plugins.safetyGate")}</Label>
-        <span className={cn(
-          "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-          getSafetyGateStatusClass(gate.status),
-        )}>
+        <span
+          className={cn(
+            "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+            getSafetyGateStatusClass(gate.status),
+          )}
+        >
           {getSafetyGateStatusLabel(gate.status, t)}
         </span>
       </div>
@@ -1860,21 +2125,33 @@ function PluginSafetyGatePanel({ plugin }: { plugin: PluginData }) {
       )}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div>
-          <p className="text-[10px] uppercase text-muted-foreground">{t("settings.plugins.safetyCanEnable")}</p>
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.safetyCanEnable")}
+          </p>
           <p className="text-xs font-medium text-foreground">
-            {gate.canEnable ? t("settings.plugins.gateYes") : t("settings.plugins.gateNo")}
+            {gate.canEnable
+              ? t("settings.plugins.gateYes")
+              : t("settings.plugins.gateNo")}
           </p>
         </div>
         <div>
-          <p className="text-[10px] uppercase text-muted-foreground">{t("settings.plugins.safetyCanApproveMcp")}</p>
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.safetyCanApproveMcp")}
+          </p>
           <p className="text-xs font-medium text-foreground">
-            {gate.canApproveMcp ? t("settings.plugins.gateYes") : t("settings.plugins.gateNo")}
+            {gate.canApproveMcp
+              ? t("settings.plugins.gateYes")
+              : t("settings.plugins.gateNo")}
           </p>
         </div>
         <div>
-          <p className="text-[10px] uppercase text-muted-foreground">{t("settings.plugins.safetyCanUseMcp")}</p>
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.safetyCanUseMcp")}
+          </p>
           <p className="text-xs font-medium text-foreground">
-            {gate.canUseMcp ? t("settings.plugins.gateYes") : t("settings.plugins.gateNo")}
+            {gate.canUseMcp
+              ? t("settings.plugins.gateYes")
+              : t("settings.plugins.gateNo")}
           </p>
         </div>
       </div>
@@ -1905,10 +2182,16 @@ function PluginControlledUiPanel({
 }) {
   const { t } = useI18n()
   const surfaces = plugin.controlledUi.manifest?.surfaces ?? []
-  const commandCount = surfaces.filter((surface) => surface.type === "command-button").length
+  const commandCount = surfaces.filter(
+    (surface) => surface.type === "command-button",
+  ).length
   const visibleReasons = plugin.controlledUi.gate.reasons.slice(0, 3)
 
-  if (surfaces.length === 0 && !plugin.controlledUi.manifestPresent && plugin.targetMode !== "controlled-ui") {
+  if (
+    surfaces.length === 0 &&
+    !plugin.controlledUi.manifestPresent &&
+    plugin.targetMode !== "controlled-ui"
+  ) {
     return null
   }
 
@@ -1922,7 +2205,9 @@ function PluginControlledUiPanel({
           </p>
         </div>
         <span className="shrink-0 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-          {t("settings.plugins.uiContributionCount", { count: surfaces.length })}
+          {t("settings.plugins.uiContributionCount", {
+            count: surfaces.length,
+          })}
         </span>
       </div>
 
@@ -1934,9 +2219,12 @@ function PluginControlledUiPanel({
         <div className="space-y-2">
           {surfaces.map((surface) => {
             const status = getControlledUiContributionStatus(plugin, surface, t)
-            const grantStatus = surface.type === "command-button"
-              ? plugin.controlledUi.actionGrantStatuses[getControlledUiActionKey(surface)]
-              : undefined
+            const grantStatus =
+              surface.type === "command-button"
+                ? plugin.controlledUi.actionGrantStatuses[
+                    getControlledUiActionKey(surface)
+                  ]
+                : undefined
             const canGrant =
               surface.type === "command-button" &&
               plugin.controlledUi.gate.canRenderControlledUi &&
@@ -1947,11 +2235,16 @@ function PluginControlledUiPanel({
               grantStatus === "current"
 
             return (
-              <div key={`${surface.type}:${surface.id}`} className="rounded border border-border bg-muted/20 px-2 py-2">
+              <div
+                key={`${surface.type}:${surface.id}`}
+                className="rounded border border-border bg-muted/20 px-2 py-2"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="text-xs font-medium text-foreground">{surface.title}</p>
+                      <p className="text-xs font-medium text-foreground">
+                        {surface.title}
+                      </p>
                       <span className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                         {getControlledUiSurfaceLabel(surface.type, t)}
                       </span>
@@ -1962,85 +2255,112 @@ function PluginControlledUiPanel({
                       </p>
                     )}
                   </div>
-                  <span className={cn(
-                    "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
-                    getControlledUiContributionStatusClass(plugin, surface),
-                  )}>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                      getControlledUiContributionStatusClass(plugin, surface),
+                    )}
+                  >
                     {status}
                   </span>
                 </div>
 
-                {surface.type === "settings-section" && surface.fields.length > 0 && (
-                  <div className="mt-2 grid gap-1.5">
-                    {surface.fields.slice(0, 4).map((field) => {
-                      const fieldValue = plugin.controlledUi.settingsValues[surface.id]?.[field.id]
-                      const canEditField = plugin.controlledUi.gate.canRenderControlledUi && !isSavingSetting
-                      const currentTextValue = typeof fieldValue === "string" ? fieldValue : ""
+                {surface.type === "settings-section" &&
+                  surface.fields.length > 0 && (
+                    <div className="mt-2 grid gap-1.5">
+                      {surface.fields.slice(0, 4).map((field) => {
+                        const fieldValue =
+                          plugin.controlledUi.settingsValues[surface.id]?.[
+                            field.id
+                          ]
+                        const canEditField =
+                          plugin.controlledUi.gate.canRenderControlledUi &&
+                          !isSavingSetting
+                        const currentTextValue =
+                          typeof fieldValue === "string" ? fieldValue : ""
 
-                      return (
-                        <div key={field.id} className="grid gap-1.5 rounded border border-border bg-background px-2 py-1.5 text-xs">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="min-w-0 font-medium text-muted-foreground">{field.label}</span>
-                            <span className="shrink-0 rounded border border-border bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                              {getControlledUiFieldTypeLabel(field.type, t)}
-                            </span>
-                          </div>
-                          {field.description && (
-                            <p className="text-[11px] leading-relaxed text-muted-foreground/70">
-                              {field.description}
-                            </p>
-                          )}
-                          {field.type === "checkbox" ? (
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={fieldValue === true}
-                                onCheckedChange={(checked) => onSetSettingValue(surface, field, checked)}
-                                disabled={!canEditField}
-                              />
+                        return (
+                          <div
+                            key={field.id}
+                            className="grid gap-1.5 rounded border border-border bg-background px-2 py-1.5 text-xs"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="min-w-0 font-medium text-muted-foreground">
+                                {field.label}
+                              </span>
+                              <span className="shrink-0 rounded border border-border bg-muted/20 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                {getControlledUiFieldTypeLabel(field.type, t)}
+                              </span>
                             </div>
-                          ) : field.type === "select" ? (
-                            <Select
-                              value={typeof fieldValue === "string" ? fieldValue : CONTROLLED_UI_SELECT_UNSET_VALUE}
-                              onValueChange={(value) => {
-                                if (value !== CONTROLLED_UI_SELECT_UNSET_VALUE) {
-                                  onSetSettingValue(surface, field, value)
+                            {field.description && (
+                              <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                                {field.description}
+                              </p>
+                            )}
+                            {field.type === "checkbox" ? (
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={fieldValue === true}
+                                  onCheckedChange={(checked) =>
+                                    onSetSettingValue(surface, field, checked)
+                                  }
+                                  disabled={!canEditField}
+                                />
+                              </div>
+                            ) : field.type === "select" ? (
+                              <Select
+                                value={
+                                  typeof fieldValue === "string"
+                                    ? fieldValue
+                                    : CONTROLLED_UI_SELECT_UNSET_VALUE
                                 }
-                              }}
-                              disabled={!canEditField}
-                            >
-                              <SelectTrigger className="h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={CONTROLLED_UI_SELECT_UNSET_VALUE} disabled>
-                                  {t("settings.plugins.contributionSettingUnset")}
-                                </SelectItem>
-                                {(field.options ?? []).map((option) => (
-                                  <SelectItem key={option} value={option}>
-                                    {option}
+                                onValueChange={(value) => {
+                                  if (
+                                    value !== CONTROLLED_UI_SELECT_UNSET_VALUE
+                                  ) {
+                                    onSetSettingValue(surface, field, value)
+                                  }
+                                }}
+                                disabled={!canEditField}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem
+                                    value={CONTROLLED_UI_SELECT_UNSET_VALUE}
+                                    disabled
+                                  >
+                                    {t(
+                                      "settings.plugins.contributionSettingUnset",
+                                    )}
                                   </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Input
-                              key={`${field.id}:${currentTextValue}`}
-                              defaultValue={currentTextValue}
-                              disabled={!canEditField}
-                              className="h-8 text-xs"
-                              onBlur={(event) => {
-                                const nextValue = event.currentTarget.value
-                                if (nextValue !== currentTextValue) {
-                                  onSetSettingValue(surface, field, nextValue)
-                                }
-                              }}
-                            />
-                          )}
-                      </div>
-                      )
-                    })}
-                  </div>
-                )}
+                                  {(field.options ?? []).map((option) => (
+                                    <SelectItem key={option} value={option}>
+                                      {option}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                key={`${field.id}:${currentTextValue}`}
+                                defaultValue={currentTextValue}
+                                disabled={!canEditField}
+                                className="h-8 text-xs"
+                                onBlur={(event) => {
+                                  const nextValue = event.currentTarget.value
+                                  if (nextValue !== currentTextValue) {
+                                    onSetSettingValue(surface, field, nextValue)
+                                  }
+                                }}
+                              />
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
 
                 {surface.type === "workbench-panel" && (
                   <p className="mt-2 text-xs text-muted-foreground">
@@ -2060,7 +2380,11 @@ function PluginControlledUiPanel({
                         onClick={() => onGrantAction(surface)}
                         disabled={!canGrant || isGranting}
                       >
-                        {isGranting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("settings.plugins.approveControlledAction")}
+                        {isGranting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          t("settings.plugins.approveControlledAction")
+                        )}
                       </Button>
                     ) : (
                       <Button
@@ -2070,7 +2394,11 @@ function PluginControlledUiPanel({
                         onClick={() => onInvokeAction(surface)}
                         disabled={!canInvoke || isInvoking}
                       >
-                        {isInvoking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("settings.plugins.prepareControlledDraft")}
+                        {isInvoking ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          t("settings.plugins.prepareControlledDraft")
+                        )}
                       </Button>
                     )}
                     <span className="text-[11px] text-muted-foreground">
@@ -2086,18 +2414,27 @@ function PluginControlledUiPanel({
         </div>
       )}
 
-      {(visibleReasons.length > 0 || plugin.controlledUi.diagnostics.length > 0) && (
+      {(visibleReasons.length > 0 ||
+        plugin.controlledUi.diagnostics.length > 0) && (
         <div className="space-y-1.5">
           {visibleReasons.map((reason) => (
-            <div key={reason} className="rounded border border-border bg-muted/20 px-2 py-1.5 text-xs text-muted-foreground">
+            <div
+              key={reason}
+              className="rounded border border-border bg-muted/20 px-2 py-1.5 text-xs text-muted-foreground"
+            >
               {getControlledUiGateReasonLabel(reason, t)}
             </div>
           ))}
-          {plugin.controlledUi.diagnostics.slice(0, 3).map((diagnostic, index) => (
-            <div key={`${diagnostic.code}-${index}`} className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200">
-              {diagnostic.message ?? diagnostic.code}
-            </div>
-          ))}
+          {plugin.controlledUi.diagnostics
+            .slice(0, 3)
+            .map((diagnostic) => (
+              <div
+                key={`${diagnostic.code}-${diagnostic.path ?? diagnostic.message ?? "diagnostic"}`}
+                className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-800 dark:text-amber-200"
+              >
+                {diagnostic.message ?? diagnostic.code}
+              </div>
+            ))}
         </div>
       )}
 
@@ -2143,8 +2480,7 @@ function PluginDeveloperTrustPanel({
     developer.gate.canTrustCurrentFingerprint &&
     developer.trustStatus !== "current"
   const canLoad =
-    developer.gate.canLoadTrustedCode &&
-    developer.loadState.status !== "loaded"
+    developer.gate.canLoadTrustedCode && developer.loadState.status !== "loaded"
   const canRevoke = developer.trustStatus !== "missing"
   const visibleReasons = developer.gate.reasons.slice(0, 5)
 
@@ -2158,16 +2494,20 @@ function PluginDeveloperTrustPanel({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1">
-          <span className={cn(
-            "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-            getDeveloperTrustStatusClass(developer.trustStatus),
-          )}>
+          <span
+            className={cn(
+              "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+              getDeveloperTrustStatusClass(developer.trustStatus),
+            )}
+          >
             {getDeveloperTrustStatusLabel(developer.trustStatus, t)}
           </span>
-          <span className={cn(
-            "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-            getDeveloperLoadStatusClass(developer.loadState.status),
-          )}>
+          <span
+            className={cn(
+              "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+              getDeveloperLoadStatusClass(developer.loadState.status),
+            )}
+          >
             {getDeveloperLoadStatusLabel(developer.loadState.status, t)}
           </span>
         </div>
@@ -2176,35 +2516,63 @@ function PluginDeveloperTrustPanel({
       {manifest ? (
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="space-y-1">
-            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerManifestId")}</p>
-            <p className="font-mono text-amber-950 dark:text-amber-50 break-all">{manifest.id}</p>
+            <p className="text-amber-900/70 dark:text-amber-100/70">
+              {t("settings.plugins.developerManifestId")}
+            </p>
+            <p className="font-mono text-amber-950 dark:text-amber-50 break-all">
+              {manifest.id}
+            </p>
           </div>
           <div className="space-y-1">
-            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.version")}</p>
-            <p className="font-mono text-amber-950 dark:text-amber-50">{manifest.version}</p>
+            <p className="text-amber-900/70 dark:text-amber-100/70">
+              {t("settings.plugins.version")}
+            </p>
+            <p className="font-mono text-amber-950 dark:text-amber-50">
+              {manifest.version}
+            </p>
           </div>
           <div className="space-y-1">
-            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerEntryHash")}</p>
-            <p className="font-mono text-amber-950 dark:text-amber-50" title={developer.entryContentHash}>
+            <p className="text-amber-900/70 dark:text-amber-100/70">
+              {t("settings.plugins.developerEntryHash")}
+            </p>
+            <p
+              className="font-mono text-amber-950 dark:text-amber-50"
+              title={developer.entryContentHash}
+            >
               sha256:{shortFingerprint(developer.entryContentHash ?? "")}
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerBundleHash")}</p>
-            <p className="font-mono text-amber-950 dark:text-amber-50" title={developer.bundleContentHash}>
+            <p className="text-amber-900/70 dark:text-amber-100/70">
+              {t("settings.plugins.developerBundleHash")}
+            </p>
+            <p
+              className="font-mono text-amber-950 dark:text-amber-50"
+              title={developer.bundleContentHash}
+            >
               sha256:{shortFingerprint(developer.bundleContentHash ?? "")}
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerBundleSize")}</p>
+            <p className="text-amber-900/70 dark:text-amber-100/70">
+              {t("settings.plugins.developerBundleSize")}
+            </p>
             <p className="text-amber-950 dark:text-amber-50">
-              {developer.bundleFileCount ?? 0} / {formatBundleSize(developer.bundleByteCount)}
+              {developer.bundleFileCount ?? 0} /{" "}
+              {formatBundleSize(developer.bundleByteCount)}
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-amber-900/70 dark:text-amber-100/70">{t("settings.plugins.developerPermissions")}</p>
-            <p className="truncate text-amber-950 dark:text-amber-50" title={manifest.permissions.join(", ")}>
-              {manifest.permissions.length > 0 ? manifest.permissions.join(", ") : "-"}
+            <p className="text-amber-900/70 dark:text-amber-100/70">
+              {t("settings.plugins.developerPermissions")}
+            </p>
+            <p
+              className="truncate text-amber-950 dark:text-amber-50"
+              title={manifest.permissions.join(", ")}
+            >
+              {manifest.permissions.length > 0
+                ? manifest.permissions.join(", ")
+                : "-"}
             </p>
           </div>
         </div>
@@ -2217,12 +2585,18 @@ function PluginDeveloperTrustPanel({
       {(visibleReasons.length > 0 || developer.diagnostics.length > 0) && (
         <div className="space-y-1.5">
           {visibleReasons.map((reason) => (
-            <div key={reason} className="rounded border border-amber-500/30 bg-background/70 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100">
+            <div
+              key={reason}
+              className="rounded border border-amber-500/30 bg-background/70 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100"
+            >
               {getDeveloperGateReasonLabel(reason, t)}
             </div>
           ))}
-          {developer.diagnostics.slice(0, 3).map((diagnostic, index) => (
-            <div key={`${diagnostic.code}-${index}`} className="rounded border border-amber-500/30 bg-background/70 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100">
+          {developer.diagnostics.slice(0, 3).map((diagnostic) => (
+            <div
+              key={`${diagnostic.code}-${diagnostic.path ?? diagnostic.message ?? "diagnostic"}`}
+              className="rounded border border-amber-500/30 bg-background/70 px-2 py-1.5 text-xs text-amber-900 dark:text-amber-100"
+            >
               {diagnostic.message ?? diagnostic.code}
             </div>
           ))}
@@ -2236,7 +2610,11 @@ function PluginDeveloperTrustPanel({
           className="h-7 px-2 text-xs"
           onClick={onTrust}
           disabled={!canTrust || isTrusting}
-          title={!canTrust ? t("settings.plugins.developerGateBlocksAction") : undefined}
+          title={
+            !canTrust
+              ? t("settings.plugins.developerGateBlocksAction")
+              : undefined
+          }
         >
           {isTrusting ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2253,7 +2631,11 @@ function PluginDeveloperTrustPanel({
           className="h-7 px-2 text-xs"
           onClick={onLoad}
           disabled={!canLoad || isLoadingPlugin}
-          title={!canLoad ? t("settings.plugins.developerGateBlocksAction") : undefined}
+          title={
+            !canLoad
+              ? t("settings.plugins.developerGateBlocksAction")
+              : undefined
+          }
         >
           {isLoadingPlugin ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2296,7 +2678,8 @@ function PluginUpdateReviewPanel({
 }) {
   const { t } = useI18n()
   const review = plugin.updateReview
-  const sourcePins = review.sourcePins.length > 0 ? review.sourcePins : plugin.sourcePins
+  const sourcePins =
+    review.sourcePins.length > 0 ? review.sourcePins : plugin.sourcePins
   const canMarkReviewed = review.status !== "reviewed"
 
   return (
@@ -2305,10 +2688,12 @@ function PluginUpdateReviewPanel({
         <div className="min-w-0 space-y-1">
           <Label>{t("settings.plugins.updateReview")}</Label>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={cn(
-              "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-              getUpdateReviewStatusClass(review.status)
-            )}>
+            <span
+              className={cn(
+                "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                getUpdateReviewStatusClass(review.status),
+              )}
+            >
               {getUpdateReviewStatusLabel(review.status, t)}
             </span>
             <span
@@ -2341,23 +2726,40 @@ function PluginUpdateReviewPanel({
 
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div className="space-y-1">
-          <p className="text-muted-foreground">{t("settings.plugins.firstSeen")}</p>
-          <p className="text-foreground">{formatReviewTimestamp(review.firstSeenAt, t)}</p>
+          <p className="text-muted-foreground">
+            {t("settings.plugins.firstSeen")}
+          </p>
+          <p className="text-foreground">
+            {formatReviewTimestamp(review.firstSeenAt, t)}
+          </p>
         </div>
         <div className="space-y-1">
-          <p className="text-muted-foreground">{t("settings.plugins.lastReviewed")}</p>
-          <p className="text-foreground">{formatReviewTimestamp(review.lastReviewedAt, t)}</p>
+          <p className="text-muted-foreground">
+            {t("settings.plugins.lastReviewed")}
+          </p>
+          <p className="text-foreground">
+            {formatReviewTimestamp(review.lastReviewedAt, t)}
+          </p>
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">{t("settings.plugins.sourcePins")}</p>
+        <p className="text-xs font-medium text-muted-foreground">
+          {t("settings.plugins.sourcePins")}
+        </p>
         {sourcePins.length > 0 ? (
           <div className="space-y-1">
             {sourcePins.map((pin) => (
-              <div key={`${pin.kind}:${pin.value}:${pin.repo ?? ""}:${pin.path ?? ""}`} className="rounded border border-border bg-muted/20 px-2 py-1.5">
-                <p className="text-[11px] text-muted-foreground">{getSourcePinLabel(pin, t)}</p>
-                <p className="text-xs font-mono text-foreground break-all">{pin.value}</p>
+              <div
+                key={`${pin.kind}:${pin.value}:${pin.repo ?? ""}:${pin.path ?? ""}`}
+                className="rounded border border-border bg-muted/20 px-2 py-1.5"
+              >
+                <p className="text-[11px] text-muted-foreground">
+                  {getSourcePinLabel(pin, t)}
+                </p>
+                <p className="text-xs font-mono text-foreground break-all">
+                  {pin.value}
+                </p>
                 {(pin.repo || pin.path) && (
                   <p className="text-[11px] text-muted-foreground/70 break-all">
                     {[pin.repo, pin.path].filter(Boolean).join(" · ")}
@@ -2367,17 +2769,26 @@ function PluginUpdateReviewPanel({
             ))}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">{t("settings.plugins.noSourcePins")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.plugins.noSourcePins")}
+          </p>
         )}
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">{t("settings.plugins.changeSummary")}</p>
+        <p className="text-xs font-medium text-muted-foreground">
+          {t("settings.plugins.changeSummary")}
+        </p>
         {review.changes.length > 0 ? (
           <div className="space-y-1">
             {review.changes.map((change) => (
-              <div key={change.field} className="grid grid-cols-[7rem_1fr] gap-2 rounded border border-border bg-muted/20 px-2 py-1.5 text-xs">
-                <span className="font-medium text-foreground">{change.field}</span>
+              <div
+                key={change.field}
+                className="grid grid-cols-[7rem_1fr] gap-2 rounded border border-border bg-muted/20 px-2 py-1.5 text-xs"
+              >
+                <span className="font-medium text-foreground">
+                  {change.field}
+                </span>
                 <span className="min-w-0 text-muted-foreground break-all">
                   {change.previous ?? "none"} {"->"} {change.current ?? "none"}
                 </span>
@@ -2385,7 +2796,9 @@ function PluginUpdateReviewPanel({
             ))}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">{t("settings.plugins.noReviewChanges")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.plugins.noReviewChanges")}
+          </p>
         )}
       </div>
 
@@ -2470,7 +2883,8 @@ function PluginDetail({
     plugin.runtime === "claude" &&
     !plugin.isDisabled &&
     plugin.safetyGate.status === "allowed"
-  const isEnableBlocked = plugin.canToggle && plugin.isDisabled && !plugin.safetyGate.canEnable
+  const isEnableBlocked =
+    plugin.canToggle && plugin.isDisabled && !canEnablePlugin(plugin)
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -2479,17 +2893,27 @@ function PluginDetail({
           {/* Name & category with integrated toggle */}
           <div>
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground">{formatPluginName(plugin.name)}</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                {formatPluginName(plugin.name)}
+              </h3>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
-                  <span className={cn(
-                    "inline-block h-1.5 w-1.5 rounded-full",
-                    plugin.canToggle && plugin.isDisabled ? "bg-muted-foreground/40" : "bg-emerald-500"
-                  )} />
-                  <span className={cn(
-                    "text-sm font-medium",
-                    plugin.canToggle && plugin.isDisabled ? "text-muted-foreground" : "text-emerald-500"
-                  )}>
+                  <span
+                    className={cn(
+                      "inline-block h-1.5 w-1.5 rounded-full",
+                      plugin.canToggle && plugin.isDisabled
+                        ? "bg-muted-foreground/40"
+                        : "bg-emerald-500",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "text-sm font-medium",
+                      plugin.canToggle && plugin.isDisabled
+                        ? "text-muted-foreground"
+                        : "text-emerald-500",
+                    )}
+                  >
                     {statusLabel}
                   </span>
                 </div>
@@ -2507,13 +2931,17 @@ function PluginDetail({
               </div>
             </div>
             {plugin.category && (
-              <p className="text-xs text-muted-foreground mt-0.5 capitalize">{plugin.category}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+                {plugin.category}
+              </p>
             )}
           </div>
 
           {/* Description */}
           {plugin.description && (
-            <p className="text-sm text-muted-foreground">{plugin.description}</p>
+            <p className="text-sm text-muted-foreground">
+              {plugin.description}
+            </p>
           )}
           <p className="text-xs text-muted-foreground/70">
             {plugin.runtime === "claude"
@@ -2523,16 +2951,23 @@ function PluginDetail({
 
           <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className={cn(
-                "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-                getTargetModeClass(plugin.targetMode)
-              )}>
+              <span
+                className={cn(
+                  "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                  getTargetModeClass(plugin.targetMode),
+                )}
+              >
                 {getTargetModeLabel(plugin.targetMode, t)}
               </span>
               <span className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                 {getExecutionStatusLabel(plugin.executionStatus, t)}
               </span>
-              <span className={cn("rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium", getReviewStatusClass(plugin.reviewStatus))}>
+              <span
+                className={cn(
+                  "rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium",
+                  getReviewStatusClass(plugin.reviewStatus),
+                )}
+              >
                 {getReviewStatusLabel(plugin.reviewStatus, t)}
               </span>
             </div>
@@ -2574,25 +3009,38 @@ function PluginDetail({
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.targetMode")}</Label>
-              <p className="text-sm text-foreground">{getTargetModeLabel(plugin.targetMode, t)}</p>
+              <p className="text-sm text-foreground">
+                {getTargetModeLabel(plugin.targetMode, t)}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.executionStatus")}</Label>
-              <p className="text-sm text-foreground">{getExecutionStatusLabel(plugin.executionStatus, t)}</p>
+              <p className="text-sm text-foreground">
+                {getExecutionStatusLabel(plugin.executionStatus, t)}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.reviewStatus")}</Label>
-              <p className={cn("text-sm font-medium", getReviewStatusClass(plugin.reviewStatus))}>
+              <p
+                className={cn(
+                  "text-sm font-medium",
+                  getReviewStatusClass(plugin.reviewStatus),
+                )}
+              >
                 {getReviewStatusLabel(plugin.reviewStatus, t)}
               </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.updatePosture")}</Label>
-              <p className="text-sm text-foreground">{getUpdatePostureLabel(plugin.updatePosture, t)}</p>
+              <p className="text-sm text-foreground">
+                {getUpdatePostureLabel(plugin.updatePosture, t)}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.sourceTrust")}</Label>
-              <p className="text-sm text-foreground">{getSourceTrustLabel(plugin.sourceTrust, t)}</p>
+              <p className="text-sm text-foreground">
+                {getSourceTrustLabel(plugin.sourceTrust, t)}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.runtime")}</Label>
@@ -2601,25 +3049,40 @@ function PluginDetail({
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.capabilities")}</Label>
               <p className="text-sm text-foreground">
-                {t("settings.plugins.capabilityCount", { count: componentCount })}
+                {t("settings.plugins.capabilityCount", {
+                  count: componentCount,
+                })}
               </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.version")}</Label>
-              <p className="text-sm text-foreground font-mono">{plugin.version}</p>
+              <p className="text-sm text-foreground font-mono">
+                {plugin.version}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.source")}</Label>
-              <p className="text-sm text-foreground font-mono">{plugin.source}</p>
+              <p className="text-sm text-foreground font-mono">
+                {plugin.source}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.path")}</Label>
-              <p className="text-sm text-foreground font-mono break-all">{plugin.path}</p>
+              <p className="text-sm text-foreground font-mono break-all">
+                {plugin.path}
+              </p>
             </div>
             {plugin.homepage && (
               <div className="space-y-1.5">
                 <Label>{t("settings.plugins.homepage")}</Label>
-                <a href={plugin.homepage} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-400 hover:underline break-all">{plugin.homepage}</a>
+                <a
+                  href={plugin.homepage}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-sm text-blue-400 hover:underline break-all"
+                >
+                  {plugin.homepage}
+                </a>
               </div>
             )}
             {plugin.tags && plugin.tags.length > 0 && (
@@ -2627,7 +3090,12 @@ function PluginDetail({
                 <Label>{t("settings.plugins.tags")}</Label>
                 <div className="flex flex-wrap gap-1">
                   {plugin.tags.map((tag) => (
-                    <span key={tag} className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{tag}</span>
+                    <span
+                      key={tag}
+                      className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+                    >
+                      {tag}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -2654,25 +3122,36 @@ function PluginDetail({
           {/* Components — clickable when the runtime exposes them to shared tabs */}
           {plugin.components.commands.length > 0 && (
             <div className="space-y-1.5">
-              <Label>{t("settings.plugins.commandsCount", { count: plugin.components.commands.length })}</Label>
+              <Label>
+                {t("settings.plugins.commandsCount", {
+                  count: plugin.components.commands.length,
+                })}
+              </Label>
               <div className="space-y-1">
                 {plugin.components.commands.map((cmd) => (
                   <button
+                    type="button"
                     key={cmd.name}
                     disabled={!canNavigateCapabilities}
-                    onClick={() => canNavigateCapabilities && onNavigateToTab("skills")}
+                    onClick={() =>
+                      canNavigateCapabilities && onNavigateToTab("skills")
+                    }
                     className={cn(
                       "w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 transition-colors text-left group",
                       canNavigateCapabilities
                         ? "hover:bg-foreground/5 cursor-pointer"
-                        : "cursor-default opacity-75"
+                        : "cursor-default opacity-75",
                     )}
                   >
                     <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-mono font-medium text-foreground">/{cmd.name}</p>
+                      <p className="text-xs font-mono font-medium text-foreground">
+                        /{cmd.name}
+                      </p>
                       {cmd.description && (
-                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">{cmd.description}</p>
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                          {cmd.description}
+                        </p>
                       )}
                     </div>
                     {canNavigateCapabilities && (
@@ -2686,25 +3165,36 @@ function PluginDetail({
 
           {plugin.components.skills.length > 0 && (
             <div className="space-y-1.5">
-              <Label>{t("settings.plugins.skillsCount", { count: plugin.components.skills.length })}</Label>
+              <Label>
+                {t("settings.plugins.skillsCount", {
+                  count: plugin.components.skills.length,
+                })}
+              </Label>
               <div className="space-y-1">
                 {plugin.components.skills.map((skill) => (
                   <button
+                    type="button"
                     key={skill.name}
                     disabled={!canNavigateCapabilities}
-                    onClick={() => canNavigateCapabilities && onNavigateToTab("skills")}
+                    onClick={() =>
+                      canNavigateCapabilities && onNavigateToTab("skills")
+                    }
                     className={cn(
                       "w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 transition-colors text-left group",
                       canNavigateCapabilities
                         ? "hover:bg-foreground/5 cursor-pointer"
-                        : "cursor-default opacity-75"
+                        : "cursor-default opacity-75",
                     )}
                   >
                     <SkillIconFilled className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-mono font-medium text-foreground">{skill.name}</p>
+                      <p className="text-xs font-mono font-medium text-foreground">
+                        {skill.name}
+                      </p>
                       {skill.description && (
-                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">{skill.description}</p>
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                          {skill.description}
+                        </p>
                       )}
                     </div>
                     {canNavigateCapabilities && (
@@ -2718,25 +3208,36 @@ function PluginDetail({
 
           {plugin.components.agents.length > 0 && (
             <div className="space-y-1.5">
-              <Label>{t("settings.plugins.agentsCount", { count: plugin.components.agents.length })}</Label>
+              <Label>
+                {t("settings.plugins.agentsCount", {
+                  count: plugin.components.agents.length,
+                })}
+              </Label>
               <div className="space-y-1">
                 {plugin.components.agents.map((agent) => (
                   <button
+                    type="button"
                     key={agent.name}
                     disabled={!canNavigateCapabilities}
-                    onClick={() => canNavigateCapabilities && onNavigateToTab("agents")}
+                    onClick={() =>
+                      canNavigateCapabilities && onNavigateToTab("agents")
+                    }
                     className={cn(
                       "w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 transition-colors text-left group",
                       canNavigateCapabilities
                         ? "hover:bg-foreground/5 cursor-pointer"
-                        : "cursor-default opacity-75"
+                        : "cursor-default opacity-75",
                     )}
                   >
                     <CustomAgentIconFilled className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-mono font-medium text-foreground">{agent.name}</p>
+                      <p className="text-xs font-mono font-medium text-foreground">
+                        {agent.name}
+                      </p>
                       {agent.description && (
-                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">{agent.description}</p>
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                          {agent.description}
+                        </p>
                       )}
                     </div>
                     {canNavigateCapabilities && (
@@ -2751,26 +3252,35 @@ function PluginDetail({
           {plugin.components.mcpServers.length > 0 && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-3">
-                <Label>{t("settings.plugins.mcpServersCount", { count: plugin.components.mcpServers.length })}</Label>
-                {plugin.runtime === "claude" && plugin.components.mcpServers.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 px-2 text-[11px] shrink-0"
-                    disabled={!canApproveMcp || isApprovingMcpServers}
-                    onClick={onApproveMcpServers}
-                    title={!canApproveMcp ? t("settings.plugins.safetyGateBlocksAction") : undefined}
-                  >
-                    {isApprovingMcpServers ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <>
-                        <ShieldCheck className="h-3 w-3 mr-1.5" />
-                        {t("settings.plugins.approveMcpServers")}
-                      </>
-                    )}
-                  </Button>
-                )}
+                <Label>
+                  {t("settings.plugins.mcpServersCount", {
+                    count: plugin.components.mcpServers.length,
+                  })}
+                </Label>
+                {plugin.runtime === "claude" &&
+                  plugin.components.mcpServers.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2 text-[11px] shrink-0"
+                      disabled={!canApproveMcp || isApprovingMcpServers}
+                      onClick={onApproveMcpServers}
+                      title={
+                        !canApproveMcp
+                          ? t("settings.plugins.safetyGateBlocksAction")
+                          : undefined
+                      }
+                    >
+                      {isApprovingMcpServers ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <>
+                          <ShieldCheck className="h-3 w-3 mr-1.5" />
+                          {t("settings.plugins.approveMcpServers")}
+                        </>
+                      )}
+                    </Button>
+                  )}
               </div>
               <p className="text-[11px] leading-relaxed text-muted-foreground/70">
                 {plugin.runtime === "claude"
@@ -2789,35 +3299,54 @@ function PluginDetail({
                     >
                       <OriginalMCPIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
                       <button
+                        type="button"
                         disabled={!canNavigateCapabilities}
-                        onClick={() => canNavigateCapabilities && onNavigateToTab("mcp")}
+                        onClick={() =>
+                          canNavigateCapabilities && onNavigateToTab("mcp")
+                        }
                         className={cn(
                           "min-w-0 flex-1 text-left",
-                          canNavigateCapabilities && "hover:underline"
+                          canNavigateCapabilities && "hover:underline",
                         )}
                       >
-                        <p className="text-xs font-mono font-medium text-foreground">{serverName}</p>
+                        <p className="text-xs font-mono font-medium text-foreground">
+                          {serverName}
+                        </p>
                       </button>
                       {needsAuth ? (
                         <Button
                           variant="secondary"
                           size="sm"
                           className="h-6 px-2 text-[11px] shrink-0"
-                          disabled={isAuthenticating || !plugin.safetyGate.canUseMcp}
+                          disabled={
+                            isAuthenticating || !plugin.safetyGate.canUseMcp
+                          }
                           onClick={() => onMcpAuth(serverName)}
-                          title={!plugin.safetyGate.canUseMcp ? t("settings.plugins.safetyGateBlocksAction") : undefined}
+                          title={
+                            !plugin.safetyGate.canUseMcp
+                              ? t("settings.plugins.safetyGateBlocksAction")
+                              : undefined
+                          }
                         >
-                          {isAuthenticating ? <Loader2 className="h-3 w-3 animate-spin" /> : t("settings.plugins.signIn")}
+                          {isAuthenticating ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            t("settings.plugins.signIn")
+                          )}
                         </Button>
                       ) : isConnected ? (
                         <span className="text-[11px] text-emerald-500 shrink-0">
                           {t("common.connected")}
                         </span>
                       ) : serverStatus ? (
-                        <span className="text-[11px] text-muted-foreground shrink-0">{serverStatus.status}</span>
+                        <span className="text-[11px] text-muted-foreground shrink-0">
+                          {serverStatus.status}
+                        </span>
                       ) : (
                         <span className="text-[11px] text-muted-foreground shrink-0">
-                          {plugin.runtime === "codex" ? t("settings.plugins.declared") : t("settings.plugins.pendingApproval")}
+                          {plugin.runtime === "codex"
+                            ? t("settings.plugins.declared")
+                            : t("settings.plugins.pendingApproval")}
                         </span>
                       )}
                     </div>
@@ -2826,7 +3355,6 @@ function PluginDetail({
               </div>
             </div>
           )}
-
         </div>
       </div>
     </div>
@@ -2849,30 +3377,36 @@ function PluginListItem({
     plugin.components.skills.length +
     plugin.components.agents.length +
     plugin.components.mcpServers.length
-  const statusLabel = plugin.safetyGate.status === "allowed"
-    ? getPluginStatusLabel(plugin, t)
-    : getSafetyGateStatusLabel(plugin.safetyGate.status, t)
+  const statusLabel =
+    plugin.runtime === "codex" || plugin.safetyGate.status === "allowed"
+      ? getPluginStatusLabel(plugin, t)
+      : getSafetyGateStatusLabel(plugin.safetyGate.status, t)
 
   return (
     <button
+      type="button"
       data-item-id={getPluginKey(plugin)}
       onClick={() => onSelect(getPluginKey(plugin))}
       className={cn(
         "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
         isSelected
           ? "bg-foreground/5 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
       )}
     >
       <div className="flex items-center gap-1.5 min-w-0">
-        <div className="text-sm leading-tight truncate">{formatPluginName(plugin.name)}</div>
+        <div className="text-sm leading-tight truncate">
+          {formatPluginName(plugin.name)}
+        </div>
         <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-muted-foreground">
           {plugin.runtime === "claude" ? "Claude" : "Codex"}
         </span>
-        <span className={cn(
-          "shrink-0 rounded border px-1 py-0.5 text-[9px] font-medium",
-          getTargetModeClass(plugin.targetMode)
-        )}>
+        <span
+          className={cn(
+            "shrink-0 rounded border px-1 py-0.5 text-[9px] font-medium",
+            getTargetModeClass(plugin.targetMode),
+          )}
+        >
           {getTargetModeLabel(plugin.targetMode, t)}
         </span>
       </div>
@@ -2885,12 +3419,16 @@ function PluginListItem({
         <span className="truncate">
           {t("settings.plugins.capabilityCount", { count: componentCount })}
         </span>
-        <span className={cn(
-          "shrink-0",
-          plugin.safetyGate.status === "allowed" && !(plugin.canToggle && plugin.isDisabled)
-            ? "text-emerald-500/80"
-            : "text-muted-foreground/60",
-        )}>
+        <span
+          className={cn(
+            "shrink-0",
+            (plugin.runtime === "codex" ||
+              plugin.safetyGate.status === "allowed") &&
+              !(plugin.canToggle && plugin.isDisabled)
+              ? "text-emerald-500/80"
+              : "text-muted-foreground/60",
+          )}
+        >
           {statusLabel}
         </span>
       </div>
@@ -2910,13 +3448,14 @@ function PluginSourceListItem({
   const { t } = useI18n()
   return (
     <button
+      type="button"
       data-item-id={source.id}
       onClick={() => onSelect(source.id)}
       className={cn(
         "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
         isSelected
           ? "bg-foreground/5 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
       )}
     >
       <div className="flex items-center gap-1.5 min-w-0">
@@ -2930,7 +3469,9 @@ function PluginSourceListItem({
       </div>
       <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground/60">
         <span className="truncate">
-          {t("settings.plugins.sourcePluginCount", { count: source.pluginCount })}
+          {t("settings.plugins.sourcePluginCount", {
+            count: source.pluginCount,
+          })}
         </span>
         <span className={cn("shrink-0", getSourceStatusClass(source.status))}>
           {getSourceStatusLabel(source.status, t)}
@@ -2950,17 +3491,20 @@ function RuntimeMarketplaceListItem({
   onSelect: (id: string) => void
 }) {
   const { t } = useI18n()
-  const installedCount = marketplace.plugins.filter((plugin) => plugin.installed).length
+  const installedCount = marketplace.plugins.filter(
+    (plugin) => plugin.installed,
+  ).length
   const availableCount = marketplace.plugins.length - installedCount
   return (
     <button
+      type="button"
       data-item-id={marketplace.id}
       onClick={() => onSelect(marketplace.id)}
       className={cn(
         "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
         isSelected
           ? "bg-foreground/5 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
       )}
     >
       <div className="flex items-center gap-1.5 min-w-0">
@@ -2971,7 +3515,9 @@ function RuntimeMarketplaceListItem({
         </span>
       </div>
       <div className="text-[11px] text-muted-foreground/60 truncate mt-0.5">
-        {marketplace.source ?? marketplace.path ?? t("settings.plugins.runtimeMarketplaceRuntimeOwned")}
+        {marketplace.source ??
+          marketplace.path ??
+          t("settings.plugins.runtimeMarketplaceRuntimeOwned")}
       </div>
       <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground/60">
         <span className="truncate">
@@ -2980,7 +3526,12 @@ function RuntimeMarketplaceListItem({
             available: availableCount,
           })}
         </span>
-        <span className={cn("shrink-0", getRuntimeMarketplaceStatusClass(marketplace.status))}>
+        <span
+          className={cn(
+            "shrink-0",
+            getRuntimeMarketplaceStatusClass(marketplace.status),
+          )}
+        >
           {getRuntimeMarketplaceStatusLabel(marketplace.status, t)}
         </span>
       </div>
@@ -3000,18 +3551,21 @@ function PluginStoreListItem({
   const { t } = useI18n()
   return (
     <button
+      type="button"
       data-item-id={entry.id}
       onClick={() => onSelect(entry.id)}
       className={cn(
         "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
         isSelected
           ? "bg-foreground/5 text-foreground"
-          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
       )}
     >
       <div className="flex items-center gap-1.5 min-w-0">
         <PackageCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <div className="text-sm leading-tight truncate">{formatPluginName(entry.name)}</div>
+        <div className="text-sm leading-tight truncate">
+          {formatPluginName(entry.name)}
+        </div>
         <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-muted-foreground">
           {entry.runtime === "claude" ? "Claude" : "Codex"}
         </span>
@@ -3023,10 +3577,12 @@ function PluginStoreListItem({
         <span className="truncate font-mono">
           {entry.source.commit ? entry.source.commit.slice(0, 12) : "-"}
         </span>
-        <span className={cn(
-          "shrink-0 rounded border px-1 py-0.5 text-[9px] font-medium",
-          getTargetModeClass(entry.targetMode)
-        )}>
+        <span
+          className={cn(
+            "shrink-0 rounded border px-1 py-0.5 text-[9px] font-medium",
+            getTargetModeClass(entry.targetMode),
+          )}
+        >
           {getTargetModeLabel(entry.targetMode, t)}
         </span>
       </div>
@@ -3056,15 +3612,23 @@ function PluginStoreCandidateDetail({
   const { t } = useI18n()
   const review = preview?.review
   const document = review?.document
-  const isBlocked = review?.issues.some((issue) => issue.severity === "blocked") ?? true
-  const canApprove = Boolean(review && !isBlocked && review.approvalStatus !== "current")
+  const isBlocked =
+    review?.issues.some((issue) => issue.severity === "blocked") ?? true
+  const canApprove = Boolean(
+    review && !isBlocked && review.approvalStatus !== "current",
+  )
   const isInstalledCurrent = review?.status === "installed-current"
-  const canInstall = Boolean(review && !isBlocked && review.approvalStatus === "current" && !isInstalledCurrent)
+  const canInstall = Boolean(
+    review &&
+      !isBlocked &&
+      review.approvalStatus === "current" &&
+      !isInstalledCurrent,
+  )
   const installLabel = isInstalledCurrent
     ? t("settings.plugins.storeStatusInstalledCurrent")
     : preview?.installed
-    ? t("settings.plugins.storeUpdate")
-    : t("settings.plugins.storeInstall")
+      ? t("settings.plugins.storeUpdate")
+      : t("settings.plugins.storeInstall")
   const backup = debug?.backupRecords[0]
 
   return (
@@ -3073,7 +3637,9 @@ function PluginStoreCandidateDetail({
         <div className="max-w-2xl mx-auto p-6 space-y-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-foreground">{formatPluginName(entry.name)}</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                {formatPluginName(entry.name)}
+              </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {getRuntimeLabel(entry.runtime, t)} · {entry.version}
               </p>
@@ -3081,16 +3647,20 @@ function PluginStoreCandidateDetail({
             <div className="flex shrink-0 flex-wrap justify-end gap-2">
               {review ? (
                 <>
-                  <span className={cn(
-                    "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-                    getStoreCandidateStatusClass(review.status),
-                  )}>
+                  <span
+                    className={cn(
+                      "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                      getStoreCandidateStatusClass(review.status),
+                    )}
+                  >
                     {getStoreCandidateStatusLabel(review.status, t)}
                   </span>
-                  <span className={cn(
-                    "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-                    getStoreApprovalStatusClass(review.approvalStatus),
-                  )}>
+                  <span
+                    className={cn(
+                      "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                      getStoreApprovalStatusClass(review.approvalStatus),
+                    )}
+                  >
                     {getStoreApprovalStatusLabel(review.approvalStatus, t)}
                   </span>
                 </>
@@ -3121,47 +3691,79 @@ function PluginStoreCandidateDetail({
               <div className="rounded-md border border-border bg-background p-3 space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="space-y-1">
-                    <p className="text-muted-foreground">{t("settings.plugins.storeRepo")}</p>
-                    <p className="font-mono text-foreground break-all">{document.source.repo}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground">{t("settings.plugins.storeCommit")}</p>
-                    <p className="font-mono text-foreground break-all">{document.source.commit}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground">{t("settings.plugins.storePath")}</p>
-                    <p className="font-mono text-foreground break-all">{document.source.path ?? "-"}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground">{t("settings.plugins.storeCandidateFingerprint")}</p>
-                    <p className="font-mono text-foreground" title={preview?.candidateFingerprint}>
-                      sha256:{shortFingerprint(preview?.candidateFingerprint ?? "")}
+                    <p className="text-muted-foreground">
+                      {t("settings.plugins.storeRepo")}
+                    </p>
+                    <p className="font-mono text-foreground break-all">
+                      {document.source.repo}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-muted-foreground">{t("settings.plugins.storePackageHash")}</p>
-                    <p className="font-mono text-foreground break-all">{document.package.sha256 ?? "-"}</p>
+                    <p className="text-muted-foreground">
+                      {t("settings.plugins.storeCommit")}
+                    </p>
+                    <p className="font-mono text-foreground break-all">
+                      {document.source.commit}
+                    </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-muted-foreground">{t("settings.plugins.storePackageSize")}</p>
-                    <p className="text-foreground">{formatBundleSize(document.package.sizeBytes)}</p>
+                    <p className="text-muted-foreground">
+                      {t("settings.plugins.storePath")}
+                    </p>
+                    <p className="font-mono text-foreground break-all">
+                      {document.source.path ?? "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">
+                      {t("settings.plugins.storeCandidateFingerprint")}
+                    </p>
+                    <p
+                      className="font-mono text-foreground"
+                      title={preview?.candidateFingerprint}
+                    >
+                      sha256:
+                      {shortFingerprint(preview?.candidateFingerprint ?? "")}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">
+                      {t("settings.plugins.storePackageHash")}
+                    </p>
+                    <p className="font-mono text-foreground break-all">
+                      {document.package.sha256 ?? "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-muted-foreground">
+                      {t("settings.plugins.storePackageSize")}
+                    </p>
+                    <p className="text-foreground">
+                      {formatBundleSize(document.package.sizeBytes)}
+                    </p>
                   </div>
                 </div>
               </div>
 
               <div className="rounded-md border border-border bg-background p-3 space-y-3">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className={cn(
-                    "rounded border px-1.5 py-0.5 text-[10px] font-medium",
-                    getTargetModeClass(document.targetMode),
-                  )}>
+                  <span
+                    className={cn(
+                      "rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                      getTargetModeClass(document.targetMode),
+                    )}
+                  >
                     {getTargetModeLabel(document.targetMode, t)}
                   </span>
                   <span className="rounded border border-border bg-muted/20 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    {t("settings.plugins.storeDeclaredPermissions", { count: document.declaredPermissions.length })}
+                    {t("settings.plugins.storeDeclaredPermissions", {
+                      count: document.declaredPermissions.length,
+                    })}
                   </span>
                   <span className="rounded border border-border bg-muted/20 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    {t("settings.plugins.storeDeclaredMcp", { count: document.declaredMcpServers.length })}
+                    {t("settings.plugins.storeDeclaredMcp", {
+                      count: document.declaredMcpServers.length,
+                    })}
                   </span>
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground">
@@ -3197,7 +3799,9 @@ function PluginStoreCandidateDetail({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground">{t("settings.plugins.storeNoIssues")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.plugins.storeNoIssues")}
+                  </p>
                 )}
               </div>
 
@@ -3206,16 +3810,24 @@ function PluginStoreCandidateDetail({
                 {review.changes.length > 0 ? (
                   <div className="space-y-1">
                     {review.changes.map((change) => (
-                      <div key={change.field} className="grid grid-cols-[8rem_1fr] gap-2 rounded border border-border bg-muted/20 px-2 py-1.5 text-xs">
-                        <span className="font-medium text-foreground">{change.field}</span>
+                      <div
+                        key={change.field}
+                        className="grid grid-cols-[8rem_1fr] gap-2 rounded border border-border bg-muted/20 px-2 py-1.5 text-xs"
+                      >
+                        <span className="font-medium text-foreground">
+                          {change.field}
+                        </span>
                         <span className="min-w-0 text-muted-foreground break-all">
-                          {change.previous ?? "none"} {"->"} {change.current ?? "none"}
+                          {change.previous ?? "none"} {"->"}{" "}
+                          {change.current ?? "none"}
                         </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground">{t("settings.plugins.noReviewChanges")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.plugins.noReviewChanges")}
+                  </p>
                 )}
               </div>
 
@@ -3227,7 +3839,9 @@ function PluginStoreCandidateDetail({
                       date: formatReviewTimestamp(backup.createdAt, t),
                     })}
                   </p>
-                  <p className="font-mono text-xs text-foreground break-all">{backup.backupPath}</p>
+                  <p className="font-mono text-xs text-foreground break-all">
+                    {backup.backupPath}
+                  </p>
                 </div>
               ) : null}
 
@@ -3238,7 +3852,11 @@ function PluginStoreCandidateDetail({
                   className="h-7 px-2 text-xs"
                   onClick={onApprove}
                   disabled={!canApprove || isApproving}
-                  title={!canApprove ? t("settings.plugins.storeApprovalGateBlocksAction") : undefined}
+                  title={
+                    !canApprove
+                      ? t("settings.plugins.storeApprovalGateBlocksAction")
+                      : undefined
+                  }
                 >
                   {isApproving ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3255,7 +3873,11 @@ function PluginStoreCandidateDetail({
                   className="h-7 px-2 text-xs"
                   onClick={onInstallOrUpdate}
                   disabled={!canInstall || isInstalling}
-                  title={!canInstall ? t("settings.plugins.storeInstallGateBlocksAction") : undefined}
+                  title={
+                    !canInstall
+                      ? t("settings.plugins.storeInstallGateBlocksAction")
+                      : undefined
+                  }
                 >
                   {isInstalling ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3299,7 +3921,9 @@ function PluginSourceDetail({
         <div className="max-w-2xl mx-auto p-6 space-y-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-foreground">{source.name}</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                {source.name}
+              </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {getRuntimeLabel(source.runtime, t)}
               </p>
@@ -3312,7 +3936,12 @@ function PluginSourceDetail({
                 onClick={onRefresh}
                 disabled={isRefreshing}
               >
-                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5 mr-1.5",
+                    isRefreshing && "animate-spin",
+                  )}
+                />
                 {t("settings.plugins.refresh")}
               </Button>
               {canRemoveDeveloperSource ? (
@@ -3336,28 +3965,41 @@ function PluginSourceDetail({
             </div>
           </div>
 
-          <p className="text-sm text-muted-foreground">{getSourceDescriptionLabel(source.runtime, t)}</p>
+          <p className="text-sm text-muted-foreground">
+            {getSourceDescriptionLabel(source.runtime, t)}
+          </p>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.sourceStatus")}</Label>
-              <p className={cn("text-sm font-medium", getSourceStatusClass(source.status))}>
+              <p
+                className={cn(
+                  "text-sm font-medium",
+                  getSourceStatusClass(source.status),
+                )}
+              >
                 {getSourceStatusLabel(source.status, t)}
               </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.sourcePluginCountLabel")}</Label>
               <p className="text-sm text-foreground">
-                {t("settings.plugins.sourcePluginCount", { count: source.pluginCount })}
+                {t("settings.plugins.sourcePluginCount", {
+                  count: source.pluginCount,
+                })}
               </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.sourceKind")}</Label>
-              <p className="text-sm text-foreground">{getSourceKindLabel(source.kind, t)}</p>
+              <p className="text-sm text-foreground">
+                {getSourceKindLabel(source.kind, t)}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.sourceTrust")}</Label>
-              <p className="text-sm text-foreground">{getSourceTrustLabel(source.trust, t)}</p>
+              <p className="text-sm text-foreground">
+                {getSourceTrustLabel(source.trust, t)}
+              </p>
             </div>
           </div>
 
@@ -3365,23 +4007,34 @@ function PluginSourceDetail({
 
           <div className="space-y-1.5">
             <Label>{t("settings.plugins.sourcePath")}</Label>
-            <p className="text-sm text-foreground font-mono break-all">{source.path}</p>
+            <p className="text-sm text-foreground font-mono break-all">
+              {source.path}
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <Label>{t("settings.plugins.sourceInstallHint")}</Label>
-            <p className="text-sm text-muted-foreground">{getSourceInstallHintLabel(source.runtime, t)}</p>
+            <p className="text-sm text-muted-foreground">
+              {getSourceInstallHintLabel(source.runtime, t)}
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <Label>{t("settings.plugins.updateHandling")}</Label>
-            <p className="text-sm text-muted-foreground">{t("settings.plugins.sourceUpdateGuidance")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("settings.plugins.sourceUpdateGuidance")}
+            </p>
           </div>
 
           {source.homepage && (
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.homepage")}</Label>
-              <a href={source.homepage} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-400 hover:underline break-all">
+              <a
+                href={source.homepage}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-sm text-blue-400 hover:underline break-all"
+              >
                 {source.homepage}
               </a>
             </div>
@@ -3425,29 +4078,40 @@ function RuntimeMarketplaceDetail({
 }) {
   const { t } = useI18n()
   const [marketplaceSource, setMarketplaceSource] = useState("")
-  const [marketplaceScope, setMarketplaceScope] = useState<RuntimePluginWriteScope>("user")
-  const installedCount = marketplace.plugins.filter((plugin) => plugin.installed).length
+  const [marketplaceScope, setMarketplaceScope] =
+    useState<RuntimePluginWriteScope>("user")
+  const installedCount = marketplace.plugins.filter(
+    (plugin) => plugin.installed,
+  ).length
   const availableCount = marketplace.plugins.length - installedCount
   const diagnostics = [
     ...marketplace.diagnostics,
     ...marketplace.snapshotDiagnostics,
   ]
-  const isRuntimeReportedGroup = marketplace.id.endsWith(":runtime-reported-plugins")
-  const canTargetExistingMarketplace = marketplace.targetable !== false && !isRuntimeReportedGroup
-  const isRuntimeActionBusy = isPreviewingRuntimeAction || isExecutingRuntimeAction || isRefreshing
-  const marketplaceAddAction: RuntimePluginWriteActionId = marketplace.runtime === "codex"
-    ? "codex.marketplace.add"
-    : "claude.marketplace.add"
-  const marketplaceUpdateAction: RuntimePluginWriteActionId = marketplace.runtime === "codex"
-    ? "codex.marketplace.upgrade"
-    : "claude.marketplace.update"
-  const marketplaceRemoveAction: RuntimePluginWriteActionId = marketplace.runtime === "codex"
-    ? "codex.marketplace.remove"
-    : "claude.marketplace.remove"
+  const isRuntimeReportedGroup = marketplace.id.endsWith(
+    ":runtime-reported-plugins",
+  )
+  const canTargetExistingMarketplace =
+    marketplace.targetable !== false && !isRuntimeReportedGroup
+  const isRuntimeActionBusy =
+    isPreviewingRuntimeAction || isExecutingRuntimeAction || isRefreshing
+  const marketplaceAddAction: RuntimePluginWriteActionId =
+    marketplace.runtime === "codex"
+      ? "codex.marketplace.add"
+      : "claude.marketplace.add"
+  const marketplaceUpdateAction: RuntimePluginWriteActionId =
+    marketplace.runtime === "codex"
+      ? "codex.marketplace.upgrade"
+      : "claude.marketplace.update"
+  const marketplaceRemoveAction: RuntimePluginWriteActionId =
+    marketplace.runtime === "codex"
+      ? "codex.marketplace.remove"
+      : "claude.marketplace.remove"
   const canExecutePreview = Boolean(
     actionPreview?.canExecute &&
-    actionPreview.confirmationToken &&
-    (!actionPreview.requiresTargetConfirmation || runtimeActionConfirmation === actionPreview.targetLabel),
+      actionPreview.confirmationToken &&
+      (!actionPreview.requiresTargetConfirmation ||
+        runtimeActionConfirmation === actionPreview.targetLabel),
   )
 
   useEffect(() => {
@@ -3478,7 +4142,10 @@ function RuntimeMarketplaceDetail({
     })
   }
 
-  const previewPluginAction = (plugin: RuntimePluginListing, action: RuntimePluginWriteActionId) => {
+  const previewPluginAction = (
+    plugin: RuntimePluginListing,
+    action: RuntimePluginWriteActionId,
+  ) => {
     onPreviewRuntimeAction({
       runtime: plugin.runtime,
       action,
@@ -3495,7 +4162,9 @@ function RuntimeMarketplaceDetail({
         <div className="max-w-3xl mx-auto p-6 space-y-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-foreground">{marketplace.name}</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                {marketplace.name}
+              </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {getRuntimeLabel(marketplace.runtime, t)}
               </p>
@@ -3507,7 +4176,12 @@ function RuntimeMarketplaceDetail({
               onClick={onRefresh}
               disabled={isRefreshing}
             >
-              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+              <RefreshCw
+                className={cn(
+                  "h-3.5 w-3.5 mr-1.5",
+                  isRefreshing && "animate-spin",
+                )}
+              />
               {t("settings.plugins.refresh")}
             </Button>
           </div>
@@ -3534,7 +4208,9 @@ function RuntimeMarketplaceDetail({
                   variant="outline"
                   size="sm"
                   className="h-7 px-2 text-xs shrink-0"
-                  onClick={() => previewMarketplaceAction(marketplaceUpdateAction)}
+                  onClick={() =>
+                    previewMarketplaceAction(marketplaceUpdateAction)
+                  }
                   disabled={isRuntimeActionBusy}
                 >
                   <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
@@ -3546,13 +4222,17 @@ function RuntimeMarketplaceDetail({
               <Input
                 value={marketplaceSource}
                 onChange={(event) => setMarketplaceSource(event.target.value)}
-                placeholder={t("settings.plugins.runtimeMarketplaceAddSourcePlaceholder")}
+                placeholder={t(
+                  "settings.plugins.runtimeMarketplaceAddSourcePlaceholder",
+                )}
                 className="h-8 text-xs"
               />
               {marketplace.runtime === "claude" ? (
                 <Select
                   value={marketplaceScope}
-                  onValueChange={(value) => setMarketplaceScope(value as RuntimePluginWriteScope)}
+                  onValueChange={(value) =>
+                    setMarketplaceScope(value as RuntimePluginWriteScope)
+                  }
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
@@ -3583,7 +4263,9 @@ function RuntimeMarketplaceDetail({
                   variant="outline"
                   size="sm"
                   className="h-7 px-2 text-xs"
-                  onClick={() => previewMarketplaceAction(marketplaceRemoveAction)}
+                  onClick={() =>
+                    previewMarketplaceAction(marketplaceRemoveAction)
+                  }
                   disabled={isRuntimeActionBusy}
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-1.5" />
@@ -3592,9 +4274,11 @@ function RuntimeMarketplaceDetail({
               </div>
             ) : (
               <p className="text-[11px] text-muted-foreground">
-                {t(isRuntimeReportedGroup
-                  ? "settings.plugins.runtimeMarketplaceReportedPluginsActionsHint"
-                  : "settings.plugins.runtimeMarketplaceEmptyActionsHint")}
+                {t(
+                  isRuntimeReportedGroup
+                    ? "settings.plugins.runtimeMarketplaceReportedPluginsActionsHint"
+                    : "settings.plugins.runtimeMarketplaceEmptyActionsHint",
+                )}
               </p>
             )}
             {marketplace.runtime === "codex" ? (
@@ -3605,20 +4289,27 @@ function RuntimeMarketplaceDetail({
           </div>
 
           {actionPreview ? (
-            <div className={cn(
-              "rounded-md border p-3 space-y-3",
-              actionPreview.canExecute
-                ? "border-border bg-background"
-                : "border-amber-500/30 bg-amber-500/10",
-            )}>
+            <div
+              className={cn(
+                "rounded-md border p-3 space-y-3",
+                actionPreview.canExecute
+                  ? "border-border bg-background"
+                  : "border-amber-500/30 bg-amber-500/10",
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <Label>{t("settings.plugins.runtimeMarketplaceActionPreview")}</Label>
-                  <p className="mt-1 text-sm font-medium text-foreground">{actionPreview.label}</p>
+                  <Label>
+                    {t("settings.plugins.runtimeMarketplaceActionPreview")}
+                  </Label>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {actionPreview.label}
+                  </p>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     {actionPreview.canExecute
                       ? t("settings.plugins.runtimeMarketplacePreviewReady")
-                      : actionPreview.blockedReason ?? t("settings.plugins.runtimeMarketplacePreviewBlocked")}
+                      : (actionPreview.blockedReason ??
+                        t("settings.plugins.runtimeMarketplacePreviewBlocked"))}
                   </p>
                 </div>
                 <Button
@@ -3633,13 +4324,17 @@ function RuntimeMarketplaceDetail({
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label>{t("settings.plugins.runtimeMarketplaceCommand")}</Label>
+                  <Label>
+                    {t("settings.plugins.runtimeMarketplaceCommand")}
+                  </Label>
                   <p className="rounded border border-border bg-muted/30 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-foreground break-all">
                     {actionPreview.commandDisplay}
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>{t("settings.plugins.runtimeMarketplaceImpact")}</Label>
+                  <Label>
+                    {t("settings.plugins.runtimeMarketplaceImpact")}
+                  </Label>
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     {actionPreview.impact}
                   </p>
@@ -3659,7 +4354,9 @@ function RuntimeMarketplaceDetail({
                   </Label>
                   <Input
                     value={runtimeActionConfirmation}
-                    onChange={(event) => onRuntimeActionConfirmationChange(event.target.value)}
+                    onChange={(event) =>
+                      onRuntimeActionConfirmationChange(event.target.value)
+                    }
                     placeholder={actionPreview.targetLabel}
                     className="h-8 text-xs font-mono"
                     disabled={isExecutingRuntimeAction}
@@ -3696,7 +4393,12 @@ function RuntimeMarketplaceDetail({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.runtimeMarketplaceStatus")}</Label>
-              <p className={cn("text-sm font-medium", getRuntimeMarketplaceStatusClass(marketplace.status))}>
+              <p
+                className={cn(
+                  "text-sm font-medium",
+                  getRuntimeMarketplaceStatusClass(marketplace.status),
+                )}
+              >
                 {getRuntimeMarketplaceStatusLabel(marketplace.status, t)}
               </p>
             </div>
@@ -3711,11 +4413,17 @@ function RuntimeMarketplaceDetail({
             </div>
             <div className="space-y-1.5">
               <Label>{t("settings.plugins.sourceTrust")}</Label>
-              <p className="text-sm text-foreground">{getSourceTrustLabel(marketplace.trust, t)}</p>
+              <p className="text-sm text-foreground">
+                {getSourceTrustLabel(marketplace.trust, t)}
+              </p>
             </div>
             <div className="space-y-1.5">
-              <Label>{t("settings.plugins.runtimeMarketplaceSourceKind")}</Label>
-              <p className="text-sm text-foreground">{t("settings.plugins.runtimeMarketplaceSourceRuntimeCli")}</p>
+              <Label>
+                {t("settings.plugins.runtimeMarketplaceSourceKind")}
+              </Label>
+              <p className="text-sm text-foreground">
+                {t("settings.plugins.runtimeMarketplaceSourceRuntimeCli")}
+              </p>
             </div>
           </div>
 
@@ -3773,14 +4481,23 @@ function RuntimeMarketplaceDetail({
                   >
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-medium text-foreground">{plugin.name}</p>
-                        <p className="truncate text-[10px] text-muted-foreground/70">{plugin.id}</p>
+                        <p className="truncate text-xs font-medium text-foreground">
+                          {plugin.name}
+                        </p>
+                        <p className="truncate text-[10px] text-muted-foreground/70">
+                          {plugin.id}
+                        </p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <span className={cn(
-                            "w-fit rounded border px-1.5 py-0.5 text-[10px] font-medium",
-                            getRuntimePluginListingStatusClass(plugin.status),
-                          )}>
-                            {getRuntimePluginListingStatusLabel(plugin.status, t)}
+                          <span
+                            className={cn(
+                              "w-fit rounded border px-1.5 py-0.5 text-[10px] font-medium",
+                              getRuntimePluginListingStatusClass(plugin.status),
+                            )}
+                          >
+                            {getRuntimePluginListingStatusLabel(
+                              plugin.status,
+                              t,
+                            )}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
                             {plugin.version ?? "-"}
@@ -3803,7 +4520,8 @@ function RuntimeMarketplaceDetail({
                             onClick={() => previewPluginAction(plugin, action)}
                             disabled={isRuntimeActionBusy}
                           >
-                            {action.includes("remove") || action.includes("uninstall") ? (
+                            {action.includes("remove") ||
+                            action.includes("uninstall") ? (
                               <Trash2 className="h-3 w-3 mr-1" />
                             ) : action.includes("disable") ? (
                               <ShieldOff className="h-3 w-3 mr-1" />
@@ -3832,11 +4550,18 @@ function RuntimeMarketplaceDetail({
 export function AgentsPluginsTab() {
   const { t } = useI18n()
   const [viewMode, setViewMode] = useState<PluginViewMode>("installed")
-  const [selectedPluginKey, setSelectedPluginKey] = useState<string | null>(null)
+  const [selectedPluginKey, setSelectedPluginKey] = useState<string | null>(
+    null,
+  )
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
-  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<string | null>(null)
-  const [selectedStoreEntryId, setSelectedStoreEntryId] = useState<string | null>(null)
-  const [runtimeActionPreview, setRuntimeActionPreview] = useState<RuntimePluginWritePreview | null>(null)
+  const [selectedMarketplaceId, setSelectedMarketplaceId] = useState<
+    string | null
+  >(null)
+  const [selectedStoreEntryId, setSelectedStoreEntryId] = useState<
+    string | null
+  >(null)
+  const [runtimeActionPreview, setRuntimeActionPreview] =
+    useState<RuntimePluginWritePreview | null>(null)
   const [runtimeActionConfirmation, setRuntimeActionConfirmation] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("all")
@@ -3857,13 +4582,25 @@ export function AgentsPluginsTab() {
     return () => document.removeEventListener("keydown", handler)
   }, [])
 
-  const { data: plugins = [], isLoading, refetch } = trpc.plugins.list.useQuery(undefined, {
+  const {
+    data: plugins = [],
+    isLoading,
+    refetch,
+  } = trpc.plugins.list.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
-  const { data: pluginSources = [], isLoading: isLoadingSources, refetch: refetchSources } = trpc.plugins.sources.useQuery(undefined, {
+  const {
+    data: pluginSources = [],
+    isLoading: isLoadingSources,
+    refetch: refetchSources,
+  } = trpc.plugins.sources.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
-  const { data: storeEntries = [], isLoading: isLoadingStore, refetch: refetchStoreCatalog } = trpc.plugins.storeCatalog.useQuery(undefined, {
+  const {
+    data: storeEntries = [],
+    isLoading: isLoadingStore,
+    refetch: refetchStoreCatalog,
+  } = trpc.plugins.storeCatalog.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
   const {
@@ -3873,17 +4610,31 @@ export function AgentsPluginsTab() {
   } = trpc.plugins.runtimeMarketplaces.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
-  const { data: safeMode = { enabled: false }, refetch: refetchSafeMode } = trpc.plugins.safeMode.useQuery(undefined, {
+  const { data: safeMode = { enabled: false }, refetch: refetchSafeMode } =
+    trpc.plugins.safeMode.useQuery(undefined, {
+      staleTime: 5 * 60 * 1000,
+    })
+  const {
+    data: developerMode = { enabled: false },
+    refetch: refetchDeveloperMode,
+  } = trpc.plugins.developerMode.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
-  const { data: developerMode = { enabled: false }, refetch: refetchDeveloperMode } = trpc.plugins.developerMode.useQuery(undefined, {
+  const {
+    data: doctorReport,
+    isLoading: isLoadingDoctor,
+    refetch: refetchDoctor,
+  } = trpc.plugins.doctor.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
-  const { data: doctorReport, isLoading: isLoadingDoctor, refetch: refetchDoctor } = trpc.plugins.doctor.useQuery(undefined, {
-    staleTime: 5 * 60 * 1000,
-  })
-  const { data: selectedStorePreview, isLoading: isLoadingStorePreview, refetch: refetchStorePreview } = trpc.plugins.previewStoreCandidate.useQuery(
-    selectedStoreEntryId ? { storeEntryId: selectedStoreEntryId } : { storeEntryId: "" },
+  const {
+    data: selectedStorePreview,
+    isLoading: isLoadingStorePreview,
+    refetch: refetchStorePreview,
+  } = trpc.plugins.previewStoreCandidate.useQuery(
+    selectedStoreEntryId
+      ? { storeEntryId: selectedStoreEntryId }
+      : { storeEntryId: "" },
     {
       enabled: viewMode === "store" && Boolean(selectedStoreEntryId),
       staleTime: 60 * 1000,
@@ -3891,60 +4642,91 @@ export function AgentsPluginsTab() {
   )
 
   // MCP server statuses for showing auth state in plugin detail
-  const { data: allMcpConfig, refetch: refetchMcp } = trpc.claude.getAllMcpConfig.useQuery(undefined, {
-    staleTime: 10 * 60 * 1000,
-  })
+  const { data: allMcpConfig, refetch: refetchMcp } =
+    trpc.claude.getAllMcpConfig.useQuery(undefined, {
+      staleTime: 10 * 60 * 1000,
+    })
   const mcpServerStatuses = useMemo(() => {
     const map: Record<string, McpServerStatus> = {}
     if (!allMcpConfig?.groups) return map
     for (const group of allMcpConfig.groups) {
       for (const server of group.mcpServers) {
-        map[server.name] = { status: server.status, needsAuth: server.needsAuth }
+        map[server.name] = {
+          status: server.status,
+          needsAuth: server.needsAuth,
+        }
       }
     }
     return map
   }, [allMcpConfig])
 
   const startOAuthMutation = trpc.claude.startMcpOAuth.useMutation()
-  const handleMcpAuth = useCallback(async (serverName: string) => {
-    try {
-      const result = await startOAuthMutation.mutateAsync({
-        serverName,
-        projectPath: "__global__",
-      })
-      if (result.success) {
-        toast.success(t("settings.plugins.toast.authenticated", { name: serverName }))
-        await refetchMcp()
-      } else {
-        toast.error(result.error || t("settings.mcp.toast.authenticationFailed"))
+  const handleMcpAuth = useCallback(
+    async (serverName: string) => {
+      try {
+        const result = await startOAuthMutation.mutateAsync({
+          serverName,
+          projectPath: "__global__",
+        })
+        if (result.success) {
+          toast.success(
+            t("settings.plugins.toast.authenticated", { name: serverName }),
+          )
+          await refetchMcp()
+        } else {
+          toast.error(
+            result.error || t("settings.mcp.toast.authenticationFailed"),
+          )
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t("settings.mcp.toast.authenticationFailed"),
+        )
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t("settings.mcp.toast.authenticationFailed"))
-    }
-  }, [startOAuthMutation, refetchMcp, t])
+    },
+    [startOAuthMutation, refetchMcp, t],
+  )
 
-  const setPluginEnabledMutation = trpc.claudeSettings.setPluginEnabled.useMutation()
+  const setPluginEnabledMutation =
+    trpc.claudeSettings.setPluginEnabled.useMutation()
+  const setRuntimeNativeEnabledMutation =
+    trpc.plugins.setRuntimeNativeEnabled.useMutation()
   const clearPluginCacheMutation = trpc.plugins.clearCache.useMutation()
   const markReviewedMutation = trpc.plugins.markReviewed.useMutation()
   const setSafeModeMutation = trpc.plugins.setSafeMode.useMutation()
   const setDeveloperModeMutation = trpc.plugins.setDeveloperMode.useMutation()
-  const chooseDeveloperSourceMutation = trpc.plugins.chooseDeveloperSourceDirectory.useMutation()
-  const removeDeveloperSourceMutation = trpc.plugins.removeDeveloperSource.useMutation()
-  const trustDeveloperPluginMutation = trpc.plugins.trustDeveloperPlugin.useMutation()
-  const revokeDeveloperTrustMutation = trpc.plugins.revokeDeveloperPluginTrust.useMutation()
-  const loadDeveloperPluginMutation = trpc.plugins.loadDeveloperPlugin.useMutation()
-  const setControlledSettingMutation = trpc.plugins.setControlledSetting.useMutation()
-  const grantControlledActionMutation = trpc.plugins.grantControlledAction.useMutation()
-  const invokeControlledActionMutation = trpc.plugins.invokeControlledAction.useMutation()
-  const approveStoreCandidateMutation = trpc.plugins.approveStoreCandidate.useMutation()
-  const installOrUpdateStoreCandidateMutation = trpc.plugins.installOrUpdateStoreCandidate.useMutation()
-  const previewRuntimePluginWriteActionMutation = trpc.plugins.previewRuntimePluginWriteAction.useMutation()
-  const executeRuntimePluginWriteActionMutation = trpc.plugins.executeRuntimePluginWriteAction.useMutation()
+  const chooseDeveloperSourceMutation =
+    trpc.plugins.chooseDeveloperSourceDirectory.useMutation()
+  const removeDeveloperSourceMutation =
+    trpc.plugins.removeDeveloperSource.useMutation()
+  const trustDeveloperPluginMutation =
+    trpc.plugins.trustDeveloperPlugin.useMutation()
+  const revokeDeveloperTrustMutation =
+    trpc.plugins.revokeDeveloperPluginTrust.useMutation()
+  const loadDeveloperPluginMutation =
+    trpc.plugins.loadDeveloperPlugin.useMutation()
+  const setControlledSettingMutation =
+    trpc.plugins.setControlledSetting.useMutation()
+  const grantControlledActionMutation =
+    trpc.plugins.grantControlledAction.useMutation()
+  const invokeControlledActionMutation =
+    trpc.plugins.invokeControlledAction.useMutation()
+  const approveStoreCandidateMutation =
+    trpc.plugins.approveStoreCandidate.useMutation()
+  const installOrUpdateStoreCandidateMutation =
+    trpc.plugins.installOrUpdateStoreCandidate.useMutation()
+  const previewRuntimePluginWriteActionMutation =
+    trpc.plugins.previewRuntimePluginWriteAction.useMutation()
+  const executeRuntimePluginWriteActionMutation =
+    trpc.plugins.executeRuntimePluginWriteAction.useMutation()
 
   const filteredPlugins = useMemo(() => {
-    const runtimeFiltered = runtimeFilter === "all"
-      ? plugins
-      : plugins.filter((plugin) => plugin.runtime === runtimeFilter)
+    const runtimeFiltered =
+      runtimeFilter === "all"
+        ? plugins
+        : plugins.filter((plugin) => plugin.runtime === runtimeFilter)
 
     if (!searchQuery.trim()) return runtimeFiltered
     const q = searchQuery.toLowerCase()
@@ -3953,24 +4735,56 @@ export function AgentsPluginsTab() {
     const qWithDashes = q.replace(/ /g, "-")
     return runtimeFiltered.filter((p) => {
       const name = p.name.toLowerCase()
-      if (name.includes(q) || name.includes(qNoDashes) || name.includes(qWithDashes)) return true
+      if (
+        name.includes(q) ||
+        name.includes(qNoDashes) ||
+        name.includes(qWithDashes)
+      )
+        return true
       if (p.runtime.includes(q)) return true
       if (p.source.toLowerCase().includes(q)) return true
       if (p.marketplace.toLowerCase().includes(q)) return true
       if (p.description?.toLowerCase().includes(q)) return true
       if (p.path.toLowerCase().includes(q)) return true
-      if (p.components.commands.some((c) => c.name.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q))) return true
-      if (p.components.skills.some((c) => c.name.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q))) return true
-      if (p.components.agents.some((c) => c.name.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q))) return true
-      if (p.components.mcpServers.some((s) => s.toLowerCase().includes(q))) return true
+      if (
+        p.components.commands.some(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            c.description?.toLowerCase().includes(q),
+        )
+      )
+        return true
+      if (
+        p.components.skills.some(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            c.description?.toLowerCase().includes(q),
+        )
+      )
+        return true
+      if (
+        p.components.agents.some(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            c.description?.toLowerCase().includes(q),
+        )
+      )
+        return true
+      if (p.components.mcpServers.some((s) => s.toLowerCase().includes(q)))
+        return true
       return false
     })
   }, [plugins, runtimeFilter, searchQuery])
 
   const pluginGroups = useMemo(() => {
-    const groups: Array<{ id: string; label: string; plugins: PluginData[] }> = []
-    const claudePlugins = filteredPlugins.filter((plugin) => plugin.runtime === "claude")
-    const codexPlugins = filteredPlugins.filter((plugin) => plugin.runtime === "codex")
+    const groups: Array<{ id: string; label: string; plugins: PluginData[] }> =
+      []
+    const claudePlugins = filteredPlugins.filter(
+      (plugin) => plugin.runtime === "claude",
+    )
+    const codexPlugins = filteredPlugins.filter(
+      (plugin) => plugin.runtime === "codex",
+    )
     const claudeEnabled = claudePlugins.filter((plugin) => !plugin.isDisabled)
     const claudeDisabled = claudePlugins.filter((plugin) => plugin.isDisabled)
 
@@ -3982,14 +4796,19 @@ export function AgentsPluginsTab() {
       })
     }
 
-    const addMarketplaceGroups = (runtime: PluginRuntime, runtimePlugins: PluginData[]) => {
+    const addMarketplaceGroups = (
+      runtime: PluginRuntime,
+      runtimePlugins: PluginData[],
+    ) => {
       const byMarketplace = new Map<string, PluginData[]>()
       for (const plugin of runtimePlugins) {
         const existing = byMarketplace.get(plugin.marketplace) || []
         existing.push(plugin)
         byMarketplace.set(plugin.marketplace, existing)
       }
-      for (const [marketplace, marketplacePlugins] of Array.from(byMarketplace.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+      for (const [marketplace, marketplacePlugins] of Array.from(
+        byMarketplace.entries(),
+      ).sort(([a], [b]) => a.localeCompare(b))) {
         groups.push({
           id: `${runtime}-${marketplace}`,
           label: `${getRuntimeLabel(runtime, t)} · ${marketplace}`,
@@ -4005,9 +4824,10 @@ export function AgentsPluginsTab() {
   }, [filteredPlugins, t])
 
   const filteredSources = useMemo(() => {
-    const runtimeFiltered = runtimeFilter === "all"
-      ? pluginSources
-      : pluginSources.filter((source) => source.runtime === runtimeFilter)
+    const runtimeFiltered =
+      runtimeFilter === "all"
+        ? pluginSources
+        : pluginSources.filter((source) => source.runtime === runtimeFilter)
 
     if (!searchQuery.trim()) return runtimeFiltered
     const q = searchQuery.toLowerCase()
@@ -4015,7 +4835,12 @@ export function AgentsPluginsTab() {
     const qWithDashes = q.replace(/ /g, "-")
     return runtimeFiltered.filter((source) => {
       const name = source.name.toLowerCase()
-      if (name.includes(q) || name.includes(qNoDashes) || name.includes(qWithDashes)) return true
+      if (
+        name.includes(q) ||
+        name.includes(qNoDashes) ||
+        name.includes(qWithDashes)
+      )
+        return true
       if (source.runtime.includes(q)) return true
       if (source.kind.includes(q)) return true
       if (source.trust.includes(q)) return true
@@ -4031,9 +4856,10 @@ export function AgentsPluginsTab() {
     return runtimeMarketplaceSnapshots.flatMap((snapshot) => {
       const matchedPluginIds = new Set<string>()
       const marketplaceItems = snapshot.marketplaces.map((marketplace) => {
-        const plugins = snapshot.plugins.filter((plugin) =>
-          plugin.marketplace === marketplace.name ||
-          plugin.id.endsWith(`@${marketplace.name}`)
+        const plugins = snapshot.plugins.filter(
+          (plugin) =>
+            plugin.marketplace === marketplace.name ||
+            plugin.id.endsWith(`@${marketplace.name}`),
         )
         for (const plugin of plugins) {
           matchedPluginIds.add(plugin.id)
@@ -4047,25 +4873,29 @@ export function AgentsPluginsTab() {
           refreshedAt: snapshot.refreshedAt,
         }
       })
-      const unmatchedPlugins = snapshot.plugins.filter((plugin) => !matchedPluginIds.has(plugin.id))
+      const unmatchedPlugins = snapshot.plugins.filter(
+        (plugin) => !matchedPluginIds.has(plugin.id),
+      )
       if (unmatchedPlugins.length === 0) {
         if (marketplaceItems.length > 0) return marketplaceItems
-        return [{
-          runtime: snapshot.runtime,
-          name: t("settings.plugins.marketplaceRuntimeEmptyTitle", {
-            runtime: getRuntimeLabel(snapshot.runtime, t),
-          }),
-          targetable: false,
-          sourceKind: "runtime-cli" as const,
-          trust: "external" as const,
-          status: "empty" as const,
-          diagnostics: [],
-          id: `${snapshot.runtime}:empty-marketplaces`,
-          pluginCount: 0,
-          plugins: [],
-          snapshotDiagnostics: snapshot.diagnostics,
-          refreshedAt: snapshot.refreshedAt,
-        }]
+        return [
+          {
+            runtime: snapshot.runtime,
+            name: t("settings.plugins.marketplaceRuntimeEmptyTitle", {
+              runtime: getRuntimeLabel(snapshot.runtime, t),
+            }),
+            targetable: false,
+            sourceKind: "runtime-cli" as const,
+            trust: "external" as const,
+            status: "empty" as const,
+            diagnostics: [],
+            id: `${snapshot.runtime}:empty-marketplaces`,
+            pluginCount: 0,
+            plugins: [],
+            snapshotDiagnostics: snapshot.diagnostics,
+            refreshedAt: snapshot.refreshedAt,
+          },
+        ]
       }
       return [
         ...marketplaceItems,
@@ -4087,9 +4917,12 @@ export function AgentsPluginsTab() {
   }, [runtimeMarketplaceSnapshots, t])
 
   const filteredMarketplaces = useMemo(() => {
-    const runtimeFiltered = runtimeFilter === "all"
-      ? runtimeMarketplaceItems
-      : runtimeMarketplaceItems.filter((marketplace) => marketplace.runtime === runtimeFilter)
+    const runtimeFiltered =
+      runtimeFilter === "all"
+        ? runtimeMarketplaceItems
+        : runtimeMarketplaceItems.filter(
+            (marketplace) => marketplace.runtime === runtimeFilter,
+          )
 
     if (!searchQuery.trim()) return runtimeFiltered
     const q = searchQuery.toLowerCase()
@@ -4097,27 +4930,42 @@ export function AgentsPluginsTab() {
     const qWithDashes = q.replace(/ /g, "-")
     return runtimeFiltered.filter((marketplace) => {
       const name = marketplace.name.toLowerCase()
-      if (name.includes(q) || name.includes(qNoDashes) || name.includes(qWithDashes)) return true
+      if (
+        name.includes(q) ||
+        name.includes(qNoDashes) ||
+        name.includes(qWithDashes)
+      )
+        return true
       if (marketplace.runtime.includes(q)) return true
       if (marketplace.status.includes(q)) return true
       if (marketplace.trust.includes(q)) return true
       if (marketplace.source?.toLowerCase().includes(q)) return true
       if (marketplace.path?.toLowerCase().includes(q)) return true
-      if (marketplace.plugins.some((plugin) =>
-        plugin.name.toLowerCase().includes(q) ||
-        plugin.id.toLowerCase().includes(q) ||
-        plugin.version?.toLowerCase().includes(q) ||
-        plugin.path?.toLowerCase().includes(q) ||
-        plugin.source?.toLowerCase().includes(q)
-      )) return true
+      if (
+        marketplace.plugins.some(
+          (plugin) =>
+            plugin.name.toLowerCase().includes(q) ||
+            plugin.id.toLowerCase().includes(q) ||
+            plugin.version?.toLowerCase().includes(q) ||
+            plugin.path?.toLowerCase().includes(q) ||
+            plugin.source?.toLowerCase().includes(q),
+        )
+      )
+        return true
       return false
     })
   }, [runtimeMarketplaceItems, runtimeFilter, searchQuery])
 
   const sourceGroups = useMemo(() => {
-    const groups: Array<{ id: string; label: string; sources: PluginSourceData[] }> = []
+    const groups: Array<{
+      id: string
+      label: string
+      sources: PluginSourceData[]
+    }> = []
     for (const runtime of ["claude", "codex"] as const) {
-      const runtimeSources = filteredSources.filter((source) => source.runtime === runtime)
+      const runtimeSources = filteredSources.filter(
+        (source) => source.runtime === runtime,
+      )
       if (runtimeSources.length === 0) continue
       groups.push({
         id: runtime,
@@ -4129,9 +4977,15 @@ export function AgentsPluginsTab() {
   }, [filteredSources, t])
 
   const marketplaceGroups = useMemo(() => {
-    const groups: Array<{ id: string; label: string; marketplaces: RuntimeMarketplaceListItem[] }> = []
+    const groups: Array<{
+      id: string
+      label: string
+      marketplaces: RuntimeMarketplaceListItem[]
+    }> = []
     for (const runtime of ["claude", "codex"] as const) {
-      const runtimeMarketplaces = filteredMarketplaces.filter((marketplace) => marketplace.runtime === runtime)
+      const runtimeMarketplaces = filteredMarketplaces.filter(
+        (marketplace) => marketplace.runtime === runtime,
+      )
       if (runtimeMarketplaces.length === 0) continue
       groups.push({
         id: runtime,
@@ -4143,9 +4997,10 @@ export function AgentsPluginsTab() {
   }, [filteredMarketplaces, t])
 
   const filteredStoreEntries = useMemo(() => {
-    const runtimeFiltered = runtimeFilter === "all"
-      ? storeEntries
-      : storeEntries.filter((entry) => entry.runtime === runtimeFilter)
+    const runtimeFiltered =
+      runtimeFilter === "all"
+        ? storeEntries
+        : storeEntries.filter((entry) => entry.runtime === runtimeFilter)
 
     if (!searchQuery.trim()) return runtimeFiltered
     const q = searchQuery.toLowerCase()
@@ -4153,7 +5008,12 @@ export function AgentsPluginsTab() {
     const qWithDashes = q.replace(/ /g, "-")
     return runtimeFiltered.filter((entry) => {
       const name = entry.name.toLowerCase()
-      if (name.includes(q) || name.includes(qNoDashes) || name.includes(qWithDashes)) return true
+      if (
+        name.includes(q) ||
+        name.includes(qNoDashes) ||
+        name.includes(qWithDashes)
+      )
+        return true
       if (entry.id.toLowerCase().includes(q)) return true
       if (entry.runtime.includes(q)) return true
       if (entry.version.toLowerCase().includes(q)) return true
@@ -4166,9 +5026,15 @@ export function AgentsPluginsTab() {
   }, [runtimeFilter, searchQuery, storeEntries])
 
   const storeGroups = useMemo(() => {
-    const groups: Array<{ id: string; label: string; entries: PluginStoreCatalogEntry[] }> = []
+    const groups: Array<{
+      id: string
+      label: string
+      entries: PluginStoreCatalogEntry[]
+    }> = []
     for (const runtime of ["claude", "codex"] as const) {
-      const runtimeEntries = filteredStoreEntries.filter((entry) => entry.runtime === runtime)
+      const runtimeEntries = filteredStoreEntries.filter(
+        (entry) => entry.runtime === runtime,
+      )
       if (runtimeEntries.length === 0) continue
       groups.push({
         id: runtime,
@@ -4181,36 +5047,43 @@ export function AgentsPluginsTab() {
 
   const allPluginKeys = useMemo(
     () => pluginGroups.flatMap((group) => group.plugins.map(getPluginKey)),
-    [pluginGroups]
+    [pluginGroups],
   )
   const allSourceIds = useMemo(
-    () => sourceGroups.flatMap((group) => group.sources.map((source) => source.id)),
-    [sourceGroups]
+    () =>
+      sourceGroups.flatMap((group) => group.sources.map((source) => source.id)),
+    [sourceGroups],
   )
   const allMarketplaceIds = useMemo(
-    () => marketplaceGroups.flatMap((group) => group.marketplaces.map((marketplace) => marketplace.id)),
-    [marketplaceGroups]
+    () =>
+      marketplaceGroups.flatMap((group) =>
+        group.marketplaces.map((marketplace) => marketplace.id),
+      ),
+    [marketplaceGroups],
   )
   const allStoreEntryIds = useMemo(
-    () => storeGroups.flatMap((group) => group.entries.map((entry) => entry.id)),
-    [storeGroups]
+    () =>
+      storeGroups.flatMap((group) => group.entries.map((entry) => entry.id)),
+    [storeGroups],
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
-    items: viewMode === "installed"
-      ? allPluginKeys
-      : viewMode === "sources"
-        ? allSourceIds
-        : viewMode === "marketplaces"
-          ? allMarketplaceIds
-          : allStoreEntryIds,
-    selectedItem: viewMode === "installed"
-      ? selectedPluginKey
-      : viewMode === "sources"
-        ? selectedSourceId
-        : viewMode === "marketplaces"
-          ? selectedMarketplaceId
-          : selectedStoreEntryId,
+    items:
+      viewMode === "installed"
+        ? allPluginKeys
+        : viewMode === "sources"
+          ? allSourceIds
+          : viewMode === "marketplaces"
+            ? allMarketplaceIds
+            : allStoreEntryIds,
+    selectedItem:
+      viewMode === "installed"
+        ? selectedPluginKey
+        : viewMode === "sources"
+          ? selectedSourceId
+          : viewMode === "marketplaces"
+            ? selectedMarketplaceId
+            : selectedStoreEntryId,
     onSelect: (id) => {
       if (viewMode === "installed") {
         setSelectedPluginKey(id)
@@ -4224,15 +5097,25 @@ export function AgentsPluginsTab() {
     },
   })
 
-  const selectedPlugin = plugins.find((p) => getPluginKey(p) === selectedPluginKey) || null
-  const selectedSource = pluginSources.find((source) => source.id === selectedSourceId) || null
-  const selectedMarketplace = runtimeMarketplaceItems.find((marketplace) => marketplace.id === selectedMarketplaceId) || null
-  const selectedStoreEntry = storeEntries.find((entry) => entry.id === selectedStoreEntryId) || null
+  const selectedPlugin =
+    plugins.find((p) => getPluginKey(p) === selectedPluginKey) || null
+  const selectedSource =
+    pluginSources.find((source) => source.id === selectedSourceId) || null
+  const selectedMarketplace =
+    runtimeMarketplaceItems.find(
+      (marketplace) => marketplace.id === selectedMarketplaceId,
+    ) || null
+  const selectedStoreEntry =
+    storeEntries.find((entry) => entry.id === selectedStoreEntryId) || null
   const selectedPluginDebug = selectedPlugin
-    ? doctorReport?.plugins.find((debug) => debug.reviewKey === selectedPlugin.reviewKey)
+    ? doctorReport?.plugins.find(
+        (debug) => debug.reviewKey === selectedPlugin.reviewKey,
+      )
     : undefined
   const selectedStoreDebug = selectedStoreEntry
-    ? doctorReport?.storeCandidates.find((debug) => debug.storeEntryId === selectedStoreEntry.id)
+    ? doctorReport?.storeCandidates.find(
+        (debug) => debug.storeEntryId === selectedStoreEntry.id,
+      )
     : undefined
 
   // Auto-select first plugin in display order (enabled first, then marketplace)
@@ -4240,29 +5123,50 @@ export function AgentsPluginsTab() {
     if (viewMode !== "installed") return
     if (selectedPlugin && filteredPlugins.includes(selectedPlugin)) return
     if (isLoading || filteredPlugins.length === 0) {
-      if (selectedPluginKey && filteredPlugins.length === 0) setSelectedPluginKey(null)
+      if (selectedPluginKey && filteredPlugins.length === 0)
+        setSelectedPluginKey(null)
       return
     }
     const first = pluginGroups[0]?.plugins[0]
     setSelectedPluginKey(first ? getPluginKey(first) : null)
-  }, [filteredPlugins, isLoading, pluginGroups, selectedPlugin, selectedPluginKey, viewMode])
+  }, [
+    filteredPlugins,
+    isLoading,
+    pluginGroups,
+    selectedPlugin,
+    selectedPluginKey,
+    viewMode,
+  ])
 
   useEffect(() => {
     if (viewMode !== "sources") return
     if (selectedSource && filteredSources.includes(selectedSource)) return
     if (isLoadingSources || filteredSources.length === 0) {
-      if (selectedSourceId && filteredSources.length === 0) setSelectedSourceId(null)
+      if (selectedSourceId && filteredSources.length === 0)
+        setSelectedSourceId(null)
       return
     }
     const first = sourceGroups[0]?.sources[0]
     setSelectedSourceId(first?.id ?? null)
-  }, [filteredSources, isLoadingSources, selectedSource, selectedSourceId, sourceGroups, viewMode])
+  }, [
+    filteredSources,
+    isLoadingSources,
+    selectedSource,
+    selectedSourceId,
+    sourceGroups,
+    viewMode,
+  ])
 
   useEffect(() => {
     if (viewMode !== "marketplaces") return
-    if (selectedMarketplace && filteredMarketplaces.includes(selectedMarketplace)) return
+    if (
+      selectedMarketplace &&
+      filteredMarketplaces.includes(selectedMarketplace)
+    )
+      return
     if (isLoadingRuntimeMarketplaces || filteredMarketplaces.length === 0) {
-      if (selectedMarketplaceId && filteredMarketplaces.length === 0) setSelectedMarketplaceId(null)
+      if (selectedMarketplaceId && filteredMarketplaces.length === 0)
+        setSelectedMarketplaceId(null)
       return
     }
     const first = marketplaceGroups[0]?.marketplaces[0]
@@ -4283,184 +5187,285 @@ export function AgentsPluginsTab() {
 
   useEffect(() => {
     if (viewMode !== "store") return
-    if (selectedStoreEntry && filteredStoreEntries.includes(selectedStoreEntry)) return
+    if (selectedStoreEntry && filteredStoreEntries.includes(selectedStoreEntry))
+      return
     if (isLoadingStore || filteredStoreEntries.length === 0) {
-      if (selectedStoreEntryId && filteredStoreEntries.length === 0) setSelectedStoreEntryId(null)
+      if (selectedStoreEntryId && filteredStoreEntries.length === 0)
+        setSelectedStoreEntryId(null)
       return
     }
     const first = storeGroups[0]?.entries[0]
     setSelectedStoreEntryId(first?.id ?? null)
-  }, [filteredStoreEntries, isLoadingStore, selectedStoreEntry, selectedStoreEntryId, storeGroups, viewMode])
+  }, [
+    filteredStoreEntries,
+    isLoadingStore,
+    selectedStoreEntry,
+    selectedStoreEntryId,
+    storeGroups,
+    viewMode,
+  ])
 
-  const approveAllMutation = trpc.claudeSettings.approveAllPluginMcpServers.useMutation()
-  const revokeAllMutation = trpc.claudeSettings.revokeAllPluginMcpServers.useMutation()
+  const approveAllMutation =
+    trpc.claudeSettings.approveAllPluginMcpServers.useMutation()
+  const revokeAllMutation =
+    trpc.claudeSettings.revokeAllPluginMcpServers.useMutation()
 
-  const handleMarkReviewed = useCallback(async (plugin: PluginData) => {
-    try {
-      await markReviewedMutation.mutateAsync({
-        reviewKey: plugin.reviewKey,
-      })
-      toast.success(t("settings.plugins.toast.reviewed"), {
-        description: formatPluginName(plugin.name),
-      })
-      await Promise.all([refetch(), refetchDoctor()])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [markReviewedMutation, refetch, refetchDoctor, t])
-
-  const handleToggleEnabled = useCallback(async (plugin: PluginData, enabled: boolean) => {
-    try {
-      await setPluginEnabledMutation.mutateAsync({
-        pluginSource: plugin.source,
-        enabled,
-      })
-
-      if (!enabled && plugin.components.mcpServers.length > 0) {
-        await revokeAllMutation.mutateAsync({
-          pluginSource: plugin.source,
+  const handleMarkReviewed = useCallback(
+    async (plugin: PluginData) => {
+      try {
+        await markReviewedMutation.mutateAsync({
+          reviewKey: plugin.reviewKey,
         })
+        toast.success(t("settings.plugins.toast.reviewed"), {
+          description: formatPluginName(plugin.name),
+        })
+        await Promise.all([refetch(), refetchDoctor()])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
       }
+    },
+    [markReviewedMutation, refetch, refetchDoctor, t],
+  )
 
-      toast.success(enabled ? t("settings.plugins.toast.enabled") : t("settings.plugins.toast.disabled"), {
-        description: formatPluginName(plugin.name),
-      })
-      await Promise.all([refetch(), refetchDoctor(), refetchMcp()])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [setPluginEnabledMutation, revokeAllMutation, refetch, refetchDoctor, refetchMcp, t])
+  const handleToggleEnabled = useCallback(
+    async (plugin: PluginData, enabled: boolean) => {
+      try {
+        if (plugin.runtime === "codex") {
+          await setRuntimeNativeEnabledMutation.mutateAsync({
+            reviewKey: plugin.reviewKey,
+            enabled,
+          })
+        } else {
+          await setPluginEnabledMutation.mutateAsync({
+            pluginSource: plugin.source,
+            enabled,
+          })
+        }
 
-  const handleApproveMcpServers = useCallback(async (plugin: PluginData) => {
-    if (plugin.runtime !== "claude" || plugin.components.mcpServers.length === 0) return
-    try {
-      await approveAllMutation.mutateAsync({
-        pluginSource: plugin.source,
-        serverNames: plugin.components.mcpServers,
-      })
-      toast.success(t("settings.plugins.toast.mcpApproved"), {
-        description: formatPluginName(plugin.name),
-      })
-      await refetchMcp()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [approveAllMutation, refetchMcp, t])
+        if (
+          plugin.runtime === "claude" &&
+          !enabled &&
+          plugin.components.mcpServers.length > 0
+        ) {
+          await revokeAllMutation.mutateAsync({
+            pluginSource: plugin.source,
+          })
+        }
 
-  const handleGrantControlledAction = useCallback(async (
-    plugin: PluginData,
-    surface: PluginControlledUiCommandButton,
-  ) => {
-    try {
-      await grantControlledActionMutation.mutateAsync({
-        reviewKey: plugin.reviewKey,
-        contributionId: surface.id,
-        actionId: surface.action.id,
-      })
-      toast.success(t("settings.plugins.toast.controlledActionApproved"), {
-        description: surface.title,
-      })
-      await Promise.all([refetch(), refetchDoctor()])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [grantControlledActionMutation, refetch, refetchDoctor, t])
+        toast.success(
+          enabled
+            ? t("settings.plugins.toast.enabled")
+            : t("settings.plugins.toast.disabled"),
+          {
+            description: formatPluginName(plugin.name),
+          },
+        )
+        await Promise.all([refetch(), refetchDoctor(), refetchMcp()])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [
+      setPluginEnabledMutation,
+      setRuntimeNativeEnabledMutation,
+      revokeAllMutation,
+      refetch,
+      refetchDoctor,
+      refetchMcp,
+      t,
+    ],
+  )
 
-  const handleSetControlledSetting = useCallback(async (
-    plugin: PluginData,
-    surface: PluginControlledUiSettingsSection,
-    field: PluginControlledUiField,
-    value: PluginControlledUiSettingValue,
-  ) => {
-    try {
-      await setControlledSettingMutation.mutateAsync({
-        reviewKey: plugin.reviewKey,
-        contributionId: surface.id,
-        fieldId: field.id,
-        value,
-      })
-      await refetch()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [refetch, setControlledSettingMutation, t])
-
-  const handleInvokeControlledAction = useCallback(async (
-    plugin: PluginData,
-    surface: PluginControlledUiCommandButton,
-  ) => {
-    try {
-      const result = await invokeControlledActionMutation.mutateAsync({
-        reviewKey: plugin.reviewKey,
-        contributionId: surface.id,
-        actionId: surface.action.id,
-      })
-      await navigator.clipboard.writeText(result.prompt)
-      toast.success(t("settings.plugins.toast.controlledDraftPrepared"), {
-        description: surface.title,
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [invokeControlledActionMutation, t])
-
-  const handleApproveStoreCandidate = useCallback(async (entry: PluginStoreCatalogEntry) => {
-    try {
-      await approveStoreCandidateMutation.mutateAsync({ storeEntryId: entry.id })
-      toast.success(t("settings.plugins.toast.storeCandidateApproved"), {
-        description: formatPluginName(entry.name),
-      })
-      await Promise.all([refetchStorePreview(), refetchDoctor()])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [approveStoreCandidateMutation, refetchDoctor, refetchStorePreview, t])
-
-  const handleInstallOrUpdateStoreCandidate = useCallback(async (entry: PluginStoreCatalogEntry) => {
-    try {
-      const result = await installOrUpdateStoreCandidateMutation.mutateAsync({ storeEntryId: entry.id })
-      toast.success(
-        result.backup
-          ? t("settings.plugins.toast.storeCandidateUpdated")
-          : t("settings.plugins.toast.storeCandidateInstalled"),
-        { description: formatPluginName(entry.name) },
+  const handleApproveMcpServers = useCallback(
+    async (plugin: PluginData) => {
+      if (
+        plugin.runtime !== "claude" ||
+        plugin.components.mcpServers.length === 0
       )
-      await Promise.all([
-        refetch(),
-        refetchStoreCatalog(),
-        refetchStorePreview(),
-        refetchDoctor(),
-      ])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [installOrUpdateStoreCandidateMutation, refetch, refetchDoctor, refetchStoreCatalog, refetchStorePreview, t])
-
-  const handlePreviewRuntimePluginWriteAction = useCallback(async (
-    request: RuntimePluginWriteActionRequest,
-  ) => {
-    try {
-      const preview = await previewRuntimePluginWriteActionMutation.mutateAsync(request)
-      setRuntimeActionPreview(preview)
-      setRuntimeActionConfirmation("")
-      if (!preview.canExecute) {
-        toast.error(preview.blockedReason ?? t("settings.plugins.runtimeMarketplacePreviewBlocked"), {
-          description: preview.label,
+        return
+      try {
+        await approveAllMutation.mutateAsync({
+          pluginSource: plugin.source,
+          serverNames: plugin.components.mcpServers,
         })
+        toast.success(t("settings.plugins.toast.mcpApproved"), {
+          description: formatPluginName(plugin.name),
+        })
+        await refetchMcp()
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [previewRuntimePluginWriteActionMutation, t])
+    },
+    [approveAllMutation, refetchMcp, t],
+  )
+
+  const handleGrantControlledAction = useCallback(
+    async (plugin: PluginData, surface: PluginControlledUiCommandButton) => {
+      try {
+        await grantControlledActionMutation.mutateAsync({
+          reviewKey: plugin.reviewKey,
+          contributionId: surface.id,
+          actionId: surface.action.id,
+        })
+        toast.success(t("settings.plugins.toast.controlledActionApproved"), {
+          description: surface.title,
+        })
+        await Promise.all([refetch(), refetchDoctor()])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [grantControlledActionMutation, refetch, refetchDoctor, t],
+  )
+
+  const handleSetControlledSetting = useCallback(
+    async (
+      plugin: PluginData,
+      surface: PluginControlledUiSettingsSection,
+      field: PluginControlledUiField,
+      value: PluginControlledUiSettingValue,
+    ) => {
+      try {
+        await setControlledSettingMutation.mutateAsync({
+          reviewKey: plugin.reviewKey,
+          contributionId: surface.id,
+          fieldId: field.id,
+          value,
+        })
+        await refetch()
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [refetch, setControlledSettingMutation, t],
+  )
+
+  const handleInvokeControlledAction = useCallback(
+    async (plugin: PluginData, surface: PluginControlledUiCommandButton) => {
+      try {
+        const result = await invokeControlledActionMutation.mutateAsync({
+          reviewKey: plugin.reviewKey,
+          contributionId: surface.id,
+          actionId: surface.action.id,
+        })
+        await navigator.clipboard.writeText(result.prompt)
+        toast.success(t("settings.plugins.toast.controlledDraftPrepared"), {
+          description: surface.title,
+        })
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [invokeControlledActionMutation, t],
+  )
+
+  const handleApproveStoreCandidate = useCallback(
+    async (entry: PluginStoreCatalogEntry) => {
+      try {
+        await approveStoreCandidateMutation.mutateAsync({
+          storeEntryId: entry.id,
+        })
+        toast.success(t("settings.plugins.toast.storeCandidateApproved"), {
+          description: formatPluginName(entry.name),
+        })
+        await Promise.all([refetchStorePreview(), refetchDoctor()])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [approveStoreCandidateMutation, refetchDoctor, refetchStorePreview, t],
+  )
+
+  const handleInstallOrUpdateStoreCandidate = useCallback(
+    async (entry: PluginStoreCatalogEntry) => {
+      try {
+        const result = await installOrUpdateStoreCandidateMutation.mutateAsync({
+          storeEntryId: entry.id,
+        })
+        toast.success(
+          result.backup
+            ? t("settings.plugins.toast.storeCandidateUpdated")
+            : t("settings.plugins.toast.storeCandidateInstalled"),
+          { description: formatPluginName(entry.name) },
+        )
+        await Promise.all([
+          refetch(),
+          refetchStoreCatalog(),
+          refetchStorePreview(),
+          refetchDoctor(),
+        ])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [
+      installOrUpdateStoreCandidateMutation,
+      refetch,
+      refetchDoctor,
+      refetchStoreCatalog,
+      refetchStorePreview,
+      t,
+    ],
+  )
+
+  const handlePreviewRuntimePluginWriteAction = useCallback(
+    async (request: RuntimePluginWriteActionRequest) => {
+      try {
+        const preview =
+          await previewRuntimePluginWriteActionMutation.mutateAsync(request)
+        setRuntimeActionPreview(preview)
+        setRuntimeActionConfirmation("")
+        if (!preview.canExecute) {
+          toast.error(
+            preview.blockedReason ??
+              t("settings.plugins.runtimeMarketplacePreviewBlocked"),
+            {
+              description: preview.label,
+            },
+          )
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [previewRuntimePluginWriteActionMutation, t],
+  )
 
   const handleExecuteRuntimePluginWriteAction = useCallback(async () => {
     if (!runtimeActionPreview?.confirmationToken) return
@@ -4473,9 +5478,13 @@ export function AgentsPluginsTab() {
           : undefined,
       })
       if (result.status !== "success") {
-        toast.error(result.diagnostics[0]?.message ?? t("settings.plugins.runtimeMarketplaceActionFailed"), {
-          description: result.preview.label,
-        })
+        toast.error(
+          result.diagnostics[0]?.message ??
+            t("settings.plugins.runtimeMarketplaceActionFailed"),
+          {
+            description: result.preview.label,
+          },
+        )
         return
       }
       toast.success(t("settings.plugins.runtimeMarketplaceActionSucceeded"), {
@@ -4493,7 +5502,10 @@ export function AgentsPluginsTab() {
         refetchDoctor(),
       ])
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.runtimeMarketplaceActionFailed")
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("settings.plugins.runtimeMarketplaceActionFailed")
       toast.error(message)
     }
   }, [
@@ -4519,7 +5531,10 @@ export function AgentsPluginsTab() {
         refetchDoctor(),
       ])
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
   }, [
@@ -4534,31 +5549,59 @@ export function AgentsPluginsTab() {
     t,
   ])
 
-  const handleToggleSafeMode = useCallback(async (enabled: boolean) => {
-    try {
-      await setSafeModeMutation.mutateAsync({ enabled })
-      toast.success(enabled
-        ? t("settings.plugins.toast.safeModeEnabled")
-        : t("settings.plugins.toast.safeModeDisabled"))
-      await Promise.all([refetchSafeMode(), refetch(), refetchDoctor(), refetchMcp()])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [setSafeModeMutation, refetchSafeMode, refetch, refetchDoctor, refetchMcp, t])
+  const handleToggleSafeMode = useCallback(
+    async (enabled: boolean) => {
+      try {
+        await setSafeModeMutation.mutateAsync({ enabled })
+        toast.success(
+          enabled
+            ? t("settings.plugins.toast.safeModeEnabled")
+            : t("settings.plugins.toast.safeModeDisabled"),
+        )
+        await Promise.all([
+          refetchSafeMode(),
+          refetch(),
+          refetchDoctor(),
+          refetchMcp(),
+        ])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [
+      setSafeModeMutation,
+      refetchSafeMode,
+      refetch,
+      refetchDoctor,
+      refetchMcp,
+      t,
+    ],
+  )
 
-  const handleToggleDeveloperMode = useCallback(async (enabled: boolean) => {
-    try {
-      await setDeveloperModeMutation.mutateAsync({ enabled })
-      toast.success(enabled
-        ? t("settings.plugins.toast.developerModeEnabled")
-        : t("settings.plugins.toast.developerModeDisabled"))
-      await Promise.all([refetchDeveloperMode(), refetch(), refetchDoctor()])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [setDeveloperModeMutation, refetchDeveloperMode, refetch, refetchDoctor, t])
+  const handleToggleDeveloperMode = useCallback(
+    async (enabled: boolean) => {
+      try {
+        await setDeveloperModeMutation.mutateAsync({ enabled })
+        toast.success(
+          enabled
+            ? t("settings.plugins.toast.developerModeEnabled")
+            : t("settings.plugins.toast.developerModeDisabled"),
+        )
+        await Promise.all([refetchDeveloperMode(), refetch(), refetchDoctor()])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [setDeveloperModeMutation, refetchDeveloperMode, refetch, refetchDoctor, t],
+  )
 
   const handleChooseDeveloperSource = useCallback(async () => {
     try {
@@ -4569,68 +5612,105 @@ export function AgentsPluginsTab() {
       setViewMode("sources")
       setSelectedSourceId(source.id)
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("settings.plugins.toast.failedToUpdate")
       toast.error(message)
     }
   }, [chooseDeveloperSourceMutation, refetchSources, refetch, refetchDoctor, t])
 
-  const handleRemoveDeveloperSource = useCallback(async (source: PluginSourceData) => {
-    if (source.kind !== "developer-local") return
-    try {
-      await removeDeveloperSourceMutation.mutateAsync({ id: source.id })
-      toast.success(t("settings.plugins.toast.developerSourceRemoved"))
-      await Promise.all([refetchSources(), refetch(), refetchDoctor()])
-      setSelectedSourceId(null)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [removeDeveloperSourceMutation, refetchSources, refetch, refetchDoctor, t])
-
-  const handleTrustDeveloperPlugin = useCallback(async (plugin: PluginData) => {
-    try {
-      await trustDeveloperPluginMutation.mutateAsync({ reviewKey: plugin.reviewKey })
-      toast.success(t("settings.plugins.toast.developerTrusted"), {
-        description: formatPluginName(plugin.name),
-      })
-      await Promise.all([refetch(), refetchDoctor()])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [trustDeveloperPluginMutation, refetch, refetchDoctor, t])
-
-  const handleRevokeDeveloperTrust = useCallback(async (plugin: PluginData) => {
-    try {
-      await revokeDeveloperTrustMutation.mutateAsync({ reviewKey: plugin.reviewKey })
-      toast.success(t("settings.plugins.toast.developerTrustRevoked"), {
-        description: formatPluginName(plugin.name),
-      })
-      await Promise.all([refetch(), refetchDoctor()])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [revokeDeveloperTrustMutation, refetch, refetchDoctor, t])
-
-  const handleLoadDeveloperPlugin = useCallback(async (plugin: PluginData) => {
-    try {
-      const result = await loadDeveloperPluginMutation.mutateAsync({ reviewKey: plugin.reviewKey })
-      if (result.status === "loaded") {
-        toast.success(t("settings.plugins.toast.developerPluginLoaded"), {
-          description: formatPluginName(plugin.name),
-        })
-      } else {
-        toast.error(result.errorMessage ?? t("settings.plugins.toast.developerPluginBlocked"), {
-          description: formatPluginName(plugin.name),
-        })
+  const handleRemoveDeveloperSource = useCallback(
+    async (source: PluginSourceData) => {
+      if (source.kind !== "developer-local") return
+      try {
+        await removeDeveloperSourceMutation.mutateAsync({ id: source.id })
+        toast.success(t("settings.plugins.toast.developerSourceRemoved"))
+        await Promise.all([refetchSources(), refetch(), refetchDoctor()])
+        setSelectedSourceId(null)
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
       }
-      await Promise.all([refetch(), refetchDoctor()])
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.plugins.toast.failedToUpdate")
-      toast.error(message)
-    }
-  }, [loadDeveloperPluginMutation, refetch, refetchDoctor, t])
+    },
+    [removeDeveloperSourceMutation, refetchSources, refetch, refetchDoctor, t],
+  )
+
+  const handleTrustDeveloperPlugin = useCallback(
+    async (plugin: PluginData) => {
+      try {
+        await trustDeveloperPluginMutation.mutateAsync({
+          reviewKey: plugin.reviewKey,
+        })
+        toast.success(t("settings.plugins.toast.developerTrusted"), {
+          description: formatPluginName(plugin.name),
+        })
+        await Promise.all([refetch(), refetchDoctor()])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [trustDeveloperPluginMutation, refetch, refetchDoctor, t],
+  )
+
+  const handleRevokeDeveloperTrust = useCallback(
+    async (plugin: PluginData) => {
+      try {
+        await revokeDeveloperTrustMutation.mutateAsync({
+          reviewKey: plugin.reviewKey,
+        })
+        toast.success(t("settings.plugins.toast.developerTrustRevoked"), {
+          description: formatPluginName(plugin.name),
+        })
+        await Promise.all([refetch(), refetchDoctor()])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [revokeDeveloperTrustMutation, refetch, refetchDoctor, t],
+  )
+
+  const handleLoadDeveloperPlugin = useCallback(
+    async (plugin: PluginData) => {
+      try {
+        const result = await loadDeveloperPluginMutation.mutateAsync({
+          reviewKey: plugin.reviewKey,
+        })
+        if (result.status === "loaded") {
+          toast.success(t("settings.plugins.toast.developerPluginLoaded"), {
+            description: formatPluginName(plugin.name),
+          })
+        } else {
+          toast.error(
+            result.errorMessage ??
+              t("settings.plugins.toast.developerPluginBlocked"),
+            {
+              description: formatPluginName(plugin.name),
+            },
+          )
+        }
+        await Promise.all([refetch(), refetchDoctor()])
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [loadDeveloperPluginMutation, refetch, refetchDoctor, t],
+  )
 
   const isRefreshingPlugins =
     isLoading ||
@@ -4654,7 +5734,10 @@ export function AgentsPluginsTab() {
         exitWidth={240}
         disableClickToClose={true}
       >
-        <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
+        <div
+          className="flex flex-col h-full bg-background border-r overflow-hidden"
+          style={{ borderRightWidth: "0.5px" }}
+        >
           <div className="px-2 pt-2 flex-shrink-0">
             <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-0.5">
               {VIEW_MODES.map((mode) => (
@@ -4666,7 +5749,7 @@ export function AgentsPluginsTab() {
                     "h-7 whitespace-nowrap rounded-md px-2 text-[11px] font-medium transition-colors",
                     viewMode === mode
                       ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {getViewModeLabel(mode, t)}
@@ -4700,13 +5783,15 @@ export function AgentsPluginsTab() {
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
             <input
               ref={searchInputRef}
-              placeholder={viewMode === "installed"
-                ? t("settings.plugins.searchPlaceholder")
-                : viewMode === "sources"
-                  ? t("settings.plugins.searchSourcesPlaceholder")
-                  : viewMode === "marketplaces"
-                    ? t("settings.plugins.searchMarketplacesPlaceholder")
-                    : t("settings.plugins.searchStorePlaceholder")}
+              placeholder={
+                viewMode === "installed"
+                  ? t("settings.plugins.searchPlaceholder")
+                  : viewMode === "sources"
+                    ? t("settings.plugins.searchSourcesPlaceholder")
+                    : viewMode === "marketplaces"
+                      ? t("settings.plugins.searchMarketplacesPlaceholder")
+                      : t("settings.plugins.searchStorePlaceholder")
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={listKeyDown}
@@ -4724,9 +5809,11 @@ export function AgentsPluginsTab() {
                     "h-6 min-w-0 overflow-hidden truncate whitespace-nowrap rounded-md px-1.5 text-[11px] font-medium leading-none transition-colors",
                     runtimeFilter === filter
                       ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
-                  title={filter === "all" ? undefined : getRuntimeLabel(filter, t)}
+                  title={
+                    filter === "all" ? undefined : getRuntimeLabel(filter, t)
+                  }
                 >
                   {getRuntimeFilterLabel(filter, t)}
                 </button>
@@ -4734,11 +5821,19 @@ export function AgentsPluginsTab() {
             </div>
           </div>
           {/* Plugin/source list */}
-          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
+          <div
+            ref={listRef}
+            role="listbox"
+            onKeyDown={listKeyDown}
+            tabIndex={-1}
+            className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none"
+          >
             {viewMode === "installed" ? (
               isLoading ? (
                 <div className="flex items-center justify-center h-full">
-                  <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("common.loading")}
+                  </p>
                 </div>
               ) : plugins.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -4779,7 +5874,9 @@ export function AgentsPluginsTab() {
                           <PluginListItem
                             key={getPluginKey(plugin)}
                             plugin={plugin}
-                            isSelected={selectedPluginKey === getPluginKey(plugin)}
+                            isSelected={
+                              selectedPluginKey === getPluginKey(plugin)
+                            }
                             onSelect={setSelectedPluginKey}
                           />
                         ))}
@@ -4791,7 +5888,9 @@ export function AgentsPluginsTab() {
             ) : viewMode === "sources" ? (
               isLoadingSources ? (
                 <div className="flex items-center justify-center h-full">
-                  <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("common.loading")}
+                  </p>
                 </div>
               ) : pluginSources.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -4837,7 +5936,9 @@ export function AgentsPluginsTab() {
             ) : viewMode === "marketplaces" ? (
               isLoadingRuntimeMarketplaces ? (
                 <div className="flex items-center justify-center h-full">
-                  <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("common.loading")}
+                  </p>
                 </div>
               ) : runtimeMarketplaceItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -4871,7 +5972,9 @@ export function AgentsPluginsTab() {
                           <RuntimeMarketplaceListItem
                             key={marketplace.id}
                             marketplace={marketplace}
-                            isSelected={selectedMarketplaceId === marketplace.id}
+                            isSelected={
+                              selectedMarketplaceId === marketplace.id
+                            }
                             onSelect={setSelectedMarketplaceId}
                           />
                         ))}
@@ -4882,7 +5985,9 @@ export function AgentsPluginsTab() {
               )
             ) : isLoadingStore ? (
               <div className="flex items-center justify-center h-full">
-                <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("common.loading")}
+                </p>
               </div>
             ) : storeEntries.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -4936,9 +6041,16 @@ export function AgentsPluginsTab() {
             <PluginDetail
               plugin={selectedPlugin}
               pluginDebug={selectedPluginDebug}
-              onToggleEnabled={(enabled) => handleToggleEnabled(selectedPlugin, enabled)}
-              isTogglingEnabled={setPluginEnabledMutation.isPending}
-              onApproveMcpServers={() => handleApproveMcpServers(selectedPlugin)}
+              onToggleEnabled={(enabled) =>
+                handleToggleEnabled(selectedPlugin, enabled)
+              }
+              isTogglingEnabled={
+                setPluginEnabledMutation.isPending ||
+                setRuntimeNativeEnabledMutation.isPending
+              }
+              onApproveMcpServers={() =>
+                handleApproveMcpServers(selectedPlugin)
+              }
               isApprovingMcpServers={approveAllMutation.isPending}
               onNavigateToTab={setActiveTab}
               mcpServerStatuses={mcpServerStatuses}
@@ -4946,15 +6058,36 @@ export function AgentsPluginsTab() {
               isAuthenticating={startOAuthMutation.isPending}
               onMarkReviewed={() => handleMarkReviewed(selectedPlugin)}
               isMarkingReviewed={markReviewedMutation.isPending}
-              onSetControlledSetting={(surface, field, value) => handleSetControlledSetting(selectedPlugin, surface, field, value)}
-              onGrantControlledAction={(surface) => handleGrantControlledAction(selectedPlugin, surface)}
-              onInvokeControlledAction={(surface) => handleInvokeControlledAction(selectedPlugin, surface)}
+              onSetControlledSetting={(surface, field, value) =>
+                handleSetControlledSetting(
+                  selectedPlugin,
+                  surface,
+                  field,
+                  value,
+                )
+              }
+              onGrantControlledAction={(surface) =>
+                handleGrantControlledAction(selectedPlugin, surface)
+              }
+              onInvokeControlledAction={(surface) =>
+                handleInvokeControlledAction(selectedPlugin, surface)
+              }
               isSavingControlledSetting={setControlledSettingMutation.isPending}
-              isGrantingControlledAction={grantControlledActionMutation.isPending}
-              isInvokingControlledAction={invokeControlledActionMutation.isPending}
-              onTrustDeveloperPlugin={() => handleTrustDeveloperPlugin(selectedPlugin)}
-              onRevokeDeveloperTrust={() => handleRevokeDeveloperTrust(selectedPlugin)}
-              onLoadDeveloperPlugin={() => handleLoadDeveloperPlugin(selectedPlugin)}
+              isGrantingControlledAction={
+                grantControlledActionMutation.isPending
+              }
+              isInvokingControlledAction={
+                invokeControlledActionMutation.isPending
+              }
+              onTrustDeveloperPlugin={() =>
+                handleTrustDeveloperPlugin(selectedPlugin)
+              }
+              onRevokeDeveloperTrust={() =>
+                handleRevokeDeveloperTrust(selectedPlugin)
+              }
+              onLoadDeveloperPlugin={() =>
+                handleLoadDeveloperPlugin(selectedPlugin)
+              }
               isTrustingDeveloperPlugin={trustDeveloperPluginMutation.isPending}
               isRevokingDeveloperTrust={revokeDeveloperTrustMutation.isPending}
               isLoadingDeveloperPlugin={loadDeveloperPluginMutation.isPending}
@@ -4976,10 +6109,17 @@ export function AgentsPluginsTab() {
                 variant="outline"
                 size="sm"
                 className="mt-4 h-7 px-2 text-xs"
-                onClick={() => { void handleRefreshPlugins() }}
+                onClick={() => {
+                  void handleRefreshPlugins()
+                }}
                 disabled={isRefreshingPlugins}
               >
-                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshingPlugins && "animate-spin")} />
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5 mr-1.5",
+                    isRefreshingPlugins && "animate-spin",
+                  )}
+                />
                 {t("settings.plugins.refresh")}
               </Button>
             </div>
@@ -4988,10 +6128,16 @@ export function AgentsPluginsTab() {
           selectedSource ? (
             <PluginSourceDetail
               source={selectedSource}
-              onRefresh={() => { void handleRefreshPlugins() }}
-              onRemoveDeveloperSource={() => handleRemoveDeveloperSource(selectedSource)}
+              onRefresh={() => {
+                void handleRefreshPlugins()
+              }}
+              onRemoveDeveloperSource={() =>
+                handleRemoveDeveloperSource(selectedSource)
+              }
               isRefreshing={isRefreshingPlugins}
-              isRemovingDeveloperSource={removeDeveloperSourceMutation.isPending}
+              isRemovingDeveloperSource={
+                removeDeveloperSourceMutation.isPending
+              }
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -5010,10 +6156,17 @@ export function AgentsPluginsTab() {
                 variant="outline"
                 size="sm"
                 className="mt-4 h-7 px-2 text-xs"
-                onClick={() => { void handleRefreshPlugins() }}
+                onClick={() => {
+                  void handleRefreshPlugins()
+                }}
                 disabled={isRefreshingPlugins}
               >
-                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshingPlugins && "animate-spin")} />
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5 mr-1.5",
+                    isRefreshingPlugins && "animate-spin",
+                  )}
+                />
                 {t("settings.plugins.refresh")}
               </Button>
             </div>
@@ -5022,19 +6175,29 @@ export function AgentsPluginsTab() {
           selectedMarketplace ? (
             <RuntimeMarketplaceDetail
               marketplace={selectedMarketplace}
-              onRefresh={() => { void handleRefreshPlugins() }}
+              onRefresh={() => {
+                void handleRefreshPlugins()
+              }}
               isRefreshing={isRefreshingPlugins}
               actionPreview={runtimeActionPreview}
               runtimeActionConfirmation={runtimeActionConfirmation}
               onRuntimeActionConfirmationChange={setRuntimeActionConfirmation}
-              onPreviewRuntimeAction={(request) => { void handlePreviewRuntimePluginWriteAction(request) }}
-              onExecuteRuntimeAction={() => { void handleExecuteRuntimePluginWriteAction() }}
+              onPreviewRuntimeAction={(request) => {
+                void handlePreviewRuntimePluginWriteAction(request)
+              }}
+              onExecuteRuntimeAction={() => {
+                void handleExecuteRuntimePluginWriteAction()
+              }}
               onCancelRuntimeActionPreview={() => {
                 setRuntimeActionPreview(null)
                 setRuntimeActionConfirmation("")
               }}
-              isPreviewingRuntimeAction={previewRuntimePluginWriteActionMutation.isPending}
-              isExecutingRuntimeAction={executeRuntimePluginWriteActionMutation.isPending}
+              isPreviewingRuntimeAction={
+                previewRuntimePluginWriteActionMutation.isPending
+              }
+              isExecutingRuntimeAction={
+                executeRuntimePluginWriteActionMutation.isPending
+              }
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -5053,10 +6216,17 @@ export function AgentsPluginsTab() {
                 variant="outline"
                 size="sm"
                 className="mt-4 h-7 px-2 text-xs"
-                onClick={() => { void handleRefreshPlugins() }}
+                onClick={() => {
+                  void handleRefreshPlugins()
+                }}
                 disabled={isRefreshingPlugins}
               >
-                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshingPlugins && "animate-spin")} />
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5 mr-1.5",
+                    isRefreshingPlugins && "animate-spin",
+                  )}
+                />
                 {t("settings.plugins.refresh")}
               </Button>
             </div>
@@ -5068,7 +6238,9 @@ export function AgentsPluginsTab() {
             debug={selectedStoreDebug}
             isLoadingPreview={isLoadingStorePreview}
             onApprove={() => handleApproveStoreCandidate(selectedStoreEntry)}
-            onInstallOrUpdate={() => handleInstallOrUpdateStoreCandidate(selectedStoreEntry)}
+            onInstallOrUpdate={() =>
+              handleInstallOrUpdateStoreCandidate(selectedStoreEntry)
+            }
             isApproving={approveStoreCandidateMutation.isPending}
             isInstalling={installOrUpdateStoreCandidateMutation.isPending}
           />
@@ -5089,10 +6261,17 @@ export function AgentsPluginsTab() {
               variant="outline"
               size="sm"
               className="mt-4 h-7 px-2 text-xs"
-              onClick={() => { void handleRefreshPlugins() }}
+              onClick={() => {
+                void handleRefreshPlugins()
+              }}
               disabled={isRefreshingPlugins}
             >
-              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshingPlugins && "animate-spin")} />
+              <RefreshCw
+                className={cn(
+                  "h-3.5 w-3.5 mr-1.5",
+                  isRefreshingPlugins && "animate-spin",
+                )}
+              />
               {t("settings.plugins.refresh")}
             </Button>
           </div>
