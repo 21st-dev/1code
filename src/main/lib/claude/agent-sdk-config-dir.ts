@@ -1,13 +1,16 @@
-import * as fs from "fs/promises"
-import * as os from "os"
-import path from "path"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import path from "node:path"
 
 type ClaudeAgentSdkConfigDirFs = {
   mkdir: typeof fs.mkdir
+  readFile: typeof fs.readFile
+  writeFile: typeof fs.writeFile
   stat: typeof fs.stat
   lstat: typeof fs.lstat
   symlink: typeof fs.symlink
   unlink: typeof fs.unlink
+  rm: typeof fs.rm
 }
 
 export type ClaudeAgentSdkIsolatedConfig = {
@@ -20,7 +23,20 @@ export type ClaudeAgentSdkConfigDirDependencies = {
   homeDir: () => string
   platform: NodeJS.Platform
   getPluginSafeModeState: () => Promise<{ enabled: boolean }>
+  getClaudePluginStagingEntries: () => Promise<ClaudePluginStagingEntry[]>
   logger: Pick<Console, "warn">
+}
+
+export interface ClaudePluginStagingEntry {
+  pluginSource: string
+  marketplace: string
+  name: string
+  version: string
+  path: string
+  description?: string
+  category?: string
+  homepage?: string
+  tags?: string[]
 }
 
 const symlinksCreated = new Set<string>()
@@ -33,13 +49,22 @@ const defaultDependencies: ClaudeAgentSdkConfigDirDependencies = {
     const state = await import("../plugins/update-review-state")
     return state.getPluginSafeModeState()
   },
+  getClaudePluginStagingEntries: async () => {
+    const [{ getEnabledPlugins, getApprovedPluginMcpServers }, gates] =
+      await Promise.all([
+        import("../trpc/routers/claude-settings"),
+        import("../plugins/runtime-gates"),
+      ])
+    return gates.discoverAllowedClaudeNativePluginRuntimeComponents({
+      enabledPluginSources: await getEnabledPlugins(),
+      approvedPluginMcpServerIdentifiers: await getApprovedPluginMcpServers(),
+    })
+  },
   logger: console,
 }
 
 function withDefaultDependencies(
-  dependencies:
-    | Partial<ClaudeAgentSdkConfigDirDependencies>
-    | undefined,
+  dependencies: Partial<ClaudeAgentSdkConfigDirDependencies> | undefined,
 ): ClaudeAgentSdkConfigDirDependencies {
   return {
     ...defaultDependencies,
@@ -59,11 +84,7 @@ export function resolveClaudeAgentSdkIsolatedConfig(input: {
 }): ClaudeAgentSdkIsolatedConfig {
   const ownerId = input.isUsingOllama ? input.chatId : input.subChatId
   return {
-    isolatedConfigDir: path.join(
-      input.userDataDir,
-      "claude-sessions",
-      ownerId,
-    ),
+    isolatedConfigDir: path.join(input.userDataDir, "claude-sessions", ownerId),
     cacheKey: ownerId,
   }
 }
@@ -72,24 +93,22 @@ export function clearClaudeAgentSdkIsolatedConfigDirCache(): void {
   symlinksCreated.clear()
 }
 
-async function removeManagedSymlink(input: {
+async function removeManagedPath(input: {
   targetPath: string
   label: string
   dependencies: ClaudeAgentSdkConfigDirDependencies
   markError: () => void
 }): Promise<void> {
   try {
-    const stat = await input.dependencies.fs
-      .lstat(input.targetPath)
-      .catch(() => undefined)
-    if (stat?.isSymbolicLink()) {
-      await input.dependencies.fs.unlink(input.targetPath)
-    }
-  } catch (symlinkErr) {
+    await input.dependencies.fs.rm(input.targetPath, {
+      recursive: true,
+      force: true,
+    })
+  } catch (err) {
     input.markError()
     input.dependencies.logger.warn(
-      `[claude] Failed to remove ${input.label} symlink for plugin safe mode:`,
-      (symlinkErr as Error).message,
+      `[claude] Failed to remove managed ${input.label}:`,
+      (err as Error).message,
     )
   }
 }
@@ -139,6 +158,139 @@ async function ensureSymlink(input: {
   }
 }
 
+async function writeFilteredSettings(input: {
+  settingsSource: string
+  settingsTarget: string
+  enabledPluginSources: string[]
+  dependencies: ClaudeAgentSdkConfigDirDependencies
+  markError: () => void
+}): Promise<void> {
+  let settings: Record<string, unknown> = {}
+  try {
+    settings = JSON.parse(
+      await input.dependencies.fs.readFile(input.settingsSource, "utf-8"),
+    ) as Record<string, unknown>
+  } catch {
+    settings = {}
+  }
+
+  const enabledSources = new Set(input.enabledPluginSources)
+  const approvedPluginMcpServers = Array.isArray(
+    settings.approvedPluginMcpServers,
+  )
+    ? (settings.approvedPluginMcpServers as unknown[]).filter(
+        (identifier): identifier is string =>
+          typeof identifier === "string" &&
+          input.enabledPluginSources.some((source) =>
+            identifier.startsWith(`${source}:`),
+          ),
+      )
+    : undefined
+
+  settings.enabledPlugins = Array.from(enabledSources).sort()
+  if (approvedPluginMcpServers) {
+    settings.approvedPluginMcpServers = approvedPluginMcpServers
+  }
+
+  try {
+    const existing = await input.dependencies.fs
+      .lstat(input.settingsTarget)
+      .catch(() => undefined)
+    if (existing?.isSymbolicLink() || existing?.isDirectory()) {
+      await input.dependencies.fs.rm(input.settingsTarget, {
+        recursive: true,
+        force: true,
+      })
+    }
+    await input.dependencies.fs.writeFile(
+      input.settingsTarget,
+      `${JSON.stringify(settings, null, 2)}\n`,
+      "utf-8",
+    )
+  } catch (err) {
+    input.markError()
+    input.dependencies.logger.warn(
+      "[claude] Failed to write filtered settings.json:",
+      (err as Error).message,
+    )
+  }
+}
+
+async function stageClaudePlugins(input: {
+  pluginsTarget: string
+  entries: ClaudePluginStagingEntry[]
+  dependencies: ClaudeAgentSdkConfigDirDependencies
+  markIncomplete: () => void
+  markError: () => void
+}): Promise<void> {
+  await removeManagedPath({
+    targetPath: input.pluginsTarget,
+    label: "plugins directory",
+    dependencies: input.dependencies,
+    markError: input.markError,
+  })
+
+  if (input.entries.length === 0) return
+
+  const marketplaces = new Map<string, ClaudePluginStagingEntry[]>()
+  for (const entry of input.entries) {
+    const existing = marketplaces.get(entry.marketplace) ?? []
+    existing.push(entry)
+    marketplaces.set(entry.marketplace, existing)
+  }
+
+  const symlinkType =
+    input.dependencies.platform === "win32" ? "junction" : "dir"
+  for (const [marketplace, entries] of marketplaces) {
+    const marketplaceRoot = path.join(
+      input.pluginsTarget,
+      "marketplaces",
+      sanitizePathSegment(marketplace),
+    )
+    const marketplaceMetaDir = path.join(marketplaceRoot, ".claude-plugin")
+    await input.dependencies.fs.mkdir(marketplaceMetaDir, { recursive: true })
+
+    const plugins = []
+    for (const entry of entries) {
+      const sourcePath = path.join("plugins", sanitizePathSegment(entry.name))
+      const targetPath = path.join(marketplaceRoot, sourcePath)
+      await input.dependencies.fs.mkdir(path.dirname(targetPath), {
+        recursive: true,
+      })
+      await ensureSymlink({
+        sourcePath: entry.path,
+        targetPath,
+        label: `plugin ${entry.pluginSource}`,
+        targetKind: "dir",
+        symlinkType,
+        dependencies: input.dependencies,
+        markIncomplete: input.markIncomplete,
+        markError: input.markError,
+      })
+      plugins.push({
+        name: entry.name,
+        version: entry.version,
+        description: entry.description,
+        source: sourcePath,
+        category: entry.category,
+        homepage: entry.homepage,
+        tags: entry.tags,
+      })
+    }
+
+    await input.dependencies.fs.writeFile(
+      path.join(marketplaceMetaDir, "marketplace.json"),
+      `${JSON.stringify({ name: marketplace, plugins }, null, 2)}\n`,
+      "utf-8",
+    )
+  }
+}
+
+function sanitizePathSegment(value: string): string {
+  const normalized = value.replace(/[^a-zA-Z0-9._-]/g, "_")
+  return normalized.length > 0 ? normalized : "plugin"
+}
+
 export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
   isolatedConfigDir: string
   cacheKey: string
@@ -148,9 +300,6 @@ export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
   await dependencies.fs.mkdir(input.isolatedConfigDir, { recursive: true })
 
   const pluginSafeMode = await dependencies.getPluginSafeModeState()
-  if (symlinksCreated.has(input.cacheKey) && !pluginSafeMode.enabled) {
-    return
-  }
 
   const homeClaudeDir = path.join(dependencies.homeDir(), ".claude")
   const symlinkType = dependencies.platform === "win32" ? "junction" : "dir"
@@ -209,20 +358,25 @@ export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
     "agents directory",
     "dir",
   )
-  // Do not expose the whole Claude plugin directory to Locus-managed runs.
-  // Reviewed plugin MCP servers are injected explicitly by the runtime route.
-  await removeManagedSymlink({
-    targetPath: pluginsTarget,
-    label: "plugins directory",
+  const pluginStagingEntries = pluginSafeMode.enabled
+    ? []
+    : await dependencies.getClaudePluginStagingEntries()
+  await stageClaudePlugins({
+    pluginsTarget,
+    entries: pluginStagingEntries,
+    dependencies,
+    markIncomplete,
+    markError,
+  })
+  await writeFilteredSettings({
+    settingsSource,
+    settingsTarget,
+    enabledPluginSources: pluginStagingEntries.map(
+      (entry) => entry.pluginSource,
+    ),
     dependencies,
     markError,
   })
-  await ensureManagedSymlink(
-    settingsSource,
-    settingsTarget,
-    "settings.json",
-    "file",
-  )
 
   if (symlinkSetupComplete) {
     symlinksCreated.add(input.cacheKey)

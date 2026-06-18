@@ -1,10 +1,15 @@
-import * as fs from "fs/promises"
-import type { Dirent } from "fs"
-import * as path from "path"
-import * as os from "os"
+import type { Dirent } from "node:fs"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
+import { parseDeveloperTrustedManifest } from "../../../shared/plugin-developer-trusted"
 import {
-  getManifestOnlyPluginTargetMode,
+  buildPluginSafetyGate,
+  type PluginSafetyGate,
+} from "../../../shared/plugin-safety-gates"
+import {
   getDeveloperTrustedPluginTargetMode,
+  getManifestOnlyPluginTargetMode,
   getPluginSourceDiagnostics,
   type PluginDiagnostic,
   type PluginExecutionStatus,
@@ -14,15 +19,15 @@ import {
 import type { PluginSourcePin } from "../../../shared/plugin-update-review"
 import type { McpServerConfig } from "../claude-config"
 import { isDirentDirectory } from "../fs/dirent"
+import { scanPluginReviewDocument } from "./review-scan"
+import { buildRuntimeNativeActivationIdentity } from "./runtime-native-activation"
 import {
   buildCurrentPluginMcpApprovalIdentifier,
-  getDeveloperPluginSources,
   extractCodexSourcePins,
+  getDeveloperPluginSources,
+  hashPluginManifestReviewDocument,
   recordPluginReviewScans,
 } from "./update-review-state"
-import { scanPluginReviewDocument } from "./review-scan"
-import { buildPluginSafetyGate, type PluginSafetyGate } from "../../../shared/plugin-safety-gates"
-import { parseDeveloperTrustedManifest } from "../../../shared/plugin-developer-trusted"
 
 export type PluginRuntime = "claude" | "codex"
 export type PluginSourceKind = "local-marketplace" | "cache" | "developer-local"
@@ -132,8 +137,18 @@ interface PluginComponentPathsResolution {
 let pluginCache: { plugins: PluginInfo[]; timestamp: number } | null = null
 let codexPluginCache: { plugins: PluginInfo[]; timestamp: number } | null = null
 const CACHE_TTL_MS = 30000 // 30 seconds - plugins don't change often during a session
-const CLAUDE_MARKETPLACES_DIR = path.join(os.homedir(), ".claude", "plugins", "marketplaces")
-const CODEX_PLUGIN_CACHE_DIR = path.join(os.homedir(), ".codex", "plugins", "cache")
+const CLAUDE_MARKETPLACES_DIR = path.join(
+  os.homedir(),
+  ".claude",
+  "plugins",
+  "marketplaces",
+)
+const CODEX_PLUGIN_CACHE_DIR = path.join(
+  os.homedir(),
+  ".codex",
+  "plugins",
+  "cache",
+)
 const MAX_DEVELOPER_DISCOVERY_MANIFEST_BYTES = 64 * 1024
 
 /**
@@ -152,7 +167,9 @@ function getString(value: unknown): string | undefined {
 
 function getStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined
-  const values = value.filter((item): item is string => typeof item === "string")
+  const values = value.filter(
+    (item): item is string => typeof item === "string",
+  )
   return values.length > 0 ? values : undefined
 }
 
@@ -176,10 +193,12 @@ export async function resolvePluginComponentPathWithDiagnostics(
 
   if (!isPathInside(pluginRoot, candidate)) {
     return {
-      diagnostics: [{
-        code: "component-path-outside-root",
-        severity: "warning",
-      }],
+      diagnostics: [
+        {
+          code: "component-path-outside-root",
+          severity: "warning",
+        },
+      ],
     }
   }
 
@@ -190,10 +209,12 @@ export async function resolvePluginComponentPathWithDiagnostics(
     ])
     if (!isPathInside(realRoot, realCandidate)) {
       return {
-        diagnostics: [{
-          code: "component-path-outside-root",
-          severity: "warning",
-        }],
+        diagnostics: [
+          {
+            code: "component-path-outside-root",
+            severity: "warning",
+          },
+        ],
       }
     }
   } catch {
@@ -246,10 +267,26 @@ async function resolvePluginComponentPaths(
   parsed: CodexPluginJson,
 ): Promise<PluginComponentPathsResolution> {
   const [commands, skills, agents, mcpServers] = await Promise.all([
-    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.commands, "commands"),
-    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.skills, "skills"),
-    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.agents, "agents"),
-    resolvePluginComponentPathWithDiagnostics(pluginRoot, parsed.mcpServers, ".mcp.json"),
+    resolvePluginComponentPathWithDiagnostics(
+      pluginRoot,
+      parsed.commands,
+      "commands",
+    ),
+    resolvePluginComponentPathWithDiagnostics(
+      pluginRoot,
+      parsed.skills,
+      "skills",
+    ),
+    resolvePluginComponentPathWithDiagnostics(
+      pluginRoot,
+      parsed.agents,
+      "agents",
+    ),
+    resolvePluginComponentPathWithDiagnostics(
+      pluginRoot,
+      parsed.mcpServers,
+      ".mcp.json",
+    ),
   ])
 
   return {
@@ -268,7 +305,9 @@ async function resolvePluginComponentPaths(
   }
 }
 
-async function getDirectoryStatus(targetPath: string): Promise<PluginSourceStatus> {
+async function getDirectoryStatus(
+  targetPath: string,
+): Promise<PluginSourceStatus> {
   let entries: Dirent[]
   try {
     entries = await fs.readdir(targetPath, { withFileTypes: true })
@@ -276,7 +315,9 @@ async function getDirectoryStatus(targetPath: string): Promise<PluginSourceStatu
     return "missing"
   }
 
-  return entries.some((entry) => !entry.name.startsWith(".")) ? "available" : "empty"
+  return entries.some((entry) => !entry.name.startsWith("."))
+    ? "available"
+    : "empty"
 }
 
 function formatSourceName(name: string): string {
@@ -286,8 +327,12 @@ function formatSourceName(name: string): string {
     .replace(/\bOpenai\b/g, "OpenAI")
 }
 
-function getSourceTrust(runtime: PluginRuntime, marketplace: string): PluginSourceTrust {
-  if (runtime === "codex" && marketplace.startsWith("openai-")) return "official"
+function getSourceTrust(
+  runtime: PluginRuntime,
+  marketplace: string,
+): PluginSourceTrust {
+  if (runtime === "codex" && marketplace.startsWith("openai-"))
+    return "official"
   return "local"
 }
 
@@ -297,8 +342,12 @@ function getSourceDescription(runtime: PluginRuntime): string {
     : "Codex plugin cache collection managed by Codex."
 }
 
-function getSourceDescriptionForKind(kind: PluginSourceKind, runtime: PluginRuntime): string {
-  if (kind === "developer-local") return "Local developer plugin source selected by the user."
+function getSourceDescriptionForKind(
+  kind: PluginSourceKind,
+  runtime: PluginRuntime,
+): string {
+  if (kind === "developer-local")
+    return "Local developer plugin source selected by the user."
   return getSourceDescription(runtime)
 }
 
@@ -308,7 +357,10 @@ function getSourceInstallHint(runtime: PluginRuntime): string {
     : "Codex manages this cache; install or update plugins through Codex, then refresh."
 }
 
-function getSourceInstallHintForKind(kind: PluginSourceKind, runtime: PluginRuntime): string {
+function getSourceInstallHintForKind(
+  kind: PluginSourceKind,
+  runtime: PluginRuntime,
+): string {
   if (kind === "developer-local") {
     return "Register local developer plugin directories explicitly. Developer plugins are full local code trust."
   }
@@ -324,12 +376,23 @@ async function discoverDeveloperTrustedPlugins(): Promise<PluginInfo[]> {
   const plugins: PluginInfo[] = []
 
   for (const source of sources) {
-    const manifestPath = path.join(source.path, ".locus-plugin", "developer.json")
-    let parsedManifest: ReturnType<typeof parseDeveloperTrustedManifest> | undefined
+    const manifestPath = path.join(
+      source.path,
+      ".locus-plugin",
+      "developer.json",
+    )
+    let parsedManifest:
+      | ReturnType<typeof parseDeveloperTrustedManifest>
+      | undefined
     try {
       const stat = await fs.stat(manifestPath)
-      if (!stat.isFile() || stat.size > MAX_DEVELOPER_DISCOVERY_MANIFEST_BYTES) {
-        throw new Error("Developer plugin discovery manifest is not a bounded file.")
+      if (
+        !stat.isFile() ||
+        stat.size > MAX_DEVELOPER_DISCOVERY_MANIFEST_BYTES
+      ) {
+        throw new Error(
+          "Developer plugin discovery manifest is not a bounded file.",
+        )
       }
       parsedManifest = parseDeveloperTrustedManifest(
         JSON.parse(await fs.readFile(manifestPath, "utf-8")) as unknown,
@@ -360,7 +423,6 @@ async function discoverDeveloperTrustedPlugins(): Promise<PluginInfo[]> {
 
   return plugins
 }
-
 
 /**
  * Discover all installed plugins from ~/.claude/plugins/marketplaces/
@@ -401,7 +463,11 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
     if (!isMarketplaceDir) continue
 
     const marketplacePath = path.join(marketplacesDir, marketplace.name)
-    const marketplaceJsonPath = path.join(marketplacePath, ".claude-plugin", "marketplace.json")
+    const marketplaceJsonPath = path.join(
+      marketplacePath,
+      ".claude-plugin",
+      "marketplace.json",
+    )
 
     try {
       const content = await fs.readFile(marketplaceJsonPath, "utf-8")
@@ -422,11 +488,15 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
         if (!plugin.source) continue
 
         // source can be a string path or an object { source: "url", url: "..." }
-        const sourcePath = typeof plugin.source === "string" ? plugin.source : null
+        const sourcePath =
+          typeof plugin.source === "string" ? plugin.source : null
         if (!sourcePath) continue
 
         try {
-          const pluginPath = await resolveClaudeMarketplacePluginPath(marketplacePath, sourcePath)
+          const pluginPath = await resolveClaudeMarketplacePluginPath(
+            marketplacePath,
+            sourcePath,
+          )
           if (!pluginPath) continue
           plugins.push({
             runtime: "claude",
@@ -466,7 +536,10 @@ export async function discoverInstalledPlugins(): Promise<PluginInfo[]> {
  * enablement state.
  */
 export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
-  if (codexPluginCache && Date.now() - codexPluginCache.timestamp < CACHE_TTL_MS) {
+  if (
+    codexPluginCache &&
+    Date.now() - codexPluginCache.timestamp < CACHE_TTL_MS
+  ) {
     return codexPluginCache.plugins
   }
 
@@ -507,7 +580,9 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
       const pluginFamilyPath = path.join(collectionPath, pluginEntry.name)
       let versionEntries: Dirent[]
       try {
-        versionEntries = await fs.readdir(pluginFamilyPath, { withFileTypes: true })
+        versionEntries = await fs.readdir(pluginFamilyPath, {
+          withFileTypes: true,
+        })
       } catch {
         continue
       }
@@ -517,7 +592,11 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
         if (!(await isDirentDirectory(pluginFamilyPath, versionEntry))) continue
 
         const pluginPath = path.join(pluginFamilyPath, versionEntry.name)
-        const pluginJsonPath = path.join(pluginPath, ".codex-plugin", "plugin.json")
+        const pluginJsonPath = path.join(
+          pluginPath,
+          ".codex-plugin",
+          "plugin.json",
+        )
 
         let parsed: CodexPluginJson
         try {
@@ -539,7 +618,8 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
           getString(parsed.interface?.websiteURL) ??
           getString(parsed.repository)
 
-        const { componentPaths, diagnostics } = await resolvePluginComponentPaths(pluginPath, parsed)
+        const { componentPaths, diagnostics } =
+          await resolvePluginComponentPaths(pluginPath, parsed)
 
         plugins.push({
           runtime: "codex",
@@ -559,7 +639,10 @@ export async function discoverCodexInstalledPlugins(): Promise<PluginInfo[]> {
           sourceKind: getSourceKind("codex"),
           sourceTrust: getSourceTrust("codex", collection.name),
           diagnostics,
-          sourcePins: await extractCodexSourcePins(pluginPath, versionEntry.name),
+          sourcePins: await extractCodexSourcePins(
+            pluginPath,
+            versionEntry.name,
+          ),
           ...getManifestOnlyPluginTargetMode(),
         })
       }
@@ -586,13 +669,16 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
     getDirectoryStatus(CODEX_PLUGIN_CACHE_DIR),
   ])
 
-  const bySource = new Map<string, {
-    runtime: PluginRuntime
-    marketplace: string
-    path: string
-    pluginCount: number
-    kind: PluginSourceKind
-  }>()
+  const bySource = new Map<
+    string,
+    {
+      runtime: PluginRuntime
+      marketplace: string
+      path: string
+      pluginCount: number
+      kind: PluginSourceKind
+    }
+  >()
 
   for (const plugin of plugins) {
     const key = `${plugin.runtime}:${plugin.marketplace}`
@@ -610,22 +696,24 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
     })
   }
 
-  const sources = Array.from(bySource.values()).map((source): PluginSourceInfo => {
-    const status: PluginSourceStatus = "available"
-    return {
-      id: `${source.runtime}:${source.marketplace}`,
-      runtime: source.runtime,
-      name: formatSourceName(source.marketplace),
-      description: getSourceDescriptionForKind(source.kind, source.runtime),
-      kind: source.kind,
-      trust: getSourceTrust(source.runtime, source.marketplace),
-      status,
-      path: source.path,
-      pluginCount: source.pluginCount,
-      installHint: getSourceInstallHintForKind(source.kind, source.runtime),
-      diagnostics: getPluginSourceDiagnostics({ status }),
-    }
-  })
+  const sources = Array.from(bySource.values()).map(
+    (source): PluginSourceInfo => {
+      const status: PluginSourceStatus = "available"
+      return {
+        id: `${source.runtime}:${source.marketplace}`,
+        runtime: source.runtime,
+        name: formatSourceName(source.marketplace),
+        description: getSourceDescriptionForKind(source.kind, source.runtime),
+        kind: source.kind,
+        trust: getSourceTrust(source.runtime, source.marketplace),
+        status,
+        path: source.path,
+        pluginCount: source.pluginCount,
+        installHint: getSourceInstallHintForKind(source.kind, source.runtime),
+        diagnostics: getPluginSourceDiagnostics({ status }),
+      }
+    },
+  )
 
   if (!sources.some((source) => source.runtime === "claude")) {
     const status = claudeRootStatus === "available" ? "empty" : claudeRootStatus
@@ -672,10 +760,12 @@ export async function discoverPluginSources(): Promise<PluginSourceInfo[]> {
  */
 export function getPluginComponentPaths(plugin: PluginInfo) {
   return {
-    commands: plugin.componentPaths?.commands ?? path.join(plugin.path, "commands"),
+    commands:
+      plugin.componentPaths?.commands ?? path.join(plugin.path, "commands"),
     skills: plugin.componentPaths?.skills ?? path.join(plugin.path, "skills"),
     agents: plugin.componentPaths?.agents ?? path.join(plugin.path, "agents"),
-    mcpServers: plugin.componentPaths?.mcpServers ?? path.join(plugin.path, ".mcp.json"),
+    mcpServers:
+      plugin.componentPaths?.mcpServers ?? path.join(plugin.path, ".mcp.json"),
   }
 }
 
@@ -726,12 +816,28 @@ export async function discoverPluginMcpServers(): Promise<PluginMcpConfig[]> {
 
       if (Object.keys(validServers).length > 0) {
         const reviewScan = await scanPluginReviewDocument(plugin)
-        const reviewResult = await recordPluginReviewScans([{
-          pluginKey: plugin.reviewKey,
-          document: reviewScan.reviewDocument,
-        }])
-        const updateReview =
-          reviewResult.metadataByPluginKey[plugin.reviewKey]
+        const reviewFingerprint = hashPluginManifestReviewDocument(
+          reviewScan.reviewDocument,
+        )
+        const reviewResult = await recordPluginReviewScans([
+          {
+            pluginKey: plugin.reviewKey,
+            document: reviewScan.reviewDocument,
+            runtimeNativeActivationIdentity:
+              buildRuntimeNativeActivationIdentity({
+                reviewDocument: reviewScan.reviewDocument,
+                reviewFingerprint,
+                packageIdentity: plugin.source,
+                packageVersion: plugin.version,
+                sourcePins:
+                  plugin.sourcePins ?? reviewScan.reviewDocument.sourcePins,
+                packageHash: plugin.sourcePins?.find(
+                  (pin) => pin.kind === "store-package-sha256",
+                )?.value,
+              }),
+          },
+        ])
+        const updateReview = reviewResult.metadataByPluginKey[plugin.reviewKey]
         const reviewGate = buildPluginSafetyGate({
           runtime: plugin.runtime,
           hasMcpServers: reviewScan.components.mcpServers.length > 0,

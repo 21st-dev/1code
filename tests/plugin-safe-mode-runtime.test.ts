@@ -93,14 +93,16 @@ describe("plugin safe mode runtime source guards", () => {
     expect(claudeRouterSource).toContain("getPluginGateMcpStatus(pluginConfig.reviewGate)")
   })
 
-  test("removes the plugin directory symlink while plugin safe mode is enabled", () => {
+  test("writes filtered plugin settings and staging while plugin safe mode is enforced", () => {
     expect(claudeRouterSource).not.toContain("ensureClaudeAgentSdkIsolatedConfigDir")
     expect(claudeRuntimeStartupSource).toContain(
       "ensureClaudeAgentSdkIsolatedConfigDir",
     )
     expect(claudeConfigDirSource).toContain("ensureClaudeAgentSdkIsolatedConfigDir")
     expect(claudeConfigDirSource).toContain("getPluginSafeModeState")
-    expect(claudeConfigDirSource).toContain("removeManagedSymlink({")
+    expect(claudeConfigDirSource).toContain("stageClaudePlugins({")
+    expect(claudeConfigDirSource).toContain("writeFilteredSettings({")
+    expect(claudeConfigDirSource).toContain("getClaudePluginStagingEntries")
     expect(claudeConfigDirSource).toContain("pluginSafeMode.enabled")
     expect(claudeConfigDirSource).not.toContain("pluginsSource")
   })

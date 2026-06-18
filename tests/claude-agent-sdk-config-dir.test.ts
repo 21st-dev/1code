@@ -3,6 +3,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  readFile,
   readlink,
   rm,
   symlink,
@@ -37,7 +38,22 @@ async function createHomeClaudeDir(root: string): Promise<string> {
   await mkdir(join(homeClaudeDir, "commands"), { recursive: true })
   await mkdir(join(homeClaudeDir, "agents"), { recursive: true })
   await mkdir(join(homeClaudeDir, "plugins"), { recursive: true })
-  await writeFile(join(homeClaudeDir, "settings.json"), "{}\n", "utf-8")
+  await writeFile(
+    join(homeClaudeDir, "settings.json"),
+    JSON.stringify(
+      {
+        includeCoAuthoredBy: false,
+        enabledPlugins: ["market:allowed", "market:blocked"],
+        approvedPluginMcpServers: [
+          "market:allowed:server#mcp-sha256:allowed",
+          "market:blocked:server#mcp-sha256:blocked",
+        ],
+      },
+      null,
+      2,
+    ),
+    "utf-8",
+  )
   return homeDir
 }
 
@@ -48,9 +64,7 @@ beforeEach(() => {
 afterEach(async () => {
   clearClaudeAgentSdkIsolatedConfigDirCache()
   await Promise.all(
-    roots.splice(0).map((root) =>
-      rm(root, { recursive: true, force: true }),
-    ),
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
   )
 })
 
@@ -83,7 +97,7 @@ describe("Claude Agent SDK isolated config dir", () => {
     })
   })
 
-  test("links selected Claude assets and removes plugin symlink in safe mode", async () => {
+  test("links selected Claude assets and writes empty plugin settings in safe mode", async () => {
     const root = await createRoot()
     const userDataDir = join(root, "user-data")
     const homeDir = await createHomeClaudeDir(root)
@@ -120,11 +134,99 @@ describe("Claude Agent SDK isolated config dir", () => {
     await expect(
       readlink(join(isolatedConfig.isolatedConfigDir, "agents")),
     ).resolves.toBe(join(homeClaudeDir, "agents"))
-    await expect(
-      readlink(join(isolatedConfig.isolatedConfigDir, "settings.json")),
-    ).resolves.toBe(join(homeClaudeDir, "settings.json"))
     expect(
       await pathExists(join(isolatedConfig.isolatedConfigDir, "plugins")),
     ).toBe(false)
+    await expect(
+      readlink(join(isolatedConfig.isolatedConfigDir, "settings.json")),
+    ).rejects.toThrow()
+    await expect(
+      readFile(
+        join(isolatedConfig.isolatedConfigDir, "settings.json"),
+        "utf-8",
+      ).then((content) => JSON.parse(content)),
+    ).resolves.toMatchObject({
+      includeCoAuthoredBy: false,
+      enabledPlugins: [],
+    })
+  })
+
+  test("stages only reviewed Claude plugins into isolated config", async () => {
+    const root = await createRoot()
+    const userDataDir = join(root, "user-data")
+    const homeDir = await createHomeClaudeDir(root)
+    const pluginSourcePath = join(root, "source-plugin")
+    await mkdir(pluginSourcePath, { recursive: true })
+    await writeFile(join(pluginSourcePath, "README.md"), "plugin\n", "utf-8")
+    const isolatedConfig = resolveClaudeAgentSdkIsolatedConfig({
+      userDataDir,
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      isUsingOllama: false,
+    })
+
+    await ensureClaudeAgentSdkIsolatedConfigDir({
+      ...isolatedConfig,
+      dependencies: {
+        homeDir: () => homeDir,
+        getPluginSafeModeState: async () => ({ enabled: false }),
+        getClaudePluginStagingEntries: async () => [
+          {
+            pluginSource: "market:allowed",
+            marketplace: "market",
+            name: "allowed",
+            version: "1.2.3",
+            path: pluginSourcePath,
+            description: "Allowed plugin",
+            category: "test",
+            homepage: "https://example.test",
+            tags: ["one", "two"],
+          },
+        ],
+        logger: { warn() {} },
+      },
+    })
+
+    const settings = JSON.parse(
+      await readFile(
+        join(isolatedConfig.isolatedConfigDir, "settings.json"),
+        "utf-8",
+      ),
+    )
+    expect(settings).toMatchObject({
+      includeCoAuthoredBy: false,
+      enabledPlugins: ["market:allowed"],
+      approvedPluginMcpServers: ["market:allowed:server#mcp-sha256:allowed"],
+    })
+
+    const stagedMarketplacePath = join(
+      isolatedConfig.isolatedConfigDir,
+      "plugins",
+      "marketplaces",
+      "market",
+    )
+    const marketplace = JSON.parse(
+      await readFile(
+        join(stagedMarketplacePath, ".claude-plugin", "marketplace.json"),
+        "utf-8",
+      ),
+    )
+    expect(marketplace).toEqual({
+      name: "market",
+      plugins: [
+        {
+          name: "allowed",
+          version: "1.2.3",
+          description: "Allowed plugin",
+          source: join("plugins", "allowed"),
+          category: "test",
+          homepage: "https://example.test",
+          tags: ["one", "two"],
+        },
+      ],
+    })
+    await expect(
+      readlink(join(stagedMarketplacePath, "plugins", "allowed")),
+    ).resolves.toBe(pluginSourcePath)
   })
 })
