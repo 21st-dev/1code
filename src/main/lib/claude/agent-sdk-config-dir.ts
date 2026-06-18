@@ -122,7 +122,7 @@ async function ensureSymlink(input: {
   dependencies: ClaudeAgentSdkConfigDirDependencies
   markIncomplete: () => void
   markError: () => void
-}): Promise<void> {
+}): Promise<boolean> {
   try {
     const sourceExists = await input.dependencies.fs
       .stat(input.sourcePath)
@@ -133,7 +133,12 @@ async function ensureSymlink(input: {
       .then(() => true)
       .catch(() => false)
 
-    if (sourceExists && !targetExists) {
+    if (!sourceExists) {
+      input.markIncomplete()
+      return false
+    }
+
+    if (!targetExists) {
       if (input.targetKind === "dir") {
         await input.dependencies.fs.symlink(
           input.sourcePath,
@@ -145,9 +150,7 @@ async function ensureSymlink(input: {
       }
     }
 
-    if (!sourceExists && !targetExists) {
-      input.markIncomplete()
-    }
+    return true
   } catch (symlinkErr) {
     input.markIncomplete()
     input.markError()
@@ -155,6 +158,7 @@ async function ensureSymlink(input: {
       `[claude] Failed to symlink ${input.label}:`,
       (symlinkErr as Error).message,
     )
+    return false
   }
 }
 
@@ -222,7 +226,7 @@ async function stageClaudePlugins(input: {
   dependencies: ClaudeAgentSdkConfigDirDependencies
   markIncomplete: () => void
   markError: () => void
-}): Promise<void> {
+}): Promise<{ stagedEntries: ClaudePluginStagingEntry[] }> {
   await removeManagedPath({
     targetPath: input.pluginsTarget,
     label: "plugins directory",
@@ -230,7 +234,7 @@ async function stageClaudePlugins(input: {
     markError: input.markError,
   })
 
-  if (input.entries.length === 0) return
+  if (input.entries.length === 0) return { stagedEntries: [] }
 
   const marketplaces = new Map<string, ClaudePluginStagingEntry[]>()
   for (const entry of input.entries) {
@@ -241,6 +245,7 @@ async function stageClaudePlugins(input: {
 
   const symlinkType =
     input.dependencies.platform === "win32" ? "junction" : "dir"
+  const stagedEntries: ClaudePluginStagingEntry[] = []
   for (const [marketplace, entries] of marketplaces) {
     const marketplaceRoot = path.join(
       input.pluginsTarget,
@@ -248,26 +253,41 @@ async function stageClaudePlugins(input: {
       sanitizePathSegment(marketplace),
     )
     const marketplaceMetaDir = path.join(marketplaceRoot, ".claude-plugin")
-    await input.dependencies.fs.mkdir(marketplaceMetaDir, { recursive: true })
 
-    const plugins = []
+    const linkedEntries: ClaudePluginStagingEntry[] = []
     for (const entry of entries) {
       const sourcePath = path.join("plugins", sanitizePathSegment(entry.name))
       const targetPath = path.join(marketplaceRoot, sourcePath)
-      await input.dependencies.fs.mkdir(path.dirname(targetPath), {
-        recursive: true,
-      })
-      await ensureSymlink({
-        sourcePath: entry.path,
-        targetPath,
-        label: `plugin ${entry.pluginSource}`,
-        targetKind: "dir",
-        symlinkType,
-        dependencies: input.dependencies,
-        markIncomplete: input.markIncomplete,
-        markError: input.markError,
-      })
-      plugins.push({
+      try {
+        await input.dependencies.fs.mkdir(path.dirname(targetPath), {
+          recursive: true,
+        })
+        const linked = await ensureSymlink({
+          sourcePath: entry.path,
+          targetPath,
+          label: `plugin ${entry.pluginSource}`,
+          targetKind: "dir",
+          symlinkType,
+          dependencies: input.dependencies,
+          markIncomplete: input.markIncomplete,
+          markError: input.markError,
+        })
+        if (linked) linkedEntries.push(entry)
+      } catch (err) {
+        input.markIncomplete()
+        input.markError()
+        input.dependencies.logger.warn(
+          `[claude] Failed to stage plugin ${entry.pluginSource}:`,
+          (err as Error).message,
+        )
+      }
+    }
+
+    if (linkedEntries.length === 0) continue
+
+    const plugins = linkedEntries.map((entry) => {
+      const sourcePath = path.join("plugins", sanitizePathSegment(entry.name))
+      return {
         name: entry.name,
         version: entry.version,
         description: entry.description,
@@ -275,15 +295,31 @@ async function stageClaudePlugins(input: {
         category: entry.category,
         homepage: entry.homepage,
         tags: entry.tags,
-      })
-    }
+      }
+    })
 
-    await input.dependencies.fs.writeFile(
-      path.join(marketplaceMetaDir, "marketplace.json"),
-      `${JSON.stringify({ name: marketplace, plugins }, null, 2)}\n`,
-      "utf-8",
-    )
+    try {
+      await input.dependencies.fs.mkdir(marketplaceMetaDir, { recursive: true })
+      await input.dependencies.fs.writeFile(
+        path.join(marketplaceMetaDir, "marketplace.json"),
+        `${JSON.stringify({ name: marketplace, plugins }, null, 2)}\n`,
+        "utf-8",
+      )
+      stagedEntries.push(...linkedEntries)
+    } catch (err) {
+      input.markIncomplete()
+      input.markError()
+      input.dependencies.logger.warn(
+        `[claude] Failed to write staged marketplace ${marketplace}:`,
+        (err as Error).message,
+      )
+      await input.dependencies.fs
+        .rm(marketplaceRoot, { recursive: true, force: true })
+        .catch(() => undefined)
+    }
   }
+
+  return { stagedEntries }
 }
 
 function sanitizePathSegment(value: string): string {
@@ -361,7 +397,7 @@ export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
   const pluginStagingEntries = pluginSafeMode.enabled
     ? []
     : await dependencies.getClaudePluginStagingEntries()
-  await stageClaudePlugins({
+  const pluginStaging = await stageClaudePlugins({
     pluginsTarget,
     entries: pluginStagingEntries,
     dependencies,
@@ -371,7 +407,7 @@ export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
   await writeFilteredSettings({
     settingsSource,
     settingsTarget,
-    enabledPluginSources: pluginStagingEntries.map(
+    enabledPluginSources: pluginStaging.stagedEntries.map(
       (entry) => entry.pluginSource,
     ),
     dependencies,

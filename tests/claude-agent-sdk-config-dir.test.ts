@@ -229,4 +229,78 @@ describe("Claude Agent SDK isolated config dir", () => {
       readlink(join(stagedMarketplacePath, "plugins", "allowed")),
     ).resolves.toBe(pluginSourcePath)
   })
+
+  test("drops failed Claude plugin staging entries from isolated activation", async () => {
+    const root = await createRoot()
+    const userDataDir = join(root, "user-data")
+    const homeDir = await createHomeClaudeDir(root)
+    const pluginSourcePath = join(root, "source-plugin")
+    await mkdir(pluginSourcePath, { recursive: true })
+    const missingPluginSourcePath = join(root, "missing-plugin")
+    const isolatedConfig = resolveClaudeAgentSdkIsolatedConfig({
+      userDataDir,
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      isUsingOllama: false,
+    })
+
+    await ensureClaudeAgentSdkIsolatedConfigDir({
+      ...isolatedConfig,
+      dependencies: {
+        homeDir: () => homeDir,
+        getPluginSafeModeState: async () => ({ enabled: false }),
+        getClaudePluginStagingEntries: async () => [
+          {
+            pluginSource: "market:allowed",
+            marketplace: "market",
+            name: "allowed",
+            version: "1.2.3",
+            path: pluginSourcePath,
+          },
+          {
+            pluginSource: "market:blocked",
+            marketplace: "market",
+            name: "blocked",
+            version: "1.2.3",
+            path: missingPluginSourcePath,
+          },
+        ],
+        logger: { warn() {} },
+      },
+    })
+
+    const settings = JSON.parse(
+      await readFile(
+        join(isolatedConfig.isolatedConfigDir, "settings.json"),
+        "utf-8",
+      ),
+    )
+    expect(settings).toMatchObject({
+      includeCoAuthoredBy: false,
+      enabledPlugins: ["market:allowed"],
+      approvedPluginMcpServers: ["market:allowed:server#mcp-sha256:allowed"],
+    })
+
+    const stagedMarketplacePath = join(
+      isolatedConfig.isolatedConfigDir,
+      "plugins",
+      "marketplaces",
+      "market",
+    )
+    const marketplace = JSON.parse(
+      await readFile(
+        join(stagedMarketplacePath, ".claude-plugin", "marketplace.json"),
+        "utf-8",
+      ),
+    )
+    expect(marketplace.plugins.map((plugin: { name: string }) => plugin.name)).toEqual([
+      "allowed",
+    ])
+    await expect(
+      readlink(join(stagedMarketplacePath, "plugins", "allowed")),
+    ).resolves.toBe(pluginSourcePath)
+    expect(
+      await pathExists(join(stagedMarketplacePath, "plugins", "blocked")),
+    ).toBe(false)
+  })
 })
