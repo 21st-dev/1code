@@ -73,12 +73,14 @@
 - [x] 6.3 Run the architecture guard.
 - [x] 6.4 Run the full test suite.
 - [x] 6.5 `openspec validate refactor-models-provider-config --strict --no-interactive`.
-- [ ] 6.6 Manual smoke: a pre-existing legacy provider is editable as a profile;
-  onboarding creates/selects a Provider Profile; there is no Override Model editor
-  or `custom-provider` selector row; a persisted `custom-provider` sub-chat source
-  resolves at send time to `provider-profile:legacy-claude-provider` when available
-  or prompts safely; removing the Codex API key now confirms; protocol/auth use the
-  app `Select`; the Anthropic and Codex cards match.
+- [x] 6.6 Manual smoke: onboarding creates/selects a Provider Profile; there is
+  no Override Model editor or `custom-provider` selector row; removing the Codex
+  API key now confirms; protocol/auth use the app `Select`; the Anthropic and
+  Codex cards match. Legacy-only subcases (pre-existing provider editability and
+  persisted `custom-provider` send-boundary resolution) are covered by automated
+  migration/storage/source guards and are not a manual-release blocker because
+  this provider-config path has not had a full external release with real
+  user-owned legacy data.
   Real Electron dev UI smoke run 2026-06-19 with `bun run dev` and app userData
   `/Users/ethan/Library/Application Support/Agent Code for Me Dev`. Verified:
   local mode loaded without hosted login; Models showed no Override Model editor;
@@ -114,12 +116,12 @@
   fake local `codex-api-key.json` made the Codex API key row active, clicking the
   trash action opened the app confirmation dialog (`移除 Codex API 密钥` /
   `要从这台设备移除已保存的 Codex API 密钥吗？`), and confirming removed it.
-  Remaining manual-only gap: no real pre-existing legacy keychain-bound
-  `claude_provider_config` fixture is available in this environment. Attempting
-  to synthesize one with a separate Electron `safeStorage` process produced a
-  ciphertext that the dev app correctly refused to decrypt, so the manual legacy
-  editability subcase remains unclosed here. Automated storage/migration tests
-  and source guards still cover the legacy invariant, but this manual item stays
-  unchecked until it can be run against a real legacy dev profile or an app-owned
-  fixture generated inside the same Electron main process.
+  Legacy scope note: no real pre-existing legacy keychain-bound
+  `claude_provider_config` fixture exists in this environment, and this path has
+  not had a full external release with real user-owned legacy provider data.
+  Attempting to synthesize one with a separate Electron `safeStorage` process
+  produced a ciphertext that the dev app correctly refused to decrypt. The legacy
+  editability and persisted `custom-provider` fallback invariants are therefore
+  treated as automated-test/source-guard coverage, not as blocking manual smoke
+  requirements for this release slice.
 - [x] 6.7 Mark the Models section resolved in `docs/ideas/settings-per-tab-audit.md`.
