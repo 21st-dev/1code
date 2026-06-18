@@ -1196,6 +1196,10 @@ export const en = {
   "settings.plugins.trustDeveloperPlugin": "Trust fingerprint",
   "settings.plugins.loadDeveloperPlugin": "Load local code",
   "settings.plugins.revokeDeveloperTrust": "Revoke trust",
+  "settings.plugins.confirmRevokeDeveloperTrust":
+    "Revoke local trust for {name}? The plugin will not be able to load trusted local code until you review and trust the current fingerprint again.",
+  "settings.plugins.confirmRemoveDeveloperSource":
+    "Remove developer source {name}? Its local plugins will disappear from Locus until you add the source again.",
   "settings.plugins.developerGateBlocksAction":
     "Developer mode, safe mode, review, source, manifest, hash, or trust gates block this action.",
   "settings.plugins.developerTrustCurrent": "Trust current",
@@ -4484,6 +4488,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.trustDeveloperPlugin": "信任 fingerprint",
   "settings.plugins.loadDeveloperPlugin": "加载本地代码",
   "settings.plugins.revokeDeveloperTrust": "撤销信任",
+  "settings.plugins.confirmRevokeDeveloperTrust":
+    "撤销 {name} 的本地信任？再次复审并信任当前 fingerprint 前，这个插件不能加载可信本地代码。",
+  "settings.plugins.confirmRemoveDeveloperSource":
+    "移除开发者来源 {name}？重新添加这个来源前，它包含的本地插件会从 Locus 中消失。",
   "settings.plugins.developerGateBlocksAction":
     "开发者模式、安全模式、复审、来源、清单、hash 或信任门禁正在阻断这个动作。",
   "settings.plugins.developerTrustCurrent": "信任当前",

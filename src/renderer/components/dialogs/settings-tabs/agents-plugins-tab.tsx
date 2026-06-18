@@ -5816,6 +5816,12 @@ export function AgentsPluginsTab() {
   const handleRemoveDeveloperSource = useCallback(
     async (source: PluginSourceData) => {
       if (source.kind !== "developer-local") return
+      const confirmed = window.confirm(
+        t("settings.plugins.confirmRemoveDeveloperSource", {
+          name: source.name,
+        }),
+      )
+      if (!confirmed) return
       try {
         await removeDeveloperSourceMutation.mutateAsync({ id: source.id })
         toast.success(t("settings.plugins.toast.developerSourceRemoved"))
@@ -5855,6 +5861,12 @@ export function AgentsPluginsTab() {
 
   const handleRevokeDeveloperTrust = useCallback(
     async (plugin: PluginData) => {
+      const confirmed = window.confirm(
+        t("settings.plugins.confirmRevokeDeveloperTrust", {
+          name: formatPluginName(plugin.name),
+        }),
+      )
+      if (!confirmed) return
       try {
         await revokeDeveloperTrustMutation.mutateAsync({
           reviewKey: plugin.reviewKey,

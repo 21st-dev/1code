@@ -393,6 +393,13 @@ describe("plugin target mode UI source guards", () => {
       "trpc.plugins.loadDeveloperPlugin.useMutation",
     )
     expect(pluginsTabSource).toContain(
+      "settings.plugins.confirmRemoveDeveloperSource",
+    )
+    expect(pluginsTabSource).toContain(
+      "settings.plugins.confirmRevokeDeveloperTrust",
+    )
+    expect(pluginsTabSource).toContain("window.confirm")
+    expect(pluginsTabSource).toContain(
       "developer.gate.canTrustCurrentFingerprint",
     )
     expect(pluginsTabSource).toContain("developer.gate.canLoadTrustedCode")
@@ -411,6 +418,8 @@ describe("plugin target mode UI source guards", () => {
       "settings.plugins.trustDeveloperPlugin",
       "settings.plugins.loadDeveloperPlugin",
       "settings.plugins.revokeDeveloperTrust",
+      "settings.plugins.confirmRevokeDeveloperTrust",
+      "settings.plugins.confirmRemoveDeveloperSource",
       "settings.plugins.developerGateBlocksAction",
       "settings.plugins.removeDeveloperSource",
       "settings.plugins.toast.developerPluginLoaded",
