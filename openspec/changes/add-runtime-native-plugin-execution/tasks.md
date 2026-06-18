@@ -102,7 +102,7 @@
 ## 6. Validation
 
 - [x] 6.1 `bun run ts:check`.
-- [ ] 6.2 `bun run lint`.
+- [x] 6.2 `bun run lint`.
 - [ ] 6.3 Full test suite, including filtered settings, safe mode, review gates,
   activation-identity drift, identity-incomplete behavior, MCP-approval gates,
   review-state recomputation, failed-load recovery, Codex version probe, and Codex
