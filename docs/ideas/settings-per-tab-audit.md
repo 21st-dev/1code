@@ -141,9 +141,10 @@ trust, update review, and per-plugin MCP management.
   are **product surfaces, not settings**. As a single settings tab it's the biggest
   source of "混乱". This is the concrete instance of the deferred IA question ("should
   these 5 tabs live in Settings?").
-- **Action (product/IA call):** consider promoting Plugins to its own management
-  surface (out of the Settings dialog), or at least split the file and treat the
-  store/marketplace as a distinct view. *[your call]*
+- **Action (product/IA call):** keep Plugins in Settings while runtime execution is
+  being made truthful; promoting Plugins to its own management surface is deferred
+  until plugin execution works. The execution-truth and in-tab trust fixes are folded
+  into `add-runtime-native-plugin-execution`.
 
 ### 🟡 B. MCP overlap with the MCP tab, no bridge + dead `setActiveTab`
 
@@ -152,7 +153,7 @@ trust, update review, and per-plugin MCP management.
   tab. `setActiveTab` is created (line 3844) but **never called** → no cross-link AND
   dead code.
 - **Action:** bridge to the MCP tab (or clarify which owns MCP auth); remove the
-  unused `setActiveTab`.
+  unused `setActiveTab`. Folded into `add-runtime-native-plugin-execution`.
 
 ### 🟡 C. Inconsistent confirmation rigor — incl. a security action with none
 
@@ -161,7 +162,8 @@ trust, update review, and per-plugin MCP management.
   4603 — a security action) and **remove developer source** (4577) fire on a single
   click with **no confirmation**.
 - **Action:** add confirmations to the destructive/security actions; right-size the
-  heavy type-to-confirm so rigor is proportional to risk.
+  heavy type-to-confirm so rigor is proportional to risk. Folded into
+  `add-runtime-native-plugin-execution`.
 
 ### 🟡 D. Codex plugins are listed but render "unsupported"
 
@@ -169,13 +171,17 @@ trust, update review, and per-plugin MCP management.
   `unsupported-runtime` / `unsupported-target-mode` / `unsupported-surface` /
   `unsupported-action` vocabulary — codex plugins/actions surface as "unsupported for
   your runtime" (the claude-privileged duopoly = review-finding ②, here too).
-- **Action:** decide — hide unsupported-runtime entries, or clearly explain why they
-  can't be used; don't show dead "unsupported" rows. *[ties to ② product call]*
+- **Action:** hide unsupported-runtime entries or clearly explain why they can't be
+  used from the Phase-1 activation matrix; don't show dead "unsupported" rows. Folded
+  into `add-runtime-native-plugin-execution`.
 
 ### Decisions to ratify (Plugins)
-1. **Is Plugins a settings tab or a product surface?** (§A) — promote it out of
-   Settings / split it, or keep as-is? *[product/IA call — the concrete ② / Phase-3
-   "do these belong in Settings" question]*
+1. **Is Plugins a settings tab or a product surface?** (§A) → **DECIDED: keep Plugins
+   in Settings for now; defer a standalone extension/product surface until execution
+   works.**
 2. **Confirm the destructive/security actions** (§C) and **bridge/clarify MCP** (§B)
-   + drop the dead `setActiveTab`? *[recommend yes]*
-3. **Codex "unsupported" entries** (§D) — hide vs explain? *[ties to ②]*
+   + drop the dead `setActiveTab`? → **DECIDED: yes; folded into
+   `add-runtime-native-plugin-execution`.**
+3. **Codex "unsupported" entries** (§D) → **DECIDED: hide dead rows or explain the
+   blocked/native-loadable state from the activation matrix; folded into
+   `add-runtime-native-plugin-execution`.**
