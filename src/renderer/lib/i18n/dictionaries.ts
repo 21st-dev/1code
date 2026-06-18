@@ -1245,6 +1245,47 @@ export const en = {
   "settings.plugins.gateNo": "No",
   "settings.plugins.safetyGateBlocksAction":
     "Review gates or safe mode currently block this action.",
+  "settings.plugins.runtimeNativeActivation": "Runtime-native activation",
+  "settings.plugins.runtimeNativeHint":
+    "Native loading is allowed only when review, enablement, safe mode, activation identity, per-run filtering, and MCP approval gates all pass.",
+  "settings.plugins.runtimeNativeCurrent": "Current run",
+  "settings.plugins.runtimeNativeEnableCandidate": "Enable candidate",
+  "settings.plugins.runtimeNativeAllowed": "Allowed",
+  "settings.plugins.runtimeNativeBlocked": "Blocked",
+  "settings.plugins.runtimeNativeIdentity": "Activation identity",
+  "settings.plugins.runtimeNativeIdentityReviewed": "Reviewed",
+  "settings.plugins.runtimeNativeIdentityIncomplete": "Incomplete",
+  "settings.plugins.runtimeNativeIdentityIncompleteAcknowledged":
+    "Incomplete acknowledged",
+  "settings.plugins.runtimeNativeIdentityUnreviewed": "Unreviewed",
+  "settings.plugins.runtimeNativeIdentityDrifted": "Drifted",
+  "settings.plugins.runtimeNativeMcpApproval": "MCP approval",
+  "settings.plugins.runtimeNativeMcpNotRequired": "Not required",
+  "settings.plugins.runtimeNativeMcpRequired": "Required",
+  "settings.plugins.runtimeNativeMcpApproved": "Approved or filtered",
+  "settings.plugins.runtimeNativeComponents": "Native components",
+  "settings.plugins.runtimeNativeBlockedReasons": "Blocked reasons",
+  "settings.plugins.runtimeNativeNoBlockedReasons":
+    "No runtime-native blockers are reported for this state.",
+  "settings.plugins.runtimeNativeReasonPluginDisabled": "The plugin is disabled.",
+  "settings.plugins.runtimeNativeReasonGlobalSafeMode":
+    "Plugin safe mode is on.",
+  "settings.plugins.runtimeNativeReasonManifestReviewRequired":
+    "The current manifest fingerprint needs local review.",
+  "settings.plugins.runtimeNativeReasonUnsupported":
+    "This runtime path has not proven native plugin loading.",
+  "settings.plugins.runtimeNativeReasonPerRunControlMissing":
+    "This runtime path has no proven per-run plugin filter.",
+  "settings.plugins.runtimeNativeReasonIdentityIncomplete":
+    "The activation identity is missing a stable drift-detection field.",
+  "settings.plugins.runtimeNativeReasonIdentityUnreviewed":
+    "The activation identity has not been reviewed.",
+  "settings.plugins.runtimeNativeReasonIdentityDrifted":
+    "The activation identity changed after review.",
+  "settings.plugins.runtimeNativeReasonMcpApprovalRequired":
+    "A declared plugin MCP server still needs approval.",
+  "settings.plugins.runtimeNativeReasonNativeLoadFailed":
+    "The previous native load or staging attempt failed.",
   "settings.plugins.uiContributions": "UI Contributions",
   "settings.plugins.uiContributionsHint":
     "Declared Locus surfaces from this plugin. Locus renders them with app-owned controls and does not execute plugin JavaScript.",
@@ -1385,7 +1426,7 @@ export const en = {
   "settings.plugins.claudePackageHint":
     "Claude Code plugins are runtime packages. Enabling them exposes their commands, skills, agents, and MCP servers to Claude Code only.",
   "settings.plugins.codexPackageHint":
-    "Codex plugins are installed Codex runtime packages. They are shown here for visibility; this app does not control their enablement yet.",
+    "Codex plugins are Codex runtime packages. Locus enables them only through the controlled app-server path after review and activation gates pass.",
   "settings.plugins.source": "Source",
   "settings.plugins.path": "Path",
   "settings.plugins.homepage": "Homepage",
@@ -4492,6 +4533,45 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.gateNo": "否",
   "settings.plugins.safetyGateBlocksAction":
     "当前复审门禁或安全模式正在阻断这个动作。",
+  "settings.plugins.runtimeNativeActivation": "运行时原生激活",
+  "settings.plugins.runtimeNativeHint":
+    "只有复审、启用状态、安全模式、激活身份、单次运行过滤和 MCP 批准都通过时，才允许原生加载。",
+  "settings.plugins.runtimeNativeCurrent": "当前运行",
+  "settings.plugins.runtimeNativeEnableCandidate": "启用候选",
+  "settings.plugins.runtimeNativeAllowed": "允许",
+  "settings.plugins.runtimeNativeBlocked": "已阻断",
+  "settings.plugins.runtimeNativeIdentity": "激活身份",
+  "settings.plugins.runtimeNativeIdentityReviewed": "已复审",
+  "settings.plugins.runtimeNativeIdentityIncomplete": "不完整",
+  "settings.plugins.runtimeNativeIdentityIncompleteAcknowledged": "已确认不完整",
+  "settings.plugins.runtimeNativeIdentityUnreviewed": "未复审",
+  "settings.plugins.runtimeNativeIdentityDrifted": "已漂移",
+  "settings.plugins.runtimeNativeMcpApproval": "MCP 批准",
+  "settings.plugins.runtimeNativeMcpNotRequired": "不需要",
+  "settings.plugins.runtimeNativeMcpRequired": "需要批准",
+  "settings.plugins.runtimeNativeMcpApproved": "已批准或已过滤",
+  "settings.plugins.runtimeNativeComponents": "原生组件",
+  "settings.plugins.runtimeNativeBlockedReasons": "阻断原因",
+  "settings.plugins.runtimeNativeNoBlockedReasons":
+    "当前状态没有报告运行时原生阻断原因。",
+  "settings.plugins.runtimeNativeReasonPluginDisabled": "插件已禁用。",
+  "settings.plugins.runtimeNativeReasonGlobalSafeMode": "插件安全模式已开启。",
+  "settings.plugins.runtimeNativeReasonManifestReviewRequired":
+    "当前 manifest fingerprint 需要本地复审。",
+  "settings.plugins.runtimeNativeReasonUnsupported":
+    "这个运行时路径还没有证明可原生加载插件。",
+  "settings.plugins.runtimeNativeReasonPerRunControlMissing":
+    "这个运行时路径还没有证明具备单次运行插件过滤能力。",
+  "settings.plugins.runtimeNativeReasonIdentityIncomplete":
+    "激活身份缺少稳定的漂移检测字段。",
+  "settings.plugins.runtimeNativeReasonIdentityUnreviewed":
+    "激活身份尚未复审。",
+  "settings.plugins.runtimeNativeReasonIdentityDrifted":
+    "激活身份在复审后发生变化。",
+  "settings.plugins.runtimeNativeReasonMcpApprovalRequired":
+    "声明的插件 MCP 服务器仍需批准。",
+  "settings.plugins.runtimeNativeReasonNativeLoadFailed":
+    "上一次原生加载或 staging 尝试失败。",
   "settings.plugins.uiContributions": "UI 贡献",
   "settings.plugins.uiContributionsHint":
     "这些是插件声明的 Locus 界面。Locus 使用应用自己的控件渲染，不执行插件 JavaScript。",
@@ -4632,7 +4712,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.claudePackageHint":
     "Claude Code 插件是 Claude 运行时的能力包。启用后只会影响 Claude Code。",
   "settings.plugins.codexPackageHint":
-    "Codex 插件是已安装的 Codex 运行时包。这里先做可见性展示，应用还不控制它们的启用状态。",
+    "Codex 插件是 Codex 运行时包。Locus 只会在复审和激活门禁通过后，通过受控 app-server 路径启用。",
   "settings.plugins.source": "来源",
   "settings.plugins.path": "路径",
   "settings.plugins.homepage": "主页",

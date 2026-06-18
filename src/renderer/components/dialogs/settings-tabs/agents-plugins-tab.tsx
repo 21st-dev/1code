@@ -1269,6 +1269,84 @@ function getSafetyGateStatusClass(status: PluginSafetyGateStatus): string {
   }
 }
 
+function getRuntimeNativeActivationStatusLabel(
+  status: RuntimeNativeActivationPolicy["status"],
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  return status === "allowed"
+    ? t("settings.plugins.runtimeNativeAllowed")
+    : t("settings.plugins.runtimeNativeBlocked")
+}
+
+function getRuntimeNativeActivationStatusClass(
+  status: RuntimeNativeActivationPolicy["status"],
+): string {
+  return status === "allowed"
+    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+}
+
+function getRuntimeNativeIdentityStatusLabel(
+  status: RuntimeNativeActivationIdentityStatus,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (status) {
+    case "reviewed":
+      return t("settings.plugins.runtimeNativeIdentityReviewed")
+    case "identity-incomplete":
+      return t("settings.plugins.runtimeNativeIdentityIncomplete")
+    case "identity-incomplete-acknowledged":
+      return t("settings.plugins.runtimeNativeIdentityIncompleteAcknowledged")
+    case "identity-unreviewed":
+      return t("settings.plugins.runtimeNativeIdentityUnreviewed")
+    case "identity-drifted":
+      return t("settings.plugins.runtimeNativeIdentityDrifted")
+  }
+}
+
+function getRuntimeNativeIdentityStatusClass(
+  status: RuntimeNativeActivationIdentityStatus,
+): string {
+  switch (status) {
+    case "reviewed":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "identity-incomplete-acknowledged":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+    case "identity-incomplete":
+    case "identity-unreviewed":
+    case "identity-drifted":
+      return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+  }
+}
+
+function getRuntimeNativeBlockedReasonLabel(
+  reason: RuntimeNativeActivationBlockedReason,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  switch (reason) {
+    case "plugin-disabled":
+      return t("settings.plugins.runtimeNativeReasonPluginDisabled")
+    case "global-safe-mode":
+      return t("settings.plugins.runtimeNativeReasonGlobalSafeMode")
+    case "manifest-review-required":
+      return t("settings.plugins.runtimeNativeReasonManifestReviewRequired")
+    case "runtime-native-unsupported":
+      return t("settings.plugins.runtimeNativeReasonUnsupported")
+    case "per-run-plugin-control-missing":
+      return t("settings.plugins.runtimeNativeReasonPerRunControlMissing")
+    case "activation-identity-incomplete":
+      return t("settings.plugins.runtimeNativeReasonIdentityIncomplete")
+    case "activation-identity-unreviewed":
+      return t("settings.plugins.runtimeNativeReasonIdentityUnreviewed")
+    case "activation-identity-drifted":
+      return t("settings.plugins.runtimeNativeReasonIdentityDrifted")
+    case "mcp-approval-required":
+      return t("settings.plugins.runtimeNativeReasonMcpApprovalRequired")
+    case "native-load-failed":
+      return t("settings.plugins.runtimeNativeReasonNativeLoadFailed")
+  }
+}
+
 function getControlledUiSurfaceLabel(
   type: PluginControlledUiSurface["type"],
   t: ReturnType<typeof useI18n>["t"],
@@ -2159,6 +2237,120 @@ function PluginSafetyGatePanel({ plugin }: { plugin: PluginData }) {
   )
 }
 
+function PluginRuntimeNativeActivationPanel({ plugin }: { plugin: PluginData }) {
+  const { t } = useI18n()
+  const current = plugin.runtimeNativeActivation.current
+  const enableCandidate = plugin.runtimeNativeActivation.enableCandidate
+  const reasonSource = plugin.isDisabled ? enableCandidate : current
+  const visibleReasons = reasonSource.reasons
+  const mcpApprovalRequired = enableCandidate.reasons.includes(
+    "mcp-approval-required",
+  )
+  const componentSummary = [
+    `${t("settings.plugins.doctorCommandsShort")}:${plugin.components.commands.length}`,
+    `${t("settings.plugins.doctorSkillsShort")}:${plugin.components.skills.length}`,
+    `${t("settings.plugins.doctorAgentsShort")}:${plugin.components.agents.length}`,
+    `MCP:${plugin.components.mcpServers.length}`,
+  ].join(" / ")
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Label>{t("settings.plugins.runtimeNativeActivation")}</Label>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t("settings.plugins.runtimeNativeHint")}
+          </p>
+        </div>
+        <span
+          className={cn(
+            "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+            getRuntimeNativeActivationStatusClass(current.status),
+          )}
+        >
+          {getRuntimeNativeActivationStatusLabel(current.status, t)}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.runtimeNativeCurrent")}
+          </p>
+          <p className="text-xs font-medium text-foreground">
+            {getRuntimeNativeActivationStatusLabel(current.status, t)}
+          </p>
+        </div>
+        <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.runtimeNativeEnableCandidate")}
+          </p>
+          <p className="text-xs font-medium text-foreground">
+            {getRuntimeNativeActivationStatusLabel(
+              enableCandidate.status,
+              t,
+            )}
+          </p>
+        </div>
+        <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.runtimeNativeIdentity")}
+          </p>
+          <span
+            className={cn(
+              "mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-medium",
+              getRuntimeNativeIdentityStatusClass(current.identityStatus),
+            )}
+          >
+            {getRuntimeNativeIdentityStatusLabel(current.identityStatus, t)}
+          </span>
+        </div>
+        <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.runtimeNativeMcpApproval")}
+          </p>
+          <p className="text-xs font-medium text-foreground">
+            {plugin.components.mcpServers.length === 0
+              ? t("settings.plugins.runtimeNativeMcpNotRequired")
+              : mcpApprovalRequired
+                ? t("settings.plugins.runtimeNativeMcpRequired")
+                : t("settings.plugins.runtimeNativeMcpApproved")}
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+        <p className="text-[10px] uppercase text-muted-foreground">
+          {t("settings.plugins.runtimeNativeComponents")}
+        </p>
+        <p className="text-xs font-medium text-foreground">
+          {componentSummary}
+        </p>
+      </div>
+
+      {visibleReasons.length > 0 ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">
+            {t("settings.plugins.runtimeNativeBlockedReasons")}
+          </p>
+          {visibleReasons.map((reason) => (
+            <div
+              key={reason}
+              className="rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-700 dark:text-red-300"
+            >
+              {getRuntimeNativeBlockedReasonLabel(reason, t)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {t("settings.plugins.runtimeNativeNoBlockedReasons")}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function PluginControlledUiPanel({
   plugin,
   onSetSettingValue,
@@ -2978,6 +3170,7 @@ function PluginDetail({
 
           <DiagnosticsPanel diagnostics={plugin.diagnostics} />
           <PluginSafetyGatePanel plugin={plugin} />
+          <PluginRuntimeNativeActivationPanel plugin={plugin} />
           <PluginControlledUiPanel
             plugin={plugin}
             onSetSettingValue={onSetControlledSetting}
