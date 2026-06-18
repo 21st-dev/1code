@@ -120,6 +120,17 @@ describe("agent runtime capability manifests", () => {
     })
     expect(claudePlugins.ok).toBe(false)
     expect(claudePlugins.capability.status).toBe("degraded")
+
+    const codexPlugins = checkAgentRuntimeCapability({
+      runtime: "codex",
+      capabilityId: "runtimePlugins",
+    })
+    expect(codexPlugins.ok).toBe(false)
+    expect(codexPlugins.capability).toMatchObject({
+      status: "degraded",
+      scope: "runtime-specific",
+      hint: expect.stringContaining("adapter-specific"),
+    })
   })
 
   test("returns normalized diagnostics for unavailable runtimes", () => {

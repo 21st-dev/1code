@@ -629,11 +629,11 @@ const CODEX_RUNTIME_MANIFEST = manifest({
     }),
     capability({
       id: "runtimePlugins",
-      status: "unsupported",
-      scope: "unavailable",
+      status: "degraded",
+      scope: "runtime-specific",
       reason:
-        "Codex plugin entries are not yet executable through a runtime-native or shared Locus plugin layer.",
-      hint: "Do not show plugin execute controls for Codex until an execution path exists.",
+        "Codex runtime plugin execution is adapter-specific: app-server has a Locus-controlled per-run plugin filter, while other Codex paths must not inherit that claim.",
+      hint: "Use the adapter-specific capability manifest before showing Codex plugin execute controls.",
     }),
     capability({
       id: "runtimeCommands",

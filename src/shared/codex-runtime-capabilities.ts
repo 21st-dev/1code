@@ -148,6 +148,14 @@ const CODEX_ACP_CAPABILITY_OVERRIDES: Partial<
       references: ["src/main/lib/trpc/routers/codex.ts"],
     },
   },
+  runtimePlugins: {
+    status: "unsupported",
+    scope: "unavailable",
+    reason:
+      "The explicit ACP temporary-compat rollback path does not expose a Locus-controlled runtime-native plugin filter.",
+    hint: "Do not inherit app-server plugin execution support when Codex is running through ACP temporary compatibility.",
+    support: null,
+  },
 }
 
 const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
@@ -257,12 +265,20 @@ const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
     },
   },
   runtimePlugins: {
-    status: "unsupported",
-    scope: "unavailable",
+    status: "supported",
+    scope: "runtime-specific",
     reason:
-      "Codex app-server plugin execution is not implemented through a runtime-native or shared Locus plugin layer.",
-    hint: "Do not expose plugin execute controls for Codex app-server until an execution path exists.",
-    support: null,
+      "Codex app-server receives Locus-built per-run plugin config overrides that disable every discovered plugin by default and enable only reviewed, explicitly enabled, runtime-native activation-approved packages.",
+    hint: "MCP-bearing Codex plugins stay disabled until Locus can preserve the MCP approval gate for that package.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/codex/app-server-plugin-allowlist.ts",
+        "src/main/lib/codex/app-server-plugin-config.ts",
+        "tests/codex-app-server-plugin-allowlist.test.ts",
+        "tests/codex-app-server-plugin-config.test.ts",
+      ],
+    },
   },
   runtimeCommands: {
     status: "unsupported",

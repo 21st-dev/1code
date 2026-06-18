@@ -83,7 +83,9 @@ describe("Codex runtime capabilities", () => {
       scope: "runtime-specific",
     })
     expect(getCodexRuntimeCapability("runtimePlugins")).toMatchObject({
-      status: "unsupported",
+      status: "degraded",
+      scope: "runtime-specific",
+      hint: expect.stringContaining("adapter-specific"),
     })
     expect(getCodexRuntimeCapability("runtimeCommands")).toMatchObject({
       status: "unsupported",
@@ -117,6 +119,7 @@ describe("Codex runtime capabilities", () => {
       "providerProfiles",
       "attachments",
       "usageMetadata",
+      "runtimePlugins",
     ])
     expect(byId.get("hardToolGuard")).toMatchObject({
       status: "degraded",
@@ -136,6 +139,17 @@ describe("Codex runtime capabilities", () => {
     expect(byId.get("rollback")).toMatchObject({
       status: "unsupported",
       scope: "unavailable",
+    })
+    expect(byId.get("runtimePlugins")).toMatchObject({
+      status: "supported",
+      scope: "runtime-specific",
+      reason: expect.stringContaining("per-run plugin config overrides"),
+      support: {
+        references: expect.arrayContaining([
+          "src/main/lib/codex/app-server-plugin-allowlist.ts",
+          "tests/codex-app-server-plugin-config.test.ts",
+        ]),
+      },
     })
     expect(JSON.stringify(appServerCapabilities)).not.toMatch(
       /(^|[^A-Za-z0-9_])sk-[A-Za-z0-9_-]{20,}|access_token|authorization|bearer\s+[A-Za-z0-9._-]+|refresh_token/i,
@@ -166,6 +180,13 @@ describe("Codex runtime capabilities", () => {
       ),
     ).toMatchObject({
       status: "degraded",
+    })
+    expect(
+      acpCapabilities.find((capability) => capability.id === "runtimePlugins"),
+    ).toMatchObject({
+      status: "unsupported",
+      scope: "unavailable",
+      reason: expect.stringContaining("does not expose"),
     })
   })
 
