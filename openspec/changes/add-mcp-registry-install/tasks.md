@@ -70,8 +70,13 @@
 
 ## 2. Registry Normalization + Install Preview
 
-- [ ] 2.1 Add the official-registry provider adapter with bounded list/search/detail
+- [x] 2.1 Add the official-registry provider adapter with bounded list/search/detail
   fetches.
+- 2026-06-20 implemented `src/main/lib/mcp-registry/official-provider.ts` as a
+  raw official-provider adapter with injectable fetch, HTTPS base URL enforcement,
+  `v0.1` list/search/detail URL construction, page-limit clamping, timeout wiring,
+  response-size bounds, and response-shape validation. No normalization, install
+  writes, MCP server launch, or tool calls are included in this step.
 - [ ] 2.2 Normalize official-registry entries into a service-owned model with provider
   ID, entry ID, version/ref, source URL, package/distribution identifier, transport,
   command/URL template, args, cwd, env schema, header schema, auth metadata, and
