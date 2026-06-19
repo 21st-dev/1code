@@ -93,8 +93,13 @@
   provenance/integrity classification. Exact version refs with package hashes can
   classify as immutable; mutable refs such as `latest` classify as mutable; exact
   refs without integrity stay unknown.
-- [ ] 2.4 Add `McpRegistryInstallPreview` separate from `McpImportPreview`; reuse
+- [x] 2.4 Add `McpRegistryInstallPreview` separate from `McpImportPreview`; reuse
   redaction primitives but do not add apply semantics to import previews.
+- 2026-06-20 implemented `src/main/lib/mcp-registry/preview.ts` with a
+  registry-specific preview shape and builder. It reuses MCP import preview URL
+  and command-arg redaction, carries entry/config fingerprints and provenance,
+  redacts setup values, does not add import-preview apply/enable semantics, and
+  keeps raw remote URL query values out of preview target IDs.
 - [ ] 2.5 Preview runtime installability from adapters, distinguishing declared
   compatibility, installable config, installed/unverified, needs setup, failed
   check, verified-local, and Codex deferred states.

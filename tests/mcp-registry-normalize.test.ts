@@ -137,7 +137,7 @@ describe("MCP registry normalization", () => {
       declaredRuntimeSupport: ["claude-code", "codex"],
     })
     expect(entry.installTargets[1]).toMatchObject({
-      id: "remote:https://demo.example.com/mcp:0",
+      id: "remote:streamable_http:0",
       source: "remote",
       transport: "streamable_http",
       urlTemplate: "https://demo.example.com/mcp",

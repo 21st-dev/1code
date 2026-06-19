@@ -330,7 +330,7 @@ function normalizeRemoteTargets(input: {
     const envSchema: McpRegistrySetupField[] = []
 
     return {
-      id: `remote:${stringValue(remote.url) ?? `remote-${index}`}:${index}`,
+      id: `remote:${normalizeTransport(remote.type)}:${index}`,
       source: "remote",
       transport: normalizeTransport(remote.type),
       ...(stringValue(remote.url)
