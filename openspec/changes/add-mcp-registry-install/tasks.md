@@ -181,8 +181,12 @@
   status display and local verification upgrades remain pending.
 - [ ] 3.7 If required setup is missing and the adapter supports inactive config, save as
   `Installed / Needs setup` and exclude the server from runs until setup is resolved.
-- [ ] 3.8 If required setup is missing and the adapter cannot keep the server inactive,
+- [x] 3.8 If required setup is missing and the adapter cannot keep the server inactive,
   block install before writing active runtime config and show the missing setup keys.
+- 2026-06-20 current Claude/Codex adapters cannot safely stage incomplete registry
+  config as inactive, so missing setup is `block-install`. The MCP tab displays
+  missing setup keys, and service tests prove install rejects before calling the
+  injected config writer.
 - [ ] 3.9 Keep registry-sourced servers MCP-only and out of Plugins as plugin execution
   items.
 - [ ] 3.10 Display plugin-sourced MCP servers with source attribution only after the
@@ -221,6 +225,9 @@
 - [ ] 5.3 Tests proving missing required setup either saves an inactive
   `Installed / Needs setup` server excluded from runs or blocks install when inactive
   state is unavailable.
+- 2026-06-20 added service coverage for the current block-install path: required
+  setup rejects before config write. The inactive `Installed / Needs setup` branch
+  remains pending until an adapter can safely stage incomplete config.
 - [ ] 5.4 Tests proving browse/preview/install do not execute registry server
   commands, package managers, Docker, MCP server processes, or MCP tools.
 - [ ] 5.5 Tests proving explicit Check does not call unsafe/unclassified tools.

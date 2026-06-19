@@ -44,6 +44,31 @@ function detailResponse(): OfficialMcpRegistryServerResponse {
   }
 }
 
+function requiredSetupDetailResponse(): OfficialMcpRegistryServerResponse {
+  return {
+    server: {
+      name: "io.github.example/needs-setup",
+      version: "1.0.0",
+      compatibility: { runtimes: ["claude-code"] },
+      packages: [
+        {
+          registryType: "npm",
+          identifier: "@example/needs-setup",
+          runtimeHint: "npx",
+          transport: { type: "stdio" },
+          environmentVariables: [
+            {
+              name: "REQUIRED_TOKEN",
+              isRequired: true,
+              isSecret: true,
+            },
+          ],
+        },
+      ],
+    },
+  }
+}
+
 function createProviderStub(): {
   provider: OfficialMcpRegistryProvider
   calls: string[]
@@ -209,5 +234,42 @@ describe("MCP registry service", () => {
       "detail:io.github.example/detail:latest",
       "detail:io.github.example/detail:latest",
     ])
+  })
+
+  test("blocks install before writing when required setup is missing", async () => {
+    const writes: unknown[] = []
+    const calls: string[] = []
+    const provider: OfficialMcpRegistryProvider = {
+      providerId: "official-mcp-registry",
+      async listServers() {
+        throw new Error("not used")
+      },
+      async searchServers() {
+        throw new Error("not used")
+      },
+      async getServerDetail(input) {
+        calls.push(`detail:${input.serverName}`)
+        return requiredSetupDetailResponse()
+      },
+    }
+    const service = createMcpRegistryService({
+      provider,
+      async writeClaudeConfig(input) {
+        writes.push(input)
+        return { success: true, name: input.name.trim() }
+      },
+    })
+
+    await expect(
+      service.installEntry({
+        serverName: "io.github.example/needs-setup",
+        targetId: "package:@example/needs-setup:0",
+        runtime: "claude-code",
+        scope: "global",
+      }),
+    ).rejects.toThrow("env:REQUIRED_TOKEN")
+
+    expect(writes).toHaveLength(0)
+    expect(calls).toEqual(["detail:io.github.example/needs-setup"])
   })
 })
