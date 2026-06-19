@@ -141,6 +141,12 @@
   OAuth/runtime auth, local dependency status, and missing setup display, with secret
   values kept in main-process or runtime-owned secure storage and renderer metadata
   redacted.
+- 2026-06-20 registry previews now include renderer-facing setup classifications
+  for Claude and Codex: required/optional/missing env, headers, variables, bearer
+  token env refs, OAuth/runtime auth, local dependency blockers, and
+  `block-install` behavior. The MCP tab displays the missing setup keys without
+  secret values. Secret capture/storage and resolved setup submission remain
+  pending.
 - [x] 3.3 On install confirmation, write through the Runtime MCP Config service and
   target adapter, not through route-local Claude/Codex helpers.
 - 2026-06-20 added a Claude-only registry install service path that materializes
@@ -209,6 +215,9 @@
   classification, setup classification, redaction, mutable-ref warnings, and
   install/setup/verified/deferred status transitions.
 - [ ] 5.2 Tests proving setup resolution keeps secrets out of renderer state.
+- 2026-06-20 preview tests assert setup classifications expose missing keys while
+  redacting registry-provided secret URL/header/env/arg values. Full setup
+  resolution storage tests remain pending.
 - [ ] 5.3 Tests proving missing required setup either saves an inactive
   `Installed / Needs setup` server excluded from runs or blocks install when inactive
   state is unavailable.

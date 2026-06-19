@@ -100,6 +100,39 @@ describe("MCP registry install preview", () => {
         ],
       },
     ])
+    expect(
+      preview.setupClassifications.find(
+        (setup) => setup.runtime === "claude-code",
+      ),
+    ).toMatchObject({
+      runtime: "claude-code",
+      env: {
+        required: ["SECRET_TOOLS_TOKEN"],
+        optional: [],
+        missing: ["SECRET_TOOLS_TOKEN"],
+      },
+      missingKeys: [
+        "env:SECRET_TOOLS_TOKEN",
+        "local-dependency:package:npm:@example/secret-tools",
+      ],
+      missingSetupBehavior: "block-install",
+    })
+    expect(
+      preview.setupClassifications.find((setup) => setup.runtime === "codex"),
+    ).toMatchObject({
+      runtime: "codex",
+      env: {
+        required: ["SECRET_TOOLS_TOKEN"],
+        optional: [],
+        missing: ["SECRET_TOOLS_TOKEN"],
+      },
+      missingKeys: [
+        "env:SECRET_TOOLS_TOKEN",
+        "local-dependency:package:npm:@example/secret-tools",
+        "runtime-auth:codex",
+      ],
+      missingSetupBehavior: "block-install",
+    })
     expect(preview.args).toEqual([
       { value: "-y", redacted: false },
       { value: "@example/secret-tools", redacted: false },
@@ -169,6 +202,26 @@ describe("MCP registry install preview", () => {
         "mutable-version-ref",
         "declared-runtime-support-unknown",
       ],
+    })
+    expect(
+      previews[0]?.setupClassifications.find(
+        (setup) => setup.runtime === "claude-code",
+      ),
+    ).toMatchObject({
+      runtime: "claude-code",
+      headers: {
+        required: ["Authorization"],
+        optional: [],
+        missing: ["Authorization"],
+      },
+      bearerTokenEnvRefs: [
+        {
+          headerName: "Authorization",
+          missing: true,
+        },
+      ],
+      missingKeys: ["bearer-token-env:Authorization", "header:Authorization"],
+      missingSetupBehavior: "block-install",
     })
     expect(JSON.stringify(previews[0])).not.toContain("url-secret")
     expect(JSON.stringify(previews[0])).not.toContain("header-secret")

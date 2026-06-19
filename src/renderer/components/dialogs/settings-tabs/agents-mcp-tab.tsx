@@ -28,6 +28,7 @@ import type {
   McpRegistryInstallPreview,
   McpRegistryInstallPreviewSetupField,
 } from "../../../../main/lib/mcp-registry/preview"
+import type { McpRegistrySetupClassification } from "../../../../main/lib/mcp-registry/setup"
 import type {
   McpImportPreview,
   McpImportRedactedField,
@@ -293,13 +294,17 @@ function canInstallRegistryPreviewToClaude(
   const claude = preview.runtimeInstallability.find(
     (item) => item.runtime === "claude-code",
   )
+  const claudeSetup = preview.setupClassifications.find(
+    (item) => item.runtime === "claude-code",
+  )
   return (
     claude?.status === "installable-config" &&
-    preview.env.length === 0 &&
-    preview.headers.length === 0 &&
-    preview.variables.length === 0 &&
-    !preview.auth.required
+    claudeSetup?.missingSetupBehavior === "none"
   )
+}
+
+function runtimeSetupLabel(setup: McpRegistrySetupClassification): string {
+  return setup.runtime === "claude-code" ? "Claude Code" : "Codex"
 }
 
 function getErrorMessage(error: unknown): string {
@@ -1415,6 +1420,37 @@ function McpRegistryPreviewCard({
             ))}
           </div>
         </ConnectionRow>
+        {preview.setupClassifications.some(
+          (setup) => setup.missingKeys.length > 0,
+        ) && (
+          <ConnectionRow label={t("settings.mcp.registrySetup")} mono={false}>
+            <div className="space-y-1">
+              {preview.setupClassifications
+                .filter((setup) => setup.missingKeys.length > 0)
+                .map((setup) => (
+                  <div
+                    key={setup.runtime}
+                    className="flex flex-wrap items-center gap-1"
+                  >
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                      {runtimeSetupLabel(setup)}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-200">
+                      {formatRegistryToken(setup.missingSetupBehavior)}
+                    </span>
+                    {setup.missingKeys.map((key) => (
+                      <span
+                        key={`${setup.runtime}:${key}`}
+                        className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+                      >
+                        {key}
+                      </span>
+                    ))}
+                  </div>
+                ))}
+            </div>
+          </ConnectionRow>
+        )}
         {preview.warnings.length > 0 && (
           <ConnectionRow label={t("settings.mcp.warnings")} mono={false}>
             <div className="flex flex-wrap gap-1">

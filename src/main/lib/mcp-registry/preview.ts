@@ -10,6 +10,7 @@ import {
   type McpRegistryProvenanceClassification,
 } from "./fingerprints"
 import {
+  type McpRegistryRuntimeId,
   type McpRegistryRuntimeInstallability,
   type McpRegistryRuntimeLocalState,
   previewDefaultMcpRegistryRuntimeInstallability,
@@ -22,6 +23,10 @@ import type {
   McpRegistrySetupFieldSource,
   McpRegistryTransportType,
 } from "./normalize"
+import {
+  classifyMcpRegistrySetup,
+  type McpRegistrySetupClassification,
+} from "./setup"
 
 export type McpRegistryInstallPreviewSetupField = {
   key: string
@@ -71,6 +76,7 @@ export type McpRegistryInstallPreview = {
   entryFingerprint: string
   configFingerprint: string
   runtimeInstallability: McpRegistryRuntimeInstallability[]
+  setupClassifications: McpRegistrySetupClassification[]
   wouldWritePaths: string[]
   warnings: string[]
 }
@@ -124,6 +130,14 @@ function sanitizeCommand(value: string | undefined): string | undefined {
   return sanitizeMcpCommandArgs([value])[0]?.value
 }
 
+function previewDefaultMcpRegistrySetupClassifications(
+  target: McpRegistryInstallTarget,
+): McpRegistrySetupClassification[] {
+  return (["claude-code", "codex"] as McpRegistryRuntimeId[]).map((runtime) =>
+    classifyMcpRegistrySetup({ runtime, target }),
+  )
+}
+
 export function buildMcpRegistryInstallPreview(input: {
   entry: McpRegistryEntry
   target: McpRegistryInstallTarget
@@ -171,6 +185,9 @@ export function buildMcpRegistryInstallPreview(input: {
       target: input.target,
       localStates: input.localStates,
     }),
+    setupClassifications: previewDefaultMcpRegistrySetupClassifications(
+      input.target,
+    ),
     wouldWritePaths: [],
     warnings: buildWarnings({ entry: input.entry, provenance }),
   }
