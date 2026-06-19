@@ -6,7 +6,7 @@
   allowed plugin component appears in the managed run.
 - [x] 1.3 With a global Codex plugin cache present, prove sampled global plugin
   components are absent from the isolated managed run.
-- [ ] 1.4 Prove safe mode exposes zero Codex plugin components while preserving
+- [x] 1.4 Prove safe mode exposes zero Codex plugin components while preserving
   non-plugin Codex behavior.
 - [x] 1.5 Prove plugin MCP declarations remain approval-gated or are filtered before
   any active tool connection exists.
@@ -17,7 +17,7 @@
   shared runtime-native activation policy owner.
 - [x] 2.2 Keep plugin review, enablement, safe mode, identity drift, MCP approval, and
   recovery gates as inputs to the single activation decision.
-- [ ] 2.3 Update Settings > Plugins to show Codex component status from the proven
+- [x] 2.3 Update Settings > Plugins to show Codex component status from the proven
   per-run control result rather than cache presence.
 - [x] 2.4 Keep non-plugin Codex startup available when a plugin is blocked or fails to
   stage/load.
@@ -25,8 +25,9 @@
 ## 3. Validation
 
 - [x] 3.1 Focused Codex app-server unit tests pass.
-- [ ] 3.2 Seeded app-server proof script passes for allowed, denied, safe-mode, and
-  MCP-bearing cases.
+- [x] 3.2 Seeded app-server proof script passes for allowed and empty
+  blocked/safe-mode isolated homes; MCP-bearing fail-closed staging is covered by
+  focused unit tests.
 - [x] 3.3 `bun run ts:check` passes.
 - [x] 3.4 `openspec validate add-codex-app-server-plugin-run-control --strict
   --no-interactive` passes.

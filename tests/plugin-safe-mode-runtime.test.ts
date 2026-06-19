@@ -99,6 +99,10 @@ describe("plugin safe mode runtime source guards", () => {
     join(process.cwd(), "src/main/lib/codex/app-server-adapter.ts"),
     "utf8",
   )
+  const dictionariesSource = readFileSync(
+    join(process.cwd(), "src/renderer/lib/i18n/dictionaries.ts"),
+    "utf8",
+  )
 
   test("discovers plugin MCP servers with review gates derived in main", () => {
     expect(pluginIndexSource).toContain("recordPluginReviewScans")
@@ -197,6 +201,12 @@ describe("plugin safe mode runtime source guards", () => {
     )
     expect(codexAppServerAdapterSource).toContain(
       "providerBinding: appServerProviderBinding",
+    )
+    expect(dictionariesSource).toContain(
+      "isolated app-server CODEX_HOME per managed run",
+    )
+    expect(dictionariesSource).not.toContain(
+      "plugin turn execution and per-run filtering remain unproven",
     )
     expect(codexPluginAllowlistSource).toContain(
       "resolveCodexAppServerPluginConfigOverrides",

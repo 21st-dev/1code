@@ -1124,7 +1124,7 @@ export const en = {
   "settings.plugins.targetModeControlledUi": "Controlled UI",
   "settings.plugins.targetModeDeveloperTrustedCode": "Trusted local code (planned)",
   "settings.plugins.targetModeManifestOnlyDescription":
-    "Locus reads this package metadata and component declarations only. It does not execute plugin JavaScript.",
+    "Locus reads this package metadata and component declarations without executing plugin JavaScript. Runtime-native activation below controls whether reviewed components are staged into Claude or Codex.",
   "settings.plugins.targetModeControlledUiDescription":
     "Locus renders declared plugin surfaces with app-owned controls. Plugin JavaScript is not executed.",
   "settings.plugins.targetModeDeveloperTrustedCodeDescription":
@@ -1443,7 +1443,7 @@ export const en = {
   "settings.plugins.claudePackageHint":
     "Locus can stage reviewed Claude Code plugins into isolated managed-run config; component activation remains proof-gated until the runtime matrix is complete.",
   "settings.plugins.codexPackageHint":
-    "Codex plugins are Codex runtime packages. App-server lists plugins and accepts no-turn thread-start config, but plugin turn execution and per-run filtering remain unproven, so Locus keeps native activation blocked.",
+    "Codex plugins are staged into an isolated app-server CODEX_HOME per managed run. Only reviewed, enabled, identity-current components are visible to that run; unapproved MCP declarations remain blocked.",
   "settings.plugins.source": "Source",
   "settings.plugins.path": "Path",
   "settings.plugins.homepage": "Homepage",
