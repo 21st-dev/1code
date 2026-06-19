@@ -3,7 +3,7 @@
 - [x] 1.1 Add scoped runtime-native plugin selection records to plugin review state.
 - [x] 1.2 Add helpers to read, write, normalize, and resolve effective scoped
   selections with `subChatId > chatId > projectId > global` precedence.
-- [ ] 1.3 Add Plugins router procedures for reading and updating scoped selections.
+- [x] 1.3 Add Plugins router procedures for reading and updating scoped selections.
 
 ## 2. Runtime Integration
 
@@ -16,10 +16,10 @@
 
 ## 3. UI
 
-- [ ] 3.1 Show global vs scoped plugin activation state in Settings > Plugins.
-- [ ] 3.2 Allow switching a project/chat/sub-chat scope between inherited and custom
+- [x] 3.1 Show global vs scoped plugin activation state in Settings > Plugins.
+- [x] 3.2 Allow switching a project/chat/sub-chat scope between inherited and custom
   selection.
-- [ ] 3.3 Keep install, review, and MCP approval messaging global and honest.
+- [x] 3.3 Keep install, review, and MCP approval messaging global and honest.
 
 ## 4. Validation
 

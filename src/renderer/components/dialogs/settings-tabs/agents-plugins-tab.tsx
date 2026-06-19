@@ -1,4 +1,4 @@
-import { useSetAtom } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import {
   ChevronRight,
   Code2,
@@ -19,7 +19,12 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { settingsPluginsSidebarWidthAtom } from "../../../features/agents/atoms"
+import {
+  selectedAgentChatIdAtom,
+  selectedProjectAtom,
+  settingsPluginsSidebarWidthAtom,
+} from "../../../features/agents/atoms"
+import { useAgentSubChatStore } from "../../../features/agents/stores/sub-chat-store"
 import {
   agentsSettingsDialogActiveTabAtom,
   type SettingsTab,
@@ -60,6 +65,30 @@ interface PluginComponent {
 type PluginRuntime = "claude" | "codex"
 type RuntimeFilter = "all" | PluginRuntime
 type PluginViewMode = "installed" | "sources" | "marketplaces" | "store"
+type RuntimeNativePluginScopeValue = "global" | "project" | "chat" | "subChat"
+type RuntimeNativePluginScopeKind = Exclude<
+  RuntimeNativePluginScopeValue,
+  "global"
+>
+type RuntimeNativePluginScope = {
+  kind: RuntimeNativePluginScopeKind
+  id: string
+}
+type RuntimeNativePluginScopeOption = {
+  value: RuntimeNativePluginScopeValue
+  label: string
+  disabled?: boolean
+}
+type RuntimeNativePluginScopedSelectionRecord = {
+  mode: "inherit" | "custom"
+  enabledPluginReviewKeys: string[]
+  updatedAt: string
+}
+type RuntimeNativePluginScopedSelections = {
+  projects: Record<string, RuntimeNativePluginScopedSelectionRecord>
+  chats: Record<string, RuntimeNativePluginScopedSelectionRecord>
+  subChats: Record<string, RuntimeNativePluginScopedSelectionRecord>
+}
 type PluginSourceKind = "local-marketplace" | "cache" | "developer-local"
 type PluginSourceTrust = "official" | "local" | "external"
 type PluginSourceStatus = "available" | "empty" | "missing"
@@ -821,6 +850,34 @@ function canEnablePlugin(plugin: PluginData): boolean {
     return plugin.runtimeNativeActivation.enableCandidate.canActivateNative
   }
   return plugin.safetyGate.canEnable
+}
+
+function getScopedSelectionRecord(
+  selections: RuntimeNativePluginScopedSelections | undefined,
+  scope: RuntimeNativePluginScope | null,
+): RuntimeNativePluginScopedSelectionRecord | undefined {
+  if (!selections || !scope) return undefined
+  if (scope.kind === "project") return selections.projects[scope.id]
+  if (scope.kind === "chat") return selections.chats[scope.id]
+  return selections.subChats[scope.id]
+}
+
+function getGloballyEnabledRuntimeNativePluginReviewKeys(
+  plugins: PluginData[],
+): string[] {
+  return plugins
+    .filter((plugin) => plugin.canToggle && !plugin.isDisabled)
+    .map((plugin) => plugin.reviewKey)
+}
+
+function getRuntimeNativeScopeLabel(
+  scopeValue: RuntimeNativePluginScopeValue,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  if (scopeValue === "project") return t("settings.plugins.scopeProject")
+  if (scopeValue === "chat") return t("settings.plugins.scopeChat")
+  if (scopeValue === "subChat") return t("settings.plugins.scopeSubChat")
+  return t("settings.plugins.scopeGlobal")
 }
 
 const RUNTIME_FILTERS: RuntimeFilter[] = ["all", "claude", "codex"]
@@ -3059,6 +3116,125 @@ function PluginUpdateReviewPanel({
   )
 }
 
+function PluginScopedActivationPanel({
+  plugin,
+  scopeValue,
+  scope,
+  scopeOptions,
+  scopeRecord,
+  onScopeChange,
+  onSetScopeMode,
+  onTogglePlugin,
+  isUpdating,
+}: {
+  plugin: PluginData
+  scopeValue: RuntimeNativePluginScopeValue
+  scope: RuntimeNativePluginScope | null
+  scopeOptions: RuntimeNativePluginScopeOption[]
+  scopeRecord?: RuntimeNativePluginScopedSelectionRecord
+  onScopeChange: (value: RuntimeNativePluginScopeValue) => void
+  onSetScopeMode: (mode: "inherit" | "custom") => void
+  onTogglePlugin: (enabled: boolean) => void
+  isUpdating: boolean
+}) {
+  const { t } = useI18n()
+  const isGlobalScope = scopeValue === "global"
+  const isCustomScope = !isGlobalScope && scopeRecord?.mode === "custom"
+  const pluginSelectedInScope =
+    isCustomScope &&
+    scopeRecord.enabledPluginReviewKeys.includes(plugin.reviewKey)
+  const canCustomizeScope = Boolean(scope) && plugin.canToggle
+  const canSelectPlugin = canCustomizeScope && isCustomScope && !plugin.isDisabled
+
+  return (
+    <div className="rounded-md border border-border bg-background p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <Label>{t("settings.plugins.runtimeScopeActivation")}</Label>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {t("settings.plugins.runtimeScopeActivationHint")}
+          </p>
+        </div>
+        <span className="shrink-0 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {getRuntimeNativeScopeLabel(scopeValue, t)}
+        </span>
+      </div>
+
+      <Select value={scopeValue} onValueChange={onScopeChange}>
+        <SelectTrigger className="h-8 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {scopeOptions.map((option) => (
+            <SelectItem
+              key={option.value}
+              value={option.value}
+              disabled={option.disabled}
+            >
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {isGlobalScope ? (
+        <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.scopeMode")}
+          </p>
+          <p className="text-xs font-medium text-foreground">
+            {plugin.isDisabled
+              ? t("settings.plugins.runtimeNativeDisabled")
+              : t("settings.plugins.runtimeNativeEnabled")}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3 rounded border border-border bg-muted/20 px-2 py-1.5">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground">
+                {t("settings.plugins.scopeCustomMode")}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {isCustomScope
+                  ? t("settings.plugins.scopeCustomModeOn")
+                  : t("settings.plugins.scopeCustomModeOff")}
+              </p>
+            </div>
+            <Switch
+              checked={isCustomScope}
+              disabled={!canCustomizeScope || isUpdating}
+              onCheckedChange={(checked) =>
+                onSetScopeMode(checked ? "custom" : "inherit")
+              }
+            />
+          </div>
+
+          {isCustomScope && (
+            <div className="flex items-center justify-between gap-3 rounded border border-border bg-muted/20 px-2 py-1.5">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground">
+                  {t("settings.plugins.scopePluginVisible")}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {plugin.isDisabled
+                    ? t("settings.plugins.scopePluginRequiresGlobal")
+                    : t("settings.plugins.scopePluginVisibleHint")}
+                </p>
+              </div>
+              <Switch
+                checked={pluginSelectedInScope}
+                disabled={!canSelectPlugin || isUpdating}
+                onCheckedChange={onTogglePlugin}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // --- Detail Panel ---
 function PluginDetail({
   plugin,
@@ -3085,6 +3261,14 @@ function PluginDetail({
   isTrustingDeveloperPlugin,
   isRevokingDeveloperTrust,
   isLoadingDeveloperPlugin,
+  runtimeNativeScopeValue,
+  runtimeNativeScope,
+  runtimeNativeScopeOptions,
+  runtimeNativeScopeRecord,
+  onRuntimeNativeScopeChange,
+  onSetRuntimeNativeScopeMode,
+  onToggleRuntimeNativeScopePlugin,
+  isUpdatingRuntimeNativeScope,
 }: {
   plugin: PluginData
   pluginDebug?: PluginDoctorPluginDebug
@@ -3114,6 +3298,14 @@ function PluginDetail({
   isTrustingDeveloperPlugin: boolean
   isRevokingDeveloperTrust: boolean
   isLoadingDeveloperPlugin: boolean
+  runtimeNativeScopeValue: RuntimeNativePluginScopeValue
+  runtimeNativeScope: RuntimeNativePluginScope | null
+  runtimeNativeScopeOptions: RuntimeNativePluginScopeOption[]
+  runtimeNativeScopeRecord?: RuntimeNativePluginScopedSelectionRecord
+  onRuntimeNativeScopeChange: (value: RuntimeNativePluginScopeValue) => void
+  onSetRuntimeNativeScopeMode: (mode: "inherit" | "custom") => void
+  onToggleRuntimeNativeScopePlugin: (enabled: boolean) => void
+  isUpdatingRuntimeNativeScope: boolean
 }) {
   const { t } = useI18n()
   const componentCount =
@@ -3199,6 +3391,18 @@ function PluginDetail({
               ? t("settings.plugins.claudePackageHint")
               : t("settings.plugins.codexPackageHint")}
           </p>
+
+          <PluginScopedActivationPanel
+            plugin={plugin}
+            scopeValue={runtimeNativeScopeValue}
+            scope={runtimeNativeScope}
+            scopeOptions={runtimeNativeScopeOptions}
+            scopeRecord={runtimeNativeScopeRecord}
+            onScopeChange={onRuntimeNativeScopeChange}
+            onSetScopeMode={onSetRuntimeNativeScopeMode}
+            onTogglePlugin={onToggleRuntimeNativeScopePlugin}
+            isUpdating={isUpdatingRuntimeNativeScope}
+          />
 
           <div className="rounded-md border border-border bg-muted/20 p-3 space-y-3">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -4850,6 +5054,13 @@ export function AgentsPluginsTab() {
   const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("all")
   const searchInputRef = useRef<HTMLInputElement>(null)
   const setActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
+  const selectedProject = useAtomValue(selectedProjectAtom)
+  const selectedChatId = useAtomValue(selectedAgentChatIdAtom)
+  const activeSubChatId = useAgentSubChatStore((state) =>
+    state.chatId === selectedChatId ? state.activeSubChatId : null,
+  )
+  const [runtimeNativeScopeValue, setRuntimeNativeScopeValue] =
+    useState<RuntimeNativePluginScopeValue>("global")
 
   // Focus search on "/" hotkey
   useEffect(() => {
@@ -4908,6 +5119,12 @@ export function AgentsPluginsTab() {
     isLoading: isLoadingDoctor,
     refetch: refetchDoctor,
   } = trpc.plugins.doctor.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  })
+  const {
+    data: runtimeNativeScopedSelections,
+    refetch: refetchRuntimeNativeScopedSelections,
+  } = trpc.plugins.getRuntimeNativeScopedSelections.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   })
   const {
@@ -4976,6 +5193,8 @@ export function AgentsPluginsTab() {
     trpc.claudeSettings.setPluginEnabled.useMutation()
   const setRuntimeNativeEnabledMutation =
     trpc.plugins.setRuntimeNativeEnabled.useMutation()
+  const setRuntimeNativeScopedSelectionMutation =
+    trpc.plugins.setRuntimeNativeScopedSelection.useMutation()
   const clearPluginCacheMutation = trpc.plugins.clearCache.useMutation()
   const markReviewedMutation = trpc.plugins.markReviewed.useMutation()
   const setSafeModeMutation = trpc.plugins.setSafeMode.useMutation()
@@ -5004,6 +5223,73 @@ export function AgentsPluginsTab() {
     trpc.plugins.previewRuntimePluginWriteAction.useMutation()
   const executeRuntimePluginWriteActionMutation =
     trpc.plugins.executeRuntimePluginWriteAction.useMutation()
+
+  const runtimeNativeScopeOptions = useMemo<RuntimeNativePluginScopeOption[]>(
+    () => [
+      {
+        value: "global",
+        label: t("settings.plugins.scopeGlobal"),
+      },
+      {
+        value: "project",
+        label: selectedProject
+          ? `${t("settings.plugins.scopeProject")} · ${selectedProject.name}`
+          : t("settings.plugins.scopeProjectUnavailable"),
+        disabled: !selectedProject?.id,
+      },
+      {
+        value: "chat",
+        label: selectedChatId
+          ? t("settings.plugins.scopeChat")
+          : t("settings.plugins.scopeChatUnavailable"),
+        disabled: !selectedChatId,
+      },
+      {
+        value: "subChat",
+        label: activeSubChatId
+          ? t("settings.plugins.scopeSubChat")
+          : t("settings.plugins.scopeSubChatUnavailable"),
+        disabled: !activeSubChatId,
+      },
+    ],
+    [activeSubChatId, selectedChatId, selectedProject, t],
+  )
+  const runtimeNativeScope = useMemo<RuntimeNativePluginScope | null>(() => {
+    if (runtimeNativeScopeValue === "project" && selectedProject?.id) {
+      return { kind: "project", id: selectedProject.id }
+    }
+    if (runtimeNativeScopeValue === "chat" && selectedChatId) {
+      return { kind: "chat", id: selectedChatId }
+    }
+    if (runtimeNativeScopeValue === "subChat" && activeSubChatId) {
+      return { kind: "subChat", id: activeSubChatId }
+    }
+    return null
+  }, [
+    activeSubChatId,
+    runtimeNativeScopeValue,
+    selectedChatId,
+    selectedProject?.id,
+  ])
+  const runtimeNativeScopeRecord = useMemo(
+    () =>
+      getScopedSelectionRecord(
+        runtimeNativeScopedSelections,
+        runtimeNativeScope,
+      ),
+    [runtimeNativeScope, runtimeNativeScopedSelections],
+  )
+
+  useEffect(() => {
+    if (
+      runtimeNativeScopeValue !== "global" &&
+      runtimeNativeScopeOptions.find(
+        (option) => option.value === runtimeNativeScopeValue,
+      )?.disabled
+    ) {
+      setRuntimeNativeScopeValue("global")
+    }
+  }, [runtimeNativeScopeOptions, runtimeNativeScopeValue])
 
   const filteredPlugins = useMemo(() => {
     const runtimeFiltered =
@@ -5520,6 +5806,83 @@ export function AgentsPluginsTab() {
       }
     },
     [markReviewedMutation, refetch, refetchDoctor, t],
+  )
+
+  const handleSetRuntimeNativeScopeMode = useCallback(
+    async (mode: "inherit" | "custom") => {
+      if (!runtimeNativeScope) return
+      const enabledPluginReviewKeys =
+        mode === "custom"
+          ? runtimeNativeScopeRecord?.mode === "custom"
+            ? runtimeNativeScopeRecord.enabledPluginReviewKeys
+            : getGloballyEnabledRuntimeNativePluginReviewKeys(plugins)
+          : []
+      try {
+        await setRuntimeNativeScopedSelectionMutation.mutateAsync({
+          scope: runtimeNativeScope,
+          mode,
+          enabledPluginReviewKeys,
+        })
+        await refetchRuntimeNativeScopedSelections()
+        toast.success(t("settings.plugins.toast.scopeUpdated"))
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [
+      plugins,
+      refetchRuntimeNativeScopedSelections,
+      runtimeNativeScope,
+      runtimeNativeScopeRecord,
+      setRuntimeNativeScopedSelectionMutation,
+      t,
+    ],
+  )
+
+  const handleToggleRuntimeNativeScopePlugin = useCallback(
+    async (plugin: PluginData, enabled: boolean) => {
+      if (!runtimeNativeScope) return
+      const currentKeys = new Set(
+        runtimeNativeScopeRecord?.mode === "custom"
+          ? runtimeNativeScopeRecord.enabledPluginReviewKeys
+          : getGloballyEnabledRuntimeNativePluginReviewKeys(plugins),
+      )
+      if (enabled) {
+        currentKeys.add(plugin.reviewKey)
+      } else {
+        currentKeys.delete(plugin.reviewKey)
+      }
+
+      try {
+        await setRuntimeNativeScopedSelectionMutation.mutateAsync({
+          scope: runtimeNativeScope,
+          mode: "custom",
+          enabledPluginReviewKeys: Array.from(currentKeys),
+        })
+        await refetchRuntimeNativeScopedSelections()
+        toast.success(t("settings.plugins.toast.scopeUpdated"), {
+          description: formatPluginName(plugin.name),
+        })
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.plugins.toast.failedToUpdate")
+        toast.error(message)
+      }
+    },
+    [
+      plugins,
+      refetchRuntimeNativeScopedSelections,
+      runtimeNativeScope,
+      runtimeNativeScopeRecord,
+      setRuntimeNativeScopedSelectionMutation,
+      t,
+    ],
   )
 
   const handleToggleEnabled = useCallback(
@@ -6394,6 +6757,18 @@ export function AgentsPluginsTab() {
               isTrustingDeveloperPlugin={trustDeveloperPluginMutation.isPending}
               isRevokingDeveloperTrust={revokeDeveloperTrustMutation.isPending}
               isLoadingDeveloperPlugin={loadDeveloperPluginMutation.isPending}
+              runtimeNativeScopeValue={runtimeNativeScopeValue}
+              runtimeNativeScope={runtimeNativeScope}
+              runtimeNativeScopeOptions={runtimeNativeScopeOptions}
+              runtimeNativeScopeRecord={runtimeNativeScopeRecord}
+              onRuntimeNativeScopeChange={setRuntimeNativeScopeValue}
+              onSetRuntimeNativeScopeMode={handleSetRuntimeNativeScopeMode}
+              onToggleRuntimeNativeScopePlugin={(enabled) =>
+                handleToggleRuntimeNativeScopePlugin(selectedPlugin, enabled)
+              }
+              isUpdatingRuntimeNativeScope={
+                setRuntimeNativeScopedSelectionMutation.isPending
+              }
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">

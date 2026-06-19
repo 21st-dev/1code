@@ -106,6 +106,7 @@ import {
   getPluginSafeModeState,
   getPluginStoreStateSnapshot,
   getRuntimeNativePluginEnablementState,
+  getRuntimeNativePluginScopedSelectionsState,
   hashPluginManifestReviewDocument,
   markPluginFingerprintReviewed,
   type PluginDeveloperSourceRecord,
@@ -115,6 +116,7 @@ import {
   setPluginDeveloperModeEnabled,
   setPluginSafeModeEnabled,
   setRuntimeNativePluginEnabled,
+  setRuntimeNativePluginScopedSelection,
   trustDeveloperPluginFingerprint,
 } from "../../plugins/update-review-state"
 import { publicProcedure, router } from "../index"
@@ -232,6 +234,13 @@ const runtimePluginWriteExecutionRequestSchema = z
     previewId: z.string().min(1),
     confirmationToken: z.string().min(1),
     targetConfirmation: z.string().optional(),
+  })
+  .strict()
+
+const runtimeNativePluginSelectionScopeSchema = z
+  .object({
+    kind: z.enum(["project", "chat", "subChat"]),
+    id: z.string().min(1),
   })
   .strict()
 
@@ -830,6 +839,14 @@ export const pluginsRouter = router({
   ),
 
   /**
+   * Read project/chat/sub-chat runtime-native plugin selections. These records
+   * only narrow globally enabled plugins for a specific run scope.
+   */
+  getRuntimeNativeScopedSelections: publicProcedure.query(async () => {
+    return getRuntimeNativePluginScopedSelectionsState()
+  }),
+
+  /**
    * Toggle local plugin safe mode without deleting packages or review metadata.
    */
   setSafeMode: publicProcedure
@@ -848,6 +865,24 @@ export const pluginsRouter = router({
     .mutation(async ({ input }): Promise<PluginDeveloperModeState> => {
       clearPluginCache()
       return setPluginDeveloperModeEnabled(input.enabled)
+    }),
+
+  setRuntimeNativeScopedSelection: publicProcedure
+    .input(
+      z
+        .object({
+          scope: runtimeNativePluginSelectionScopeSchema,
+          mode: z.enum(["inherit", "custom"]),
+          enabledPluginReviewKeys: z.array(z.string().min(1)).optional(),
+        })
+        .strict(),
+    )
+    .mutation(async ({ input }) => {
+      return setRuntimeNativePluginScopedSelection({
+        scope: input.scope,
+        mode: input.mode,
+        enabledPluginReviewKeys: input.enabledPluginReviewKeys,
+      })
     }),
 
   /**
