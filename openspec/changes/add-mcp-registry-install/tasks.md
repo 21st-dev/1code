@@ -305,9 +305,17 @@
   invocation paths, and does not write `verified-local`.
 - [ ] 5.6 Manual proof: official-registry MCP server installed to Claude; real Claude
   run discovers, connects, lists tools, and calls a tool.
-- [ ] 5.7 Manual proof for Codex app-server only if proof gates pass; otherwise record
+- [x] 5.7 Manual proof for Codex app-server only if proof gates pass; otherwise record
   Codex deferred/unavailable reason and verify the UI does not offer fake Codex
   verified support.
+- 2026-06-20 Codex proof gates did not pass for this change, so the accepted
+  behavior is deferred/unavailable rather than real Codex proof. Verified by
+  `bun test tests/mcp-registry-management-inert.test.ts
+  tests/mcp-registry-router.test.ts tests/mcp-registry-preview.test.ts
+  tests/mcp-registry-installability.test.ts tests/mcp-registry-service.test.ts`:
+  Codex preview/installability reports `codex-deferred` with deferred reasons,
+  Codex registry install/check reject with deferred errors, and the MCP tab UI
+  only offers registry install/check for Claude.
 - [x] 5.8 `bun run ts:check`.
 - 2026-06-20 passed: `tsc --noEmit`.
 - [x] 5.9 `bun run lint`.
