@@ -65,6 +65,38 @@ describe("plugin target mode UI source guards", () => {
     )
   })
 
+  test("renders the runtime-native activation matrix from plugin facts", () => {
+    expect(pluginsTabSource).toContain("PluginRuntimeNativeActivationPanel")
+    expect(pluginsTabSource).toContain("plugin.runtimeNativeActivation.current")
+    expect(pluginsTabSource).toContain(
+      "plugin.runtimeNativeActivation.enableCandidate",
+    )
+    expect(pluginsTabSource).toContain("plugin.updateReview.status")
+    expect(pluginsTabSource).toContain("plugin.isDisabled")
+    expect(pluginsTabSource).toContain('"native-load-failed"')
+    expect(pluginsTabSource).toContain("plugin.components.commands.length")
+    expect(pluginsTabSource).toContain("plugin.components.skills.length")
+    expect(pluginsTabSource).toContain("plugin.components.agents.length")
+    expect(pluginsTabSource).toContain("plugin.components.hooks.length")
+    expect(pluginsTabSource).toContain("plugin.components.mcpServers.length")
+
+    for (const key of [
+      "settings.plugins.runtimeNativeInstalledState",
+      "settings.plugins.runtimeNativeEnablement",
+      "settings.plugins.runtimeNativeReview",
+      "settings.plugins.runtimeNativeRecovery",
+      "settings.plugins.runtimeNativeCurrent",
+      "settings.plugins.runtimeNativeEnableCandidate",
+      "settings.plugins.runtimeNativeIdentity",
+      "settings.plugins.runtimeNativeMcpApproval",
+      "settings.plugins.runtimeNativeComponents",
+      "settings.plugins.runtimeNativeBlockedReasons",
+      "settings.plugins.runtimeNativeRecoveryFailed",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+  })
+
   test("localizes target mode and update handling copy", () => {
     for (const key of [
       "settings.plugins.targetModeManifestOnly",

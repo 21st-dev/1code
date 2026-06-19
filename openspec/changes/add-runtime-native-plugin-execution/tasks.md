@@ -83,7 +83,7 @@
 
 ## 5. Phase 5 - UI Truth And Plugins-Tab Cleanup
 
-- [ ] 5.1 Settings > Plugins shows per-plugin installed, enabled, reviewed,
+- [x] 5.1 Settings > Plugins shows per-plugin installed, enabled, reviewed,
   runtime-loadable, component status, activation identity status, MCP approval state,
   recovery state, and blocked reasons from the activation matrix.
 - [x] 5.2 Keep Plugins inside Settings; do not promote it to a standalone extension

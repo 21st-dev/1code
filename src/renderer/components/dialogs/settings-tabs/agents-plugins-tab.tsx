@@ -2257,6 +2257,9 @@ function PluginRuntimeNativeActivationPanel({ plugin }: { plugin: PluginData }) 
   const mcpApprovalRequired = enableCandidate.reasons.includes(
     "mcp-approval-required",
   )
+  const hasNativeLoadFailure =
+    current.reasons.includes("native-load-failed") ||
+    enableCandidate.reasons.includes("native-load-failed")
   const componentSummary = [
     `${t("settings.plugins.doctorCommandsShort")}:${plugin.components.commands.length}`,
     `${t("settings.plugins.doctorSkillsShort")}:${plugin.components.skills.length}`,
@@ -2285,6 +2288,49 @@ function PluginRuntimeNativeActivationPanel({ plugin }: { plugin: PluginData }) 
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.runtimeNativeInstalledState")}
+          </p>
+          <p className="text-xs font-medium text-foreground">
+            {t("settings.plugins.runtimeNativeInstalled")}
+          </p>
+        </div>
+        <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.runtimeNativeEnablement")}
+          </p>
+          <p className="text-xs font-medium text-foreground">
+            {plugin.isDisabled
+              ? t("settings.plugins.runtimeNativeDisabled")
+              : t("settings.plugins.runtimeNativeEnabled")}
+          </p>
+        </div>
+        <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.runtimeNativeReview")}
+          </p>
+          <p className="text-xs font-medium text-foreground">
+            {getUpdateReviewStatusLabel(plugin.updateReview.status, t)}
+          </p>
+        </div>
+        <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
+          <p className="text-[10px] uppercase text-muted-foreground">
+            {t("settings.plugins.runtimeNativeRecovery")}
+          </p>
+          <p
+            className={cn(
+              "text-xs font-medium",
+              hasNativeLoadFailure
+                ? "text-red-700 dark:text-red-300"
+                : "text-emerald-700 dark:text-emerald-300",
+            )}
+          >
+            {hasNativeLoadFailure
+              ? t("settings.plugins.runtimeNativeRecoveryFailed")
+              : t("settings.plugins.runtimeNativeRecoveryReady")}
+          </p>
+        </div>
         <div className="rounded border border-border bg-muted/20 px-2 py-1.5">
           <p className="text-[10px] uppercase text-muted-foreground">
             {t("settings.plugins.runtimeNativeCurrent")}
