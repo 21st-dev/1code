@@ -39,6 +39,16 @@ proven. A staged package or parsed manifest alone is not native execution proof.
     accepted-method list. `thread/settings/update` is treated as insufficient
     proof until a managed `thread/start`/`thread/resume` run shows plugin
     allowlist enforcement.
+- `bun scripts/probe-codex-app-server-plugin-protocol.ts --timeout-ms=8000
+  --include-thread-start=1 --thread-start-disabled-plugin-id=figma@openai-curated`
+  starts an ephemeral `thread/start` and intentionally does not send
+  `turn/start`, so it does not call a model. The bundled app-server accepted the
+  managed thread start and returned a thread/session id, zero turns, and the
+  passed config key `plugins.figma@openai-curated.enabled`. The response
+  `instructionSources` contained only the project `AGENTS.md` and zero
+  plugin-like instruction sources. This proves the low-risk thread-start probe
+  path works, but it does not prove plugin component execution or per-run plugin
+  allowlist enforcement.
 
 ## Current Matrix
 

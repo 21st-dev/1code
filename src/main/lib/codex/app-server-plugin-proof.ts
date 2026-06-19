@@ -26,6 +26,22 @@ export interface CodexAppServerPluginProtocolAssessment {
   reasons: string[]
 }
 
+export interface CodexAppServerThreadStartObservation {
+  method: "thread/start"
+  ok: boolean
+  resultKeys: string[]
+  threadKeys: string[]
+  hasThreadId: boolean
+  hasSessionId: boolean
+  ephemeral?: boolean
+  turnCount?: number
+  instructionSourceCount?: number
+  pluginLikeInstructionSourceCount?: number
+  sampleInstructionSources: string[]
+  configKeys: string[]
+  errorMessage?: string
+}
+
 export interface CodexAppServerProtocolLikeResponse {
   result?: unknown
   error?: {
@@ -50,6 +66,50 @@ interface RuntimeComponentCounts {
 
 const PER_RUN_PLUGIN_CONTROL_METHOD_PATTERN =
   /(^thread\/.*plugin|^plugin\/.*(allow|disable|enable|filter|settings|thread)|plugin.*allowlist)/i
+
+export function summarizeCodexAppServerThreadStartResponse(input: {
+  response: CodexAppServerProtocolLikeResponse
+  config?: Record<string, unknown> | null
+}): CodexAppServerThreadStartObservation {
+  const result = input.response.result
+  const thread = isRecord(result) ? result.thread : undefined
+  const threadRecord = isRecord(thread) ? thread : undefined
+  const instructionSources = isRecord(result)
+    ? getArray(result.instructionSources)
+    : []
+  const sampleInstructionSources = instructionSources
+    .map((source) => getInstructionSourceLabel(source))
+    .filter(isNonEmptyString)
+    .slice(0, 8)
+  const threadTurns = threadRecord ? getArray(threadRecord.turns) : []
+  const errorMessage = input.response.error?.message
+
+  return {
+    method: "thread/start",
+    ok: !input.response.error,
+    resultKeys: isRecord(result) ? Object.keys(result) : [],
+    threadKeys: threadRecord ? Object.keys(threadRecord) : [],
+    hasThreadId: isNonEmptyString(threadRecord?.id),
+    hasSessionId: isNonEmptyString(threadRecord?.sessionId),
+    ephemeral:
+      typeof threadRecord?.ephemeral === "boolean"
+        ? threadRecord.ephemeral
+        : undefined,
+    turnCount:
+      threadRecord && Array.isArray(threadRecord.turns)
+        ? threadTurns.length
+        : undefined,
+    instructionSourceCount:
+      instructionSources.length > 0 ? instructionSources.length : undefined,
+    pluginLikeInstructionSourceCount:
+      instructionSources.length > 0
+        ? sampleInstructionSources.filter(isPluginLikeInstructionSource).length
+        : undefined,
+    sampleInstructionSources,
+    configKeys: input.config ? Object.keys(input.config).sort() : [],
+    ...(errorMessage ? { errorMessage } : {}),
+  }
+}
 
 export function summarizeCodexAppServerPluginProtocolResponse(
   method: string,
@@ -252,6 +312,21 @@ function getDisplayName(record: Record<string, unknown>): string | undefined {
     return nestedInterface.displayName
   }
   return undefined
+}
+
+function getInstructionSourceLabel(source: unknown): string | undefined {
+  if (isNonEmptyString(source)) return source
+  if (!isRecord(source)) return undefined
+  return getDisplayName(source)
+}
+
+function isPluginLikeInstructionSource(source: string): boolean {
+  const normalized = source.toLowerCase()
+  return (
+    normalized.includes("/plugins/") ||
+    normalized.includes(".agents/plugins") ||
+    normalized.startsWith("plugin:")
+  )
 }
 
 function getArray(value: unknown): unknown[] {

@@ -3,6 +3,7 @@ import {
   assessCodexAppServerPluginProtocol,
   extractAcceptedCodexAppServerClientMethods,
   summarizeCodexAppServerPluginProtocolResponse,
+  summarizeCodexAppServerThreadStartResponse,
 } from "../src/main/lib/codex/app-server-plugin-proof"
 
 describe("Codex app-server plugin proof helpers", () => {
@@ -168,5 +169,45 @@ describe("Codex app-server plugin proof helpers", () => {
         observations: [],
       }).hasTypedPerRunPluginAllowlist,
     ).toBe(true)
+  })
+
+  test("summarizes no-turn thread start evidence without treating config as enforcement proof", () => {
+    expect(
+      summarizeCodexAppServerThreadStartResponse({
+        config: {
+          "plugins.figma@openai-curated.enabled": false,
+        },
+        response: {
+          result: {
+            thread: {
+              id: "thread-1",
+              sessionId: "session-1",
+              ephemeral: true,
+              turns: [],
+            },
+            instructionSources: [
+              "/repo/AGENTS.md",
+              "/Users/test/.codex/plugins/cache/openai-curated/figma/SKILL.md",
+            ],
+            cwd: "/repo",
+          },
+        },
+      }),
+    ).toMatchObject({
+      method: "thread/start",
+      ok: true,
+      resultKeys: ["thread", "instructionSources", "cwd"],
+      hasThreadId: true,
+      hasSessionId: true,
+      ephemeral: true,
+      turnCount: 0,
+      instructionSourceCount: 2,
+      pluginLikeInstructionSourceCount: 1,
+      sampleInstructionSources: [
+        "/repo/AGENTS.md",
+        "/Users/test/.codex/plugins/cache/openai-curated/figma/SKILL.md",
+      ],
+      configKeys: ["plugins.figma@openai-curated.enabled"],
+    })
   })
 })

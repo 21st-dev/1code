@@ -9,12 +9,15 @@ import {
   type CodexAppServerProtocolLikeResponse,
   extractAcceptedCodexAppServerClientMethods,
   summarizeCodexAppServerPluginProtocolResponse,
+  summarizeCodexAppServerThreadStartResponse,
 } from "../src/main/lib/codex/app-server-plugin-proof"
 
 interface ProbeOptions {
   codexPath: string
   codexHome: string
   timeoutMs: number
+  includeThreadStart: boolean
+  threadStartDisabledPluginId?: string
   outPath?: string
   tempCodexHome?: string
 }
@@ -72,6 +75,10 @@ function loadOptions(): ProbeOptions {
     codexPath: readOptionalArg("codex") ?? defaultCodexPath(),
     codexHome: path.resolve(codexHome),
     timeoutMs: Number(readOptionalArg("timeout-ms") ?? 5_000),
+    includeThreadStart: readBooleanArg("include-thread-start", false),
+    threadStartDisabledPluginId: readOptionalArg(
+      "thread-start-disabled-plugin-id",
+    ),
     outPath: readOptionalArg("out"),
     tempCodexHome,
   }
@@ -201,11 +208,23 @@ function observationFor(
   return observation
 }
 
+function buildThreadStartConfig(
+  options: Pick<ProbeOptions, "threadStartDisabledPluginId">,
+): Record<string, unknown> | null {
+  if (!options.threadStartDisabledPluginId) return null
+  return {
+    [`plugins.${options.threadStartDisabledPluginId}.enabled`]: false,
+  }
+}
+
 async function main(): Promise<void> {
   const options = loadOptions()
   const client = new CodexAppServerProbeClient(options)
   const observations: CodexAppServerPluginProtocolObservation[] = []
   let acceptedClientMethods: string[] = []
+  let threadStart: ReturnType<
+    typeof summarizeCodexAppServerThreadStartResponse
+  > | null = null
 
   try {
     observations.push(
@@ -245,12 +264,34 @@ async function main(): Promise<void> {
             unknownMethodResponse.error.message,
           )
 
+    if (options.includeThreadStart) {
+      const config = buildThreadStartConfig(options)
+      const threadStartResponse = await client.request("thread/start", {
+        model: null,
+        modelProvider: null,
+        cwd: process.cwd(),
+        approvalPolicy: "untrusted",
+        approvalsReviewer: "user",
+        sandbox: "read-only",
+        config,
+        serviceName: "locus-codex-plugin-proof",
+        ephemeral: true,
+        sessionStartSource: "startup",
+        threadSource: "user",
+      })
+      threadStart = summarizeCodexAppServerThreadStartResponse({
+        response: threadStartResponse,
+        config,
+      })
+    }
+
     const evidence = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       codexPath: options.codexPath,
       codexHome: options.codexHome,
       observations,
+      ...(threadStart ? { threadStart } : {}),
       acceptedClientMethods,
       assessment: assessCodexAppServerPluginProtocol({
         observations,
