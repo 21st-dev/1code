@@ -6,7 +6,9 @@ function getProcedureBlock(source: string, procedure: string): string {
   expect(mutationStart).toBeGreaterThan(0)
   const blockStart = mutationStart + `${procedure}: publicProcedure`.length
   const following = source.slice(blockStart)
-  const nextMutationOffset = following.search(/\n\n  [a-zA-Z0-9]+: publicProcedure/)
+  const nextMutationOffset = following.search(
+    /\n\n {2}[a-zA-Z0-9]+: publicProcedure/,
+  )
   return source.slice(
     mutationStart,
     nextMutationOffset === -1 ? undefined : blockStart + nextMutationOffset,
@@ -15,10 +17,7 @@ function getProcedureBlock(source: string, procedure: string): string {
 
 describe("Claude MCP config mutation boundaries", () => {
   test("routes project-scoped MCP writes through main-layer project and name guards", () => {
-    const source = readFileSync(
-      "src/main/lib/trpc/routers/claude.ts",
-      "utf8",
-    )
+    const source = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
 
     expect(source).toContain("const MCP_SERVER_NAME_REGEX")
     expect(source).toContain("function normalizeMcpServerName")
@@ -47,61 +46,73 @@ describe("Claude MCP config mutation boundaries", () => {
 
 describe("Codex MCP config mutation boundaries", () => {
   test("OAuth and logout cwd are limited to registered projects", () => {
-    const source = readFileSync(
-      "src/main/lib/trpc/routers/codex.ts",
+    const route = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
+    const service = readFileSync(
+      "src/main/lib/runtime-mcp-config/codex.ts",
       "utf8",
     )
 
-    expect(source).toContain("function resolveCodexMcpProjectPathForCli")
-    expect(source).toContain("Codex MCP project path must match a registered project")
-    expect(source).toContain("Codex MCP project path no longer exists")
-    expect(source).toContain("function isExistingCodexMcpCwd")
-    expect(source).toContain(".from(projectsTable)")
-    expect(source).toContain(".where(eq(projectsTable.path, requestedPath))")
+    expect(service).toContain("function resolveCodexMcpProjectPathForCli")
+    expect(service).toContain(
+      "Codex MCP project path must match a registered project",
+    )
+    expect(service).toContain("Codex MCP project path no longer exists")
+    expect(service).toContain("function isExistingCodexMcpCwd")
+    expect(service).toContain(".from(projectsTable)")
+    expect(service).toContain(".where(eq(projectsTable.path, requestedPath))")
 
-    const oauthBlock = getProcedureBlock(source, "startMcpOAuth")
-    const logoutBlock = getProcedureBlock(source, "logoutMcpServer")
-    const projectPathResolverStart = source.indexOf(
+    const oauthBlock = getProcedureBlock(route, "startMcpOAuth")
+    const logoutBlock = getProcedureBlock(route, "logoutMcpServer")
+    const projectPathResolverStart = service.indexOf(
       "function resolveCodexMcpProjectPathForCli",
     )
-    const registeredProjectCheck = source.indexOf(
+    const registeredProjectCheck = service.indexOf(
       "if (!registeredProject)",
       projectPathResolverStart,
     )
-    const existingCwdCheck = source.indexOf(
+    const existingCwdCheck = service.indexOf(
       "if (!isExistingCodexMcpCwd(registeredProject.path))",
       projectPathResolverStart,
     )
-    const projectPathReturn = source.indexOf(
+    const projectPathReturn = service.indexOf(
       "return registeredProject.path",
       projectPathResolverStart,
     )
 
-    expect(oauthBlock).toContain("resolveCodexMcpProjectPathForCli(input.projectPath)")
-    expect(logoutBlock).toContain("resolveCodexMcpProjectPathForCli(input.projectPath)")
-    expect(oauthBlock).not.toContain("cwd: projectPath && projectPath.length > 0 ? projectPath : undefined")
-    expect(logoutBlock).not.toContain("cwd: projectPath && projectPath.length > 0 ? projectPath : undefined")
+    expect(oauthBlock).toContain("startCodexMcpOAuth(input)")
+    expect(logoutBlock).toContain("logoutCodexMcpServer(input)")
+    expect(oauthBlock).not.toContain(
+      "cwd: projectPath && projectPath.length > 0 ? projectPath : undefined",
+    )
+    expect(logoutBlock).not.toContain(
+      "cwd: projectPath && projectPath.length > 0 ? projectPath : undefined",
+    )
+    expect(route).not.toContain("function resolveCodexMcpProjectPathForCli")
+    expect(route).not.toContain('runCodexCliChecked(["mcp", "login"')
+    expect(route).not.toContain('runCodexCliChecked(["mcp", "logout"')
     expect(registeredProjectCheck).toBeGreaterThan(projectPathResolverStart)
     expect(existingCwdCheck).toBeGreaterThan(registeredProjectCheck)
     expect(projectPathReturn).toBeGreaterThan(existingCwdCheck)
   })
 
   test("snapshot reads skip missing project cwd before spawning Codex", () => {
-    const source = readFileSync(
-      "src/main/lib/trpc/routers/codex.ts",
+    const service = readFileSync(
+      "src/main/lib/runtime-mcp-config/codex.ts",
       "utf8",
     )
 
-    const snapshotStart = source.indexOf("async function resolveCodexMcpSnapshot")
-    const cwdGuard = source.indexOf(
+    const snapshotStart = service.indexOf(
+      "async function resolveCodexMcpSnapshot",
+    )
+    const cwdGuard = service.indexOf(
       'lookupPath !== "__global__" && !isExistingCodexMcpCwd(lookupPath)',
       snapshotStart,
     )
-    const emptySnapshot = source.indexOf(
+    const emptySnapshot = service.indexOf(
       "return createEmptyCodexMcpSnapshot",
       cwdGuard,
     )
-    const cliSpawn = source.indexOf(
+    const cliSpawn = service.indexOf(
       'runCodexCliChecked(["mcp", "list", "--json"]',
       snapshotStart,
     )

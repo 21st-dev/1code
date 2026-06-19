@@ -188,19 +188,23 @@ describe("desktop runtime preflight", () => {
     expect(startupIndex).toBeGreaterThan(inputsIndex)
     expect(runRequestIndex).toBeGreaterThan(startupIndex)
     expect(lifecycleIndex).toBeGreaterThan(runRequestIndex)
-    expect(claude).not.toContain("cwd: input.cwd,\n                systemPrompt")
+    expect(claude).not.toContain(
+      "cwd: input.cwd,\n                systemPrompt",
+    )
   })
 
   test("Codex route blocks desktop preflight before creating a job", () => {
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
     const blockerIndex = codex.indexOf("new DesktopRunPreflightError(blocker)")
-    const runtimeStatusIndex = codex.indexOf("const runtimeStatus = await getCodexRuntimeStatus()")
+    const runtimeStatusIndex = codex.indexOf(
+      "const runtimeStatus = await getCodexRuntimeStatus()",
+    )
     const attachmentIndex = codex.indexOf(
       "prepareChatImageAttachmentsForDesktopRun({",
       runtimeStatusIndex,
     )
     const mcpIndex = codex.indexOf(
-      "mcpSnapshot = await resolveCodexMcpSnapshot({",
+      "mcpSnapshot = await resolveCodexMcpSnapshotForDesktopRun({",
       attachmentIndex,
     )
     const localOnlyIndex = codex.indexOf(
