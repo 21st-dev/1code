@@ -19,13 +19,14 @@
   allowlist, isolated config root, startup flag, lifecycle method, or equivalent
   control. If Codex only auto-loads global plugin state, record native execution as
   blocked.
-- [ ] 1.8 Codex: identify the stable activation identity fields available for a
-  native-loaded plugin (manifest/component declarations plus package identity,
-  version, source pin, package hash, or equivalent), and prove drift is detected
-  before activation.
-- [ ] 1.9 Codex: prove native-loaded MCP servers remain approval-gated; if Codex can
-  only load an MCP-bearing package whole, block that package before MCP approval or
-  mark non-MCP components partial.
+- [x] 1.8 Codex: because no controlled native Codex loading path was proven, record
+  the discovered package identity fields available before activation (manifest and
+  component declarations plus package source, version, cache/source pins, and package
+  hash when available), prove drift is blocked by the shared policy, and defer any
+  positive native-loaded drift proof to `add-codex-app-server-plugin-run-control`.
+- [x] 1.9 Codex: because no controlled native Codex loading path was proven, block
+  MCP-bearing Codex packages before activation and defer positive native-loaded MCP
+  approval proof to `add-codex-app-server-plugin-run-control`.
 - [x] 1.10 Produce a per-runtime, per-component activation matrix with
   `native-loadable`, `mcp-only`, `not-loadable`, identity completeness, and blocked
   reasons.
@@ -66,8 +67,9 @@
 
 ## 4. Phase 4 - Codex Controlled Native Execution
 
-- [ ] 4.1 If Phase 1 proves app-server supports per-run filtering, wire Codex plugin
-  lifecycle/status and pass only reviewed+enabled plugins to that managed thread.
+- [x] 4.1 Phase 1 did not prove app-server supports per-run filtering, so this change
+  does not wire Codex native plugin lifecycle/status into managed threads; the work
+  is deferred to `add-codex-app-server-plugin-run-control`.
 - [x] 4.2 If Phase 1 proves app-server has no per-run filtering, stop Codex native
   execution work for this change, keep Codex marked unsupported or explicitly
   MCP-only, and prepare a follow-up proposal. Do not mark Codex native execution

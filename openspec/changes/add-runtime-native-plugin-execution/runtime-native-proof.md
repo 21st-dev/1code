@@ -66,6 +66,22 @@ proven. A staged package or parsed manifest alone is not native execution proof.
   skill present, and no-turn `thread/start` shows only project instructions with
   zero plugin-like instruction sources. This is not sufficient per-run control for
   Locus-managed native Codex plugin activation.
+- A follow-up run of the same seeded Codex probe on 2026-06-19 produced the same
+  closure evidence: the seeded plugin was installed+enabled in global inventory,
+  `proof-plugin:proof-skill` appeared in `skills/list`, `thread/start` accepted
+  `plugins.proof-plugin@locus-proof.enabled=false`, and the accepted app-server
+  method list still exposed no typed per-run plugin allowlist/filter method. For
+  this change, Codex native execution remains blocked rather than partially wired.
+- Codex activation identity is computed for discovered packages before any native
+  activation attempt from the manifest review fingerprint plus package source,
+  package version, source pins such as cache version, and package hash when
+  available. `tests/codex-app-server-plugin-config.test.ts` and
+  `tests/codex-app-server-plugin-allowlist.test.ts` prove the shared policy keeps
+  Codex app-server plugin overrides disabled for reviewed packages while native
+  support and per-run control are missing, and still fails closed for disabled,
+  unreviewed, safe-mode, drifted identity, scan failure, and MCP-bearing packages.
+  Positive native-loaded Codex drift and MCP approval proof is deferred to
+  `openspec/changes/add-codex-app-server-plugin-run-control`.
 - Claude Agent SDK type declarations expose per-session
   `options.plugins: [{ type: "local", path, skipMcpDiscovery }]`, which the SDK
   implementation maps to `--plugin-dir` or `--plugin-dir-no-mcp`. The bundled
