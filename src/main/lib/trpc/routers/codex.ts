@@ -1656,7 +1656,11 @@ export const codexRouter = router({
             })
 
             const appServerPluginConfig = useCodexAppServerAdapter
-              ? await resolveCodexAppServerPluginConfigOverrides()
+              ? await resolveCodexAppServerPluginConfigOverrides({
+                  projectId: desktopRunRequest.context.projectId,
+                  chatId: desktopRunRequest.context.chatId,
+                  subChatId: desktopRunRequest.context.subChatId,
+                })
               : undefined
 
             const codexAdapter = useCodexAppServerAdapter

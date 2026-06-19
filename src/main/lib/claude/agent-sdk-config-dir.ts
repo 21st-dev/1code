@@ -5,6 +5,7 @@ import {
   type ClaudeNativePluginStagingFailureInput,
   replaceClaudeNativePluginStagingFailures,
 } from "./plugin-staging-state"
+import type { RuntimeNativePluginActivationScopeContext } from "../plugins/update-review-state"
 
 type ClaudeAgentSdkConfigDirFs = {
   mkdir: typeof fs.mkdir
@@ -28,7 +29,9 @@ export type ClaudeAgentSdkConfigDirDependencies = {
   homeDir: () => string
   platform: NodeJS.Platform
   getPluginSafeModeState: () => Promise<{ enabled: boolean }>
-  getClaudePluginStagingEntries: () => Promise<ClaudePluginStagingEntry[]>
+  getClaudePluginStagingEntries: (
+    scopeContext?: RuntimeNativePluginActivationScopeContext,
+  ) => Promise<ClaudePluginStagingEntry[]>
   logger: Pick<Console, "warn">
 }
 
@@ -69,7 +72,7 @@ const defaultDependencies: ClaudeAgentSdkConfigDirDependencies = {
     const state = await import("../plugins/update-review-state")
     return state.getPluginSafeModeState()
   },
-  getClaudePluginStagingEntries: async () => {
+  getClaudePluginStagingEntries: async (scopeContext) => {
     const [{ getEnabledPlugins, getApprovedPluginMcpServers }, gates] =
       await Promise.all([
         import("../trpc/routers/claude-settings"),
@@ -78,6 +81,7 @@ const defaultDependencies: ClaudeAgentSdkConfigDirDependencies = {
     return gates.discoverAllowedClaudeNativePluginRuntimeComponents({
       enabledPluginSources: await getEnabledPlugins(),
       approvedPluginMcpServerIdentifiers: await getApprovedPluginMcpServers(),
+      scopeContext,
     })
   },
   logger: console,
@@ -558,6 +562,7 @@ function findDuplicatePluginSourcePaths(
 export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
   isolatedConfigDir: string
   cacheKey: string
+  pluginScopeContext?: RuntimeNativePluginActivationScopeContext
   dependencies?: Partial<ClaudeAgentSdkConfigDirDependencies>
 }): Promise<ClaudeAgentSdkIsolatedConfigDirResult> {
   const dependencies = withDefaultDependencies(input.dependencies)
@@ -619,7 +624,7 @@ export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
   )
   const pluginStagingEntries = pluginSafeMode.enabled
     ? []
-    : await dependencies.getClaudePluginStagingEntries()
+    : await dependencies.getClaudePluginStagingEntries(input.pluginScopeContext)
   const pluginStaging = await stageClaudePlugins({
     pluginsTarget,
     entries: pluginStagingEntries,

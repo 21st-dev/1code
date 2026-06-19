@@ -70,6 +70,7 @@ describe("Claude Agent SDK runtime startup", () => {
     const ensureIsolatedConfigDir = mock(async () => ({ nativePluginConfigs }))
 
     const result = await prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
+      projectId: "project-1",
       chatId: "chat-1",
       subChatId: "sub-1",
       isUsingOllama: false,
@@ -90,9 +91,14 @@ describe("Claude Agent SDK runtime startup", () => {
       ),
       cacheKey: "sub-1",
     })
-    expect(ensureIsolatedConfigDir).toHaveBeenCalledWith(
-      result.runtimeStartup.isolatedConfig,
-    )
+    expect(ensureIsolatedConfigDir).toHaveBeenCalledWith({
+      ...result.runtimeStartup.isolatedConfig,
+      pluginScopeContext: {
+        projectId: "project-1",
+        chatId: "chat-1",
+        subChatId: "sub-1",
+      },
+    })
   })
 
   test("keeps startup context when isolated config setup fails", async () => {

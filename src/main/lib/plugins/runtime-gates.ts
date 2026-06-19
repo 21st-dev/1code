@@ -20,8 +20,12 @@ import {
   runtimeSupportsProvenPerRunPluginControl,
 } from "./runtime-native-activation"
 import {
+  getRuntimeNativePluginScopedSelectionsState,
   hashPluginManifestReviewDocument,
   recordPluginReviewScans,
+  resolveRuntimeNativePluginEffectiveEnablement,
+  type RuntimeNativePluginActivationScopeContext,
+  type RuntimeNativePluginEnablementRecord,
 } from "./update-review-state"
 
 export interface AllowedClaudePluginRuntimeComponents {
@@ -108,6 +112,7 @@ export async function discoverAllowedClaudePluginRuntimeComponents(
 export async function discoverAllowedClaudeNativePluginRuntimeComponents(input: {
   enabledPluginSources: string[]
   approvedPluginMcpServerIdentifiers: string[]
+  scopeContext?: RuntimeNativePluginActivationScopeContext
 }): Promise<AllowedClaudeNativePluginRuntimeComponents[]> {
   if (input.enabledPluginSources.length === 0) return []
 
@@ -119,9 +124,26 @@ export async function discoverAllowedClaudeNativePluginRuntimeComponents(input: 
     discoverInstalledPlugins(),
     discoverPluginMcpServers(),
   ])
-  const enabledPlugins = installedPlugins.filter((plugin) =>
+  const globallyEnabledPlugins = installedPlugins.filter((plugin) =>
     enabledSources.has(plugin.source),
   )
+  const scopedSelections = await getRuntimeNativePluginScopedSelectionsState()
+  const effectiveEnablement = resolveRuntimeNativePluginEffectiveEnablement({
+    globalEnablement: buildRuntimeNativePluginEnablementFromPlugins(
+      globallyEnabledPlugins,
+    ),
+    scopedSelections,
+    context: input.scopeContext,
+  })
+  const enabledReviewKeys =
+    effectiveEnablement.mode === "custom"
+      ? new Set(Object.keys(effectiveEnablement.enablement))
+      : null
+  const enabledPlugins = enabledReviewKeys
+    ? globallyEnabledPlugins.filter((plugin) =>
+        enabledReviewKeys.has(plugin.reviewKey),
+      )
+    : globallyEnabledPlugins
   if (enabledPlugins.length === 0) return []
 
   const scannedPlugins = await Promise.all(
@@ -199,6 +221,20 @@ export async function discoverAllowedClaudeNativePluginRuntimeComponents(input: 
         },
       ]
     },
+  )
+}
+
+function buildRuntimeNativePluginEnablementFromPlugins(
+  plugins: PluginInfo[],
+): Record<string, RuntimeNativePluginEnablementRecord> {
+  return Object.fromEntries(
+    plugins.map((plugin) => [
+      plugin.reviewKey,
+      {
+        enabled: true,
+        updatedAt: "runtime",
+      },
+    ]),
   )
 }
 

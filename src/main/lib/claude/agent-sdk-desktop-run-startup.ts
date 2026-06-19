@@ -135,6 +135,7 @@ export async function prepareClaudeAgentSdkDesktopRunStartup(
   })
 
   const runtimeStartup = await dependencies.prepareRuntimeStartup({
+    projectId: input.preflight.project?.id ?? null,
     chatId: input.chatId,
     subChatId: input.subChatId,
     isUsingOllama,

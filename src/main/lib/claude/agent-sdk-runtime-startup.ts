@@ -10,6 +10,7 @@ import {
   type PrepareClaudeAgentSdkRuntimeStartupEnvironmentInput,
   prepareClaudeAgentSdkRuntimeStartupEnvironment,
 } from "./env"
+import type { RuntimeNativePluginActivationScopeContext } from "../plugins/update-review-state"
 
 type PrepareClaudeAgentSdkOllamaStartupDiagnostics =
   typeof prepareClaudeAgentSdkOllamaStartupDiagnostics
@@ -20,6 +21,7 @@ export type PrepareClaudeAgentSdkRuntimeStartupContextInput = Omit<
   PrepareClaudeAgentSdkRuntimeStartupEnvironmentInput,
   "isolatedConfigDir"
 > & {
+  projectId?: string | null
   chatId: string
   subChatId: string
   isUsingOllama: boolean
@@ -55,6 +57,7 @@ export type PrepareClaudeAgentSdkRuntimeStartupDiagnosticsInput = {
 }
 
 export function prepareClaudeAgentSdkRuntimeStartupContext({
+  projectId: _projectId,
   chatId,
   subChatId,
   isUsingOllama,
@@ -88,7 +91,7 @@ export async function prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
   const runtimeStartup = prepareClaudeAgentSdkRuntimeStartupContext(input)
   try {
     const isolatedConfigResult = await ensureIsolatedConfigDir(
-      runtimeStartup.isolatedConfig,
+      withClaudePluginScopeContext(runtimeStartup.isolatedConfig, input),
     )
     return {
       runtimeStartup: {
@@ -103,6 +106,25 @@ export async function prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
       runtimeStartup,
       isolatedConfigReady: false,
     }
+  }
+}
+
+function withClaudePluginScopeContext(
+  isolatedConfig: ClaudeAgentSdkIsolatedConfig,
+  input: Pick<
+    PrepareClaudeAgentSdkRuntimeStartupForDesktopRunInput,
+    "projectId" | "chatId" | "subChatId"
+  >,
+): ClaudeAgentSdkIsolatedConfig & {
+  pluginScopeContext: RuntimeNativePluginActivationScopeContext
+} {
+  return {
+    ...isolatedConfig,
+    pluginScopeContext: {
+      projectId: input.projectId,
+      chatId: input.chatId,
+      subChatId: input.subChatId,
+    },
   }
 }
 

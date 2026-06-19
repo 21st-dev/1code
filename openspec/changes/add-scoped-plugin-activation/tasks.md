@@ -7,11 +7,11 @@
 
 ## 2. Runtime Integration
 
-- [ ] 2.1 Pass project/chat/sub-chat scope context into Codex app-server plugin
+- [x] 2.1 Pass project/chat/sub-chat scope context into Codex app-server plugin
   allowlist resolution.
-- [ ] 2.2 Apply effective scoped selections before Codex isolated home staging.
-- [ ] 2.3 Apply effective scoped selections before Claude native plugin staging.
-- [ ] 2.4 Keep unselected, disabled, unreviewed, drifted, safe-mode-blocked, and
+- [x] 2.2 Apply effective scoped selections before Codex isolated home staging.
+- [x] 2.3 Apply effective scoped selections before Claude native plugin staging.
+- [x] 2.4 Keep unselected, disabled, unreviewed, drifted, safe-mode-blocked, and
   unapproved-MCP plugins absent from generated runtime config.
 
 ## 3. UI
@@ -24,8 +24,8 @@
 ## 4. Validation
 
 - [x] 4.1 Add unit tests for scoped selection normalization and precedence.
-- [ ] 4.2 Add Codex allowlist/staging tests for unselected plugins.
-- [ ] 4.3 Add Claude staging tests for scoped selected plugins.
-- [ ] 4.4 `bun run ts:check` passes.
-- [ ] 4.5 `openspec validate add-scoped-plugin-activation --strict --no-interactive`
+- [x] 4.2 Add Codex allowlist/staging tests for unselected plugins.
+- [x] 4.3 Add Claude staging tests for scoped selected plugins.
+- [x] 4.4 `bun run ts:check` passes.
+- [x] 4.5 `openspec validate add-scoped-plugin-activation --strict --no-interactive`
   passes.

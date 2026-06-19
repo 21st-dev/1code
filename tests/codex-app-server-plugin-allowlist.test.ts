@@ -19,6 +19,24 @@ interface MockCodexPlugin {
   updatePosture: "review-before-enable"
 }
 
+interface MockClaudePlugin {
+  runtime: "claude"
+  reviewKey: string
+  name: string
+  version: string
+  path: string
+  installRoot: string
+  source: string
+  marketplace: string
+  sourceKind: "local-marketplace"
+  sourceTrust: "official"
+  diagnostics: []
+  sourcePins: Array<{ kind: "store-package-sha256"; value: string }>
+  targetMode: "manifest-only"
+  executionStatus: "not-run-by-locus"
+  updatePosture: "review-before-enable"
+}
+
 interface MockPluginReviewScanInput {
   pluginKey: string
   runtimeNativeActivationIdentity: {
@@ -28,8 +46,43 @@ interface MockPluginReviewScanInput {
   }
 }
 
+type MockPlugin = MockCodexPlugin | MockClaudePlugin
+
+type MockScopedSelections = {
+  projects: Record<
+    string,
+    {
+      mode: "inherit" | "custom"
+      enabledPluginReviewKeys: string[]
+      updatedAt: string
+    }
+  >
+  chats: Record<
+    string,
+    {
+      mode: "inherit" | "custom"
+      enabledPluginReviewKeys: string[]
+      updatedAt: string
+    }
+  >
+  subChats: Record<
+    string,
+    {
+      mode: "inherit" | "custom"
+      enabledPluginReviewKeys: string[]
+      updatedAt: string
+    }
+  >
+}
+
 let plugins: MockCodexPlugin[] = []
+let claudePlugins: MockClaudePlugin[] = []
 let enablement: Record<string, { enabled: boolean; updatedAt: string }> = {}
+let scopedSelections: MockScopedSelections = {
+  projects: {},
+  chats: {},
+  subChats: {},
+}
 let reviewStatuses: Record<
   string,
   "new" | "unchanged" | "changed" | "reviewed"
@@ -38,16 +91,18 @@ let safeModeEnabled = false
 
 mock.module("../src/main/lib/plugins", () => ({
   discoverCodexInstalledPlugins: async () => plugins,
+  discoverInstalledPlugins: async () => claudePlugins,
+  discoverPluginMcpServers: async () => [],
 }))
 
 mock.module("../src/main/lib/plugins/review-scan", () => ({
-  scanPluginReviewDocument: async (plugin: MockCodexPlugin) => {
+  scanPluginReviewDocument: async (plugin: MockPlugin) => {
     if (plugin.source.includes("broken")) {
       throw new Error("broken plugin metadata")
     }
     const hasMcpServers = plugin.source.includes("cloudflare")
     const reviewDocument = buildPluginManifestReviewDocument({
-      runtime: "codex",
+      runtime: plugin.runtime,
       source: plugin.source,
       marketplace: plugin.marketplace,
       name: plugin.name,
@@ -86,7 +141,64 @@ mock.module("../src/main/lib/plugins/review-scan", () => ({
 }))
 
 mock.module("../src/main/lib/plugins/update-review-state", () => ({
-  getRuntimeNativePluginEnablementState: async () => enablement,
+  getEffectiveRuntimeNativePluginEnablementState: async (
+    context?: { subChatId?: string | null },
+  ) => {
+    if (context?.subChatId === "sub-scoped") {
+      return {
+        scope: "subChat",
+        scopeId: "sub-scoped",
+        mode: "custom",
+        enablement: Object.fromEntries(
+          Object.entries(enablement).filter(([pluginKey]) =>
+            pluginKey.endsWith(":figma"),
+          ),
+        ),
+      }
+    }
+    return {
+      scope: "global",
+      mode: "global",
+      enablement,
+    }
+  },
+  getRuntimeNativePluginScopedSelectionsState: async () => scopedSelections,
+  resolveRuntimeNativePluginEffectiveEnablement: (input: {
+    globalEnablement: Record<string, { enabled: boolean; updatedAt: string }>
+    scopedSelections?: MockScopedSelections
+    context?: {
+      projectId?: string | null
+      chatId?: string | null
+      subChatId?: string | null
+    }
+  }) => {
+    const subChatId = input.context?.subChatId
+    const record =
+      subChatId && input.scopedSelections?.subChats[subChatId]?.mode === "custom"
+        ? input.scopedSelections.subChats[subChatId]
+        : null
+    if (!record || !subChatId) {
+      return {
+        scope: "global",
+        mode: "global",
+        enablement: input.globalEnablement,
+      }
+    }
+
+    return {
+      scope: "subChat",
+      scopeId: subChatId,
+      mode: "custom",
+      enablement: Object.fromEntries(
+        record.enabledPluginReviewKeys.flatMap((pluginReviewKey) => {
+          const globalRecord = input.globalEnablement[pluginReviewKey]
+          return globalRecord?.enabled === true
+            ? [[pluginReviewKey, { enabled: true, updatedAt: record.updatedAt }]]
+            : []
+        }),
+      ),
+    }
+  },
   hashPluginManifestReviewDocument: (document: { source: string }) =>
     `manifest:${document.source}`,
   recordPluginReviewScans: async (inputs: MockPluginReviewScanInput[]) => ({
@@ -128,6 +240,7 @@ mock.module("../src/main/lib/plugins/update-review-state", () => ({
 const allowlist = await import(
   "../src/main/lib/codex/app-server-plugin-allowlist"
 )
+const runtimeGates = await import("../src/main/lib/plugins/runtime-gates")
 
 function codexPlugin(name: string, version = "7118aaa3") {
   return {
@@ -149,10 +262,36 @@ function codexPlugin(name: string, version = "7118aaa3") {
   }
 }
 
+function claudePlugin(name: string): MockClaudePlugin {
+  return {
+    runtime: "claude",
+    reviewKey: `claude:market:${name}`,
+    name,
+    version: "1.0.0",
+    path: `/plugins/${name}`,
+    installRoot: "/plugins",
+    source: `market:${name}`,
+    marketplace: "market",
+    sourceKind: "local-marketplace",
+    sourceTrust: "official",
+    diagnostics: [],
+    sourcePins: [{ kind: "store-package-sha256", value: `sha256-${name}` }],
+    targetMode: "manifest-only",
+    executionStatus: "not-run-by-locus",
+    updatePosture: "review-before-enable",
+  }
+}
+
 describe("Codex app-server plugin allowlist resolver", () => {
   beforeEach(() => {
     plugins = []
+    claudePlugins = []
     enablement = {}
+    scopedSelections = {
+      projects: {},
+      chats: {},
+      subChats: {},
+    }
     reviewStatuses = {}
     safeModeEnabled = false
   })
@@ -264,5 +403,75 @@ describe("Codex app-server plugin allowlist resolver", () => {
       canActivateNative: false,
       reasons: ["native-load-failed"],
     })
+  })
+
+  test("applies scoped Codex plugin selection before app-server staging", async () => {
+    plugins = [codexPlugin("figma"), codexPlugin("github")]
+    enablement = {
+      "codex:openai-curated:figma": {
+        enabled: true,
+        updatedAt: "2026-06-02T00:00:00.000Z",
+      },
+      "codex:openai-curated:github": {
+        enabled: true,
+        updatedAt: "2026-06-02T00:00:00.000Z",
+      },
+    }
+    reviewStatuses = {
+      "codex:openai-curated:figma": "reviewed",
+      "codex:openai-curated:github": "reviewed",
+    }
+
+    const result = await allowlist.resolveCodexAppServerPluginConfigOverrides({
+      subChatId: "sub-scoped",
+    })
+
+    expect(result.config).toEqual({
+      "plugins.figma@openai-curated.enabled": true,
+      "plugins.github@openai-curated.enabled": false,
+    })
+    expect(
+      result.entries.find((entry) => entry.pluginId === "github@openai-curated")
+        ?.nativeActivationPolicy.reasons,
+    ).toEqual(["plugin-disabled"])
+  })
+})
+
+describe("Claude native plugin runtime gates", () => {
+  beforeEach(() => {
+    plugins = []
+    claudePlugins = []
+    enablement = {}
+    scopedSelections = {
+      projects: {},
+      chats: {},
+      subChats: {},
+    }
+    reviewStatuses = {}
+    safeModeEnabled = false
+  })
+
+  test("applies scoped plugin selection before Claude native staging", async () => {
+    claudePlugins = [claudePlugin("figma"), claudePlugin("github")]
+    scopedSelections.subChats["sub-scoped"] = {
+      mode: "custom",
+      enabledPluginReviewKeys: ["claude:market:figma"],
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    }
+    reviewStatuses = {
+      "claude:market:figma": "reviewed",
+      "claude:market:github": "reviewed",
+    }
+
+    const result =
+      await runtimeGates.discoverAllowedClaudeNativePluginRuntimeComponents({
+        enabledPluginSources: ["market:figma", "market:github"],
+        approvedPluginMcpServerIdentifiers: [],
+        scopeContext: {
+          subChatId: "sub-scoped",
+        },
+      })
+
+    expect(result.map((entry) => entry.pluginSource)).toEqual(["market:figma"])
   })
 })

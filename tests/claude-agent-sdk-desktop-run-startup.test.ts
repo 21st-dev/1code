@@ -20,7 +20,7 @@ function createBaseInput() {
       runId: "run-1",
       cancel: () => undefined,
       streamId: "stream-1",
-      preflight: { cwd: "/repo" } as any,
+      preflight: { cwd: "/repo", project: { id: "project-1" } } as any,
       permissionPolicy: { runtimeId: "claude-code" } as any,
       requestedModel: "claude-sonnet",
       modelSource: "profile:provider-1",
@@ -203,6 +203,7 @@ describe("Claude Agent SDK desktop run startup", () => {
       existingSessionId: "existing-session",
     })
     expect(calls[2].input).toMatchObject({
+      projectId: "project-1",
       chatId: "chat-1",
       subChatId: "sub-1",
       isUsingOllama: false,

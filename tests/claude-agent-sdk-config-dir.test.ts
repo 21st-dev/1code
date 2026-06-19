@@ -297,6 +297,45 @@ describe("Claude Agent SDK isolated config dir", () => {
     ])
   })
 
+  test("passes plugin scope context into Claude plugin staging", async () => {
+    const root = await createRoot()
+    const userDataDir = join(root, "user-data")
+    const homeDir = await createHomeClaudeDir(root)
+    const calls: unknown[] = []
+    const isolatedConfig = resolveClaudeAgentSdkIsolatedConfig({
+      userDataDir,
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      isUsingOllama: false,
+    })
+
+    await ensureClaudeAgentSdkIsolatedConfigDir({
+      ...isolatedConfig,
+      pluginScopeContext: {
+        projectId: "project-1",
+        chatId: "chat-1",
+        subChatId: "sub-1",
+      },
+      dependencies: {
+        homeDir: () => homeDir,
+        getPluginSafeModeState: async () => ({ enabled: false }),
+        getClaudePluginStagingEntries: async (scopeContext) => {
+          calls.push(scopeContext)
+          return []
+        },
+        logger: { warn() {} },
+      },
+    })
+
+    expect(calls).toEqual([
+      {
+        projectId: "project-1",
+        chatId: "chat-1",
+        subChatId: "sub-1",
+      },
+    ])
+  })
+
   test("drops failed Claude plugin staging entries from isolated activation", async () => {
     const root = await createRoot()
     const userDataDir = join(root, "user-data")

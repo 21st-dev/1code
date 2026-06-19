@@ -2,9 +2,10 @@ import { discoverCodexInstalledPlugins, type PluginInfo } from "../plugins"
 import { scanPluginReviewDocument } from "../plugins/review-scan"
 import { buildRuntimeNativeActivationIdentity } from "../plugins/runtime-native-activation"
 import {
-  getRuntimeNativePluginEnablementState,
+  getEffectiveRuntimeNativePluginEnablementState,
   hashPluginManifestReviewDocument,
   recordPluginReviewScans,
+  type RuntimeNativePluginActivationScopeContext,
 } from "../plugins/update-review-state"
 import {
   buildCodexAppServerResolvedPluginConfigOverrides,
@@ -13,10 +14,14 @@ import {
   getCodexAppServerPluginId,
 } from "./app-server-plugin-config"
 
-export async function resolveCodexAppServerPluginConfigOverrides(): Promise<CodexAppServerResolvedPluginConfigOverrides> {
+export async function resolveCodexAppServerPluginConfigOverrides(
+  context: RuntimeNativePluginActivationScopeContext = {},
+): Promise<CodexAppServerResolvedPluginConfigOverrides> {
   const [plugins, enablement] = await Promise.all([
     discoverCodexInstalledPlugins(),
-    getRuntimeNativePluginEnablementState(),
+    getEffectiveRuntimeNativePluginEnablementState(context).then(
+      (effective) => effective.enablement,
+    ),
   ])
   if (plugins.length === 0) return { config: {}, entries: [] }
 
