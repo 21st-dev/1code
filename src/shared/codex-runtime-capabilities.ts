@@ -218,8 +218,8 @@ const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
     status: "degraded",
     scope: "runtime-specific",
     reason:
-      "Codex app-server MCP elicitation is mapped, but app-server configuration import/write behavior is not implemented.",
-    hint: "Keep MCP configuration operations tied to existing shared owners until app-server config writes are proven.",
+      "Codex app-server can consume a subset of existing Codex MCP config through the shared Runtime MCP Config service, but registry installation is not proven because Codex writes are still limited to global basic stdio/http CLI adds and cannot stage full registry fields or inactive setup.",
+    hint: "Do not offer Codex registry install or verified support until app-server config writes cover registry fields and inactive setup, and runtime proof gates pass.",
     support: null,
   },
   providerProfiles: {

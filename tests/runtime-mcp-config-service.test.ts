@@ -9,7 +9,7 @@ import {
 } from "bun:test"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import * as realOs from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import * as dbSchema from "../src/main/lib/db/schema"
 
 type MockMcpServerConfig = {
@@ -267,6 +267,7 @@ beforeEach(() => {
   codexMcpConfig.clearCodexMcpConfigCache()
   mockHome = originalHome || realOs.tmpdir()
   delete process.env.CODEX_REMOTE_TOKEN
+  delete process.env.CODEX_MISSING_ENV
 })
 
 afterEach(() => {
@@ -461,6 +462,135 @@ describe("Runtime MCP config service behavior", () => {
         command: "node",
       }),
     ).rejects.toThrow("global scope only")
+  })
+
+  test("materializes Codex registry-relevant fields without claiming full install writes", async () => {
+    const projectPath = makeTempDir()
+    process.env.CODEX_REMOTE_TOKEN = "runtime-secret"
+    codexMcpListStdout = JSON.stringify([
+      {
+        name: "disabled_stdio",
+        enabled: false,
+        disabled_reason: "missing setup",
+        transport: {
+          type: "stdio",
+          command: "./server.js",
+          args: ["--mode", "disabled"],
+          env: { INLINE_SECRET: "inline-secret" },
+          env_vars: ["CODEX_REMOTE_TOKEN", "CODEX_MISSING_ENV"],
+          cwd: projectPath,
+        },
+        auth_status: "unsupported",
+      },
+      {
+        name: "active_stdio",
+        enabled: true,
+        transport: {
+          type: "stdio",
+          command: "./server.js",
+          args: ["--mode", "active"],
+          env: { INLINE_SECRET: "inline-secret" },
+          env_vars: ["CODEX_REMOTE_TOKEN", "CODEX_MISSING_ENV"],
+          cwd: projectPath,
+        },
+        auth_status: "unsupported",
+      },
+      {
+        name: "remote_sse",
+        enabled: true,
+        transport: {
+          type: "sse",
+          url: "https://api.example.com/mcp",
+          http_headers: { "X-Inline": "inline-header" },
+          env_http_headers: {
+            "X-Env": "CODEX_REMOTE_TOKEN",
+            "X-Missing": "CODEX_MISSING_ENV",
+          },
+          bearer_token_env_var: "CODEX_REMOTE_TOKEN",
+        },
+        auth_status: "bearer_token",
+      },
+    ])
+
+    const snapshot = await codexMcpConfig.resolveCodexMcpSnapshot({
+      lookupPath: projectPath,
+    })
+
+    expect(codexCliCalls.at(-1)).toEqual({
+      args: ["mcp", "list", "--json"],
+      options: { cwd: projectPath },
+    })
+    expect(snapshot.mcpServersForSession).toContainEqual({
+      name: "active_stdio",
+      type: "stdio",
+      command: resolve(projectPath, "server.js"),
+      args: ["--mode", "active"],
+      env: [
+        { name: "INLINE_SECRET", value: "inline-secret" },
+        { name: "CODEX_REMOTE_TOKEN", value: "runtime-secret" },
+      ],
+    })
+    expect(snapshot.mcpServersForSession).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "disabled_stdio" }),
+      ]),
+    )
+    expect(snapshot.mcpServersForSession).toContainEqual({
+      name: "remote_sse",
+      type: "http",
+      url: "https://api.example.com/mcp",
+      headers: expect.arrayContaining([
+        { name: "X-Inline", value: "inline-header" },
+        { name: "X-Env", value: "runtime-secret" },
+        { name: "Authorization", value: "Bearer runtime-secret" },
+      ]),
+    })
+
+    const servers = snapshot.groups[0]?.mcpServers || []
+    expect(
+      servers.find((server) => server.name === "disabled_stdio"),
+    ).toMatchObject({
+      status: "failed",
+      config: {
+        enabled: false,
+        disabledReason: "missing setup",
+        command: resolve(projectPath, "server.js"),
+        cwd: projectPath,
+        env: { INLINE_SECRET: "<redacted>" },
+        envVars: ["CODEX_REMOTE_TOKEN", "CODEX_MISSING_ENV"],
+      },
+    })
+    expect(servers.find((server) => server.name === "remote_sse")).toMatchObject(
+      {
+        config: {
+          transportType: "sse",
+          url: "https://api.example.com/mcp",
+          headers: { "X-Inline": "<redacted>" },
+          envHttpHeaders: {
+            "X-Env": "CODEX_REMOTE_TOKEN",
+            "X-Missing": "CODEX_MISSING_ENV",
+          },
+          bearerTokenEnvVar: "CODEX_REMOTE_TOKEN",
+        },
+      },
+    )
+
+    await codexMcpConfig.addCodexMcpServer({
+      name: "complex_stdio",
+      scope: "global",
+      transport: "stdio",
+      command: "node",
+      args: ["server.js"],
+    })
+
+    expect(codexCliCalls.at(-1)?.args).toEqual([
+      "mcp",
+      "add",
+      "complex_stdio",
+      "--",
+      "node",
+      "server.js",
+    ])
   })
 
   test("starts Claude OAuth for global and registered project MCP servers", async () => {

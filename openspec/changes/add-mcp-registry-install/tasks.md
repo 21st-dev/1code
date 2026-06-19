@@ -51,12 +51,22 @@
 - [ ] 1.3 Define verified-state behavior from the probe results. If a runtime lacks a
   required signal, automatic `Verified` upgrades from passive run observation are
   disabled or narrowed for that runtime.
-- [ ] 1.4 Probe Codex app-server adapter installability for registry-relevant fields:
+- [x] 1.4 Probe Codex app-server adapter installability for registry-relevant fields:
   env, env-var references, HTTP headers, env-header references, bearer-token env,
   cwd, transport type, enabled state, and scope/capability reporting.
-- [ ] 1.5 If Codex app-server cannot represent required fields or cannot produce
+- 2026-06-20 probe recorded in `codex-installability-probe-notes.md`. Codex
+  app-server can materialize existing config for runtime use across env,
+  env-var references, headers, env-header references, bearer-token env, cwd,
+  `stdio`/`streamable_http`/`http`/`sse`, disabled exclusion, and project lookup;
+  current install writes remain global basic stdio/http CLI adds and cannot stage
+  full registry fields or inactive setup.
+- [x] 1.5 If Codex app-server cannot represent required fields or cannot produce
   end-to-end proof, mark Codex registry support deferred/unavailable and keep Claude
   registry install shippable.
+- 2026-06-20 decision: Codex registry install and `Verified on Codex` remain
+  deferred for this change until full-field config writes and real app-server
+  runtime proof both pass. Claude remains the first shippable registry install
+  target.
 
 ## 2. Registry Normalization + Install Preview
 

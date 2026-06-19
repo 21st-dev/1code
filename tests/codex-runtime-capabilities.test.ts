@@ -136,6 +136,11 @@ describe("Codex runtime capabilities", () => {
       status: "degraded",
       reason: expect.stringContaining("not proven on the app-server transport"),
     })
+    expect(byId.get("mcpConfiguration")).toMatchObject({
+      status: "degraded",
+      reason: expect.stringContaining("registry installation is not proven"),
+      hint: expect.stringContaining("Do not offer Codex registry install"),
+    })
     expect(byId.get("rollback")).toMatchObject({
       status: "unsupported",
       scope: "unavailable",
