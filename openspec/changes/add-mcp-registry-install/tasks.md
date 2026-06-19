@@ -274,21 +274,31 @@
 
 ## 5. Validation
 
-- [ ] 5.1 Unit tests for official-registry normalization, provenance/fingerprint
+- [x] 5.1 Unit tests for official-registry normalization, provenance/fingerprint
   classification, setup classification, redaction, mutable-ref warnings, and
   install/setup/verified/deferred status transitions.
-- [ ] 5.2 Tests proving setup resolution keeps secrets out of renderer state.
+- 2026-06-20 registry unit coverage now includes official-provider bounds,
+  normalization, fingerprints/provenance, setup classification, redacted preview,
+  installability states, service install/setup paths, verification local state,
+  router envelope, runtime MCP integration, and deferred Codex states.
+- [x] 5.2 Tests proving setup resolution keeps secrets out of renderer state.
 - 2026-06-20 preview tests assert setup classifications expose missing keys while
-  redacting registry-provided secret URL/header/env/arg values. Full setup
-  resolution storage tests remain pending.
+  redacting registry-provided secret URL/header/env/arg values. Service/runtime
+  tests now also prove resolved secrets are encrypted in config metadata,
+  materialized only in main-process runtime code, and omitted from install/check
+  result state.
 - [x] 5.3 Tests proving missing required setup either saves an inactive
   `Installed / Needs setup` server excluded from runs or blocks install when inactive
   state is unavailable.
 - 2026-06-20 added service and runtime coverage for the Claude inactive branch:
   missing setup writes disabled `installed-needs-setup` config, and
   Locus-managed Claude SDK runs exclude disabled and registry needs-setup servers.
-- [ ] 5.4 Tests proving browse/preview/install do not execute registry server
+- [x] 5.4 Tests proving browse/preview/install do not execute registry server
   commands, package managers, Docker, MCP server processes, or MCP tools.
+- 2026-06-20 `mcp-registry-management-inert` and router guards prove
+  browse/preview/install do not import process execution, route-local MCP
+  helpers, package managers, Docker, MCP server launch, or MCP tool/list calls;
+  only explicit Check may list tools after user action.
 - [x] 5.5 Tests proving explicit Check does not call unsafe/unclassified tools.
 - 2026-06-20 source guard covers the explicit registry Check implementation:
   it lists tools, records `ready-to-verify`, does not contain MCP tool-call
@@ -298,9 +308,18 @@
 - [ ] 5.7 Manual proof for Codex app-server only if proof gates pass; otherwise record
   Codex deferred/unavailable reason and verify the UI does not offer fake Codex
   verified support.
-- [ ] 5.8 `bun run ts:check`.
-- [ ] 5.9 `bun run lint`.
-- [ ] 5.10 Architecture guard.
-- [ ] 5.11 `openspec validate add-mcp-registry-install --strict --no-interactive`.
+- [x] 5.8 `bun run ts:check`.
+- 2026-06-20 passed: `tsc --noEmit`.
+- [x] 5.9 `bun run lint`.
+- 2026-06-20 passed: `bun run lint:changed`; no changed files supported by
+  Biome after the final verification slice.
+- [x] 5.10 Architecture guard.
+- 2026-06-20 passed: `node scripts/check-architecture-guards.mjs`.
+- [x] 5.11 `openspec validate add-mcp-registry-install --strict --no-interactive`.
+- 2026-06-20 passed: change is valid.
 - [ ] 5.12 Record the resolved MCP registry install behavior in
   `docs/ideas/settings-per-tab-audit.md`.
+- 2026-06-20 not checked: the target audit doc currently contains user-owned
+  uncommitted audit additions, so this change should not stage or commit that
+  file without coordination. Resolved behavior is recorded in this OpenSpec task
+  list for now.
