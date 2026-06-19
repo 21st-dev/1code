@@ -695,13 +695,21 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-config-dir.ts",
       "utf8",
     )
+    const claudeMcpConfig = readFileSync(
+      "src/main/lib/runtime-mcp-config/claude.ts",
+      "utf8",
+    )
 
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-provider-startup")
     expect(claudeRouter).not.toContain("../../claude/agent-sdk-runtime-startup")
     expect(claudeRouter).toContain(
       "../../claude/agent-sdk-desktop-run-startup",
     )
-    expect(claudeRouter).toContain("../../claude/agent-sdk-config-dir")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-config-dir")
+    expect(claudeMcpConfig).toContain("../claude/agent-sdk-config-dir")
+    expect(claudeMcpConfig).toContain(
+      "clearClaudeAgentSdkIsolatedConfigDirCache",
+    )
     expect(claudeRouter).toContain(
       "prepareClaudeAgentSdkDesktopRunStartup({",
     )
@@ -1051,14 +1059,20 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-query-loader.ts",
       "utf8",
     )
+    const claudeMcpConfig = readFileSync(
+      "src/main/lib/runtime-mcp-config/claude.ts",
+      "utf8",
+    )
 
-    expect(claudeRouter).toContain("../../claude/agent-sdk-query-loader")
+    expect(claudeRouter).not.toContain("../../claude/agent-sdk-query-loader")
     expect(claudeRouter).not.toContain("getClaudeAgentSdkQuery()")
-    expect(claudeRouter).toContain("clearClaudeAgentSdkQueryCache()")
+    expect(claudeRouter).not.toContain("clearClaudeAgentSdkQueryCache()")
     expect(claudeRouter).not.toContain("let cachedClaudeQuery")
     expect(claudeRouter).not.toContain(
       'await import("@anthropic-ai/claude-agent-sdk")',
     )
+    expect(claudeMcpConfig).toContain("../claude/agent-sdk-query-loader")
+    expect(claudeMcpConfig).toContain("clearClaudeAgentSdkQueryCache()")
     expect(claudeQueryLoader).toContain("let cachedClaudeQuery")
     expect(claudeQueryLoader).toContain(
       'await import("@anthropic-ai/claude-agent-sdk")',
