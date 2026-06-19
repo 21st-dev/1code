@@ -6,7 +6,9 @@ import {
   Check,
   Copy,
   FileSearch,
+  Globe2,
   Loader2,
+  Package,
   Plus,
   RefreshCw,
   Trash2,
@@ -21,6 +23,11 @@ import {
   useState,
 } from "react"
 import { toast } from "sonner"
+import type { McpRegistryEntry } from "../../../../main/lib/mcp-registry/normalize"
+import type {
+  McpRegistryInstallPreview,
+  McpRegistryInstallPreviewSetupField,
+} from "../../../../main/lib/mcp-registry/preview"
 import type {
   McpImportPreview,
   McpImportRedactedField,
@@ -55,6 +62,7 @@ import {
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
 
 type McpProvider = "claude-code" | "codex"
+type McpViewMode = "configured" | "registry"
 type ProviderSection = {
   provider: McpProvider
   title: "CODEX" | "CLAUDE CODE"
@@ -72,6 +80,11 @@ type CodexLogoutFailure = {
   serverName: string
   projectPath: string | null
   message: string
+}
+
+type McpRegistryDetailResult = {
+  entry: McpRegistryEntry
+  previews: McpRegistryInstallPreview[]
 }
 
 // Status indicator dot - exported for reuse in other components
@@ -238,6 +251,37 @@ function isCodexLogoutFailureForServer(
     failure.serverName === serverName &&
     failure.projectPath === projectPath
   )
+}
+
+function getRegistryEntryKey(entry: McpRegistryEntry): string {
+  return `${entry.entryId}:${entry.versionRef}`
+}
+
+function formatRegistryToken(value: string): string {
+  return value.replaceAll("_", " ").replaceAll("-", " ")
+}
+
+function registryEntryTitle(entry: McpRegistryEntry): string {
+  return entry.title || entry.name || entry.entryId
+}
+
+function registryPreviewTargetLabel(
+  preview: McpRegistryInstallPreview,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  const source =
+    preview.targetSource === "package"
+      ? t("settings.mcp.registryPackageTarget")
+      : preview.targetSource === "remote"
+        ? t("settings.mcp.registryRemoteTarget")
+        : formatRegistryToken(preview.targetSource)
+  return `${source} / ${formatRegistryToken(preview.transport)}`
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string") return error
+  return "Unknown error"
 }
 
 function CopyValueButton({ value }: { value: string }) {
@@ -1208,6 +1252,257 @@ function McpImportPreviewPanel({
   )
 }
 
+function RegistrySetupFieldChips({
+  fields,
+}: {
+  fields: McpRegistryInstallPreviewSetupField[]
+}) {
+  const { t } = useI18n()
+  return (
+    <div className="flex flex-wrap gap-1">
+      {fields.map((field) => (
+        <span
+          key={`${field.source}:${field.key}`}
+          className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text"
+          title={field.description ?? field.key}
+        >
+          {field.key}
+          {field.required ? ` ${t("settings.mcp.registryRequired")}` : ""}
+          {field.hasDefaultValue
+            ? ` ${t("settings.mcp.registryDefaultAvailable")}`
+            : ""}
+          {field.secret ? ` ${t("settings.mcp.redacted")}` : ""}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function McpRegistryPreviewCard({
+  preview,
+}: {
+  preview: McpRegistryInstallPreview
+}) {
+  const { t } = useI18n()
+
+  return (
+    <div className="rounded-md border border-border bg-background overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Package className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p className="truncate text-xs font-medium text-foreground">
+            {registryPreviewTargetLabel(preview, t)}
+          </p>
+        </div>
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {preview.targetId}
+        </span>
+      </div>
+      <div className="divide-y divide-border">
+        {preview.url && <ConnectionRow label="URL" value={preview.url} />}
+        {preview.command && (
+          <ConnectionRow
+            label={t("settings.mcp.command")}
+            value={preview.command}
+          />
+        )}
+        {preview.args.length > 0 && (
+          <ConnectionRow
+            label={t("settings.mcp.args")}
+            copyValue={preview.args.map((arg) => arg.value).join(" ")}
+          >
+            <div className="flex flex-wrap gap-1">
+              {preview.args.map((arg) => (
+                <span
+                  key={`${arg.value}:${arg.redacted ? "redacted" : "plain"}`}
+                  className={cn(
+                    "text-[11px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground select-text break-all",
+                    arg.redacted && "text-red-300",
+                  )}
+                >
+                  {arg.value}
+                </span>
+              ))}
+            </div>
+          </ConnectionRow>
+        )}
+        {preview.cwd && <ConnectionRow label="Cwd" value={preview.cwd} />}
+        {preview.env.length > 0 && (
+          <ConnectionRow label={t("settings.mcp.envKeys")}>
+            <RegistrySetupFieldChips fields={preview.env} />
+          </ConnectionRow>
+        )}
+        {preview.headers.length > 0 && (
+          <ConnectionRow label={t("settings.mcp.headerKeys")}>
+            <RegistrySetupFieldChips fields={preview.headers} />
+          </ConnectionRow>
+        )}
+        {preview.variables.length > 0 && (
+          <ConnectionRow label={t("settings.mcp.registryVariables")}>
+            <RegistrySetupFieldChips fields={preview.variables} />
+          </ConnectionRow>
+        )}
+        <ConnectionRow label={t("settings.mcp.authentication")} mono={false}>
+          <div className="flex flex-wrap gap-1">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+              {formatRegistryToken(preview.auth.kind)}
+            </span>
+            {preview.auth.required && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-200">
+                {t("settings.mcp.registryRequired")}
+              </span>
+            )}
+          </div>
+        </ConnectionRow>
+        <ConnectionRow
+          label={t("settings.mcp.registryInstallability")}
+          mono={false}
+        >
+          <div className="flex flex-wrap gap-1">
+            {preview.runtimeInstallability.map((item) => (
+              <span
+                key={`${item.runtime}:${item.status}`}
+                className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+              >
+                {item.runtime}: {formatRegistryToken(item.status)}
+              </span>
+            ))}
+          </div>
+        </ConnectionRow>
+        {preview.warnings.length > 0 && (
+          <ConnectionRow label={t("settings.mcp.warnings")} mono={false}>
+            <div className="flex flex-wrap gap-1">
+              {preview.warnings.map((warning) => (
+                <span
+                  key={warning}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-200"
+                >
+                  {formatRegistryToken(warning)}
+                </span>
+              ))}
+            </div>
+          </ConnectionRow>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function McpRegistryDetailPanel({
+  entry,
+  detail,
+  isLoading,
+  error,
+}: {
+  entry: McpRegistryEntry | null
+  detail: McpRegistryDetailResult | undefined
+  isLoading: boolean
+  error: unknown
+}) {
+  const { t } = useI18n()
+  const displayEntry = detail?.entry ?? entry
+  const previews = detail?.previews ?? []
+
+  if (!displayEntry) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center px-4">
+        <Globe2 className="h-10 w-10 text-border mb-3" />
+        <p className="text-sm font-medium text-foreground">
+          {t("settings.mcp.registryTitle")}
+        </p>
+        <p className="mt-2 max-w-sm text-xs text-muted-foreground">
+          {t("settings.mcp.registryEmptyDetail")}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-3xl mx-auto p-6 space-y-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="truncate text-sm font-semibold text-foreground">
+                {registryEntryTitle(displayEntry)}
+              </h3>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                {t("settings.mcp.previewOnlyBadge")}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground break-words">
+              {displayEntry.description ||
+                t("settings.mcp.registryPreviewDescription")}
+            </p>
+          </div>
+          {isLoading && (
+            <Loader2 className="h-4 w-4 shrink-0 text-muted-foreground animate-spin" />
+          )}
+        </div>
+
+        {error ? (
+          <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2">
+            <div className="flex items-start gap-2 text-xs text-red-200">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{getErrorMessage(error)}</span>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-2">
+          <SummaryItem
+            label={t("settings.mcp.name")}
+            value={displayEntry.entryId}
+          />
+          <SummaryItem
+            label={t("settings.mcp.registryVersion")}
+            value={displayEntry.versionRef}
+          />
+          <SummaryItem
+            label={t("settings.mcp.registryTargets")}
+            value={String(displayEntry.installTargets.length)}
+          />
+          <SummaryItem
+            label={t("settings.mcp.registryRuntimeSupport")}
+            value={displayEntry.declaredRuntimeSupport
+              .map(formatRegistryToken)
+              .join(", ")}
+          />
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <h5 className="text-xs font-medium text-foreground">
+              {t("settings.mcp.registryInstallPreview")}
+            </h5>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("settings.mcp.registryPreviewOnlyDescription")}
+            </p>
+          </div>
+          {isLoading && previews.length === 0 ? (
+            <div className="flex items-center justify-center rounded-md border border-border bg-background py-8">
+              <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+            </div>
+          ) : previews.length > 0 ? (
+            previews.map((preview) => (
+              <McpRegistryPreviewCard
+                key={preview.targetId}
+                preview={preview}
+              />
+            ))
+          ) : (
+            <div className="rounded-md border border-border bg-background px-4 py-8 text-center">
+              <p className="text-sm font-medium text-foreground">
+                {t("settings.mcp.registryNoPreview")}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Main Component ---
 export function AgentsMcpTab() {
   const { t } = useI18n()
@@ -1221,6 +1516,10 @@ export function AgentsMcpTab() {
   const [selectedServerKey, setSelectedServerKey] = useState<string | null>(
     null,
   )
+  const [selectedRegistryEntryKey, setSelectedRegistryEntryKey] = useState<
+    string | null
+  >(null)
+  const [mcpViewMode, setMcpViewMode] = useState<McpViewMode>("configured")
   const [searchQuery, setSearchQuery] = useState("")
   const [showAddForm, setShowAddForm] = useState(false)
   const [showImportPreviewPanel, setShowImportPreviewPanel] = useState(false)
@@ -1261,10 +1560,24 @@ export function AgentsMcpTab() {
   const showImportPreview = showImportPreviewPanel || !!importPreview
 
   const openImportPreview = useCallback((preview: McpImportPreview) => {
+    setMcpViewMode("configured")
     setImportPreview(preview)
     setShowImportPreviewPanel(true)
     setShowAddForm(false)
     setSelectedServerKey(null)
+    setSelectedRegistryEntryKey(null)
+  }, [])
+
+  const switchMcpViewMode = useCallback((nextMode: McpViewMode) => {
+    setMcpViewMode(nextMode)
+    setSearchQuery("")
+    setShowAddForm(false)
+    setShowImportPreviewPanel(false)
+    if (nextMode === "registry") {
+      setSelectedServerKey(null)
+    } else {
+      setSelectedRegistryEntryKey(null)
+    }
   }, [])
 
   useEffect(() => {
@@ -1287,6 +1600,18 @@ export function AgentsMcpTab() {
   const codexMcpQuery = trpc.codex.getAllMcpConfig.useQuery(undefined, {
     staleTime: 10 * 60 * 1000,
   })
+  const registrySearchQuery =
+    mcpViewMode === "registry" ? searchQuery.trim() : ""
+  const mcpRegistryQuery = trpc.mcpRegistry.list.useQuery(
+    {
+      limit: 30,
+      ...(registrySearchQuery ? { search: registrySearchQuery } : {}),
+    },
+    {
+      enabled: mcpViewMode === "registry",
+      staleTime: 5 * 60 * 1000,
+    },
+  )
   const hasAnyData = Boolean(claudeMcpQuery.data || codexMcpQuery.data)
   const isLoadingConfig =
     !hasAnyData && (claudeMcpQuery.isLoading || codexMcpQuery.isLoading)
@@ -1374,6 +1699,29 @@ export function AgentsMcpTab() {
   )
 
   const totalServers = allListedServers.length
+  const registryEntries = mcpRegistryQuery.data?.entries ?? []
+  const registryEntryKeys = useMemo(
+    () => registryEntries.map(getRegistryEntryKey),
+    [registryEntries],
+  )
+  const selectedRegistryEntry = useMemo<McpRegistryEntry | null>(() => {
+    if (!selectedRegistryEntryKey) return null
+    return (
+      registryEntries.find(
+        (entry) => getRegistryEntryKey(entry) === selectedRegistryEntryKey,
+      ) ?? null
+    )
+  }, [registryEntries, selectedRegistryEntryKey])
+  const mcpRegistryDetailQuery = trpc.mcpRegistry.detail.useQuery(
+    {
+      serverName: selectedRegistryEntry?.entryId ?? "",
+      version: selectedRegistryEntry?.versionRef,
+    },
+    {
+      enabled: mcpViewMode === "registry" && !!selectedRegistryEntry,
+      staleTime: 5 * 60 * 1000,
+    },
+  )
 
   // Flat list of all server keys for keyboard navigation
   const allServerKeys = useMemo(
@@ -1381,20 +1729,53 @@ export function AgentsMcpTab() {
     [filteredListedServers],
   )
 
+  const sidebarListKeys =
+    mcpViewMode === "registry" ? registryEntryKeys : allServerKeys
+  const selectedSidebarKey =
+    mcpViewMode === "registry" ? selectedRegistryEntryKey : selectedServerKey
+
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
-    items: allServerKeys,
-    selectedItem: selectedServerKey,
-    onSelect: setSelectedServerKey,
+    items: sidebarListKeys,
+    selectedItem: selectedSidebarKey,
+    onSelect: (key) => {
+      if (mcpViewMode === "registry") {
+        setSelectedRegistryEntryKey(key)
+      } else {
+        setSelectedServerKey(key)
+      }
+    },
   })
 
   // Auto-select first server when data loads (sorted, so connected first)
   useEffect(() => {
+    if (mcpViewMode !== "configured") return
     if (selectedServerKey || isLoadingConfig || showImportPreview) return
     const firstServer = allListedServers[0]
     if (firstServer) {
       setSelectedServerKey(firstServer.key)
     }
-  }, [allListedServers, selectedServerKey, isLoadingConfig, showImportPreview])
+  }, [
+    allListedServers,
+    selectedServerKey,
+    isLoadingConfig,
+    showImportPreview,
+    mcpViewMode,
+  ])
+
+  useEffect(() => {
+    if (mcpViewMode !== "registry") return
+    const firstEntry = registryEntries[0]
+    if (!firstEntry) {
+      if (selectedRegistryEntryKey) setSelectedRegistryEntryKey(null)
+      return
+    }
+    const hasSelection = registryEntries.some(
+      (entry) => getRegistryEntryKey(entry) === selectedRegistryEntryKey,
+    )
+    if (!hasSelection) {
+      setSelectedRegistryEntryKey(getRegistryEntryKey(firstEntry))
+    }
+  }, [mcpViewMode, registryEntries, selectedRegistryEntryKey])
 
   // Find selected server
   const selectedServer = useMemo<ListedServer | null>(() => {
@@ -1624,6 +2005,10 @@ export function AgentsMcpTab() {
     )
       ? codexLogoutFailure
       : null
+  const isLoadingRegistry =
+    mcpViewMode === "registry" &&
+    !mcpRegistryQuery.data &&
+    mcpRegistryQuery.isLoading
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -1645,56 +2030,109 @@ export function AgentsMcpTab() {
           style={{ borderRightWidth: "0.5px" }}
         >
           {/* Search + Add */}
-          <div className="px-2 pt-2 flex-shrink-0 flex items-center">
-            <input
-              ref={searchInputRef}
-              placeholder={t("settings.mcp.searchPlaceholder")}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={listKeyDown}
-              className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none mr-1.5"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setShowAddForm(true)
-                setShowImportPreviewPanel(false)
-                setSelectedServerKey(null)
-              }}
-              className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-              title={t("settings.mcp.addServer")}
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowImportPreviewPanel(true)
-                setShowAddForm(false)
-                setSelectedServerKey(null)
-              }}
-              className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-              title={t("settings.mcp.previewImport")}
-              aria-label={t("settings.mcp.previewImport")}
-            >
-              <FileSearch className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void handleRefresh()
-              }}
-              className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
-              title={t("settings.mcp.refreshServers")}
-              aria-label={t("settings.mcp.refreshServers")}
-            >
-              <RefreshCw
+          <div className="px-2 pt-2 flex-shrink-0">
+            <div className="mb-1.5 grid grid-cols-2 rounded-md bg-muted p-0.5">
+              <button
+                type="button"
+                onClick={() => switchMcpViewMode("configured")}
                 className={cn(
-                  "h-3.5 w-3.5",
-                  isRefreshingConfig && "animate-spin",
+                  "h-6 rounded text-[11px] font-medium transition-colors",
+                  mcpViewMode === "configured"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
+              >
+                {t("settings.mcp.configuredServers")}
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMcpViewMode("registry")}
+                className={cn(
+                  "h-6 rounded text-[11px] font-medium transition-colors",
+                  mcpViewMode === "registry"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t("settings.mcp.registryTitle")}
+              </button>
+            </div>
+            <div className="flex items-center">
+              <input
+                ref={searchInputRef}
+                placeholder={
+                  mcpViewMode === "registry"
+                    ? t("settings.mcp.registrySearchPlaceholder")
+                    : t("settings.mcp.searchPlaceholder")
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={listKeyDown}
+                className="h-7 w-full rounded-lg text-sm bg-muted border border-input px-3 placeholder:text-muted-foreground/40 outline-none mr-1.5"
               />
-            </button>
+              {mcpViewMode === "configured" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddForm(true)
+                      setShowImportPreviewPanel(false)
+                      setSelectedServerKey(null)
+                    }}
+                    className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
+                    title={t("settings.mcp.addServer")}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowImportPreviewPanel(true)
+                      setShowAddForm(false)
+                      setSelectedServerKey(null)
+                    }}
+                    className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
+                    title={t("settings.mcp.previewImport")}
+                    aria-label={t("settings.mcp.previewImport")}
+                  >
+                    <FileSearch className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleRefresh()
+                    }}
+                    className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
+                    title={t("settings.mcp.refreshServers")}
+                    aria-label={t("settings.mcp.refreshServers")}
+                  >
+                    <RefreshCw
+                      className={cn(
+                        "h-3.5 w-3.5",
+                        isRefreshingConfig && "animate-spin",
+                      )}
+                    />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void mcpRegistryQuery.refetch()
+                  }}
+                  className="h-7 w-7 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
+                  title={t("settings.mcp.registryRefresh")}
+                  aria-label={t("settings.mcp.registryRefresh")}
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      mcpRegistryQuery.isFetching && "animate-spin",
+                    )}
+                  />
+                </button>
+              )}
+            </div>
           </div>
           {/* Server list */}
           <div
@@ -1704,7 +2142,81 @@ export function AgentsMcpTab() {
             role="listbox"
             className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none"
           >
-            {isLoadingConfig ? (
+            {mcpViewMode === "registry" ? (
+              isLoadingRegistry ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+                </div>
+              ) : mcpRegistryQuery.error ? (
+                <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                  <AlertTriangle className="h-7 w-7 text-red-300 mb-2" />
+                  <p className="text-xs text-muted-foreground">
+                    {getErrorMessage(mcpRegistryQuery.error)}
+                  </p>
+                </div>
+              ) : registryEntries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                  <Globe2 className="h-8 w-8 text-border mb-3" />
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {t("settings.mcp.registryNoResults")}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  <div className="px-2 pb-1 pt-1">
+                    <p className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground">
+                      {t("settings.mcp.registrySectionTitle")}
+                    </p>
+                    <div className="mt-1 h-px bg-border" />
+                  </div>
+                  {registryEntries.map((entry) => {
+                    const key = getRegistryEntryKey(entry)
+                    const isSelected = selectedRegistryEntryKey === key
+                    return (
+                      <button
+                        type="button"
+                        key={key}
+                        data-item-id={key}
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => setSelectedRegistryEntryKey(key)}
+                        className={cn(
+                          "w-full text-left py-1.5 pl-2 pr-2 rounded-md cursor-pointer group relative",
+                          "transition-colors duration-75",
+                          "outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+                          isSelected
+                            ? "bg-foreground/5 text-foreground"
+                            : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                        )}
+                      >
+                        <div className="flex items-start gap-2">
+                          <Globe2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1">
+                              <span className="truncate block text-sm leading-tight flex-1">
+                                {registryEntryTitle(entry)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 min-w-0">
+                              <span className="truncate flex-1 min-w-0">
+                                {entry.entryId}
+                              </span>
+                              <span className="flex-shrink-0">
+                                {entry.installTargets.length === 1
+                                  ? t("settings.mcp.registryOneTarget")
+                                  : t("settings.mcp.registryTargetCount", {
+                                      count: entry.installTargets.length,
+                                    })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            ) : isLoadingConfig ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
               </div>
@@ -1832,7 +2344,14 @@ export function AgentsMcpTab() {
 
       {/* Right content - detail panel */}
       <div className="flex-1 min-w-0 h-full overflow-hidden">
-        {showAddForm ? (
+        {mcpViewMode === "registry" ? (
+          <McpRegistryDetailPanel
+            entry={selectedRegistryEntry}
+            detail={mcpRegistryDetailQuery.data}
+            isLoading={mcpRegistryDetailQuery.isLoading}
+            error={mcpRegistryDetailQuery.error}
+          />
+        ) : showAddForm ? (
           <CreateMcpServerForm
             onCreated={() => {
               setShowAddForm(false)
