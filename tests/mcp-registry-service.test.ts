@@ -147,4 +147,67 @@ describe("MCP registry service", () => {
       "detail:io.github.example/detail:latest",
     ])
   })
+
+  test("installs setup-free registry targets through the injected Claude writer", async () => {
+    const { provider, calls } = createProviderStub()
+    const writes: unknown[] = []
+    const service = createMcpRegistryService({
+      provider,
+      async writeClaudeConfig(input) {
+        writes.push(input)
+        return { success: true, name: input.name.trim() }
+      },
+    })
+
+    await expect(
+      service.installEntry({
+        serverName: "io.github.example/detail",
+        targetId: "remote:streamable_http:0",
+        runtime: "claude-code",
+        scope: "global",
+        installName: "registry_remote",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      runtime: "claude-code",
+      serverName: "registry_remote",
+      status: "installed-unverified",
+      entryFingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      configFingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+    })
+
+    expect(writes).toHaveLength(1)
+    expect(writes[0]).toMatchObject({
+      name: "registry_remote",
+      scope: "global",
+      config: {
+        url: "https://mcp.example.com/mcp",
+        transportType: "streamable_http",
+        _locusMcpRegistry: {
+          providerId: "official-mcp-registry",
+          entryId: "io.github.example/detail",
+          targetId: "remote:streamable_http:0",
+          runtime: "claude-code",
+          status: "installed-unverified",
+          entryFingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          configFingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+          installedAt: expect.any(String),
+        },
+      },
+    })
+
+    await expect(
+      service.installEntry({
+        serverName: "io.github.example/detail",
+        targetId: "remote:streamable_http:0",
+        runtime: "codex",
+        scope: "global",
+      }),
+    ).rejects.toThrow("Codex MCP registry install is deferred")
+
+    expect(calls).toEqual([
+      "detail:io.github.example/detail:latest",
+      "detail:io.github.example/detail:latest",
+    ])
+  })
 })

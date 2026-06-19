@@ -143,6 +143,10 @@
   redacted.
 - [ ] 3.3 On install confirmation, write through the Runtime MCP Config service and
   target adapter, not through route-local Claude/Codex helpers.
+- 2026-06-20 added a Claude-only registry install service path that materializes
+  setup-free registry targets, then writes through
+  `writeClaudeMcpServerConfig` in the Runtime MCP Config owner. The tRPC install
+  mutation and renderer confirmation UI remain pending.
 - [ ] 3.4 Ensure browse/preview/install do not run registry server commands, package
   managers, Docker images, MCP server processes, or MCP tools.
 - 2026-06-20 added `tests/mcp-registry-management-inert.test.ts` to guard the
@@ -154,8 +158,14 @@
   in this slice.
 - [ ] 3.5 Allow runtime-owned config writers during install only when they write or
   stage configuration and do not launch the target MCP server.
+- 2026-06-20 install service uses the Claude runtime-owned config writer only;
+  tests keep the registry service inert against process execution and MCP tool
+  calls. Full install-path coverage remains pending until the route/UI slice lands.
 - [ ] 3.6 After install with setup resolved, mark the server `Installed / Unverified`
   for that runtime and fingerprint until local runtime proof exists.
+- 2026-06-20 Claude registry install writes `_locusMcpRegistry` metadata with
+  `installed-unverified`, entry fingerprint, and config fingerprint. Renderer
+  status display and local verification upgrades remain pending.
 - [ ] 3.7 If required setup is missing and the adapter supports inactive config, save as
   `Installed / Needs setup` and exclude the server from runs until setup is resolved.
 - [ ] 3.8 If required setup is missing and the adapter cannot keep the server inactive,

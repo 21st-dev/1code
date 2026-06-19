@@ -1,4 +1,9 @@
 import {
+  installMcpRegistryTarget,
+  type McpRegistryInstallInput,
+  type McpRegistryInstallResult,
+} from "./install"
+import {
   type McpRegistryEntry,
   normalizeOfficialMcpRegistryEntry,
 } from "./normalize"
@@ -32,10 +37,21 @@ export type McpRegistryService = {
   previewEntryInstall: (
     input: OfficialMcpRegistryDetailInput & { targetId: string },
   ) => Promise<McpRegistryInstallPreview>
+  installEntry: (
+    input: OfficialMcpRegistryDetailInput & {
+      targetId: string
+      runtime: McpRegistryInstallInput["runtime"]
+      scope: McpRegistryInstallInput["scope"]
+      projectPath?: McpRegistryInstallInput["projectPath"]
+      installName?: McpRegistryInstallInput["installName"]
+      resolvedSetup?: McpRegistryInstallInput["resolvedSetup"]
+    },
+  ) => Promise<McpRegistryInstallResult>
 }
 
 export type CreateMcpRegistryServiceOptions = {
   provider?: OfficialMcpRegistryProvider
+  writeClaudeConfig?: McpRegistryInstallInput["writeClaudeConfig"]
 }
 
 export function createMcpRegistryService(
@@ -83,6 +99,26 @@ export function createMcpRegistryService(
         throw new Error("MCP registry install target was not found.")
       }
       return buildMcpRegistryInstallPreview({ entry, target })
+    },
+    async installEntry(input) {
+      const { targetId, ...detailInput } = input
+      const { entry } = await getEntryDetail(detailInput)
+      const target = entry.installTargets.find(
+        (candidate) => candidate.id === targetId,
+      )
+      if (!target) {
+        throw new Error("MCP registry install target was not found.")
+      }
+      return installMcpRegistryTarget({
+        entry,
+        target,
+        runtime: input.runtime,
+        scope: input.scope,
+        projectPath: input.projectPath,
+        installName: input.installName,
+        resolvedSetup: input.resolvedSetup,
+        writeClaudeConfig: options.writeClaudeConfig,
+      })
     },
   }
 }
