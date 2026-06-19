@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test"
 import {
-  buildCodexAppServerPluginConfigOverrides,
   buildCodexAppServerResolvedPluginConfigOverrides,
   getCodexAppServerPluginId,
 } from "../src/main/lib/codex/app-server-plugin-config"
@@ -32,77 +31,6 @@ describe("Codex app-server plugin config", () => {
         source: "team:figma",
       }),
     ).toBeUndefined()
-  })
-
-  test("builds deterministic per-thread allowlist overrides for known Codex plugins", () => {
-    const result = buildCodexAppServerPluginConfigOverrides({
-      plugins: [
-        {
-          runtime: "codex",
-          marketplace: "openai-curated",
-          source: "openai-curated:figma@7118aaa3",
-        },
-        {
-          runtime: "codex",
-          marketplace: "openai-curated",
-          source: "openai-curated:github@7118aaa3",
-        },
-        {
-          runtime: "claude",
-          marketplace: "team",
-          source: "team:figma",
-        },
-      ],
-      allowedPluginSources: ["openai-curated:figma@7118aaa3"],
-    })
-
-    expect(result).toEqual({
-      entries: [
-        {
-          pluginId: "figma@openai-curated",
-          pluginSource: "openai-curated:figma@7118aaa3",
-          enabled: true,
-        },
-        {
-          pluginId: "github@openai-curated",
-          pluginSource: "openai-curated:github@7118aaa3",
-          enabled: false,
-        },
-      ],
-      config: {
-        "plugins.figma@openai-curated.enabled": true,
-        "plugins.github@openai-curated.enabled": false,
-      },
-    })
-  })
-
-  test("keeps duplicate plugin ids enabled when any discovered source is allowed", () => {
-    const result = buildCodexAppServerPluginConfigOverrides({
-      plugins: [
-        {
-          runtime: "codex",
-          marketplace: "openai-curated",
-          source: "openai-curated:figma@old",
-        },
-        {
-          runtime: "codex",
-          marketplace: "openai-curated",
-          source: "openai-curated:figma@new",
-        },
-      ],
-      allowedPluginSources: ["openai-curated:figma@new"],
-    })
-
-    expect(result.config).toEqual({
-      "plugins.figma@openai-curated.enabled": true,
-    })
-    expect(result.entries).toEqual([
-      {
-        pluginId: "figma@openai-curated",
-        pluginSource: "openai-curated:figma@new",
-        enabled: true,
-      },
-    ])
   })
 
   test("keeps resolved app-server plugin overrides disabled until native control proof exists", () => {

@@ -12,11 +12,6 @@ export interface CodexAppServerPluginConfigEntry {
   enabled: boolean
 }
 
-export interface CodexAppServerPluginConfigOverrides {
-  config: Record<string, boolean>
-  entries: CodexAppServerPluginConfigEntry[]
-}
-
 export interface CodexAppServerPluginActivationCandidate {
   plugin: Pick<PluginInfo, "runtime" | "marketplace" | "source">
   pluginEnabled: boolean
@@ -59,44 +54,6 @@ export function getCodexAppServerPluginId(
 
   if (!normalizedPluginName || !normalizedMarketplace) return undefined
   return `${normalizedPluginName}@${normalizedMarketplace}`
-}
-
-export function buildCodexAppServerPluginConfigOverrides(input: {
-  plugins: Array<Pick<PluginInfo, "runtime" | "marketplace" | "source">>
-  allowedPluginSources: string[]
-}): CodexAppServerPluginConfigOverrides {
-  const allowedSources = new Set(input.allowedPluginSources)
-  const enabledByPluginId = new Map<string, boolean>()
-  const sourceByPluginId = new Map<string, string>()
-
-  for (const plugin of input.plugins) {
-    const pluginId = getCodexAppServerPluginId(plugin)
-    if (!pluginId) continue
-
-    const enabled = allowedSources.has(plugin.source)
-    enabledByPluginId.set(
-      pluginId,
-      (enabledByPluginId.get(pluginId) ?? false) || enabled,
-    )
-    if (enabled || !sourceByPluginId.has(pluginId)) {
-      sourceByPluginId.set(pluginId, plugin.source)
-    }
-  }
-
-  const entries = Array.from(enabledByPluginId.entries())
-    .map(([pluginId, enabled]) => ({
-      pluginId,
-      pluginSource: sourceByPluginId.get(pluginId) ?? "",
-      enabled,
-    }))
-    .sort((a, b) => a.pluginId.localeCompare(b.pluginId))
-
-  const config: Record<string, boolean> = {}
-  for (const entry of entries) {
-    config[`plugins.${entry.pluginId}.enabled`] = entry.enabled
-  }
-
-  return { config, entries }
 }
 
 export function buildCodexAppServerResolvedPluginConfigOverrides(input: {
