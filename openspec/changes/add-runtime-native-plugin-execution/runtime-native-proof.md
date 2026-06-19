@@ -20,6 +20,25 @@ proven. A staged package or parsed manifest alone is not native execution proof.
   commands first and falls back to text output when `--json` is not supported.
 - `tests/runtime-plugin-marketplace.test.ts` covers Codex JSON parsing and text
   fallback.
+- `bun scripts/probe-codex-app-server-plugin-protocol.ts --timeout-ms=8000`
+  against the bundled `resources/bin/darwin-arm64/codex app-server --listen
+  stdio://` and the user's default `CODEX_HOME` produced bounded protocol
+  evidence:
+  - `initialize` returned `userAgent`, `codexHome`, `platformFamily`, and
+    `platformOs`.
+  - `plugin/installed` returned 3 marketplaces and 16 installed/enabled plugins.
+  - `plugin/list` returned 3 marketplaces, 186 marketplace plugins, 16 installed
+    plugins, and 45 featured plugin IDs.
+  - `skills/list` returned one current-workspace skill root with 168 skills;
+    `hooks/list` returned one current-workspace hook root with zero hooks.
+  - An unknown-method probe exposed accepted client methods including global
+    plugin management/read methods (`plugin/list`, `plugin/installed`,
+    `plugin/read`, `plugin/skill/read`, `plugin/install`, `plugin/uninstall`,
+    and plugin sharing methods) and the generic `thread/settings/update` method.
+  - No typed per-run plugin allowlist/filter method was observed in the app-server
+    accepted-method list. `thread/settings/update` is treated as insufficient
+    proof until a managed `thread/start`/`thread/resume` run shows plugin
+    allowlist enforcement.
 
 ## Current Matrix
 
@@ -46,6 +65,10 @@ proven. A staged package or parsed manifest alone is not native execution proof.
   `src/main/lib/codex/app-server-adapter.ts`
 - Codex fail-closed plugin override owner:
   `src/main/lib/codex/app-server-plugin-config.ts`
+- Codex app-server plugin protocol proof helper:
+  `src/main/lib/codex/app-server-plugin-proof.ts`
+- Codex app-server plugin protocol proof script:
+  `scripts/probe-codex-app-server-plugin-protocol.ts`
 - Runtime-native activation policy owner:
   `src/main/lib/plugins/runtime-native-activation.ts`
 - Runtime capability truth:
