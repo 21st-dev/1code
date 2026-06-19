@@ -85,3 +85,10 @@
     (`node_modules/electron/dist/Electron.app/.../Electron -e ...` exits 134 /
     SIGABRT), so Settings UI click validation must be run in a GUI-capable
     local session.
+  - 2026-06-20 retry with isolated runtime state also remains blocked before UI:
+    `HOME=/private/tmp/locus-settings-ia-home
+    CODEX_HOME=/private/tmp/locus-settings-ia-home/.codex
+    LOCUS_USER_DATA_DIR=/private/tmp/locus-settings-ia-smoke bun run dev`
+    successfully builds main/preload, then fails starting the dev server with
+    `listen EPERM: operation not permitted ::1:5173`. Manual UI smoke remains
+    unchecked until a GUI/network-listen-capable local session can open Settings.
