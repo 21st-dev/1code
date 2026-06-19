@@ -994,6 +994,16 @@ export const en = {
   "settings.mcp.reconnect": "Reconnect",
   "settings.mcp.authenticate": "Authenticate",
   "settings.mcp.logout": "Logout",
+  "settings.mcp.retryLogout": "Retry logout",
+  "settings.mcp.codexLogoutFailureTitle": "Codex logout did not finish",
+  "settings.mcp.codexLogoutFailureCredentialRisk":
+    "Logout failed. OAuth credentials may still exist, so this server remains connected until Codex confirms logout.",
+  "settings.mcp.codexLogoutFailureSource": "Source",
+  "settings.mcp.codexLogoutFailureSourceValue":
+    "Codex CLI/keyring credential deletion",
+  "settings.mcp.codexLogoutManualCleanup": "View manual cleanup guidance",
+  "settings.mcp.codexLogoutManualCleanupDescription":
+    "Retry the Codex CLI logout in the same Codex environment, or revoke the OAuth grant from the provider after verifying the server. Locus will not delete Codex credentials directly.",
   "settings.mcp.deleteServer": "Delete server",
   "settings.mcp.dangerZone": "Danger Zone",
   "settings.mcp.dangerZoneDescription":
@@ -1060,6 +1070,8 @@ export const en = {
   "settings.mcp.toast.authenticationFailed": "Authentication failed",
   "settings.mcp.toast.loggedOut": '"{name}" is logged out, refreshing...',
   "settings.mcp.toast.logoutFailed": "Logout failed",
+  "settings.mcp.toast.codexLogoutFailedDescription":
+    "Codex CLI/keyring credential deletion failed. OAuth credentials may still exist; retry or use the manual cleanup guidance.",
   "settings.mcp.toast.enabled": '"{name}" is enabled, refreshing...',
   "settings.mcp.toast.disabled": '"{name}" is disabled, refreshing...',
   "settings.mcp.toast.failedToToggle": "Failed to toggle server",
@@ -4319,6 +4331,16 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.reconnect": "重新连接",
   "settings.mcp.authenticate": "授权",
   "settings.mcp.logout": "退出登录",
+  "settings.mcp.retryLogout": "重试退出登录",
+  "settings.mcp.codexLogoutFailureTitle": "Codex 退出登录未完成",
+  "settings.mcp.codexLogoutFailureCredentialRisk":
+    "退出登录失败。OAuth 凭据可能仍然存在，因此在 Codex 确认退出前，这个服务器仍保持连接状态。",
+  "settings.mcp.codexLogoutFailureSource": "来源",
+  "settings.mcp.codexLogoutFailureSourceValue":
+    "Codex CLI/keyring 凭据删除失败",
+  "settings.mcp.codexLogoutManualCleanup": "查看手动清理说明",
+  "settings.mcp.codexLogoutManualCleanupDescription":
+    "请在同一个 Codex 环境中重试 Codex CLI 退出登录，或确认服务器后到提供方撤销 OAuth 授权。Locus 不会直接删除 Codex 凭据。",
   "settings.mcp.deleteServer": "删除服务器",
   "settings.mcp.dangerZone": "危险区",
   "settings.mcp.dangerZoneDescription":
@@ -4385,6 +4407,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.toast.authenticationFailed": "授权失败",
   "settings.mcp.toast.loggedOut": '"{name}" 已退出登录，正在刷新...',
   "settings.mcp.toast.logoutFailed": "退出登录失败",
+  "settings.mcp.toast.codexLogoutFailedDescription":
+    "Codex CLI/keyring 凭据删除失败。OAuth 凭据可能仍然存在；请重试或查看手动清理说明。",
   "settings.mcp.toast.enabled": '"{name}" 已启用，正在刷新...',
   "settings.mcp.toast.disabled": '"{name}" 已禁用，正在刷新...',
   "settings.mcp.toast.failedToToggle": "切换服务器失败",
