@@ -33,4 +33,13 @@
 - [x] 3.3 Architecture guard.
 - [x] 3.4 Targeted MCP route/service tests.
 - [ ] 3.5 Existing Settings > MCP manual add/remove/refresh/auth smoke.
+  - 2026-06-19 partial isolated desktop smoke: `bun run build`, then
+    `HOME=/private/tmp/locus-mcp-service-home CODEX_HOME=/private/tmp/locus-mcp-service-home/.codex LOCUS_USER_DATA_DIR=/private/tmp/locus-mcp-service-smoke2 node_modules/.bin/electron --remote-debugging-port=9334 .`.
+    Settings > MCP opened after non-sensitive onboarding localStorage setup.
+    Claude Code global stdio add/remove/refresh passed with
+    `smoke_claude_stdio` in the temporary HOME; delete confirmation appeared.
+    Codex global stdio add/remove/refresh passed with `smoke_codex_stdio` in
+    the temporary CODEX_HOME; delete confirmation appeared. Auth/login/logout
+    was not executed because no disposable auth-capable MCP server was available,
+    and real user Claude/Codex credentials were intentionally not used.
 - [x] 3.6 `openspec validate refactor-runtime-mcp-config-service --strict --no-interactive`.
