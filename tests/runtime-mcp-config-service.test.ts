@@ -226,7 +226,12 @@ mock.module("../src/main/lib/mcp-auth", () => ({
     servers,
   fetchMcpTools: async (url: string) =>
     url.includes("needs-auth") ? [] : [{ name: "remote_tool" }],
-  fetchMcpToolsStdio: async () => [{ name: "stdio_tool" }],
+  fetchMcpToolsStdio: async (config: { command: string }) => {
+    if (config.command.includes("fail")) {
+      throw new Error("spawn failed")
+    }
+    return [{ name: "stdio_tool" }]
+  },
   getMcpAuthStatus: async () => ({ status: "connected" }),
   startMcpOAuth: async (serverName: string, projectPath: string) => {
     mcpOAuthCalls.push({ serverName, projectPath })
@@ -495,6 +500,34 @@ describe("Runtime MCP config service behavior", () => {
             installedAt: "2026-06-20T00:00:00.000Z",
           },
         },
+        registry_check_fail: {
+          command: "registry-fail-tool",
+          _locusMcpRegistry: {
+            providerId: "official-mcp-registry",
+            entryId: "io.github.example/check-fail",
+            targetId: "package:@example/check-fail:0",
+            runtime: "claude-code",
+            status: "installed-unverified",
+            entryFingerprint: "sha256:entry-check-fail",
+            configFingerprint: "sha256:config-check-fail",
+            installedAt: "2026-06-20T00:00:00.000Z",
+          },
+        },
+        registry_missing_setup: {
+          command: "registry-missing-tool",
+          disabled: true,
+          _locusMcpRegistry: {
+            providerId: "official-mcp-registry",
+            entryId: "io.github.example/missing",
+            targetId: "package:@example/missing:0",
+            runtime: "claude-code",
+            status: "installed-needs-setup",
+            missingSetupKeys: ["env:REQUIRED_TOKEN"],
+            entryFingerprint: "sha256:entry-missing",
+            configFingerprint: "sha256:config-missing",
+            installedAt: "2026-06-20T00:00:00.000Z",
+          },
+        },
       },
     }
 
@@ -521,6 +554,39 @@ describe("Runtime MCP config service behavior", () => {
     ).resolves.toMatchObject({
       status: "ready-to-verify",
       reason: "tool-list-success:1",
+    })
+
+    await expect(
+      claudeMcpConfig.checkClaudeMcpRegistryServer({
+        serverName: "registry_check_fail",
+        scope: "global",
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      status: "failed-check",
+      reason: "process-launch-failure: spawn failed",
+    })
+    await expect(
+      getMcpRegistryVerificationRecord({
+        runtime: "claude-code",
+        serverName: "registry_check_fail",
+        entryFingerprint: "sha256:entry-check-fail",
+        configFingerprint: "sha256:config-check-fail",
+      }),
+    ).resolves.toMatchObject({
+      status: "failed-check",
+      reason: "process-launch-failure: spawn failed",
+    })
+
+    await expect(
+      claudeMcpConfig.checkClaudeMcpRegistryServer({
+        serverName: "registry_missing_setup",
+        scope: "global",
+      }),
+    ).resolves.toMatchObject({
+      success: false,
+      status: "failed-check",
+      reason: expect.stringContaining("env:REQUIRED_TOKEN"),
     })
   })
 

@@ -65,6 +65,27 @@ export type ClaudeMcpRegistryCheckResult = {
   reason?: string
 }
 
+function classifyRegistryCheckFailure(input: {
+  serverConfig: McpServerConfig
+  error: unknown
+}): string {
+  const message =
+    input.error instanceof Error ? input.error.message : String(input.error)
+  if (!input.serverConfig.command && !input.serverConfig.url) {
+    return `unsupported-adapter-field: ${message}`
+  }
+  if (input.serverConfig.command) {
+    return `process-launch-failure: ${message}`
+  }
+  if (/auth|unauthori[sz]ed|forbidden|401|403/i.test(message)) {
+    return `missing-auth: ${message}`
+  }
+  if (/connect|network|fetch|timeout|ECONN|ENOTFOUND|EAI_AGAIN/i.test(message)) {
+    return `connection-failure: ${message}`
+  }
+  return `tool-list-failure: ${message}`
+}
+
 const MCP_SERVER_NAME_REGEX = /^[a-zA-Z0-9_-]+$/
 
 function getPluginGateMcpStatus(gate: { status: string }): string {
@@ -265,7 +286,7 @@ function shouldIncludeClaudeMcpServerInSdk(
 
 const MCP_FETCH_TIMEOUT_MS = 40_000
 
-async function fetchToolsForServer(
+async function fetchToolsForServerStrict(
   serverConfig: McpServerConfig,
 ): Promise<McpToolInfo[]> {
   const timeoutPromise = new Promise<McpToolInfo[]>((_, reject) =>
@@ -281,31 +302,29 @@ async function fetchToolsForServer(
       const headers = runtimeConfig.headers as
         | Record<string, string>
         | undefined
-      try {
-        return await fetchMcpTools(runtimeConfig.url, headers)
-      } catch {
-        return []
-      }
+      return await fetchMcpTools(runtimeConfig.url, headers)
     }
 
     const command = runtimeConfig.command
     if (command) {
-      try {
-        return await fetchMcpToolsStdio({
-          command,
-          args: runtimeConfig.args,
-          env: runtimeConfig.env as Record<string, string> | undefined,
-        })
-      } catch {
-        return []
-      }
+      return await fetchMcpToolsStdio({
+        command,
+        args: runtimeConfig.args,
+        env: runtimeConfig.env as Record<string, string> | undefined,
+      })
     }
 
-    return []
+    throw new Error("Registry MCP server config has no command or URL")
   })()
 
+  return await Promise.race([fetchPromise, timeoutPromise])
+}
+
+async function fetchToolsForServer(
+  serverConfig: McpServerConfig,
+): Promise<McpToolInfo[]> {
   try {
-    return await Promise.race([fetchPromise, timeoutPromise])
+    return await fetchToolsForServerStrict(serverConfig)
   } catch {
     return []
   }
@@ -1117,8 +1136,25 @@ export async function checkClaudeMcpRegistryServer(input: {
   const localState = resolveMcpRegistryRuntimeLocalStateFromConfig({
     config: serverConfig,
   })
-  if (serverConfig.disabled === true || localState?.status === "installed-needs-setup") {
-    throw new Error(`Server "${serverName}" still requires setup before check`)
+  if (
+    serverConfig.disabled === true ||
+    localState?.status === "installed-needs-setup"
+  ) {
+    const reason = localState?.reason ?? "missing setup"
+    await upsertMcpRegistryVerificationRecord({
+      ...verificationKey,
+      status: "failed-check",
+      reason,
+    })
+    return {
+      success: false,
+      runtime: "claude-code",
+      serverName,
+      status: "failed-check",
+      toolCount: 0,
+      toolNames: [],
+      reason,
+    }
   }
 
   const materializedConfig = materializeMcpRegistryServerConfigForRuntime(
@@ -1127,7 +1163,7 @@ export async function checkClaudeMcpRegistryServer(input: {
   )
 
   try {
-    const tools = await fetchToolsForServer(materializedConfig)
+    const tools = await fetchToolsForServerStrict(materializedConfig)
     await upsertMcpRegistryVerificationRecord({
       ...verificationKey,
       status: "ready-to-verify",
@@ -1142,8 +1178,10 @@ export async function checkClaudeMcpRegistryServer(input: {
       toolNames: tools.map((tool) => tool.name).sort(),
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const reason = `tool-list-failure: ${message}`
+    const reason = classifyRegistryCheckFailure({
+      serverConfig: materializedConfig,
+      error,
+    })
     await upsertMcpRegistryVerificationRecord({
       ...verificationKey,
       status: "failed-check",

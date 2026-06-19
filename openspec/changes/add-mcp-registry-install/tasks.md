@@ -262,9 +262,15 @@
   connect/list-only and never performs a tool call. Tool-call proof is therefore
   still reserved for user-initiated real runs until a Locus-owned safe-tool
   classifier exists.
-- [ ] 4.7 Record failure reasons such as missing env, missing auth, unsupported adapter
+- [x] 4.7 Record failure reasons such as missing env, missing auth, unsupported adapter
   field, process launch failure, connection failure, tool-list failure, tool-call
   failure, and unavailable observability.
+- 2026-06-20 explicit Check now records `failed-check` reasons for unresolved
+  setup/missing env, missing auth, unsupported config fields, process launch
+  failures, connection failures, and tool-list failures. Tool-call failure is
+  not emitted by Check because 4.6 keeps Check connect/list-only until a safe
+  tool classifier exists; Codex remains explicit deferred/unavailable rather
+  than producing unverifiable Check evidence.
 
 ## 5. Validation
 
