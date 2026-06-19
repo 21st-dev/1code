@@ -29,7 +29,7 @@
 - [ ] 1.10 Produce a per-runtime, per-component activation matrix with
   `native-loadable`, `mcp-only`, `not-loadable`, identity completeness, and blocked
   reasons.
-- [ ] 1.11 Version-probe Codex plugin inventory commands; do not require `--json` when
+- [x] 1.11 Version-probe Codex plugin inventory commands; do not require `--json` when
   the bundled Codex build does not support it.
 
 ## 2. Phase 2 - Shared Policy Owner

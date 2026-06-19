@@ -60,8 +60,14 @@ export async function getCodexPluginMarketplaceSnapshot(
   options: RuntimeMarketplaceAdapterOptions = {},
 ): Promise<RuntimePluginMarketplaceSnapshot> {
   const [marketplaceResult, pluginResult] = await Promise.all([
-    runRuntimePluginCommand("codex", ["plugin", "marketplace", "list"], options),
-    runRuntimePluginCommand("codex", ["plugin", "list"], options),
+    runRuntimePluginCommandVariants("codex", [
+      ["plugin", "marketplace", "list", "--json"],
+      ["plugin", "marketplace", "list"],
+    ], options),
+    runRuntimePluginCommandVariants("codex", [
+      ["plugin", "list", "--json"],
+      ["plugin", "list"],
+    ], options),
   ])
   const marketplaceParse = parseCodexMarketplaceList(marketplaceResult.stdout)
   const pluginParse = parseCodexPluginList(pluginResult.stdout)
@@ -142,6 +148,34 @@ export async function runRuntimePluginCommand(
       stderr: "",
       diagnostics: [diagnosticFromCommandError(command, commandText, error)],
     }
+  }
+}
+
+async function runRuntimePluginCommandVariants(
+  command: string,
+  argsVariants: string[][],
+  options: RuntimeMarketplaceAdapterOptions = {},
+): Promise<RuntimeCommandResult> {
+  let firstFailure: RuntimeCommandResult | undefined
+
+  for (const args of argsVariants) {
+    const result = await runRuntimePluginCommand(command, args, options)
+    if (result.diagnostics.length === 0) return result
+    firstFailure ??= result
+  }
+
+  return firstFailure ?? {
+    stdout: "",
+    stderr: "",
+    diagnostics: [
+      {
+        code: "runtime-cli-error",
+        severity: "warning",
+        runtime: commandToRuntime(command),
+        command,
+        message: "Runtime CLI marketplace read failed.",
+      },
+    ],
   }
 }
 
@@ -321,6 +355,9 @@ export function parseCodexMarketplaceList(output: string): {
   marketplaces: RuntimePluginMarketplace[]
   diagnostics: RuntimeMarketplaceDiagnostic[]
 } {
+  const jsonParse = parseCodexMarketplaceJson(output)
+  if (jsonParse) return jsonParse
+
   const lines = nonEmptyLines(output)
   if (lines.length === 0) {
     return {
@@ -370,10 +407,63 @@ export function parseCodexMarketplaceList(output: string): {
   }
 }
 
+function parseCodexMarketplaceJson(output: string): {
+  marketplaces: RuntimePluginMarketplace[]
+  diagnostics: RuntimeMarketplaceDiagnostic[]
+} | undefined {
+  if (!output.trim().startsWith("[") && !output.trim().startsWith("{")) {
+    return undefined
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(output) as unknown
+  } catch {
+    return {
+      marketplaces: [],
+      diagnostics: [parseFailureDiagnostic("codex", "codex plugin marketplace list --json")],
+    }
+  }
+
+  const values = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.marketplaces)
+      ? parsed.marketplaces
+      : []
+  const marketplaces = values.map((value, index): RuntimePluginMarketplace => {
+    const record = isRecord(value) ? value : {}
+    const marketplaceSource = isRecord(record.marketplaceSource)
+      ? record.marketplaceSource
+      : undefined
+    const name = getString(record.name) ??
+      getString(record.id) ??
+      `codex-marketplace-${index + 1}`
+    const source = getString(record.root) ??
+      getString(record.source) ??
+      getString(marketplaceSource?.source)
+    return {
+      runtime: "codex",
+      name,
+      source,
+      path: source?.startsWith("/") ? source : undefined,
+      sourceKind: "runtime-cli",
+      trust: getRuntimeMarketplaceTrust({ runtime: "codex", name, source }),
+      status: "available",
+      pluginCount: getNumber(record.pluginCount),
+      diagnostics: [],
+    }
+  })
+
+  return { marketplaces, diagnostics: [] }
+}
+
 export function parseCodexPluginList(output: string): {
   plugins: RuntimePluginListing[]
   diagnostics: RuntimeMarketplaceDiagnostic[]
 } {
+  const jsonParse = parseCodexPluginJson(output)
+  if (jsonParse) return jsonParse
+
   if (/No plugins found/i.test(output)) {
     return { plugins: [], diagnostics: [] }
   }
@@ -431,6 +521,96 @@ export function parseCodexPluginList(output: string): {
     diagnostics: plugins.length === 0 && output.trim()
       ? [parseFailureDiagnostic("codex", "codex plugin list")]
       : [],
+  }
+}
+
+function parseCodexPluginJson(output: string): {
+  plugins: RuntimePluginListing[]
+  diagnostics: RuntimeMarketplaceDiagnostic[]
+} | undefined {
+  if (!output.trim().startsWith("[") && !output.trim().startsWith("{")) {
+    return undefined
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(output) as unknown
+  } catch {
+    return {
+      plugins: [],
+      diagnostics: [parseFailureDiagnostic("codex", "codex plugin list --json")],
+    }
+  }
+
+  const installed = extractCodexJsonArray(parsed, ["installed", "plugins"])
+    .map((value) => codexJsonPluginListing(value, true))
+  const available = extractCodexJsonArray(parsed, ["available"])
+    .map((value) => codexJsonPluginListing(value, false))
+
+  return {
+    plugins: mergeRuntimePluginListings([...installed, ...available]),
+    diagnostics: [],
+  }
+}
+
+function extractCodexJsonArray(parsed: unknown, keys: string[]): unknown[] {
+  if (Array.isArray(parsed)) return parsed
+  if (!isRecord(parsed)) return []
+  for (const key of keys) {
+    const value = parsed[key]
+    if (Array.isArray(value)) return value
+  }
+  return []
+}
+
+function codexJsonPluginListing(
+  value: unknown,
+  defaultInstalled: boolean,
+): RuntimePluginListing {
+  const record = isRecord(value) ? value : {}
+  const rawId =
+    getString(record.pluginId) ??
+    getString(record.id) ??
+    getString(record.plugin)
+  const marketplace =
+    getString(record.marketplaceName) ??
+    getString(record.marketplace) ??
+    getString(record.marketplaceId)
+  const name =
+    getString(record.name) ??
+    (rawId ? splitPluginMarketplaceId(rawId, marketplace)[0] : "codex-plugin")
+  const id = rawId ?? (marketplace ? `${name}@${marketplace}` : name)
+  const installed = getBoolean(record.installed) ?? defaultInstalled
+  const enabled = getBoolean(record.enabled)
+  const statusText =
+    getString(record.status) ??
+    (installed
+      ? enabled === false
+        ? "installed, disabled"
+        : enabled === true
+          ? "installed, enabled"
+          : "installed"
+      : "not installed")
+  const status = normalizeRuntimePluginStatus(statusText)
+  const source = isRecord(record.source) ? record.source : undefined
+  const marketplaceSource = isRecord(record.marketplaceSource)
+    ? record.marketplaceSource
+    : undefined
+
+  return {
+    runtime: "codex",
+    id,
+    marketplace: marketplace ?? splitPluginMarketplaceId(id, undefined)[1],
+    name,
+    version: getString(record.version),
+    status: installed ? status.status : "not-installed",
+    statusText,
+    installed,
+    enabled: installed ? enabled ?? status.enabled : false,
+    source: getString(marketplaceSource?.source),
+    path: getString(source?.path) ?? getString(record.path),
+    componentSummary: normalizeComponentSummary(record),
+    diagnostics: [],
   }
 }
 

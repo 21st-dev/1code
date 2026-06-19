@@ -29,6 +29,65 @@ computer-use@openai-bundled  installed, enabled  1.0.799       /Users/me/.codex/
 latex@openai-bundled         not installed                     /Users/me/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/latex
 `
 
+const CODEX_MARKETPLACES_JSON = JSON.stringify({
+  marketplaces: [
+    {
+      name: "openai-primary-runtime",
+      root: "/Users/me/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime",
+      marketplaceSource: {
+        sourceType: "local",
+        source: "/Users/me/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime",
+      },
+    },
+    {
+      name: "openai-curated",
+      root: "/Users/me/.codex/.tmp/plugins",
+    },
+  ],
+})
+
+const CODEX_PLUGINS_JSON = JSON.stringify({
+  installed: [
+    {
+      pluginId: "documents@openai-primary-runtime",
+      name: "documents",
+      marketplaceName: "openai-primary-runtime",
+      version: "26.614.11602",
+      installed: true,
+      enabled: true,
+      source: {
+        source: "local",
+        path: "/Users/me/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime/plugins/documents",
+      },
+    },
+    {
+      pluginId: "figma@openai-curated",
+      name: "figma",
+      marketplaceName: "openai-curated",
+      version: "7118aaa3",
+      installed: true,
+      enabled: false,
+      source: {
+        source: "local",
+        path: "/Users/me/.codex/.tmp/plugins/plugins/figma",
+      },
+    },
+  ],
+  available: [
+    {
+      pluginId: "latex@openai-bundled",
+      name: "latex",
+      marketplaceName: "openai-bundled",
+      installed: false,
+      enabled: false,
+      source: {
+        source: "local",
+        path: "/Users/me/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/latex",
+      },
+    },
+  ],
+})
+
 describe("runtime plugin marketplace adapters", () => {
   test("normalizes runtime plugin status text", () => {
     expect(normalizeRuntimePluginStatus("installed, enabled")).toEqual({
@@ -106,6 +165,50 @@ describe("runtime plugin marketplace adapters", () => {
         enabled: false,
         version: undefined,
         path: "/Users/me/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/latex",
+      }),
+    ])
+  })
+
+  test("parses Codex JSON marketplace and plugin inventory output", () => {
+    const marketplaces = parseCodexMarketplaceList(CODEX_MARKETPLACES_JSON)
+    const plugins = parseCodexPluginList(CODEX_PLUGINS_JSON)
+
+    expect(marketplaces.diagnostics).toEqual([])
+    expect(marketplaces.marketplaces).toEqual([
+      expect.objectContaining({
+        runtime: "codex",
+        name: "openai-primary-runtime",
+        status: "available",
+        path: "/Users/me/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime",
+      }),
+      expect.objectContaining({
+        name: "openai-curated",
+        path: "/Users/me/.codex/.tmp/plugins",
+      }),
+    ])
+    expect(plugins.diagnostics).toEqual([])
+    expect(plugins.plugins).toEqual([
+      expect.objectContaining({
+        runtime: "codex",
+        id: "documents@openai-primary-runtime",
+        marketplace: "openai-primary-runtime",
+        name: "documents",
+        status: "installed-enabled",
+        enabled: true,
+        version: "26.614.11602",
+        path: "/Users/me/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime/plugins/documents",
+      }),
+      expect.objectContaining({
+        id: "figma@openai-curated",
+        status: "installed-disabled",
+        enabled: false,
+        version: "7118aaa3",
+      }),
+      expect.objectContaining({
+        id: "latex@openai-bundled",
+        status: "not-installed",
+        installed: false,
+        enabled: false,
       }),
     ])
   })
@@ -299,6 +402,62 @@ describe("runtime plugin marketplace adapters", () => {
     expect(snapshot.marketplaces).toHaveLength(3)
     expect(snapshot.plugins).toHaveLength(3)
     expect(snapshot.diagnostics).toEqual([])
+  })
+
+  test("prefers Codex JSON inventory commands and falls back to text output", async () => {
+    const jsonCalls: string[] = []
+    const jsonRunner: RuntimeCommandRunner = async (_command, args) => {
+      jsonCalls.push(args.join(" "))
+      const text = args.join(" ")
+      if (text === "plugin marketplace list --json") {
+        return { stdout: CODEX_MARKETPLACES_JSON, stderr: "" }
+      }
+      if (text === "plugin list --json") {
+        return { stdout: CODEX_PLUGINS_JSON, stderr: "" }
+      }
+      throw new Error(`unexpected command: ${text}`)
+    }
+    const jsonSnapshot = await getRuntimePluginMarketplaceSnapshot("codex", {
+      runner: jsonRunner,
+      now: new Date("2026-06-03T00:00:00Z"),
+    })
+
+    expect(jsonCalls).toEqual([
+      "plugin marketplace list --json",
+      "plugin list --json",
+    ])
+    expect(jsonSnapshot.marketplaces).toHaveLength(2)
+    expect(jsonSnapshot.plugins).toHaveLength(3)
+    expect(jsonSnapshot.diagnostics).toEqual([])
+
+    const fallbackCalls: string[] = []
+    const fallbackRunner: RuntimeCommandRunner = async (_command, args) => {
+      fallbackCalls.push(args.join(" "))
+      const text = args.join(" ")
+      if (text.endsWith("--json")) {
+        throw Object.assign(new Error("unknown option '--json'"), { code: 2 })
+      }
+      if (text === "plugin marketplace list") {
+        return { stdout: CODEX_MARKETPLACES, stderr: "" }
+      }
+      if (text === "plugin list") {
+        return { stdout: CODEX_PLUGINS, stderr: "" }
+      }
+      throw new Error(`unexpected command: ${text}`)
+    }
+    const fallbackSnapshot = await getRuntimePluginMarketplaceSnapshot("codex", {
+      runner: fallbackRunner,
+      now: new Date("2026-06-03T00:00:00Z"),
+    })
+
+    expect(fallbackCalls).toHaveLength(4)
+    expect(fallbackCalls).toContain("plugin marketplace list --json")
+    expect(fallbackCalls).toContain("plugin marketplace list")
+    expect(fallbackCalls).toContain("plugin list --json")
+    expect(fallbackCalls).toContain("plugin list")
+    expect(fallbackSnapshot.marketplaces).toHaveLength(3)
+    expect(fallbackSnapshot.plugins).toHaveLength(3)
+    expect(fallbackSnapshot.diagnostics).toEqual([])
   })
 
   test("builds a Claude snapshot through injected JSON commands", async () => {
