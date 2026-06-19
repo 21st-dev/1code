@@ -35,6 +35,10 @@
 
 - [ ] 1.1 Probe Claude Agent SDK runs with a known MCP server and record whether Locus
   can observe server connection, tool-list, and successful MCP tool-call signals.
+- 2026-06-20 code-level pre-probe recorded in `observability-probe-notes.md`.
+  Locus already parses Claude SDK init `mcp_servers`/`tools` and MCP-prefixed
+  tool input/output chunks, but this is not checked because a real Claude run
+  with a known harmless MCP server is still required.
 - [ ] 1.2 Probe Locus-managed Codex app-server runs with a known MCP server and record
   whether Locus can observe server connection, tool-list, and successful MCP
   tool-call signals.
