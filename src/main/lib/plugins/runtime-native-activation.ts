@@ -63,7 +63,7 @@ export interface RuntimeNativeActivationState {
 }
 
 const PROVEN_RUNTIME_NATIVE_PLUGIN_LOADING: Record<PluginRuntime, boolean> = {
-  claude: false,
+  claude: true,
   codex: false,
 }
 

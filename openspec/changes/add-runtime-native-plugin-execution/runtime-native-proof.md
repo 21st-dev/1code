@@ -77,15 +77,22 @@ proven. A staged package or parsed manifest alone is not native execution proof.
   closing before any `assistant` or `result` message. This proves native plugin
   MCP discovery exists and must remain disabled in Locus-managed native plugin
   loading unless the current MCP approval gate explicitly allows it.
+- Claude runtime-native activation identity is derived from the bounded manifest
+  review fingerprint plus package identity/source, package version, source pins,
+  and package hash when available. `tests/runtime-native-activation.test.ts`
+  proves deterministic identity hashing, identity-incomplete blocking, and
+  drifted identity blocking before activation. `tests/plugin-update-review.test.ts`
+  proves reviewed activation identity state is stored separately from manifest
+  review and that a later package hash drift reports `identity-drifted`.
 
 ## Current Matrix
 
 | Runtime | Component | Current classification | Identity completeness | Blocked reason / evidence |
 |---|---|---|---|---|
-| Claude Code | commands | runtime-native-loadable | identity depends on manifest plus package source/version/pins/hash; local packages without stable hash remain identity-incomplete | Agent SDK `options.plugins` with an isolated config lists plugin commands in `system:init`; Locus integration still needs to pass only reviewed plugin dirs. |
-| Claude Code | skills | runtime-native-loadable | same as commands | Agent SDK `options.plugins` with an isolated config lists plugin skills in `system:init`; Locus integration still needs to pass only reviewed plugin dirs. |
-| Claude Code | agents | runtime-native-loadable | same as commands | Agent SDK `options.plugins` with an isolated config lists plugin agents in `system:init`; Locus integration still needs to pass only reviewed plugin dirs. |
-| Claude Code | hooks | runtime-native-loadable | same as commands | Agent SDK `options.plugins` executes the test plugin `SessionStart` hook and emits hook events before the first model turn; Locus integration still needs to pass only reviewed plugin dirs. |
+| Claude Code | commands | runtime-native-loadable | identity depends on manifest plus package source/version/pins/hash; local packages without stable hash remain identity-incomplete | Agent SDK `options.plugins` with an isolated config lists plugin commands in `system:init`; Locus passes only activation-policy-allowed staged plugin dirs. |
+| Claude Code | skills | runtime-native-loadable | same as commands | Agent SDK `options.plugins` with an isolated config lists plugin skills in `system:init`; Locus passes only activation-policy-allowed staged plugin dirs. |
+| Claude Code | agents | runtime-native-loadable | same as commands | Agent SDK `options.plugins` with an isolated config lists plugin agents in `system:init`; Locus passes only activation-policy-allowed staged plugin dirs. |
+| Claude Code | hooks | runtime-native-loadable | same as commands | Agent SDK `options.plugins` executes the test plugin `SessionStart` hook and emits hook events before the first model turn; Locus passes only activation-policy-allowed staged plugin dirs. |
 | Claude Code | MCP servers | mcp-only | same as commands | Agent SDK native plugin MCP discovery is proven: with `skipMcpDiscovery=false`, the plugin MCP server appears in `system:init`; with `skipMcpDiscovery=true`, it does not. Locus-managed native plugin loading must use `skipMcpDiscovery=true` and keep approved plugin MCP servers on the existing Locus MCP config path. |
 | Codex app-server | commands | not-loadable | Codex cache version/source pins can contribute identity, but no native activation is allowed while per-run control is missing | App-server receives fail-closed `plugins.<id>.enabled=false` config overrides, but no managed-run proof shows app-server honors installed/enabled plugins or per-run filtering. |
 | Codex app-server | skills | not-loadable | same as commands | Same app-server proof gap. |
@@ -103,6 +110,9 @@ proven. A staged package or parsed manifest alone is not native execution proof.
   `src/main/lib/claude/agent-sdk-query-options.ts`
 - Claude review/safe-mode/MCP gate owner:
   `src/main/lib/plugins/runtime-gates.ts`
+- Runtime-native activation identity and drift gate:
+  `src/main/lib/plugins/runtime-native-activation.ts` and
+  `src/main/lib/plugins/update-review-state.ts`
 - Codex app-server config handoff:
   `src/main/lib/codex/app-server-adapter.ts`
 - Codex fail-closed plugin override owner:
@@ -121,9 +131,10 @@ proven. A staged package or parsed manifest alone is not native execution proof.
 
 Claude now has managed Agent SDK proof that `options.plugins` can load plugin
 commands, skills, agents, hooks, and MCP metadata from an isolated run. Claude
-still needs negative cases for unreviewed global plugins, safe mode, activation
-identity drift, identity-incomplete packages, and staging failure before Locus
-can wire the runtime path.
+also has code-level proof that reviewed activation identity gates block drifted
+and identity-incomplete packages before native activation. Claude still needs
+manual managed-run negative evidence for unreviewed global plugins, safe mode,
+and staging failure.
 
 Codex still needs a managed app-server proof run with isolated `CODEX_HOME` and
 test plugins. The proof must show whether `thread/start` or `thread/resume`

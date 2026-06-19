@@ -110,7 +110,7 @@ describe("runtime native plugin activation", () => {
     })
   })
 
-  test("keeps runtime-derived native activation blocked until proof exists", () => {
+  test("allows runtime-derived Claude activation after proof while Codex stays blocked", () => {
     const identity = buildRuntimeNativeActivationIdentity({
       reviewDocument: reviewDocument(),
       reviewFingerprint: "manifest-a",
@@ -134,12 +134,11 @@ describe("runtime native plugin activation", () => {
           "anthropic:context-tools@0.1.0:context#mcp-sha256:abc",
         ],
       }).current,
-    ).toMatchObject({
-      status: "blocked",
-      reasons: [
-        "runtime-native-unsupported",
-        "per-run-plugin-control-missing",
-      ],
+    ).toEqual({
+      status: "allowed",
+      canActivateNative: true,
+      identityStatus: "reviewed",
+      reasons: [],
     })
 
     expect(

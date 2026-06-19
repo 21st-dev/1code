@@ -9,7 +9,7 @@
   non-plugin settings and non-plugin MCP behavior.
 - [x] 1.4 Claude: prove a native-loaded plugin with an unapproved MCP server does not
   create an active tool connection.
-- [ ] 1.5 Claude: identify the stable activation identity fields available for a
+- [x] 1.5 Claude: identify the stable activation identity fields available for a
   native-loaded plugin (manifest/component declarations plus package identity,
   version, source pin, package hash, or equivalent), and prove drift is detected
   before activation.
