@@ -14,7 +14,7 @@
 
 - [ ] 1.1 Confirm `add-mcp-registry-install` has landed with its MCP
   verified/setup semantics preserved.
-- 2026-06-20 not satisfied: `add-mcp-registry-install` is still active at 38/45
+- 2026-06-20 not satisfied: `add-mcp-registry-install` is still active at 39/45
   with real Claude/Codex runtime proof and verified-state tasks intentionally
   unchecked, so Runtime Capability Projection implementation must not start yet.
 - [ ] 1.2 Confirm this change is implemented as Phase 1 Codex registry skill
