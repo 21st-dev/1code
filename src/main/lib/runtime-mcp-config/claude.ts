@@ -104,6 +104,14 @@ function getMcpServersForScope(
     : config.mcpServers
 }
 
+function assertWritableClaudeMcpConfig(config: McpServerConfig): void {
+  const command = typeof config.command === "string" ? config.command.trim() : ""
+  const url = typeof config.url === "string" ? config.url.trim() : ""
+  if (!command && !url) {
+    throw new Error("Claude MCP server config requires command or URL")
+  }
+}
+
 function getEffectivePluginMcpServerConfig(input: {
   claudeConfig: ClaudeConfig
   pluginConfig: PluginMcpConfig
@@ -838,7 +846,6 @@ export async function addClaudeMcpServer(input: {
   bearerToken?: string
 }) {
   const serverName = normalizeMcpServerName(input.name)
-  const projectPath = resolveMcpProjectPathForMutation(input)
 
   if (input.transport === "stdio" && !input.command?.trim()) {
     throw new Error("Command is required for stdio servers")
@@ -868,6 +875,24 @@ export async function addClaudeMcpServer(input: {
     }
   }
 
+  return writeClaudeMcpServerConfig({
+    name: serverName,
+    scope: input.scope,
+    projectPath: input.projectPath,
+    config: serverConfig,
+  })
+}
+
+export async function writeClaudeMcpServerConfig(input: {
+  name: string
+  scope: "global" | "project"
+  projectPath?: string
+  config: McpServerConfig
+}) {
+  const serverName = normalizeMcpServerName(input.name)
+  const projectPath = resolveMcpProjectPathForMutation(input)
+  assertWritableClaudeMcpConfig(input.config)
+
   await updateClaudeConfigAtomic((existingConfig) => {
     if (projectPath) {
       if (existingConfig.projects?.[projectPath]?.mcpServers?.[serverName]) {
@@ -881,7 +906,7 @@ export async function addClaudeMcpServer(input: {
       existingConfig,
       projectPath,
       serverName,
-      serverConfig,
+      input.config,
     )
   })
 

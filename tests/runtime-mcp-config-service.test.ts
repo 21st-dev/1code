@@ -344,6 +344,15 @@ describe("Runtime MCP config service behavior", () => {
       args: ["project.js"],
       env: { MCP_ENV: "1" },
     })
+    await claudeMcpConfig.writeClaudeMcpServerConfig({
+      name: "registry_remote",
+      scope: "global",
+      config: {
+        url: "https://registry.example.com/mcp",
+        authType: "oauth",
+        headers: { "X-Registry": "present" },
+      },
+    })
     await claudeMcpConfig.removeClaudeMcpServer({
       name: "project_existing",
       scope: "project",
@@ -361,6 +370,11 @@ describe("Runtime MCP config service behavior", () => {
       command: "node",
       args: ["project.js"],
       env: { MCP_ENV: "1" },
+    })
+    expect(claudeConfig.mcpServers?.registry_remote).toEqual({
+      url: "https://registry.example.com/mcp",
+      authType: "oauth",
+      headers: { "X-Registry": "present" },
     })
     expect(
       claudeConfig.projects?.[projectPath]?.mcpServers?.project_existing,
