@@ -25,7 +25,9 @@ describe("plugin store source guards", () => {
     expect(storeRouterBlock).toContain("storeEntryId: z.string().min(1)")
     expect(storeRouterBlock).toContain("previewPluginStoreCandidate(input.storeEntryId)")
     expect(storeRouterBlock).toContain("approveCurrentPluginStoreCandidate(input.storeEntryId)")
-    expect(storeRouterBlock).toContain("installOrUpdateApprovedPluginStoreCandidate(input.storeEntryId)")
+    expect(storeRouterBlock).toMatch(
+      /installOrUpdateApprovedPluginStoreCandidate\(\s*input\.storeEntryId,\s*\)/,
+    )
     expect(storeRouterBlock).not.toContain("candidateFingerprint:")
     expect(storeRouterBlock).not.toContain("packageHash:")
     expect(storeRouterBlock).not.toContain("localPath:")

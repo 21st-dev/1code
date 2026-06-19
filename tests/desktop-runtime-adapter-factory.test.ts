@@ -813,7 +813,8 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeConfigDir).toContain("ensureClaudeAgentSdkIsolatedConfigDir")
     expect(claudeConfigDir).toContain("clearClaudeAgentSdkIsolatedConfigDirCache")
     expect(claudeConfigDir).toContain("getPluginSafeModeState")
-    expect(claudeConfigDir).toContain("removeManagedSymlink")
+    expect(claudeConfigDir).toContain("ensureManagedSymlink")
+    expect(claudeConfigDir).toContain("replaceClaudeNativePluginStagingFailures")
     expect(claudeConfigDir).toContain("ensureSymlink")
   })
 

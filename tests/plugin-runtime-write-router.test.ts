@@ -26,7 +26,7 @@ describe("runtime plugin write router guards", () => {
     expect(routerBlock).toContain("marketplace: z.string().optional()")
     expect(routerBlock).toContain("source: z.string().optional()")
     expect(routerBlock).toContain("scope: z.enum(runtimePluginWriteScopes).optional()")
-    expect(routerBlock).toContain("}).strict()")
+    expect(routerBlock.match(/\.strict\(\)/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
     expect(routerBlock).not.toContain("command:")
     expect(routerBlock).not.toContain("args:")
     expect(routerBlock).not.toContain("cwd:")
