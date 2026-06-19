@@ -49,6 +49,23 @@ proven. A staged package or parsed manifest alone is not native execution proof.
   plugin-like instruction sources. This proves the low-risk thread-start probe
   path works, but it does not prove plugin component execution or per-run plugin
   allowlist enforcement.
+- `bun scripts/probe-codex-app-server-plugin-protocol.ts --timeout-ms=8000
+  --seed-local-test-plugin=1 --include-thread-start=1
+  --thread-start-disabled-plugin-id=proof-plugin@locus-proof` builds a temporary
+  local marketplace with `.agents/plugins/marketplace.json`, installs
+  `proof-plugin@locus-proof` through the bundled Codex CLI, and starts app-server
+  with an isolated temporary `CODEX_HOME`. The seeded plugin appears in
+  `plugin/installed` and `plugin/list` as installed+enabled, and
+  `skills/list` reports `targetSkillPresent: true` for
+  `proof-plugin:proof-skill`. This proves app-server honors globally
+  installed/enabled Codex plugin state on the process-level plugin/skill surface.
+- The same seeded probe passes `plugins.proof-plugin@locus-proof.enabled=false`
+  into `thread/start`. App-server accepts the key, but no typed per-run plugin
+  allowlist/filter method is exposed, `plugin/installed` and `plugin/list` still
+  report the seeded plugin enabled, `skills/list` still reports the seeded plugin
+  skill present, and no-turn `thread/start` shows only project instructions with
+  zero plugin-like instruction sources. This is not sufficient per-run control for
+  Locus-managed native Codex plugin activation.
 - Claude Agent SDK type declarations expose per-session
   `options.plugins: [{ type: "local", path, skipMcpDiscovery }]`, which the SDK
   implementation maps to `--plugin-dir` or `--plugin-dir-no-mcp`. The bundled
@@ -110,10 +127,10 @@ proven. A staged package or parsed manifest alone is not native execution proof.
 | Claude Code | agents | runtime-native-loadable | same as commands | Agent SDK `options.plugins` with an isolated config lists plugin agents in `system:init`; Locus passes only activation-policy-allowed staged plugin dirs. |
 | Claude Code | hooks | runtime-native-loadable | same as commands | Agent SDK `options.plugins` executes the test plugin `SessionStart` hook and emits hook events before the first model turn; Locus passes only activation-policy-allowed staged plugin dirs. |
 | Claude Code | MCP servers | mcp-only | same as commands | Agent SDK native plugin MCP discovery is proven: with `skipMcpDiscovery=false`, the plugin MCP server appears in `system:init`; with `skipMcpDiscovery=true`, it does not. Locus-managed native plugin loading must use `skipMcpDiscovery=true` and keep approved plugin MCP servers on the existing Locus MCP config path. |
-| Codex app-server | commands | not-loadable | Codex cache version/source pins can contribute identity, but no native activation is allowed while per-run control is missing | App-server receives fail-closed `plugins.<id>.enabled=false` config overrides, but no managed-run proof shows app-server honors installed/enabled plugins or per-run filtering. |
-| Codex app-server | skills | not-loadable | same as commands | Same app-server proof gap. |
-| Codex app-server | agents | not-loadable | same as commands | Same app-server proof gap. |
-| Codex app-server | hooks | not-loadable | same as commands | Same app-server proof gap. |
+| Codex app-server | commands | not-loadable | Codex cache version/source pins can contribute identity, but no native activation is allowed while per-run control is missing | App-server exposes global installed/enabled plugin inventory, but no managed-run proof shows commands are per-run filterable. |
+| Codex app-server | skills | not-loadable | same as commands | A seeded installed+enabled test plugin appears in app-server `skills/list`, but `plugins.<id>.enabled=false` at `thread/start` is not proven to filter that global skill surface and no typed per-run allowlist exists. |
+| Codex app-server | agents | not-loadable | same as commands | App-server exposes global plugin inventory, but no managed-run proof shows agents are per-run filterable. |
+| Codex app-server | hooks | not-loadable | same as commands | App-server exposes global hook inventory, but no managed-run proof shows hooks are per-run filterable. |
 | Codex app-server | MCP servers | not-loadable | same as commands | Codex plugin MCP declarations are metadata only in Locus until app-server native loading and MCP approval gating are proven. |
 
 ## Implementation Evidence
@@ -152,8 +169,12 @@ of controlled isolated runs and that safe mode exposes zero plugin components
 while preserving non-plugin skills. Code-level proof covers reviewed activation
 identity drift, identity-incomplete packages, and staging failure.
 
-Codex still needs a managed app-server proof run with isolated `CODEX_HOME` and
-test plugins. The proof must show whether `thread/start` or `thread/resume`
-honors installed/enabled plugin state and whether `plugins.<id>.enabled=false`
-or another primitive can filter plugins per run. Until then Codex native plugin
-execution remains blocked.
+Codex app-server now has an isolated `CODEX_HOME` seeded-plugin proof: global
+installed/enabled plugin state reaches app-server inventory and the global skill
+surface. The proof does not expose a Locus-controllable per-run plugin filter:
+`thread/start` accepts `plugins.<id>.enabled=false`, but no typed allowlist method
+exists and the seeded plugin remains visible in global plugin/skill inventory. Per
+this change's design gate, Codex native plugin execution remains blocked for this
+change and should move only through a follow-up that adds or proves a real per-run
+control primitive. Follow-up proposal:
+`openspec/changes/add-codex-app-server-plugin-run-control`.

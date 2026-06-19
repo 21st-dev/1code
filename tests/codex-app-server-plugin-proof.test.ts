@@ -96,6 +96,67 @@ describe("Codex app-server plugin proof helpers", () => {
     })
   })
 
+  test("records target plugin and target skill proof fields", () => {
+    expect(
+      summarizeCodexAppServerPluginProtocolResponse(
+        "plugin/installed",
+        {
+          result: {
+            marketplaces: [
+              {
+                name: "locus-proof",
+                plugins: [
+                  {
+                    pluginId: "proof-plugin@locus-proof",
+                    name: "proof-plugin",
+                    marketplaceName: "locus-proof",
+                    installed: true,
+                    enabled: true,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        {
+          targetPluginId: "proof-plugin@locus-proof",
+          targetSkillName: "proof-plugin:proof-skill",
+        },
+      ),
+    ).toMatchObject({
+      targetPluginId: "proof-plugin@locus-proof",
+      targetPluginPresent: true,
+      targetPluginEnabled: true,
+      targetSkillName: "proof-plugin:proof-skill",
+      targetSkillPresent: false,
+    })
+
+    expect(
+      summarizeCodexAppServerPluginProtocolResponse(
+        "skills/list",
+        {
+          result: {
+            data: [
+              {
+                skills: [
+                  { name: "early-skill" },
+                  { name: "proof-plugin:proof-skill" },
+                ],
+              },
+            ],
+          },
+        },
+        {
+          targetPluginId: "proof-plugin@locus-proof",
+          targetSkillName: "proof-plugin:proof-skill",
+        },
+      ),
+    ).toMatchObject({
+      targetPluginPresent: false,
+      targetSkillPresent: true,
+    })
+  })
+
   test("extracts accepted client methods from app-server unknown variant errors", () => {
     expect(
       extractAcceptedCodexAppServerClientMethods(

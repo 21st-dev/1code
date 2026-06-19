@@ -13,9 +13,9 @@
   native-loaded plugin (manifest/component declarations plus package identity,
   version, source pin, package hash, or equivalent), and prove drift is detected
   before activation.
-- [ ] 1.6 Codex: prove whether `codex app-server` honors installed/enabled plugins
+- [x] 1.6 Codex: prove whether `codex app-server` honors installed/enabled plugins
   inside a managed thread.
-- [ ] 1.7 Codex: prove whether Locus can filter plugins per run through an app-server
+- [x] 1.7 Codex: prove whether Locus can filter plugins per run through an app-server
   allowlist, isolated config root, startup flag, lifecycle method, or equivalent
   control. If Codex only auto-loads global plugin state, record native execution as
   blocked.
@@ -68,7 +68,7 @@
 
 - [ ] 4.1 If Phase 1 proves app-server supports per-run filtering, wire Codex plugin
   lifecycle/status and pass only reviewed+enabled plugins to that managed thread.
-- [ ] 4.2 If Phase 1 proves app-server has no per-run filtering, stop Codex native
+- [x] 4.2 If Phase 1 proves app-server has no per-run filtering, stop Codex native
   execution work for this change, keep Codex marked unsupported or explicitly
   MCP-only, and prepare a follow-up proposal. Do not mark Codex native execution
   complete.

@@ -1,4 +1,8 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
+import {
+  type ChildProcessWithoutNullStreams,
+  spawn,
+  spawnSync,
+} from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import path from "node:path"
@@ -18,8 +22,12 @@ interface ProbeOptions {
   timeoutMs: number
   includeThreadStart: boolean
   threadStartDisabledPluginId?: string
+  seedLocalTestPlugin: boolean
+  targetPluginId?: string
+  targetSkillName?: string
   outPath?: string
   tempCodexHome?: string
+  tempMarketplaceRoot?: string
 }
 
 interface PendingRequest {
@@ -62,7 +70,9 @@ function defaultCodexPath(): string {
 }
 
 function loadOptions(): ProbeOptions {
-  const tempCodexHome = readBooleanArg("temp-codex-home", false)
+  const seedLocalTestPlugin = readBooleanArg("seed-local-test-plugin", false)
+  const tempCodexHome = readBooleanArg("temp-codex-home", false) ||
+    seedLocalTestPlugin
     ? mkdtempSync(path.join(tmpdir(), "locus-codex-plugin-proof-"))
     : undefined
   const codexHome =
@@ -79,8 +89,18 @@ function loadOptions(): ProbeOptions {
     threadStartDisabledPluginId: readOptionalArg(
       "thread-start-disabled-plugin-id",
     ),
+    seedLocalTestPlugin,
+    targetPluginId:
+      readOptionalArg("target-plugin-id") ??
+      (seedLocalTestPlugin ? "proof-plugin@locus-proof" : undefined),
+    targetSkillName:
+      readOptionalArg("target-skill-name") ??
+      (seedLocalTestPlugin ? "proof-plugin:proof-skill" : undefined),
     outPath: readOptionalArg("out"),
     tempCodexHome,
+    tempMarketplaceRoot: seedLocalTestPlugin
+      ? mkdtempSync(path.join(tmpdir(), "locus-codex-plugin-market-"))
+      : undefined,
   }
 }
 
@@ -192,12 +212,17 @@ class CodexAppServerProbeClient {
 }
 
 function observationFor(
+  options: Pick<ProbeOptions, "targetPluginId" | "targetSkillName">,
   method: string,
   response: CodexAppServerProtocolLikeResponse,
 ): CodexAppServerPluginProtocolObservation {
   const observation = summarizeCodexAppServerPluginProtocolResponse(
     method,
     response,
+    {
+      targetPluginId: options.targetPluginId,
+      targetSkillName: options.targetSkillName,
+    },
   )
   if (observation.errorMessage && observation.errorMessage.length > 1000) {
     return {
@@ -206,6 +231,132 @@ function observationFor(
     }
   }
   return observation
+}
+
+function runCodexPluginCommand(input: {
+  options: Pick<ProbeOptions, "codexPath" | "codexHome">
+  args: string[]
+}): void {
+  const result = spawnSync(input.options.codexPath, input.args, {
+    env: {
+      ...process.env,
+      CODEX_HOME: input.options.codexHome,
+    },
+    encoding: "utf-8",
+  })
+  if (result.status === 0) return
+
+  const stderr = result.stderr.trim()
+  const stdout = result.stdout.trim()
+  throw new Error(
+    `codex ${input.args.join(" ")} failed: ${stderr || stdout || "unknown error"}`,
+  )
+}
+
+function writeLocalTestPluginMarketplace(
+  marketplaceRoot: string,
+): void {
+  const marketplaceManifestPath = path.join(
+    marketplaceRoot,
+    ".agents",
+    "plugins",
+    "marketplace.json",
+  )
+  const pluginRoot = path.join(marketplaceRoot, "plugins", "proof-plugin")
+  mkdirSync(path.dirname(marketplaceManifestPath), { recursive: true })
+  mkdirSync(path.join(pluginRoot, ".codex-plugin"), { recursive: true })
+  mkdirSync(path.join(pluginRoot, "skills", "proof-skill"), {
+    recursive: true,
+  })
+  mkdirSync(path.join(pluginRoot, "commands"), { recursive: true })
+  mkdirSync(path.join(pluginRoot, "agents"), { recursive: true })
+
+  writeFileSync(
+    marketplaceManifestPath,
+    `${JSON.stringify(
+      {
+        name: "locus-proof",
+        interface: { displayName: "Locus Proof" },
+        plugins: [
+          {
+            name: "proof-plugin",
+            source: {
+              source: "local",
+              path: "./plugins/proof-plugin",
+            },
+            policy: {
+              installation: "AVAILABLE",
+              authentication: "ON_INSTALL",
+            },
+            category: "Developer Tools",
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  writeFileSync(
+    path.join(pluginRoot, ".codex-plugin", "plugin.json"),
+    `${JSON.stringify(
+      {
+        name: "proof-plugin",
+        version: "0.0.1",
+        description: "Locus Codex plugin proof fixture.",
+        author: { name: "Locus" },
+        skills: "./skills/",
+        commands: "./commands/",
+        agents: "./agents/",
+        interface: {
+          displayName: "Proof Plugin",
+          shortDescription: "Proof fixture",
+          developerName: "Locus",
+          category: "Engineering",
+          capabilities: ["Read"],
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  writeFileSync(
+    path.join(pluginRoot, "skills", "proof-skill", "SKILL.md"),
+    [
+      "---",
+      "name: proof-skill",
+      "description: Locus Codex plugin proof skill.",
+      "---",
+      "",
+      "Proof skill body.",
+      "",
+    ].join("\n"),
+  )
+  writeFileSync(
+    path.join(pluginRoot, "commands", "proof-command.md"),
+    ["---", "description: Proof command.", "---", "", "Proof command body.", ""].join(
+      "\n",
+    ),
+  )
+  writeFileSync(
+    path.join(pluginRoot, "agents", "proof-agent.md"),
+    ["---", "name: proof-agent", "description: Proof agent.", "---", "", "Proof agent body.", ""].join(
+      "\n",
+    ),
+  )
+}
+
+function seedLocalTestPlugin(options: ProbeOptions): void {
+  if (!options.seedLocalTestPlugin || !options.tempMarketplaceRoot) return
+
+  writeLocalTestPluginMarketplace(options.tempMarketplaceRoot)
+  runCodexPluginCommand({
+    options,
+    args: ["plugin", "marketplace", "add", options.tempMarketplaceRoot, "--json"],
+  })
+  runCodexPluginCommand({
+    options,
+    args: ["plugin", "add", "proof-plugin@locus-proof", "--json"],
+  })
 }
 
 function buildThreadStartConfig(
@@ -219,6 +370,7 @@ function buildThreadStartConfig(
 
 async function main(): Promise<void> {
   const options = loadOptions()
+  seedLocalTestPlugin(options)
   const client = new CodexAppServerProbeClient(options)
   const observations: CodexAppServerPluginProtocolObservation[] = []
   let acceptedClientMethods: string[] = []
@@ -229,6 +381,7 @@ async function main(): Promise<void> {
   try {
     observations.push(
       observationFor(
+        options,
         "initialize",
         await client.request("initialize", {
           clientInfo: {
@@ -247,12 +400,15 @@ async function main(): Promise<void> {
       "hooks/list",
       "plugin/read",
     ]) {
-      observations.push(observationFor(method, await client.request(method)))
+      observations.push(
+        observationFor(options, method, await client.request(method)),
+      )
     }
 
     const unknownMethod = "plugin/marketplace/list"
     const unknownMethodResponse = await client.request(unknownMethod)
     const unknownMethodObservation = observationFor(
+      options,
       unknownMethod,
       unknownMethodResponse,
     )
@@ -290,6 +446,15 @@ async function main(): Promise<void> {
       generatedAt: new Date().toISOString(),
       codexPath: options.codexPath,
       codexHome: options.codexHome,
+      ...(options.seedLocalTestPlugin
+        ? {
+            seededLocalTestPlugin: {
+              pluginId: "proof-plugin@locus-proof",
+              skillName: "proof-plugin:proof-skill",
+              marketplaceRoot: options.tempMarketplaceRoot,
+            },
+          }
+        : {}),
       observations,
       ...(threadStart ? { threadStart } : {}),
       acceptedClientMethods,
@@ -312,6 +477,9 @@ async function main(): Promise<void> {
     client.close()
     if (options.tempCodexHome) {
       rmSync(options.tempCodexHome, { recursive: true, force: true })
+    }
+    if (options.tempMarketplaceRoot) {
+      rmSync(options.tempMarketplaceRoot, { recursive: true, force: true })
     }
   }
 }

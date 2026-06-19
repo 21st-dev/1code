@@ -11,6 +11,11 @@ export interface CodexAppServerPluginProtocolObservation {
   skillCount?: number
   hookRootCount?: number
   hookCount?: number
+  targetPluginId?: string
+  targetPluginPresent?: boolean
+  targetPluginEnabled?: boolean
+  targetSkillName?: string
+  targetSkillPresent?: boolean
   sampleNames: string[]
   errorMessage?: string
 }
@@ -55,12 +60,15 @@ interface PluginInventoryCounts {
   installedPluginCount?: number
   enabledPluginCount?: number
   featuredPluginCount?: number
+  targetPluginPresent?: boolean
+  targetPluginEnabled?: boolean
   sampleNames: string[]
 }
 
 interface RuntimeComponentCounts {
   rootCount?: number
   componentCount?: number
+  targetComponentPresent?: boolean
   sampleNames: string[]
 }
 
@@ -114,10 +122,21 @@ export function summarizeCodexAppServerThreadStartResponse(input: {
 export function summarizeCodexAppServerPluginProtocolResponse(
   method: string,
   response: CodexAppServerProtocolLikeResponse,
+  targets: {
+    targetPluginId?: string
+    targetSkillName?: string
+  } = {},
 ): CodexAppServerPluginProtocolObservation {
   const result = response.result
-  const pluginCounts = summarizePluginInventory(result)
-  const skills = summarizeRuntimeComponents(result, "skills")
+  const pluginCounts = summarizePluginInventory(
+    result,
+    targets.targetPluginId,
+  )
+  const skills = summarizeRuntimeComponents(
+    result,
+    "skills",
+    targets.targetSkillName,
+  )
   const hooks = summarizeRuntimeComponents(result, "hooks")
   const errorMessage = response.error?.message
 
@@ -134,6 +153,19 @@ export function summarizeCodexAppServerPluginProtocolResponse(
     skillCount: skills.componentCount,
     hookRootCount: hooks.rootCount,
     hookCount: hooks.componentCount,
+    ...(targets.targetPluginId
+      ? {
+          targetPluginId: targets.targetPluginId,
+          targetPluginPresent: pluginCounts.targetPluginPresent === true,
+          targetPluginEnabled: pluginCounts.targetPluginEnabled === true,
+        }
+      : {}),
+    ...(targets.targetSkillName
+      ? {
+          targetSkillName: targets.targetSkillName,
+          targetSkillPresent: skills.targetComponentPresent === true,
+        }
+      : {}),
     sampleNames: uniqueStrings([
       ...pluginCounts.sampleNames,
       ...skills.sampleNames,
@@ -224,7 +256,10 @@ export function assessCodexAppServerPluginProtocol(input: {
   }
 }
 
-function summarizePluginInventory(result: unknown): PluginInventoryCounts {
+function summarizePluginInventory(
+  result: unknown,
+  targetPluginId?: string,
+): PluginInventoryCounts {
   if (!isRecord(result)) return { sampleNames: [] }
 
   const marketplaces = getArray(result.marketplaces)
@@ -242,6 +277,9 @@ function summarizePluginInventory(result: unknown): PluginInventoryCounts {
   const sampleNames = pluginRecords
     .map((plugin) => getDisplayName(plugin))
     .filter(isNonEmptyString)
+  const targetPlugin = targetPluginId
+    ? pluginRecords.find((plugin) => pluginMatches(plugin, targetPluginId))
+    : undefined
 
   return {
     marketplaceCount: marketplaces.length > 0 ? marketplaces.length : undefined,
@@ -256,6 +294,12 @@ function summarizePluginInventory(result: unknown): PluginInventoryCounts {
         : undefined,
     featuredPluginCount:
       featuredPluginIds.length > 0 ? featuredPluginIds.length : undefined,
+    ...(targetPluginId
+      ? {
+          targetPluginPresent: Boolean(targetPlugin),
+          targetPluginEnabled: targetPlugin?.enabled === true,
+        }
+      : {}),
     sampleNames: uniqueStrings(sampleNames).slice(0, 8),
   }
 }
@@ -263,6 +307,7 @@ function summarizePluginInventory(result: unknown): PluginInventoryCounts {
 function summarizeRuntimeComponents(
   result: unknown,
   componentKey: "skills" | "hooks",
+  targetComponentName?: string,
 ): RuntimeComponentCounts {
   if (!isRecord(result)) return { sampleNames: [] }
 
@@ -275,10 +320,15 @@ function summarizeRuntimeComponents(
     isRecord(entry) ? getArray(entry[componentKey]) : [],
   )
   const components = [...directComponents, ...nestedComponents]
-  const sampleNames = components
-    .filter(isRecord)
+  const componentRecords = components.filter(isRecord)
+  const sampleNames = componentRecords
     .map((component) => getDisplayName(component))
     .filter(isNonEmptyString)
+  const targetComponentPresent = targetComponentName
+    ? componentRecords.some((component) =>
+        recordStringValues(component).includes(targetComponentName),
+      )
+    : undefined
 
   return {
     rootCount:
@@ -287,6 +337,9 @@ function summarizeRuntimeComponents(
       dataWithComponents.length > 0 || directComponents.length > 0
         ? components.length
         : undefined,
+    ...(targetComponentName
+      ? { targetComponentPresent: targetComponentPresent === true }
+      : {}),
     sampleNames: uniqueStrings(sampleNames).slice(0, 8),
   }
 }
@@ -312,6 +365,51 @@ function getDisplayName(record: Record<string, unknown>): string | undefined {
     return nestedInterface.displayName
   }
   return undefined
+}
+
+function pluginMatches(
+  record: Record<string, unknown>,
+  targetPluginId: string,
+): boolean {
+  if (recordStringValues(record).includes(targetPluginId)) return true
+
+  const pluginName =
+    stringValue(record.pluginId) ??
+    stringValue(record.id) ??
+    stringValue(record.name) ??
+    stringValue(record.pluginName)
+  const marketplaceName =
+    stringValue(record.marketplaceName) ?? stringValue(record.marketplace)
+  return `${pluginName}@${marketplaceName}` === targetPluginId
+}
+
+function recordStringValues(record: Record<string, unknown>): string[] {
+  const values: string[] = []
+  for (const key of [
+    "pluginId",
+    "id",
+    "name",
+    "displayName",
+    "title",
+    "pluginName",
+    "path",
+  ]) {
+    const value = record[key]
+    if (isNonEmptyString(value)) values.push(value)
+  }
+
+  const nestedInterface = record.interface
+  if (
+    isRecord(nestedInterface) &&
+    isNonEmptyString(nestedInterface.displayName)
+  ) {
+    values.push(nestedInterface.displayName)
+  }
+  return values
+}
+
+function stringValue(value: unknown): string | undefined {
+  return isNonEmptyString(value) ? value : undefined
 }
 
 function getInstructionSourceLabel(source: unknown): string | undefined {
