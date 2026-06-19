@@ -44,12 +44,20 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
       github: { type: "http", url: "https://mcp.example.com", headers: {} },
     } as any
     const refreshCalls: unknown[][] = []
+    const plugins = [
+      {
+        type: "local" as const,
+        path: "/tmp/plugin",
+        skipMcpDiscovery: true,
+      },
+    ]
 
     const result = await prepareClaudeAgentSdkDesktopRuntimeQuery({
       request,
       prompt: "inspect",
       existingMessages: [],
       rawMcpServers: rawServers,
+      plugins,
       env: { PATH: "/bin" },
       isUsingOllama: false,
       guardedContract: null,
@@ -88,6 +96,7 @@ describe("Claude Agent SDK desktop runtime query startup", () => {
     ).toContain("Use repo rules.")
     expect(result.queryOptions.prompt).toBe("inspect")
     expect(result.queryOptions.options.mcpServers).toBe(refreshedServers)
+    expect(result.queryOptions.options.plugins).toBe(plugins)
     expect(result.queryOptions.options.model).toBe("claude-sonnet-4")
     expect(result.queryOptions.options.permissionMode).toBe(
       "bypassPermissions",

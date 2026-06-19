@@ -97,6 +97,10 @@ proven. A staged package or parsed manifest alone is not native execution proof.
 
 - Claude isolated config staging:
   `src/main/lib/claude/agent-sdk-config-dir.ts`
+- Claude staged native plugin handoff:
+  `src/main/lib/claude/agent-sdk-runtime-startup.ts`,
+  `src/main/lib/claude/agent-sdk-runtime-lifecycle.ts`, and
+  `src/main/lib/claude/agent-sdk-query-options.ts`
 - Claude review/safe-mode/MCP gate owner:
   `src/main/lib/plugins/runtime-gates.ts`
 - Codex app-server config handoff:

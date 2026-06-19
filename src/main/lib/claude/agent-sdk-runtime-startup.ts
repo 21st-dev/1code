@@ -1,16 +1,15 @@
 import * as electron from "electron"
 import {
   type ClaudeAgentSdkIsolatedConfig,
+  type ClaudeAgentSdkNativePluginConfig,
   ensureClaudeAgentSdkIsolatedConfigDir,
   resolveClaudeAgentSdkIsolatedConfig,
 } from "./agent-sdk-config-dir"
+import { prepareClaudeAgentSdkOllamaStartupDiagnostics } from "./agent-sdk-ollama-diagnostics"
 import {
-  prepareClaudeAgentSdkRuntimeStartupEnvironment,
   type PrepareClaudeAgentSdkRuntimeStartupEnvironmentInput,
+  prepareClaudeAgentSdkRuntimeStartupEnvironment,
 } from "./env"
-import {
-  prepareClaudeAgentSdkOllamaStartupDiagnostics,
-} from "./agent-sdk-ollama-diagnostics"
 
 type PrepareClaudeAgentSdkOllamaStartupDiagnostics =
   typeof prepareClaudeAgentSdkOllamaStartupDiagnostics
@@ -32,6 +31,7 @@ export type PreparedClaudeAgentSdkRuntimeStartupContext = ReturnType<
 > & {
   isolatedConfig: ClaudeAgentSdkIsolatedConfig
   isolatedConfigDir: string
+  nativePluginConfigs: ClaudeAgentSdkNativePluginConfig[]
 }
 
 export type PrepareClaudeAgentSdkRuntimeStartupForDesktopRunInput =
@@ -76,6 +76,7 @@ export function prepareClaudeAgentSdkRuntimeStartupContext({
     ...environment,
     isolatedConfig,
     isolatedConfigDir: isolatedConfig.isolatedConfigDir,
+    nativePluginConfigs: [],
   }
 }
 
@@ -86,9 +87,14 @@ export async function prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
 }: PrepareClaudeAgentSdkRuntimeStartupForDesktopRunInput): Promise<PreparedClaudeAgentSdkRuntimeStartupForDesktopRun> {
   const runtimeStartup = prepareClaudeAgentSdkRuntimeStartupContext(input)
   try {
-    await ensureIsolatedConfigDir(runtimeStartup.isolatedConfig)
+    const isolatedConfigResult = await ensureIsolatedConfigDir(
+      runtimeStartup.isolatedConfig,
+    )
     return {
-      runtimeStartup,
+      runtimeStartup: {
+        ...runtimeStartup,
+        nativePluginConfigs: isolatedConfigResult?.nativePluginConfigs ?? [],
+      },
       isolatedConfigReady: true,
     }
   } catch (startupErr) {
@@ -106,8 +112,7 @@ export async function prepareClaudeAgentSdkRuntimeStartupDiagnostics({
   runtimeStartup,
   cwd,
   resumeSessionId,
-  prepareOllamaStartupDiagnostics =
-    prepareClaudeAgentSdkOllamaStartupDiagnostics,
+  prepareOllamaStartupDiagnostics = prepareClaudeAgentSdkOllamaStartupDiagnostics,
 }: PrepareClaudeAgentSdkRuntimeStartupDiagnosticsInput): Promise<void> {
   await prepareOllamaStartupDiagnostics({
     isUsingOllama,

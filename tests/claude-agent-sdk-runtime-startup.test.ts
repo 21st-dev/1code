@@ -31,6 +31,7 @@ describe("Claude Agent SDK runtime startup", () => {
       cacheKey: "sub-1",
     })
     expect(startup.isolatedConfigDir).toBe(startup.isolatedConfig.isolatedConfigDir)
+    expect(startup.nativePluginConfigs).toEqual([])
     expect(startup.resolvedModel).toBe("provider-model")
     expect(startup.finalEnv).toMatchObject({
       ANTHROPIC_BASE_URL: "https://provider.example.com",
@@ -59,7 +60,14 @@ describe("Claude Agent SDK runtime startup", () => {
   })
 
   test("ensures isolated config during desktop runtime startup", async () => {
-    const ensureIsolatedConfigDir = mock(async () => {})
+    const nativePluginConfigs = [
+      {
+        type: "local" as const,
+        path: "/tmp/plugin",
+        skipMcpDiscovery: true as const,
+      },
+    ]
+    const ensureIsolatedConfigDir = mock(async () => ({ nativePluginConfigs }))
 
     const result = await prepareClaudeAgentSdkRuntimeStartupForDesktopRun({
       chatId: "chat-1",
@@ -73,6 +81,7 @@ describe("Claude Agent SDK runtime startup", () => {
     })
 
     expect(result.isolatedConfigReady).toBe(true)
+    expect(result.runtimeStartup.nativePluginConfigs).toBe(nativePluginConfigs)
     expect(result.runtimeStartup.isolatedConfig).toEqual({
       isolatedConfigDir: join(
         "/tmp/locus-user-data",
@@ -107,6 +116,7 @@ describe("Claude Agent SDK runtime startup", () => {
 
     expect(result.isolatedConfigReady).toBe(false)
     expect(result.runtimeStartup.isolatedConfig.cacheKey).toBe("sub-1")
+    expect(result.runtimeStartup.nativePluginConfigs).toEqual([])
     expect(error).toHaveBeenCalledWith(
       "[claude] Failed to setup isolated config dir:",
       setupError,

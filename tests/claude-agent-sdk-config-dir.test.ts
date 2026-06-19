@@ -122,7 +122,7 @@ describe("Claude Agent SDK isolated config dir", () => {
       "dir",
     )
 
-    await ensureClaudeAgentSdkIsolatedConfigDir({
+    const result = await ensureClaudeAgentSdkIsolatedConfigDir({
       ...isolatedConfig,
       dependencies: {
         homeDir: () => homeDir,
@@ -130,6 +130,7 @@ describe("Claude Agent SDK isolated config dir", () => {
         logger: { warn() {} },
       },
     })
+    expect(result.nativePluginConfigs).toEqual([])
 
     await expect(
       readlink(join(isolatedConfig.isolatedConfigDir, "skills")),
@@ -171,7 +172,7 @@ describe("Claude Agent SDK isolated config dir", () => {
       isUsingOllama: false,
     })
 
-    await ensureClaudeAgentSdkIsolatedConfigDir({
+    const result = await ensureClaudeAgentSdkIsolatedConfigDir({
       ...isolatedConfig,
       dependencies: {
         homeDir: () => homeDir,
@@ -234,6 +235,13 @@ describe("Claude Agent SDK isolated config dir", () => {
     await expect(
       readlink(join(stagedMarketplacePath, "plugins", "allowed")),
     ).resolves.toBe(pluginSourcePath)
+    expect(result.nativePluginConfigs).toEqual([
+      {
+        type: "local",
+        path: join(stagedMarketplacePath, "plugins", "allowed"),
+        skipMcpDiscovery: true,
+      },
+    ])
   })
 
   test("drops failed Claude plugin staging entries from isolated activation", async () => {
@@ -250,7 +258,7 @@ describe("Claude Agent SDK isolated config dir", () => {
       isUsingOllama: false,
     })
 
-    await ensureClaudeAgentSdkIsolatedConfigDir({
+    const result = await ensureClaudeAgentSdkIsolatedConfigDir({
       ...isolatedConfig,
       dependencies: {
         homeDir: () => homeDir,
@@ -308,6 +316,13 @@ describe("Claude Agent SDK isolated config dir", () => {
     expect(
       await pathExists(join(stagedMarketplacePath, "plugins", "blocked")),
     ).toBe(false)
+    expect(result.nativePluginConfigs).toEqual([
+      {
+        type: "local",
+        path: join(stagedMarketplacePath, "plugins", "allowed"),
+        skipMcpDiscovery: true,
+      },
+    ])
     expect(getClaudeNativePluginStagingFailure("market:allowed")).toBeUndefined()
     expect(getClaudeNativePluginStagingFailure("market:blocked")).toMatchObject({
       pluginSource: "market:blocked",
@@ -333,7 +348,7 @@ describe("Claude Agent SDK isolated config dir", () => {
       isUsingOllama: false,
     })
 
-    await ensureClaudeAgentSdkIsolatedConfigDir({
+    const result = await ensureClaudeAgentSdkIsolatedConfigDir({
       ...isolatedConfig,
       dependencies: {
         homeDir: () => homeDir,
@@ -380,6 +395,7 @@ describe("Claude Agent SDK isolated config dir", () => {
         ),
       ),
     ).toBe(false)
+    expect(result.nativePluginConfigs).toEqual([])
     expect(getClaudeNativePluginStagingFailure("market:allowed/a")).toMatchObject(
       {
         pluginSource: "market:allowed/a",
@@ -408,7 +424,7 @@ describe("Claude Agent SDK isolated config dir", () => {
     })
     const pluginsTarget = join(isolatedConfig.isolatedConfigDir, "plugins")
 
-    await ensureClaudeAgentSdkIsolatedConfigDir({
+    const result = await ensureClaudeAgentSdkIsolatedConfigDir({
       ...isolatedConfig,
       dependencies: {
         homeDir: () => homeDir,
@@ -444,6 +460,7 @@ describe("Claude Agent SDK isolated config dir", () => {
       includeCoAuthoredBy: false,
       enabledPlugins: [],
     })
+    expect(result.nativePluginConfigs).toEqual([])
     expect(getClaudeNativePluginStagingFailure("market:allowed")).toMatchObject({
       pluginSource: "market:allowed",
       reason: "stage-failed",

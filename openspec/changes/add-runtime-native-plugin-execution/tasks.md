@@ -47,7 +47,7 @@
 
 ## 3. Phase 3 - Claude Controlled Native Execution
 
-- [ ] 3.1 Replace raw plugin-dir removal with review-gated plugin staging into the
+- [x] 3.1 Replace raw plugin-dir removal with review-gated plugin staging into the
   isolated Claude config directory for component types proven in Phase 1.
 - [x] 3.2 Replace raw `settings.json` symlink behavior for plugin activation with a
   filtered settings/activation manifest whose `enabledPlugins` only includes

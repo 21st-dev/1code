@@ -158,6 +158,8 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
     runtimeQueryInput.env ?? runtimeStartupContext?.finalEnv ?? {}
   const runtimeResolvedModel =
     runtimeQueryInput.resolvedModel ?? runtimeStartupContext?.resolvedModel
+  const runtimeNativePluginConfigs =
+    runtimeQueryInput.plugins ?? runtimeStartupContext?.nativePluginConfigs
   const runtimeHasExistingApiConfig =
     input.hasExistingApiConfig ??
     runtimeStartupContext?.hasExistingApiConfig ??
@@ -243,6 +245,7 @@ export async function runClaudeAgentSdkDesktopRuntimeLifecycle(
         runtimeQueryInput.guardedContract ?? input.guardedContract,
       emit: runtimeQueryInput.emit ?? input.emit,
       resolvedModel: runtimeResolvedModel,
+      plugins: runtimeNativePluginConfigs,
       guardEvents: runtimeQueryInput.guardEvents ?? guardEvents,
       parts,
       stderrLines,

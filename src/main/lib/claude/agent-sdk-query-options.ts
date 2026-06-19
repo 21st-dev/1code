@@ -28,6 +28,7 @@ export type CreateClaudeAgentSdkQueryOptionsInput = {
   isUsingOllama: boolean
   canUseTool: NonNullable<ClaudeAgentSdkOptions["canUseTool"]>
   hooks?: ClaudeAgentSdkOptions["hooks"]
+  plugins?: ClaudeAgentSdkOptions["plugins"]
   stderr: NonNullable<ClaudeAgentSdkOptions["stderr"]>
   pathToClaudeCodeExecutable: string
   resumeSessionAt?: string | null
@@ -242,6 +243,7 @@ export function createClaudeAgentSdkQueryOptions({
   isUsingOllama,
   canUseTool,
   hooks,
+  plugins,
   stderr,
   pathToClaudeCodeExecutable,
   resumeSessionAt,
@@ -273,6 +275,7 @@ export function createClaudeAgentSdkQueryOptions({
       }),
       canUseTool,
       ...(hooks && { hooks }),
+      ...(plugins?.length && { plugins }),
       stderr,
       pathToClaudeCodeExecutable,
       ...(resumeSessionId && {

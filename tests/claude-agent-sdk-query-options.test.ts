@@ -429,6 +429,13 @@ describe("Claude Agent SDK query options", () => {
         args: ["server.js"],
       },
     } as any
+    const plugins = [
+      {
+        type: "local" as const,
+        path: "/tmp/plugin",
+        skipMcpDiscovery: true,
+      },
+    ]
 
     const queryParams = createClaudeAgentSdkQueryOptions({
       request,
@@ -440,6 +447,7 @@ describe("Claude Agent SDK query options", () => {
       env: { PATH: "/bin" },
       permission,
       mcpServers,
+      plugins,
       isUsingOllama: false,
       canUseTool,
       hooks,
@@ -459,6 +467,7 @@ describe("Claude Agent SDK query options", () => {
     })
     expect(queryParams.options.env).toEqual({ PATH: "/bin" })
     expect(queryParams.options.mcpServers).toBe(mcpServers)
+    expect(queryParams.options.plugins).toBe(plugins)
     expect(queryParams.options.permissionMode).toBe("bypassPermissions")
     expect(queryParams.options.allowDangerouslySkipPermissions).toBe(true)
     expect(queryParams.options.disallowedTools).toBeUndefined()

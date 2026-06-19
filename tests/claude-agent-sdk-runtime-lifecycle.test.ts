@@ -83,6 +83,11 @@ function createLifecycleInput(
     logStartupDiagnostics?: any
     signal?: AbortSignal
     streamState?: ReturnType<typeof createClaudeAgentSdkStreamConsumerMutableState>
+    nativePluginConfigs?: Array<{
+      type: "local"
+      path: string
+      skipMcpDiscovery: true
+    }>
   } = {},
 ) {
   const signal = input.signal ?? new AbortController().signal
@@ -103,6 +108,7 @@ function createLifecycleInput(
     isolatedConfigDir: "/tmp/claude-config",
     resolvedModel: "claude-sonnet",
     hasExistingApiConfig: true,
+    nativePluginConfigs: input.nativePluginConfigs ?? [],
   }
 
   return {
@@ -316,14 +322,22 @@ describe("Claude Agent SDK runtime lifecycle", () => {
     })
   })
 
-  test("defaults runtime query env and model from startup context", async () => {
+  test("defaults runtime query env, model, and native plugins from startup context", async () => {
     const db = createAgentJobTestDb()
     seedChat(db)
     const query = mock(() => createClaudeAssistantStream())
     const logStartupDiagnostics = mock(() => {})
+    const nativePluginConfigs = [
+      {
+        type: "local" as const,
+        path: "/tmp/plugin",
+        skipMcpDiscovery: true as const,
+      },
+    ]
     const input = createLifecycleInput(db, {
       query,
       logStartupDiagnostics,
+      nativePluginConfigs,
     })
     delete (input.runtimeQuery as any).env
     delete (input.runtimeQuery as any).resolvedModel
@@ -343,6 +357,7 @@ describe("Claude Agent SDK runtime lifecycle", () => {
       CLAUDE_CODE_OAUTH_TOKEN: "oauth-token",
     })
     expect(query.mock.calls[0][0].options.model).toBe("claude-sonnet")
+    expect(query.mock.calls[0][0].options.plugins).toBe(nativePluginConfigs)
     expect(logStartupDiagnostics.mock.calls[0][0].auth).toMatchObject({
       hasExistingApiConfig: true,
     })

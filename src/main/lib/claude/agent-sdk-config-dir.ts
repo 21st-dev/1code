@@ -43,6 +43,20 @@ export interface ClaudePluginStagingEntry {
   tags?: string[]
 }
 
+export interface ClaudeStagedNativePluginEntry extends ClaudePluginStagingEntry {
+  stagedPath: string
+}
+
+export interface ClaudeAgentSdkNativePluginConfig {
+  type: "local"
+  path: string
+  skipMcpDiscovery: true
+}
+
+export interface ClaudeAgentSdkIsolatedConfigDirResult {
+  nativePluginConfigs: ClaudeAgentSdkNativePluginConfig[]
+}
+
 const symlinksCreated = new Set<string>()
 
 const defaultDependencies: ClaudeAgentSdkConfigDirDependencies = {
@@ -235,7 +249,7 @@ async function stageClaudePlugins(input: {
   markIncomplete: () => void
   markError: () => void
 }): Promise<{
-  stagedEntries: ClaudePluginStagingEntry[]
+  stagedEntries: ClaudeStagedNativePluginEntry[]
   failedEntries: ClaudeNativePluginStagingFailureInput[]
 }> {
   const removedPreviousPlugins = await removeManagedPath({
@@ -270,7 +284,7 @@ async function stageClaudePlugins(input: {
   )
   const symlinkType =
     input.dependencies.platform === "win32" ? "junction" : "dir"
-  const stagedEntries: ClaudePluginStagingEntry[] = []
+  const stagedEntries: ClaudeStagedNativePluginEntry[] = []
   const failedEntries: ClaudeNativePluginStagingFailureInput[] = []
   for (const [marketplace, entries] of marketplaces) {
     const marketplaceSegment = sanitizePathSegment(marketplace)
@@ -293,7 +307,7 @@ async function stageClaudePlugins(input: {
     const marketplaceMetaDir = path.join(marketplaceRoot, ".claude-plugin")
     const collidingPluginSourcePaths = findDuplicatePluginSourcePaths(entries)
 
-    const linkedEntries: ClaudePluginStagingEntry[] = []
+    const linkedEntries: ClaudeStagedNativePluginEntry[] = []
     for (const entry of entries) {
       const sourcePath = path.join("plugins", sanitizePathSegment(entry.name))
       if (collidingPluginSourcePaths.has(sourcePath)) {
@@ -330,7 +344,10 @@ async function stageClaudePlugins(input: {
           markError: input.markError,
         })
         if (linked) {
-          linkedEntries.push(entry)
+          linkedEntries.push({
+            ...entry,
+            stagedPath: targetPath,
+          })
         } else {
           failedEntries.push(toStagingFailure(entry, "symlink-failed"))
         }
@@ -439,7 +456,7 @@ export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
   isolatedConfigDir: string
   cacheKey: string
   dependencies?: Partial<ClaudeAgentSdkConfigDirDependencies>
-}): Promise<void> {
+}): Promise<ClaudeAgentSdkIsolatedConfigDirResult> {
   const dependencies = withDefaultDependencies(input.dependencies)
   await dependencies.fs.mkdir(input.isolatedConfigDir, { recursive: true })
 
@@ -529,5 +546,13 @@ export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
     dependencies.logger.warn(
       "[claude] Symlink setup incomplete, will retry on next request",
     )
+  }
+
+  return {
+    nativePluginConfigs: pluginStaging.stagedEntries.map((entry) => ({
+      type: "local",
+      path: entry.stagedPath,
+      skipMcpDiscovery: true,
+    })),
   }
 }
