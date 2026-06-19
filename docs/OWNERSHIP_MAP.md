@@ -152,12 +152,14 @@ or UI helper.
 
 ## Runtime MCP Configuration
 
-- Canonical owner: runtime router code until service extraction is completed by
-  an approved OpenSpec change
-- Current files: `src/main/lib/trpc/routers/claude.ts`,
-  `src/main/lib/trpc/routers/codex.ts`
-- Rule: extraction must move MCP config/status behavior into a named service and
-  remove the old route helper/call sites in the same change.
+- Canonical owner: `src/main/lib/runtime-mcp-config/`
+- Runtime adapters: `src/main/lib/runtime-mcp-config/claude.ts`,
+  `src/main/lib/runtime-mcp-config/codex.ts`
+- Consumers: runtime routes, startup MCP warmup, and desktop runtime startup
+  materialization
+- Rule: runtime routes may validate tRPC inputs and map errors, but durable MCP
+  listing, status, auth, add/update/remove, refresh/cache, and session
+  materialization behavior belongs to the Runtime MCP Config service.
 
 ## tRPC Route Boundary
 

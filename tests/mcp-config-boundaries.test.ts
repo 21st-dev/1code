@@ -17,30 +17,50 @@ function getProcedureBlock(source: string, procedure: string): string {
 
 describe("Claude MCP config mutation boundaries", () => {
   test("routes project-scoped MCP writes through main-layer project and name guards", () => {
-    const source = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const route = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const service = readFileSync(
+      "src/main/lib/runtime-mcp-config/claude.ts",
+      "utf8",
+    )
 
-    expect(source).toContain("const MCP_SERVER_NAME_REGEX")
-    expect(source).toContain("function normalizeMcpServerName")
-    expect(source).toContain("function resolveMcpProjectPathForMutation")
-    expect(source).toContain("function getMcpServersForScope")
-    expect(source).toContain("updateClaudeConfigAtomic")
+    expect(service).toContain("const MCP_SERVER_NAME_REGEX")
+    expect(service).toContain("function normalizeMcpServerName")
+    expect(service).toContain("function resolveMcpProjectPathForMutation")
+    expect(service).toContain("function getMcpServersForScope")
+    expect(service).toContain("updateClaudeConfigAtomic")
+    expect(route).not.toContain("function normalizeMcpServerName")
+    expect(route).not.toContain("function resolveMcpProjectPathForMutation")
+    expect(route).not.toContain("updateClaudeConfigAtomic")
 
-    const oauthBlock = getProcedureBlock(source, "startMcpOAuth")
-    expect(oauthBlock).toContain("normalizeMcpServerName")
-    expect(oauthBlock).toContain("resolveMcpProjectPathForMutation")
+    const oauthBlock = getProcedureBlock(route, "startMcpOAuth")
+    expect(oauthBlock).toContain("startClaudeMcpOAuth(input)")
 
-    for (const mutation of [
-      "addMcpServer",
-      "updateMcpServer",
-      "removeMcpServer",
-      "setMcpBearerToken",
-    ]) {
-      const block = getProcedureBlock(source, mutation)
-      expect(block).toContain("normalizeMcpServerName")
-      expect(block).toContain("resolveMcpProjectPathForMutation")
-      expect(block).toContain("updateClaudeConfigAtomic")
+    const expectedDelegates: Record<string, string> = {
+      addMcpServer: "addClaudeMcpServer(input)",
+      updateMcpServer: "updateClaudeMcpServer(input)",
+      removeMcpServer: "removeClaudeMcpServer(input)",
+      setMcpBearerToken: "setClaudeMcpBearerToken(input)",
+    }
+
+    for (const [mutation, delegate] of Object.entries(expectedDelegates)) {
+      const block = getProcedureBlock(route, mutation)
+      expect(block).toContain(delegate)
       expect(block).not.toContain("await writeClaudeConfig")
     }
+  })
+
+  test("desktop startup materializes Claude MCP servers through the service owner", () => {
+    const route = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
+    const service = readFileSync(
+      "src/main/lib/runtime-mcp-config/claude.ts",
+      "utf8",
+    )
+
+    expect(route).toContain("resolveClaudeMcpServersForSdk({")
+    expect(route).not.toContain('path.join(os.homedir(), ".claude.json")')
+    expect(service).toContain("export async function resolveClaudeMcpServersForSdk")
+    expect(service).toContain('path.join(os.homedir(), ".claude.json")')
+    expect(service).toContain("workingMcpServers")
   })
 })
 
