@@ -409,6 +409,89 @@ describe("plugin update review state", () => {
     })
   })
 
+  test("resolves scoped runtime-native plugin selections with specific-scope precedence", async () => {
+    const statePath = join(userDataDir, "plugin-review-state.json")
+    await reviewState.setRuntimeNativePluginEnabled(
+      { pluginReviewKey: "codex:openai-curated:figma", enabled: true },
+      statePath,
+      new Date("2026-06-02T00:03:00Z"),
+    )
+    await reviewState.setRuntimeNativePluginEnabled(
+      { pluginReviewKey: "codex:openai-curated:github", enabled: true },
+      statePath,
+      new Date("2026-06-02T00:04:00Z"),
+    )
+    await reviewState.setRuntimeNativePluginEnabled(
+      { pluginReviewKey: "codex:openai-curated:blocked", enabled: false },
+      statePath,
+      new Date("2026-06-02T00:05:00Z"),
+    )
+
+    await reviewState.setRuntimeNativePluginScopedSelection(
+      {
+        scope: { kind: "project", id: "project-1" },
+        mode: "custom",
+        enabledPluginReviewKeys: ["codex:openai-curated:github"],
+      },
+      statePath,
+      new Date("2026-06-02T00:06:00Z"),
+    )
+    await reviewState.setRuntimeNativePluginScopedSelection(
+      {
+        scope: { kind: "chat", id: "chat-1" },
+        mode: "inherit",
+      },
+      statePath,
+      new Date("2026-06-02T00:07:00Z"),
+    )
+    await reviewState.setRuntimeNativePluginScopedSelection(
+      {
+        scope: { kind: "subChat", id: "sub-1" },
+        mode: "custom",
+        enabledPluginReviewKeys: [
+          "codex:openai-curated:figma",
+          "codex:openai-curated:blocked",
+        ],
+      },
+      statePath,
+      new Date("2026-06-02T00:08:00Z"),
+    )
+
+    await expect(
+      reviewState.getEffectiveRuntimeNativePluginEnablementState(
+        { projectId: "project-1", chatId: "chat-1", subChatId: "sub-1" },
+        statePath,
+      ),
+    ).resolves.toMatchObject({
+      scope: "subChat",
+      scopeId: "sub-1",
+      mode: "custom",
+      enablement: {
+        "codex:openai-curated:figma": {
+          enabled: true,
+          updatedAt: "2026-06-02T00:08:00.000Z",
+        },
+      },
+    })
+
+    await expect(
+      reviewState.getEffectiveRuntimeNativePluginEnablementState(
+        { projectId: "project-1", chatId: "chat-1", subChatId: "sub-2" },
+        statePath,
+      ),
+    ).resolves.toMatchObject({
+      scope: "project",
+      scopeId: "project-1",
+      mode: "custom",
+      enablement: {
+        "codex:openai-curated:github": {
+          enabled: true,
+          updatedAt: "2026-06-02T00:06:00.000Z",
+        },
+      },
+    })
+  })
+
   test("persists plugin safe mode without deleting review records", async () => {
     const statePath = join(userDataDir, "plugin-review-state.json")
     const pluginKey = "codex:openai-curated:figma"

@@ -1,7 +1,7 @@
 ## 1. State And API
 
-- [ ] 1.1 Add scoped runtime-native plugin selection records to plugin review state.
-- [ ] 1.2 Add helpers to read, write, normalize, and resolve effective scoped
+- [x] 1.1 Add scoped runtime-native plugin selection records to plugin review state.
+- [x] 1.2 Add helpers to read, write, normalize, and resolve effective scoped
   selections with `subChatId > chatId > projectId > global` precedence.
 - [ ] 1.3 Add Plugins router procedures for reading and updating scoped selections.
 
@@ -23,7 +23,7 @@
 
 ## 4. Validation
 
-- [ ] 4.1 Add unit tests for scoped selection normalization and precedence.
+- [x] 4.1 Add unit tests for scoped selection normalization and precedence.
 - [ ] 4.2 Add Codex allowlist/staging tests for unselected plugins.
 - [ ] 4.3 Add Claude staging tests for scoped selected plugins.
 - [ ] 4.4 `bun run ts:check` passes.

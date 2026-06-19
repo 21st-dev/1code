@@ -65,6 +65,7 @@ interface PluginReviewState {
     string,
     RuntimeNativePluginEnablementRecord
   >
+  runtimeNativePluginScopedSelections?: RuntimeNativePluginScopedSelections
   storeCandidates?: Record<string, PluginStoreCandidateRecord>
   storeApprovals?: Record<string, PluginStoreCandidateApproval>
   installedStorePackages?: Record<string, PluginStoreInstalledPackageRecord>
@@ -90,6 +91,41 @@ export interface PluginDeveloperSourceRecord {
 export interface RuntimeNativePluginEnablementRecord {
   enabled: boolean
   updatedAt: string
+}
+
+export type RuntimeNativePluginSelectionScopeKind =
+  | "project"
+  | "chat"
+  | "subChat"
+
+export interface RuntimeNativePluginSelectionScope {
+  kind: RuntimeNativePluginSelectionScopeKind
+  id: string
+}
+
+export interface RuntimeNativePluginActivationScopeContext {
+  projectId?: string | null
+  chatId?: string | null
+  subChatId?: string | null
+}
+
+export interface RuntimeNativePluginScopedSelectionRecord {
+  mode: "inherit" | "custom"
+  enabledPluginReviewKeys: string[]
+  updatedAt: string
+}
+
+export interface RuntimeNativePluginScopedSelections {
+  projects: Record<string, RuntimeNativePluginScopedSelectionRecord>
+  chats: Record<string, RuntimeNativePluginScopedSelectionRecord>
+  subChats: Record<string, RuntimeNativePluginScopedSelectionRecord>
+}
+
+export interface RuntimeNativePluginEffectiveEnablement {
+  scope: "global" | RuntimeNativePluginSelectionScopeKind
+  scopeId?: string
+  mode: "global" | "inherit" | "custom"
+  enablement: Record<string, RuntimeNativePluginEnablementRecord>
 }
 
 export interface PluginReviewScanInput {
@@ -236,6 +272,10 @@ export async function readPluginReviewState(
       runtimeNativePluginEnablement: normalizeRuntimeNativePluginEnablement(
         state.runtimeNativePluginEnablement,
       ),
+      runtimeNativePluginScopedSelections:
+        normalizeRuntimeNativePluginScopedSelections(
+          state.runtimeNativePluginScopedSelections,
+        ),
       storeCandidates: normalizeStoreCandidates(state.storeCandidates),
       storeApprovals: normalizeStoreApprovals(state.storeApprovals),
       installedStorePackages: normalizeInstalledStorePackages(
@@ -315,6 +355,73 @@ export async function getRuntimeNativePluginEnablementState(
   return normalizeRuntimeNativePluginEnablement(
     state.runtimeNativePluginEnablement,
   )
+}
+
+export async function getRuntimeNativePluginScopedSelectionsState(
+  filePath = getPluginReviewStatePath(),
+): Promise<RuntimeNativePluginScopedSelections> {
+  const state = await readPluginReviewState(filePath)
+  return normalizeRuntimeNativePluginScopedSelections(
+    state.runtimeNativePluginScopedSelections,
+  )
+}
+
+export async function getEffectiveRuntimeNativePluginEnablementState(
+  context: RuntimeNativePluginActivationScopeContext = {},
+  filePath = getPluginReviewStatePath(),
+): Promise<RuntimeNativePluginEffectiveEnablement> {
+  const state = await readPluginReviewState(filePath)
+  return resolveRuntimeNativePluginEffectiveEnablement({
+    globalEnablement: normalizeRuntimeNativePluginEnablement(
+      state.runtimeNativePluginEnablement,
+    ),
+    scopedSelections: normalizeRuntimeNativePluginScopedSelections(
+      state.runtimeNativePluginScopedSelections,
+    ),
+    context,
+  })
+}
+
+export function resolveRuntimeNativePluginEffectiveEnablement(input: {
+  globalEnablement: Record<string, RuntimeNativePluginEnablementRecord>
+  scopedSelections?: RuntimeNativePluginScopedSelections
+  context?: RuntimeNativePluginActivationScopeContext
+}): RuntimeNativePluginEffectiveEnablement {
+  const globalEnablement = normalizeRuntimeNativePluginEnablement(
+    input.globalEnablement,
+  )
+  const scopedSelections = normalizeRuntimeNativePluginScopedSelections(
+    input.scopedSelections,
+  )
+  const resolvedScope = resolveMostSpecificRuntimeNativePluginScope(
+    scopedSelections,
+    input.context ?? {},
+  )
+  if (!resolvedScope || resolvedScope.record.mode !== "custom") {
+    return {
+      scope: resolvedScope?.scope.kind ?? "global",
+      scopeId: resolvedScope?.scope.id,
+      mode: resolvedScope?.record.mode ?? "global",
+      enablement: globalEnablement,
+    }
+  }
+
+  const enablement: Record<string, RuntimeNativePluginEnablementRecord> = {}
+  for (const pluginReviewKey of resolvedScope.record.enabledPluginReviewKeys) {
+    const globalRecord = globalEnablement[pluginReviewKey]
+    if (globalRecord?.enabled !== true) continue
+    enablement[pluginReviewKey] = {
+      enabled: true,
+      updatedAt: resolvedScope.record.updatedAt,
+    }
+  }
+
+  return {
+    scope: resolvedScope.scope.kind,
+    scopeId: resolvedScope.scope.id,
+    mode: "custom",
+    enablement,
+  }
 }
 
 export async function getPluginStoreStateSnapshot(
@@ -449,6 +556,34 @@ export async function setRuntimeNativePluginEnabled(
     ...enablement,
     [input.pluginReviewKey]: record,
   }
+  await writePluginReviewState(state, filePath)
+  return record
+}
+
+export async function setRuntimeNativePluginScopedSelection(
+  input: {
+    scope: RuntimeNativePluginSelectionScope
+    mode: RuntimeNativePluginScopedSelectionRecord["mode"]
+    enabledPluginReviewKeys?: string[]
+  },
+  filePath = getPluginReviewStatePath(),
+  now = new Date(),
+): Promise<RuntimeNativePluginScopedSelectionRecord> {
+  const state = await readPluginReviewState(filePath)
+  const scopedSelections = normalizeRuntimeNativePluginScopedSelections(
+    state.runtimeNativePluginScopedSelections,
+  )
+  const record: RuntimeNativePluginScopedSelectionRecord = {
+    mode: input.mode,
+    enabledPluginReviewKeys:
+      input.mode === "custom"
+        ? normalizePluginReviewKeyList(input.enabledPluginReviewKeys ?? [])
+        : [],
+    updatedAt: now.toISOString(),
+  }
+  const bucket = getScopedSelectionBucket(scopedSelections, input.scope.kind)
+  bucket[input.scope.id] = record
+  state.runtimeNativePluginScopedSelections = scopedSelections
   await writePluginReviewState(state, filePath)
   return record
 }
@@ -792,6 +927,97 @@ function normalizeRuntimeNativePluginEnablement(
     }
   }
   return normalized
+}
+
+function normalizeRuntimeNativePluginScopedSelections(
+  value: RuntimeNativePluginScopedSelections | undefined,
+): RuntimeNativePluginScopedSelections {
+  return {
+    projects: normalizeScopedSelectionBucket(value?.projects),
+    chats: normalizeScopedSelectionBucket(value?.chats),
+    subChats: normalizeScopedSelectionBucket(value?.subChats),
+  }
+}
+
+function normalizeScopedSelectionBucket(
+  value: Record<string, RuntimeNativePluginScopedSelectionRecord> | undefined,
+): Record<string, RuntimeNativePluginScopedSelectionRecord> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const normalized: Record<string, RuntimeNativePluginScopedSelectionRecord> = {}
+  for (const [scopeId, record] of Object.entries(value)) {
+    if (
+      typeof scopeId !== "string" ||
+      scopeId.trim().length === 0 ||
+      !record ||
+      typeof record !== "object" ||
+      (record.mode !== "inherit" && record.mode !== "custom") ||
+      typeof record.updatedAt !== "string"
+    ) {
+      continue
+    }
+    normalized[scopeId] = {
+      mode: record.mode,
+      enabledPluginReviewKeys:
+        record.mode === "custom"
+          ? normalizePluginReviewKeyList(record.enabledPluginReviewKeys)
+          : [],
+      updatedAt: record.updatedAt,
+    }
+  }
+  return normalized
+}
+
+function normalizePluginReviewKeyList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return Array.from(
+    new Set(
+      value
+        .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+        .filter((entry) => entry.length > 0),
+    ),
+  ).sort()
+}
+
+function resolveMostSpecificRuntimeNativePluginScope(
+  scopedSelections: RuntimeNativePluginScopedSelections,
+  context: RuntimeNativePluginActivationScopeContext,
+):
+  | {
+      scope: RuntimeNativePluginSelectionScope
+      record: RuntimeNativePluginScopedSelectionRecord
+    }
+  | null {
+  const candidates: Array<{
+    kind: RuntimeNativePluginSelectionScopeKind
+    id?: string | null
+  }> = [
+    { kind: "subChat", id: context.subChatId },
+    { kind: "chat", id: context.chatId },
+    { kind: "project", id: context.projectId },
+  ]
+  for (const candidate of candidates) {
+    const id = candidate.id?.trim()
+    if (!id) continue
+    const record = getScopedSelectionBucket(scopedSelections, candidate.kind)[id]
+    if (!record) continue
+    if (record.mode === "inherit") continue
+    return { scope: { kind: candidate.kind, id }, record }
+  }
+  return null
+}
+
+function getScopedSelectionBucket(
+  scopedSelections: RuntimeNativePluginScopedSelections,
+  kind: RuntimeNativePluginSelectionScopeKind,
+): Record<string, RuntimeNativePluginScopedSelectionRecord> {
+  switch (kind) {
+    case "project":
+      return scopedSelections.projects
+    case "chat":
+      return scopedSelections.chats
+    case "subChat":
+      return scopedSelections.subChats
+  }
 }
 
 function normalizeStoreCandidates(
