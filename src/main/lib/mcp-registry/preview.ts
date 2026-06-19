@@ -101,8 +101,17 @@ function buildWarnings(input: {
   if (input.provenance.provenance === "mutable") {
     warnings.push("mutable-provenance")
   }
+  if (input.provenance.provenance === "unknown") {
+    warnings.push("unknown-provenance")
+  }
   if (input.provenance.integrity === "missing") {
     warnings.push("integrity-missing")
+  }
+  if (input.provenance.reasons.includes("mutable-version-ref")) {
+    warnings.push("mutable-version-ref")
+  }
+  if (input.provenance.reasons.includes("unknown-version-ref")) {
+    warnings.push("unknown-version-ref")
   }
   if (input.entry.declaredRuntimeSupport.includes("unknown")) {
     warnings.push("declared-runtime-support-unknown")

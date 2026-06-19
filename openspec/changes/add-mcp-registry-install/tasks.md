@@ -109,9 +109,12 @@
   can represent installed/unverified, installed/needs-setup, failed-check, and
   verified-local; Codex is always reported as `codex-deferred` pending the Phase-0
   config-write and runtime-proof gates.
-- [ ] 2.6 Surface mutable/unpinned risk warnings for `latest`, branch names,
+- [x] 2.6 Surface mutable/unpinned risk warnings for `latest`, branch names,
   unresolved tags, missing integrity metadata, or unknown source pins without
   blocking the user's explicit install attempt.
+- 2026-06-20 registry previews now surface non-blocking warnings for mutable
+  provenance, unknown provenance, missing integrity, mutable version refs such
+  as `latest`, unknown version refs, and unknown declared runtime support.
 - [ ] 2.7 Classify required setup before install: required/optional env keys,
   header keys, bearer-token env references, OAuth/runtime auth, local dependencies,
   missing keys, and whether the target adapter can keep incomplete servers inactive.

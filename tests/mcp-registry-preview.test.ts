@@ -166,10 +166,42 @@ describe("MCP registry install preview", () => {
       warnings: [
         "mutable-provenance",
         "integrity-missing",
+        "mutable-version-ref",
         "declared-runtime-support-unknown",
       ],
     })
     expect(JSON.stringify(previews[0])).not.toContain("url-secret")
     expect(JSON.stringify(previews[0])).not.toContain("header-secret")
+  })
+
+  test("surfaces unknown provenance and unresolved ref warnings without blocking preview", () => {
+    const entry = normalizeOfficialMcpRegistryEntry({
+      server: {
+        name: "io.github.example/unresolved",
+        version: "release-channel",
+        packages: [
+          {
+            registryType: "npm",
+            identifier: "@example/unresolved",
+            runtimeHint: "npx",
+            transport: { type: "stdio" },
+          },
+        ],
+      },
+    })
+    const preview = buildMcpRegistryInstallPreviews({ entry })[0]
+
+    expect(preview).toMatchObject({
+      provenance: {
+        provenance: "unknown",
+        integrity: "missing",
+      },
+      warnings: [
+        "unknown-provenance",
+        "integrity-missing",
+        "unknown-version-ref",
+        "declared-runtime-support-unknown",
+      ],
+    })
   })
 })
