@@ -62,14 +62,26 @@
 
 ## 5. Validation
 
-- [ ] 5.1 `bun run ts:check`.
-- [ ] 5.2 `bun run lint` (changed-line biome) green.
-- [ ] 5.3 Run the architecture guard — `assertNoDeadSettingsState` must pass (proves
+- [x] 5.1 `bun run ts:check`.
+- [x] 5.2 `bun run lint` (changed-line biome) green.
+- [x] 5.3 Run the architecture guard — `assertNoDeadSettingsState` must pass (proves
   the Beta module is fully deleted and every remaining tab module is rendered).
-- [ ] 5.4 Run the full test suite.
-- [ ] 5.5 `openspec validate refactor-settings-ia --strict --no-interactive`.
+- [x] 5.4 Run the full test suite.
+- [x] 5.5 `openspec validate refactor-settings-ia --strict --no-interactive`.
 - [ ] 5.6 Manual smoke: each moved toggle is in its new tab and **keeps its prior
   value** (no pref reset); the Notifications group renders; the code-theme pickers
   work; the Debug tab is still unlockable via 5 clicks on the About version.
-- [ ] 5.7 Mark the §1 IA-smell items resolved in
+- [x] 5.7 Mark the §1 IA-smell items resolved in
   `docs/ideas/settings-reconciliation-ledger.md`.
+  - 2026-06-20 validation: `bun run ts:check`, `bun run lint`,
+    `bun run architecture:check`, `openspec validate refactor-settings-ia
+    --strict --no-interactive`, `openspec validate --all --strict
+    --no-interactive`, and `bun -e` Shiki theme-list verification passed.
+    Default parallel `bun run test` reproducibly fails in unrelated
+    provider/voice local HTTP server tests with `EADDRINUSE` on `listen(0,
+    "127.0.0.1")`; the same failing files pass individually, and the full suite
+    passes with `bun test tests --max-concurrency=1` (1065 pass / 0 fail).
+    Manual desktop smoke is still unchecked: this sandbox cannot launch Electron
+    (`node_modules/electron/dist/Electron.app/.../Electron -e ...` exits 134 /
+    SIGABRT), so Settings UI click validation must be run in a GUI-capable
+    local session.

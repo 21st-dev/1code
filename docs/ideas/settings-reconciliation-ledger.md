@@ -25,15 +25,15 @@
 ## 1. Information architecture (as shipped)
 
 Source: `src/renderer/features/settings/settings-sidebar.tsx` (the nav) +
-`settings-content.tsx` (the switcher). 12 visible tabs in 4 groups (+ hidden
-Debug):
+`settings-content.tsx` (the switcher). Current visible tabs are grouped as
+follows (+ hidden Debug, unlockable from About):
 
 | Group | Tabs |
 |---|---|
 | **General** | Preferences · Appearance · Keyboard · About |
 | **Workspace** | Projects · Models |
 | **Agent Capabilities** | Commands · Skills · Custom Agents · MCP · Plugins |
-| **Advanced** | Beta (+ Debug, unlocked via 5 clicks on Beta) |
+| **Advanced** | Debug only after unlock |
 
 ### IA smells (organization debt)
 
@@ -52,6 +52,14 @@ Debug):
 6. **Two "Custom Agents" tab implementations exist; one is dead** (see §4).
 
 ---
+
+> **Update — resolved by change `refactor-settings-ia`:** IA smells 1-5 above
+> were fixed. Local models / Ollama moved to **Models**, Rollback moved to
+> **Preferences**, Kanban moved to **Appearance** with the storage key preserved
+> as `preferences:beta-kanban-enabled`, Ctrl+Tab now has only the **Keyboard**
+> control, notifications are grouped in **Preferences**, code-block theme pickers
+> are surfaced in **Appearance**, and the Beta tab was deleted. The hidden Debug
+> unlock moved from the Beta nav item to 5 clicks on the About version number.
 
 > **Update — resolved by change `remove-dead-settings-state` (Phase 1):** the
 > 🔴 dead rows below were deleted — `useNativeFrameAtom`,
@@ -78,14 +86,14 @@ leftover · 🟢 live & ok · ⚪ app-state (not a user setting)
 | `activeProfileIdAtom` | (model profiles) | — | 0 | ✅ removed | Phase 1 — deleted with the dead profile chain |
 | `modelProfilesAtom` | `agents:model-profiles` | — | 0 ext. (only same-file derived) | ✅ removed | Phase 1 — deleted (fed only the dead `activeConfigAtom`) |
 | `enableTasksAtom` | (enable tasks) | — | 1 (`ipc-chat-transport.ts`) | ✅ removed | Phase 1 — inlined to `true`, atom deleted |
-| `vscodeCodeThemeLightAtom` | (code theme) | — | 1 (`use-code-theme.ts`) | 🟠 orphan | code theme has no settings entry — surface under Appearance or remove |
-| `vscodeCodeThemeDarkAtom` | (code theme) | — | 1 (`use-code-theme.ts`) | 🟠 orphan | same |
+| `vscodeCodeThemeLightAtom` | (code theme) | appearance | 1 (`use-code-theme.ts`) | 🟢 live | surfaced in Appearance by `refactor-settings-ia` |
+| `vscodeCodeThemeDarkAtom` | (code theme) | appearance | 1 (`use-code-theme.ts`) | 🟢 live | surfaced in Appearance by `refactor-settings-ia` |
 | `usageBudgetAtom` | (usage budget) | — | 1 (`usage-popover.tsx`) | 🟠 orphan | budget consumed by usage UI but no setting to set it |
-| `betaKanbanEnabledAtom` | `preferences:beta-kanban-enabled` | keyboard | 3 | 🟡 misplaced | "graduated from beta" yet beta-named & in Keyboard tab — rename + move (Appearance/Workspace) or retire flag |
-| `selectedOllamaModelAtom` | (offline) | beta | 5 | 🟡 misplaced | live, but local-models capability buried in Beta |
-| `autoOfflineModeAtom` | (offline) | beta | 1 | 🟡 misplaced | same — move to Models/Workspace |
-| `showOfflineModeFeaturesAtom` | (offline) | beta | 5 | 🟡 misplaced | gate for offline; reconsider home |
-| `ctrlTabTargetAtom` | (quick switch) | keyboard, **preferences** | 1 | 🟡 dup | exposed in two tabs — pick one |
+| `kanbanViewEnabledAtom` | `preferences:beta-kanban-enabled` | appearance | 3 | 🟢 live | renamed symbol; storage key preserved by `refactor-settings-ia` |
+| `selectedOllamaModelAtom` | (offline) | models | 5 | 🟢 live | local models section in Models |
+| `autoOfflineModeAtom` | (offline) | models | 1 | 🟢 live | local models section in Models |
+| `showOfflineModeFeaturesAtom` | (offline) | models | 5 | 🟢 live | local models section in Models |
+| `ctrlTabTargetAtom` | (quick switch) | keyboard | 1 | 🟢 live | duplicate Preferences control removed |
 | `selectedTeamIdAtom` | (team) | — | 3 (chat surface) | ✅ removed | Phase 2 — inert team scaffolding deleted |
 | `billingMethodAtom` | (billing) | — | 5 (onboarding) | ✅ renamed | Phase 2 → `onboardingProviderModeAtom` (misnamed, not payment; key/values kept) |
 | `customClaudeConfigAtom` | (legacy config) | — | 1 (`App.tsx`) | 🟢 kept | live legacy provider-config migration in `App.tsx` — not residue |
@@ -101,10 +109,10 @@ leftover · 🟢 live & ok · ⚪ app-state (not a user setting)
 | `preferredEditorAtom` | (editor) | preferences | 9 | 🟢 live | ok |
 | `autoAdvanceTargetAtom` | (auto advance) | preferences | 1 | 🟢 live | ok |
 | `appLanguagePreferenceAtom` | (language) | preferences | 1 (`i18n`) | 🟢 live | ok (in Preferences) |
-| `soundNotificationsEnabledAtom` | (notifications) | preferences | 1 | 🟢 live | candidate for a Notifications group |
-| `desktopNotificationsEnabledAtom` | (notifications) | preferences | 1 | 🟢 live | same |
-| `notifyWhenFocusedAtom` | (notifications) | preferences | 1 | 🟢 live | same |
-| `historyEnabledAtom` | (rollback) | beta | 1 | 🟢 live | "Rollback" — consider graduating out of Beta |
+| `soundNotificationsEnabledAtom` | (notifications) | preferences | 1 | 🟢 live | grouped under Notifications |
+| `desktopNotificationsEnabledAtom` | (notifications) | preferences | 1 | 🟢 live | grouped under Notifications |
+| `notifyWhenFocusedAtom` | (notifications) | preferences | 1 | 🟢 live | grouped under Notifications |
+| `historyEnabledAtom` | (rollback) | preferences | 1 | 🟢 live | moved out of Beta |
 | `selectedFullThemeIdAtom` | (theme) | appearance | 1 | 🟢 live | ok |
 | `systemLightThemeIdAtom` | (theme) | appearance | 1 | 🟢 live | ok |
 | `systemDarkThemeIdAtom` | (theme) | appearance | 1 | 🟢 live | ok |
@@ -117,9 +125,10 @@ leftover · 🟢 live & ok · ⚪ app-state (not a user setting)
 **Tally:** ✅ **7 removed by Phase 1** (`remove-dead-settings-state`) — the 4 dead
 atoms + the 2-atom dead profile chain + the `enableTasks` orphan (plus the
 non-persisted `networkOnlineAtom` and the `ModelProfile`/`getOfflineProfile`/
-`OFFLINE_PROFILE` helpers, not table rows). **Remaining:** ~3 orphan (code-theme
-×2, usage-budget — these have live readers, so they need a UI decision, not
-deletion) · ~5 misplaced/dup · rest live/app-state — out of ~44, in *one* file.
+`OFFLINE_PROFILE` helpers, not table rows). **Remaining after
+`refactor-settings-ia`:** 1 orphan (`usageBudgetAtom` — it has a live reader, so it
+needs a UI decision, not deletion) · no standing IA misplaced/duplicate rows from
+§1 · rest live/app-state — out of ~44, in *one* file.
 The ~5 fork-leftover rows were resolved by **Phase 2** (`refactor-fork-saas-residue`,
 §3): team scaffolding removed, `billingMethod` renamed, helper-API/legacy-config
 kept. Per-tab internal state (MCP servers, skills, plugins, etc.) is not counted
