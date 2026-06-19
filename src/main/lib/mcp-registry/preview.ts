@@ -9,6 +9,11 @@ import {
   fingerprintMcpRegistryInstallTarget,
   type McpRegistryProvenanceClassification,
 } from "./fingerprints"
+import {
+  type McpRegistryRuntimeInstallability,
+  type McpRegistryRuntimeLocalState,
+  previewDefaultMcpRegistryRuntimeInstallability,
+} from "./installability"
 import type {
   McpRegistryEntry,
   McpRegistryInstallTarget,
@@ -65,6 +70,7 @@ export type McpRegistryInstallPreview = {
   provenance: McpRegistryProvenanceClassification
   entryFingerprint: string
   configFingerprint: string
+  runtimeInstallability: McpRegistryRuntimeInstallability[]
   wouldWritePaths: string[]
   warnings: string[]
 }
@@ -112,6 +118,7 @@ function sanitizeCommand(value: string | undefined): string | undefined {
 export function buildMcpRegistryInstallPreview(input: {
   entry: McpRegistryEntry
   target: McpRegistryInstallTarget
+  localStates?: McpRegistryRuntimeLocalState[]
 }): McpRegistryInstallPreview {
   const provenance = classifyMcpRegistryProvenance(input.entry)
   const command = sanitizeCommand(input.target.commandTemplate)
@@ -150,15 +157,25 @@ export function buildMcpRegistryInstallPreview(input: {
     provenance,
     entryFingerprint: fingerprintMcpRegistryEntry(input.entry),
     configFingerprint: fingerprintMcpRegistryInstallTarget(input),
+    runtimeInstallability: previewDefaultMcpRegistryRuntimeInstallability({
+      entry: input.entry,
+      target: input.target,
+      localStates: input.localStates,
+    }),
     wouldWritePaths: [],
     warnings: buildWarnings({ entry: input.entry, provenance }),
   }
 }
 
-export function buildMcpRegistryInstallPreviews(
-  entry: McpRegistryEntry,
-): McpRegistryInstallPreview[] {
-  return entry.installTargets.map((target) =>
-    buildMcpRegistryInstallPreview({ entry, target }),
+export function buildMcpRegistryInstallPreviews(input: {
+  entry: McpRegistryEntry
+  localStates?: McpRegistryRuntimeLocalState[]
+}): McpRegistryInstallPreview[] {
+  return input.entry.installTargets.map((target) =>
+    buildMcpRegistryInstallPreview({
+      entry: input.entry,
+      target,
+      localStates: input.localStates,
+    }),
   )
 }

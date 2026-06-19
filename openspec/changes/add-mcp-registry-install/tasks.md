@@ -100,9 +100,15 @@
   and command-arg redaction, carries entry/config fingerprints and provenance,
   redacts setup values, does not add import-preview apply/enable semantics, and
   keeps raw remote URL query values out of preview target IDs.
-- [ ] 2.5 Preview runtime installability from adapters, distinguishing declared
+- [x] 2.5 Preview runtime installability from adapters, distinguishing declared
   compatibility, installable config, installed/unverified, needs setup, failed
   check, verified-local, and Codex deferred states.
+- 2026-06-20 implemented `src/main/lib/mcp-registry/installability.ts` and added
+  `runtimeInstallability` to registry install previews. Claude installability is
+  derived from materializable stdio/http config and required setup; local states
+  can represent installed/unverified, installed/needs-setup, failed-check, and
+  verified-local; Codex is always reported as `codex-deferred` pending the Phase-0
+  config-write and runtime-proof gates.
 - [ ] 2.6 Surface mutable/unpinned risk warnings for `latest`, branch names,
   unresolved tags, missing integrity metadata, or unknown source pins without
   blocking the user's explicit install attempt.

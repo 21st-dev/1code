@@ -78,6 +78,28 @@ describe("MCP registry install preview", () => {
       wouldWritePaths: [],
       warnings: [],
     })
+    expect(preview.runtimeInstallability).toEqual([
+      {
+        runtime: "claude-code",
+        status: "needs-setup",
+        declaredCompatibility: "declared",
+        installableConfig: true,
+        requiredSetupKeys: ["env:SECRET_TOOLS_TOKEN"],
+        reasons: ["required-setup-missing"],
+      },
+      {
+        runtime: "codex",
+        status: "codex-deferred",
+        declaredCompatibility: "not-declared",
+        installableConfig: false,
+        requiredSetupKeys: ["env:SECRET_TOOLS_TOKEN"],
+        reasons: [
+          "codex-registry-support-deferred",
+          "codex-config-writes-do-not-cover-registry-fields",
+          "codex-runtime-proof-missing",
+        ],
+      },
+    ])
     expect(preview.args).toEqual([
       { value: "-y", redacted: false },
       { value: "@example/secret-tools", redacted: false },
@@ -112,7 +134,7 @@ describe("MCP registry install preview", () => {
         ],
       },
     })
-    const previews = buildMcpRegistryInstallPreviews(entry)
+    const previews = buildMcpRegistryInstallPreviews({ entry })
 
     expect(previews).toHaveLength(1)
     expect(previews[0]).toMatchObject({
