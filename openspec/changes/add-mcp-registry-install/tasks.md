@@ -16,18 +16,20 @@
   `openspec/changes/archive/2026-06-19-add-runtime-native-plugin-execution/`, and
   current `openspec/specs/runtime-plugins/spec.md` includes
   "Plugin MCP ownership is clear."
-- [ ] 0.3 Record the official MCP registry provider adapter used for this change,
+- [x] 0.3 Record the official MCP registry provider adapter used for this change,
   including its list/search/detail API shape and available entry fields.
-- 2026-06-20 provider discovery started in `registry-provider-notes.md`: official
-  registry API freeze signal, live list response shape, observed entry fields,
-  remote/package/setup fields, and unresolved search/detail/schema gaps are
-  recorded. Keep this unchecked until search/detail API shape is recorded.
-- [ ] 0.4 If the official MCP registry cannot supply the fields needed for
+- 2026-06-20 provider discovery completed in `registry-provider-notes.md` using
+  official API docs, OpenAPI, source handlers/types, router registration, server
+  schema, and server JSON docs. The adapter target is the documented `v0.1`
+  read API; the official router also registers `v0` and the live web reader
+  successfully opened `/v0/servers`.
+- [x] 0.4 If the official MCP registry cannot supply the fields needed for
   normalization, provenance, setup, and preview, stop and update the provider
   decision before implementation continues.
-- 2026-06-20 status: not failed, but not complete. Live list fields appear
-  promising for browse/provenance/setup preview, but search/detail/schema coverage
-  is still unverified; do not start 2.x implementation until 0.3/0.4 are resolved.
+- 2026-06-20 status: no provider decision change required. Official docs/schema
+  provide list/search/detail, repository/package/remote/setup/provenance fields,
+  package hash support, and registry/publisher metadata. Runtime adapter
+  installability and verification remain separate Phase-0 proof gates.
 
 ## 1. Phase-0 Proof Gates
 
