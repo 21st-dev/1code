@@ -62,6 +62,8 @@ export interface RuntimeNativeActivationState {
   enableCandidate: RuntimeNativeActivationPolicy
 }
 
+// Single runtime-native plugin execution switch. Keep Codex false until
+// add-codex-app-server-plugin-run-control proves app-server per-run filtering.
 const PROVEN_RUNTIME_NATIVE_PLUGIN_LOADING: Record<PluginRuntime, boolean> = {
   claude: true,
   codex: false,

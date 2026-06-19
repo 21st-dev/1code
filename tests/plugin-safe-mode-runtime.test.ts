@@ -79,6 +79,18 @@ describe("plugin safe mode runtime source guards", () => {
     join(process.cwd(), "src/main/lib/plugins/runtime-gates.ts"),
     "utf8",
   )
+  const runtimeNativeActivationSource = readFileSync(
+    join(process.cwd(), "src/main/lib/plugins/runtime-native-activation.ts"),
+    "utf8",
+  )
+  const codexPluginConfigSource = readFileSync(
+    join(process.cwd(), "src/main/lib/codex/app-server-plugin-config.ts"),
+    "utf8",
+  )
+  const codexPluginAllowlistSource = readFileSync(
+    join(process.cwd(), "src/main/lib/codex/app-server-plugin-allowlist.ts"),
+    "utf8",
+  )
 
   test("discovers plugin MCP servers with review gates derived in main", () => {
     expect(pluginIndexSource).toContain("recordPluginReviewScans")
@@ -144,6 +156,29 @@ describe("plugin safe mode runtime source guards", () => {
     expect(pluginsRouterSource).not.toContain("areScannedPluginMcpServersApproved")
     expect(pluginsRouterSource).not.toContain("supportsCodexNativeLoading")
     expect(runtimeGatesSource).not.toContain("runtimeSupportsNativeLoading: true")
+  })
+
+  test("keeps Codex native plugin execution deferred behind the single proof switch", () => {
+    expect(runtimeNativeActivationSource).toContain(
+      "PROVEN_RUNTIME_NATIVE_PLUGIN_LOADING",
+    )
+    expect(runtimeNativeActivationSource).toContain("claude: true")
+    expect(runtimeNativeActivationSource).toContain("codex: false")
+    expect(runtimeNativeActivationSource).toContain(
+      "add-codex-app-server-plugin-run-control",
+    )
+    expect(codexPluginConfigSource).toContain(
+      "runtimeSupportsNativeLoading: false",
+    )
+    expect(codexPluginConfigSource).toContain(
+      "runtimeSupportsPerRunPluginControl: false",
+    )
+    expect(codexPluginAllowlistSource).toContain(
+      "resolveCodexAppServerPluginConfigOverrides",
+    )
+    expect(codexPluginAllowlistSource).toContain(
+      "buildCodexAppServerResolvedPluginConfigOverrides",
+    )
   })
 
   test("gates plugin commands, skills, and agents before runtime discovery", () => {
