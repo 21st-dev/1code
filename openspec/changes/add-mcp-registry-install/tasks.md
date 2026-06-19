@@ -254,9 +254,14 @@
   Config Claude adapter, records `ready-to-verify` or `failed-check`, and does
   not invoke MCP tools or upgrade to Verified. Codex Check remains deferred
   instead of offering fake support.
-- [ ] 4.6 Allow explicit Check to call a tool only when Locus has classified that tool
+- [x] 4.6 Allow explicit Check to call a tool only when Locus has classified that tool
   as safe and side-effect-free; otherwise require a user-initiated real run for
   tool-call proof.
+- 2026-06-20 conservative implementation: no MCP registry tools are currently
+  classified as safe side-effect-free tools, so explicit Check remains
+  connect/list-only and never performs a tool call. Tool-call proof is therefore
+  still reserved for user-initiated real runs until a Locus-owned safe-tool
+  classifier exists.
 - [ ] 4.7 Record failure reasons such as missing env, missing auth, unsupported adapter
   field, process launch failure, connection failure, tool-list failure, tool-call
   failure, and unavailable observability.
@@ -278,7 +283,10 @@
   Locus-managed Claude SDK runs exclude disabled and registry needs-setup servers.
 - [ ] 5.4 Tests proving browse/preview/install do not execute registry server
   commands, package managers, Docker, MCP server processes, or MCP tools.
-- [ ] 5.5 Tests proving explicit Check does not call unsafe/unclassified tools.
+- [x] 5.5 Tests proving explicit Check does not call unsafe/unclassified tools.
+- 2026-06-20 source guard covers the explicit registry Check implementation:
+  it lists tools, records `ready-to-verify`, does not contain MCP tool-call
+  invocation paths, and does not write `verified-local`.
 - [ ] 5.6 Manual proof: official-registry MCP server installed to Claude; real Claude
   run discovers, connects, lists tools, and calls a tool.
 - [ ] 5.7 Manual proof for Codex app-server only if proof gates pass; otherwise record

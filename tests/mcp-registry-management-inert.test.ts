@@ -27,6 +27,10 @@ const mcpTabSource = readFileSync(
   ),
   "utf8",
 )
+const claudeRuntimeMcpSource = readFileSync(
+  join(process.cwd(), "src/main/lib/runtime-mcp-config/claude.ts"),
+  "utf8",
+)
 
 describe("MCP registry management-time inert boundary", () => {
   test("does not import process execution or route-local MCP helpers", () => {
@@ -89,5 +93,23 @@ describe("MCP registry management-time inert boundary", () => {
     expect(toggleableBlock).toContain(
       '!item.groupName.toLowerCase().includes("plugin")',
     )
+  })
+
+  test("keeps explicit registry check connect-list only without unclassified tool calls", () => {
+    const checkBlock = claudeRuntimeMcpSource.slice(
+      claudeRuntimeMcpSource.indexOf(
+        "export async function checkClaudeMcpRegistryServer",
+      ),
+      claudeRuntimeMcpSource.indexOf(
+        "export async function getPendingPluginMcpApprovals",
+      ),
+    )
+
+    expect(checkBlock).toContain("fetchToolsForServer")
+    expect(checkBlock).toContain('status: "ready-to-verify"')
+    expect(checkBlock).not.toMatch(/\bcallTool\b/)
+    expect(checkBlock).not.toMatch(/\btools\/call\b/)
+    expect(checkBlock).not.toMatch(/\binvoke[A-Za-z]*Tool\b/)
+    expect(checkBlock).not.toContain('status: "verified-local"')
   })
 })
