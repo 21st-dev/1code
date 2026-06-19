@@ -1689,7 +1689,7 @@ export const codexRouter = router({
                   appManagedApiKey: codexProviderProfile
                     ? null
                     : appManagedCodexApiKey,
-                  pluginConfigOverrides: appServerPluginConfig?.config,
+                  pluginConfig: appServerPluginConfig,
                   controlledEditEnabled:
                     process.env
                       .LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR === "1",

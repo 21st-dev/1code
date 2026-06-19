@@ -62,11 +62,11 @@ export interface RuntimeNativeActivationState {
   enableCandidate: RuntimeNativeActivationPolicy
 }
 
-// Single runtime-native plugin execution switch. Keep Codex false until
-// add-codex-app-server-plugin-run-control proves app-server per-run filtering.
+// Single runtime-native plugin execution switch. Codex is only safe because
+// app-server runs through an isolated CODEX_HOME staged per Locus run.
 const PROVEN_RUNTIME_NATIVE_PLUGIN_LOADING: Record<PluginRuntime, boolean> = {
   claude: true,
-  codex: false,
+  codex: true,
 }
 
 export function runtimeSupportsProvenNativePluginLoading(input: {

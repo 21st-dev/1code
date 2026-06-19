@@ -207,6 +207,7 @@ describe("Codex app-server plugin proof helpers", () => {
       supportsSkillInventory: true,
       supportsHookInventory: true,
       exposesGenericThreadSettingsUpdate: true,
+      supportsIsolatedCodexHomeControl: false,
       hasTypedPerRunPluginAllowlist: false,
       typedPerRunPluginControlMethods: [],
       observedPluginMethods: [
@@ -221,6 +222,76 @@ describe("Codex app-server plugin proof helpers", () => {
         "no typed per-run plugin allowlist method was observed",
       ],
     })
+  })
+
+  test("treats isolated CODEX_HOME as the proven Codex app-server control primitive", () => {
+    const assessment = assessCodexAppServerPluginProtocol({
+      acceptedClientMethods: [
+        "initialize",
+        "thread/start",
+        "skills/list",
+        "plugin/installed",
+      ],
+      observations: [
+        summarizeCodexAppServerPluginProtocolResponse(
+          "plugin/installed",
+          {
+            result: {
+              marketplaces: [
+                {
+                  name: "locus-proof",
+                  plugins: [
+                    {
+                      pluginId: "proof-plugin@locus-proof",
+                      name: "proof-plugin",
+                      marketplaceName: "locus-proof",
+                      installed: true,
+                      enabled: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            targetPluginId: "proof-plugin@locus-proof",
+            targetSkillName: "proof-plugin:proof-skill",
+          },
+        ),
+        summarizeCodexAppServerPluginProtocolResponse(
+          "skills/list",
+          {
+            result: {
+              data: [
+                {
+                  skills: [{ name: "proof-plugin:proof-skill" }],
+                },
+              ],
+            },
+          },
+          {
+            targetPluginId: "proof-plugin@locus-proof",
+            targetSkillName: "proof-plugin:proof-skill",
+          },
+        ),
+      ],
+      isolatedHome: {
+        codexHome: "/tmp/locus-codex-plugin-proof",
+        usedTemporaryCodexHome: true,
+        targetPluginId: "proof-plugin@locus-proof",
+        targetPluginPresent: true,
+        targetSkillName: "proof-plugin:proof-skill",
+        targetSkillPresent: true,
+        sampledGlobalPluginNames: ["github@openai-curated"],
+        leakedGlobalPluginNames: [],
+      },
+    })
+
+    expect(assessment.supportsIsolatedCodexHomeControl).toBe(true)
+    expect(assessment.hasTypedPerRunPluginAllowlist).toBe(false)
+    expect(assessment.reasons).toContain(
+      "isolated CODEX_HOME proved staged plugin visibility without sampled global plugin leakage",
+    )
   })
 
   test("flags future typed per-run plugin control methods if app-server adds one", () => {

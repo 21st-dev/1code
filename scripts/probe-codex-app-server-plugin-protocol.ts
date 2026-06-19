@@ -3,12 +3,20 @@ import {
   spawn,
   spawnSync,
 } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import path from "node:path"
 import { createInterface } from "node:readline"
 import {
   assessCodexAppServerPluginProtocol,
+  type CodexAppServerIsolatedHomeProofObservation,
   type CodexAppServerPluginProtocolObservation,
   type CodexAppServerProtocolLikeResponse,
   extractAcceptedCodexAppServerClientMethods,
@@ -233,6 +241,65 @@ function observationFor(
   return observation
 }
 
+function collectCodexPluginIds(codexHome: string): string[] {
+  const cacheRoot = path.join(codexHome, "plugins", "cache")
+  if (!existsSync(cacheRoot)) return []
+
+  const pluginIds: string[] = []
+  for (const marketplace of readdirSync(cacheRoot, { withFileTypes: true })) {
+    if (!marketplace.isDirectory() || marketplace.name.startsWith(".")) continue
+    const marketplaceRoot = path.join(cacheRoot, marketplace.name)
+    for (const plugin of readdirSync(marketplaceRoot, { withFileTypes: true })) {
+      if (!plugin.isDirectory() || plugin.name.startsWith(".")) continue
+      pluginIds.push(`${plugin.name}@${marketplace.name}`)
+    }
+  }
+
+  return [...new Set(pluginIds)].sort()
+}
+
+function buildIsolatedHomeProof(input: {
+  options: ProbeOptions
+  observations: CodexAppServerPluginProtocolObservation[]
+}): CodexAppServerIsolatedHomeProofObservation {
+  const observedNames = new Set(
+    input.observations.flatMap((observation) => observation.sampleNames),
+  )
+  const sampledGlobalPluginNames = collectCodexPluginIds(
+    path.join(homedir(), ".codex"),
+  )
+    .filter((pluginId) => pluginId !== input.options.targetPluginId)
+    .slice(0, 20)
+  const leakedGlobalPluginNames = sampledGlobalPluginNames.filter((pluginId) => {
+    const pluginName = pluginId.split("@")[0]
+    return [...observedNames].some(
+      (observedName) =>
+        observedName === pluginId ||
+        observedName === pluginName ||
+        observedName.startsWith(`${pluginName}:`),
+    )
+  })
+
+  return {
+    codexHome: input.options.codexHome,
+    usedTemporaryCodexHome: Boolean(input.options.tempCodexHome),
+    ...(input.options.targetPluginId
+      ? { targetPluginId: input.options.targetPluginId }
+      : {}),
+    targetPluginPresent: input.observations.some(
+      (observation) => observation.targetPluginPresent === true,
+    ),
+    ...(input.options.targetSkillName
+      ? { targetSkillName: input.options.targetSkillName }
+      : {}),
+    targetSkillPresent: input.observations.some(
+      (observation) => observation.targetSkillPresent === true,
+    ),
+    sampledGlobalPluginNames,
+    leakedGlobalPluginNames,
+  }
+}
+
 function runCodexPluginCommand(input: {
   options: Pick<ProbeOptions, "codexPath" | "codexHome">
   args: string[]
@@ -441,11 +508,13 @@ async function main(): Promise<void> {
       })
     }
 
+    const isolatedHome = buildIsolatedHomeProof({ options, observations })
     const evidence = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       codexPath: options.codexPath,
       codexHome: options.codexHome,
+      isolatedHome,
       ...(options.seedLocalTestPlugin
         ? {
             seededLocalTestPlugin: {
@@ -461,6 +530,7 @@ async function main(): Promise<void> {
       assessment: assessCodexAppServerPluginProtocol({
         observations,
         acceptedClientMethods,
+        isolatedHome,
       }),
       notifications: client.getNotifications(),
     }

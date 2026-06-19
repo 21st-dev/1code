@@ -25,10 +25,22 @@ export interface CodexAppServerPluginProtocolAssessment {
   supportsSkillInventory: boolean
   supportsHookInventory: boolean
   exposesGenericThreadSettingsUpdate: boolean
+  supportsIsolatedCodexHomeControl: boolean
   hasTypedPerRunPluginAllowlist: boolean
   typedPerRunPluginControlMethods: string[]
   observedPluginMethods: string[]
   reasons: string[]
+}
+
+export interface CodexAppServerIsolatedHomeProofObservation {
+  codexHome: string
+  usedTemporaryCodexHome: boolean
+  targetPluginId?: string
+  targetPluginPresent?: boolean
+  targetSkillName?: string
+  targetSkillPresent?: boolean
+  sampledGlobalPluginNames: string[]
+  leakedGlobalPluginNames: string[]
 }
 
 export interface CodexAppServerThreadStartObservation {
@@ -192,6 +204,7 @@ export function extractAcceptedCodexAppServerClientMethods(
 export function assessCodexAppServerPluginProtocol(input: {
   observations: CodexAppServerPluginProtocolObservation[]
   acceptedClientMethods?: string[]
+  isolatedHome?: CodexAppServerIsolatedHomeProofObservation
 }): CodexAppServerPluginProtocolAssessment {
   const acceptedClientMethods = input.acceptedClientMethods ?? []
   const observedPluginMethods = uniqueStrings(
@@ -228,6 +241,9 @@ export function assessCodexAppServerPluginProtocol(input: {
   )
   const hasTypedPerRunPluginAllowlist =
     typedPerRunPluginControlMethods.length > 0
+  const supportsIsolatedCodexHomeControl = isIsolatedCodexHomeControlProven(
+    input.isolatedHome,
+  )
 
   const reasons: string[] = []
   if (supportsPluginInventory) {
@@ -243,17 +259,39 @@ export function assessCodexAppServerPluginProtocol(input: {
   if (!hasTypedPerRunPluginAllowlist) {
     reasons.push("no typed per-run plugin allowlist method was observed")
   }
+  if (supportsIsolatedCodexHomeControl) {
+    reasons.push(
+      "isolated CODEX_HOME proved staged plugin visibility without sampled global plugin leakage",
+    )
+  } else if (input.isolatedHome) {
+    reasons.push("isolated CODEX_HOME proof was incomplete")
+  }
 
   return {
     supportsPluginInventory,
     supportsSkillInventory,
     supportsHookInventory,
     exposesGenericThreadSettingsUpdate,
+    supportsIsolatedCodexHomeControl,
     hasTypedPerRunPluginAllowlist,
     typedPerRunPluginControlMethods,
     observedPluginMethods,
     reasons,
   }
+}
+
+function isIsolatedCodexHomeControlProven(
+  observation: CodexAppServerIsolatedHomeProofObservation | undefined,
+): boolean {
+  if (!observation?.usedTemporaryCodexHome) return false
+  if (observation.leakedGlobalPluginNames.length > 0) return false
+  if (observation.targetPluginId && observation.targetPluginPresent !== true) {
+    return false
+  }
+  if (observation.targetSkillName && observation.targetSkillPresent !== true) {
+    return false
+  }
+  return true
 }
 
 function summarizePluginInventory(

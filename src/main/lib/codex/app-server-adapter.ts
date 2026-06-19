@@ -36,6 +36,11 @@ import {
 } from "./app-server-provider-binding"
 import { assertNoCodexAppServerRendererSecrets } from "./app-server-provider-binding"
 import {
+  prepareCodexAppServerIsolatedPluginHome,
+  type CodexAppServerPluginHomeResult,
+} from "./app-server-plugin-home"
+import type { CodexAppServerResolvedPluginConfigOverrides } from "./app-server-plugin-config"
+import {
   dispatchCodexAppServerServerRequest,
   type CodexAppServerServerRequest,
 } from "./app-server-safety"
@@ -65,7 +70,13 @@ export type CreateCodexAppServerAdapterInput = {
   enabled?: boolean
   experimentalApi?: boolean
   configOverrides?: Record<string, unknown>
-  pluginConfigOverrides?: Record<string, boolean>
+  pluginConfig?: CodexAppServerResolvedPluginConfigOverrides
+  pluginConfigOverrides?: CodexAppServerPluginHomeResult["pluginConfigOverrides"]
+  preparePluginHome?: (input: {
+    request: DesktopRunRequest
+    runtimeEnv: Record<string, string>
+    pluginConfig: CodexAppServerResolvedPluginConfigOverrides
+  }) => Promise<CodexAppServerPluginHomeResult>
   createTransport?: (input: {
     request: DesktopRunRequest
     providerBinding: CodexAppServerProviderBinding
@@ -297,7 +308,9 @@ export function createCodexAppServerAdapter({
   enabled = false,
   experimentalApi = false,
   configOverrides,
+  pluginConfig,
   pluginConfigOverrides,
+  preparePluginHome,
   createTransport,
   providerGatewayToken = null,
   appManagedApiKey = null,
@@ -334,17 +347,45 @@ export function createCodexAppServerAdapter({
         providerGatewayToken,
         appManagedApiKey,
       })
+      const resolvedPluginConfig = pluginConfig ?? {
+        config: pluginConfigOverrides ?? {},
+        entries: [],
+      }
+      const pluginHome = await (preparePluginHome
+        ? preparePluginHome({
+            request,
+            runtimeEnv: providerBinding.runtimeEnv,
+            pluginConfig: resolvedPluginConfig,
+          })
+        : createTransport
+          ? Promise.resolve({
+              codexHome: providerBinding.runtimeEnv.CODEX_HOME ?? "",
+              runtimeEnv: providerBinding.runtimeEnv,
+              pluginConfigOverrides: resolvedPluginConfig.config,
+              stagedEntries: [],
+              blockedEntries: [],
+            } satisfies CodexAppServerPluginHomeResult)
+        : prepareCodexAppServerIsolatedPluginHome({
+            chatId: request.context.chatId,
+            subChatId: request.context.subChatId,
+            runtimeEnv: providerBinding.runtimeEnv,
+            pluginConfig: resolvedPluginConfig,
+          }))
+      const appServerProviderBinding: CodexAppServerProviderBinding = {
+        ...providerBinding,
+        runtimeEnv: pluginHome.runtimeEnv,
+      }
       assertCodexAppServerShellSnapshotsScrubbed(
         scrubCodexAppServerShellSnapshots({
-          runtimeEnv: providerBinding.runtimeEnv,
+          runtimeEnv: appServerProviderBinding.runtimeEnv,
         }),
         "pre-start",
       )
       const transport =
-        createTransport?.({ request, providerBinding }) ??
+        createTransport?.({ request, providerBinding: appServerProviderBinding }) ??
         createCodexAppServerStdioTransport({
           cwd: request.context.cwd,
-          env: providerBinding.runtimeEnv,
+          env: appServerProviderBinding.runtimeEnv,
         })
       const runtimeMapper = createCodexAppServerRuntimeEventMapper()
       const { threadSandbox, turnSandbox } = sandboxForRequest(request)
@@ -603,7 +644,7 @@ export function createCodexAppServerAdapter({
         const appServerConfig = {
           ...(providerBinding.client.config ?? {}),
           ...(configOverrides ?? {}),
-          ...(pluginConfigOverrides ?? {}),
+          ...pluginHome.pluginConfigOverrides,
         }
 
         const resumeThreadId = request.session.resumeSessionId ?? null
@@ -612,7 +653,7 @@ export function createCodexAppServerAdapter({
               "thread/resume",
               buildThreadResumeParams({
                 request,
-                providerBinding,
+                providerBinding: appServerProviderBinding,
                 permission,
                 threadSandbox,
                 config: appServerConfig,
@@ -623,7 +664,7 @@ export function createCodexAppServerAdapter({
               "thread/start",
               buildThreadStartParams({
                 request,
-                providerBinding,
+                providerBinding: appServerProviderBinding,
                 permission,
                 threadSandbox,
                 config: appServerConfig,
@@ -733,7 +774,7 @@ export function createCodexAppServerAdapter({
         try {
           assertCodexAppServerShellSnapshotsScrubbed(
             scrubCodexAppServerShellSnapshots({
-              runtimeEnv: providerBinding.runtimeEnv,
+              runtimeEnv: appServerProviderBinding.runtimeEnv,
             }),
             "post-run",
           )

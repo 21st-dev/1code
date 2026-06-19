@@ -110,7 +110,7 @@ describe("runtime native plugin activation", () => {
     })
   })
 
-  test("allows runtime-derived Claude activation after proof while Codex stays blocked", () => {
+  test("allows runtime-derived Claude and Codex activation after native proof", () => {
     const identity = buildRuntimeNativeActivationIdentity({
       reviewDocument: reviewDocument(),
       reviewFingerprint: "manifest-a",
@@ -158,11 +158,7 @@ describe("runtime native plugin activation", () => {
         mcpApprovalIdentifiers: {},
         approvedPluginMcpServers: [],
       }).current.reasons,
-    ).toEqual([
-      "runtime-native-unsupported",
-      "per-run-plugin-control-missing",
-      "mcp-approval-required",
-    ])
+    ).toEqual(["mcp-approval-required"])
   })
 
   test("reports bounded reasons for ordinary blocked states", () => {

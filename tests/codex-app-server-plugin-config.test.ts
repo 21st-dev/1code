@@ -33,7 +33,7 @@ describe("Codex app-server plugin config", () => {
     ).toBeUndefined()
   })
 
-  test("keeps resolved app-server plugin overrides disabled until native control proof exists", () => {
+  test("enables reviewed Codex plugins after isolated app-server home proof exists", () => {
     const reviewDocument = buildPluginManifestReviewDocument({
       runtime: "codex",
       marketplace: "openai-curated",
@@ -63,6 +63,8 @@ describe("Codex app-server plugin config", () => {
             runtime: "codex",
             marketplace: "openai-curated",
             source: "openai-curated:figma@7118aaa3",
+            sourceKind: "cache",
+            path: "/plugins/openai-curated/figma/7118aaa3",
           },
           pluginEnabled: true,
           safeModeEnabled: false,
@@ -76,17 +78,20 @@ describe("Codex app-server plugin config", () => {
     })
 
     expect(result.config).toEqual({
-      "plugins.figma@openai-curated.enabled": false,
+      "plugins.figma@openai-curated.enabled": true,
     })
     expect(result.entries[0]).toMatchObject({
       pluginId: "figma@openai-curated",
-      enabled: false,
+      enabled: true,
+      pluginPath: "/plugins/openai-curated/figma/7118aaa3",
+      cacheCoordinates: {
+        marketplace: "openai-curated",
+        name: "figma",
+        version: "7118aaa3",
+      },
       nativeActivationPolicy: {
-        status: "blocked",
-        reasons: [
-          "runtime-native-unsupported",
-          "per-run-plugin-control-missing",
-        ],
+        status: "allowed",
+        reasons: [],
       },
     })
   })
@@ -123,6 +128,7 @@ describe("Codex app-server plugin config", () => {
             runtime: "codex",
             marketplace: "openai-curated",
             source: "openai-curated:disabled@7118aaa3",
+            sourceKind: "cache",
           },
           pluginEnabled: false,
           safeModeEnabled: false,
@@ -137,6 +143,7 @@ describe("Codex app-server plugin config", () => {
             runtime: "codex",
             marketplace: "openai-curated",
             source: "openai-curated:new@7118aaa3",
+            sourceKind: "cache",
           },
           pluginEnabled: true,
           safeModeEnabled: false,
@@ -151,6 +158,7 @@ describe("Codex app-server plugin config", () => {
             runtime: "codex",
             marketplace: "openai-curated",
             source: "openai-curated:safe-mode@7118aaa3",
+            sourceKind: "cache",
           },
           pluginEnabled: true,
           safeModeEnabled: true,
@@ -165,6 +173,7 @@ describe("Codex app-server plugin config", () => {
             runtime: "codex",
             marketplace: "openai-curated",
             source: "openai-curated:drifted@7118aaa3",
+            sourceKind: "cache",
           },
           pluginEnabled: true,
           safeModeEnabled: false,
@@ -179,6 +188,7 @@ describe("Codex app-server plugin config", () => {
             runtime: "codex",
             marketplace: "openai-curated",
             source: "openai-curated:cloudflare@7118aaa3",
+            sourceKind: "cache",
           },
           pluginEnabled: true,
           safeModeEnabled: false,
@@ -201,31 +211,11 @@ describe("Codex app-server plugin config", () => {
     expect(
       result.entries.map((entry) => entry.nativeActivationPolicy.reasons),
     ).toEqual([
-      [
-        "runtime-native-unsupported",
-        "per-run-plugin-control-missing",
-        "mcp-approval-required",
-      ],
-      [
-        "plugin-disabled",
-        "runtime-native-unsupported",
-        "per-run-plugin-control-missing",
-      ],
-      [
-        "runtime-native-unsupported",
-        "per-run-plugin-control-missing",
-        "activation-identity-drifted",
-      ],
-      [
-        "manifest-review-required",
-        "runtime-native-unsupported",
-        "per-run-plugin-control-missing",
-      ],
-      [
-        "global-safe-mode",
-        "runtime-native-unsupported",
-        "per-run-plugin-control-missing",
-      ],
+      ["mcp-approval-required"],
+      ["plugin-disabled"],
+      ["activation-identity-drifted"],
+      ["manifest-review-required"],
+      ["global-safe-mode"],
     ])
   })
 })

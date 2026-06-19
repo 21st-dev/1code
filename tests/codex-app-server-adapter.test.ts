@@ -827,6 +827,92 @@ describe("Codex app-server adapter", () => {
     })
   })
 
+  test("uses isolated plugin home env and staged plugin config for app-server startup", async () => {
+    const transport = new FakeCodexAppServerTransport()
+    const prepareCalls: unknown[] = []
+
+    await createCodexAppServerAdapter({
+      enabled: true,
+      configOverrides: {
+        "features.apply_patch_freeform": true,
+      },
+      pluginConfig: {
+        config: {
+          "plugins.figma@openai-curated.enabled": true,
+        },
+        entries: [
+          {
+            pluginId: "figma@openai-curated",
+            pluginSource: "openai-curated:figma@7118aaa3",
+            enabled: true,
+            pluginPath: "/global/.codex/plugins/cache/openai-curated/figma/7118aaa3",
+            cacheCoordinates: {
+              marketplace: "openai-curated",
+              name: "figma",
+              version: "7118aaa3",
+            },
+            nativeActivationPolicy: {
+              status: "allowed",
+              canActivateNative: true,
+              identityStatus: "reviewed",
+              reasons: [],
+            },
+          },
+        ],
+      },
+      preparePluginHome: async (input) => {
+        prepareCalls.push(input)
+        return {
+          codexHome: "/isolated/codex-home/sub-1",
+          runtimeEnv: {
+            ...input.runtimeEnv,
+            CODEX_HOME: "/isolated/codex-home/sub-1",
+          },
+          pluginConfigOverrides: {
+            "plugins.figma@openai-curated.enabled": true,
+            "plugins.github@openai-curated.enabled": false,
+          },
+          stagedEntries: [
+            {
+              pluginId: "figma@openai-curated",
+              pluginSource: "openai-curated:figma@7118aaa3",
+              sourcePath:
+                "/global/.codex/plugins/cache/openai-curated/figma/7118aaa3",
+              stagedPath:
+                "/isolated/codex-home/sub-1/plugins/cache/openai-curated/figma/7118aaa3",
+            },
+          ],
+          blockedEntries: [],
+        }
+      },
+      createTransport: ({ providerBinding }) => {
+        expect(providerBinding.runtimeEnv.CODEX_HOME).toBe(
+          "/isolated/codex-home/sub-1",
+        )
+        return transport
+      },
+    }).run(createRequest(appServerPolicy()))
+
+    expect(prepareCalls).toHaveLength(1)
+    expect(prepareCalls[0]).toMatchObject({
+      pluginConfig: {
+        config: {
+          "plugins.figma@openai-curated.enabled": true,
+        },
+      },
+    })
+    const threadStart = transport.requests.find(
+      (request) => request.method === "thread/start",
+    )
+    expect(threadStart?.params).toMatchObject({
+      config: {
+        "features.apply_patch_freeform": true,
+        "plugins.figma@openai-curated.enabled": true,
+        "plugins.github@openai-curated.enabled": false,
+      },
+    })
+  })
+
   test("passes allowlisted CODEX_HOME to app-server without inheriting host secrets", async () => {
     const transport = new FakeCodexAppServerTransport()
 

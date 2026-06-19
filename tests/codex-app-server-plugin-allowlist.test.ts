@@ -157,7 +157,7 @@ describe("Codex app-server plugin allowlist resolver", () => {
     safeModeEnabled = false
   })
 
-  test("keeps reviewed Codex plugins disabled until native control proof exists", async () => {
+  test("enables reviewed Codex plugins through isolated app-server home control", async () => {
     plugins = [
       codexPlugin("figma"),
       codexPlugin("github"),
@@ -183,33 +183,32 @@ describe("Codex app-server plugin allowlist resolver", () => {
 
     expect(result.config).toEqual({
       "plugins.cloudflare@openai-curated.enabled": false,
-      "plugins.figma@openai-curated.enabled": false,
+      "plugins.figma@openai-curated.enabled": true,
       "plugins.github@openai-curated.enabled": false,
     })
     expect(
       result.entries.find((entry) => entry.pluginId === "figma@openai-curated")
         ?.nativeActivationPolicy.reasons,
-    ).toEqual([
-      "runtime-native-unsupported",
-      "per-run-plugin-control-missing",
-    ])
+    ).toEqual([])
+    expect(
+      result.entries.find((entry) => entry.pluginId === "figma@openai-curated"),
+    ).toMatchObject({
+      pluginPath: "/plugins/openai-curated/figma/7118aaa3",
+      cacheCoordinates: {
+        marketplace: "openai-curated",
+        name: "figma",
+        version: "7118aaa3",
+      },
+    })
     expect(
       result.entries.find(
         (entry) => entry.pluginId === "cloudflare@openai-curated",
       )?.nativeActivationPolicy.reasons,
-    ).toEqual([
-      "runtime-native-unsupported",
-      "per-run-plugin-control-missing",
-      "mcp-approval-required",
-    ])
+    ).toEqual(["mcp-approval-required"])
     expect(
       result.entries.find((entry) => entry.pluginId === "github@openai-curated")
         ?.nativeActivationPolicy.reasons,
-    ).toEqual([
-      "plugin-disabled",
-      "runtime-native-unsupported",
-      "per-run-plugin-control-missing",
-    ])
+    ).toEqual(["plugin-disabled"])
   })
 
   test("safe mode overrides otherwise eligible Codex native plugins", async () => {
@@ -232,8 +231,6 @@ describe("Codex app-server plugin allowlist resolver", () => {
     })
     expect(result.entries[0].nativeActivationPolicy.reasons).toEqual([
       "global-safe-mode",
-      "runtime-native-unsupported",
-      "per-run-plugin-control-missing",
     ])
   })
 
@@ -257,7 +254,7 @@ describe("Codex app-server plugin allowlist resolver", () => {
 
     expect(result.config).toEqual({
       "plugins.broken@openai-curated.enabled": false,
-      "plugins.figma@openai-curated.enabled": false,
+      "plugins.figma@openai-curated.enabled": true,
     })
     expect(
       result.entries.find((entry) => entry.pluginId === "broken@openai-curated")

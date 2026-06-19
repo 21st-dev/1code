@@ -9,6 +9,7 @@ import {
 import {
   buildCodexAppServerResolvedPluginConfigOverrides,
   type CodexAppServerResolvedPluginConfigOverrides,
+  getCodexAppServerPluginCacheCoordinates,
   getCodexAppServerPluginId,
 } from "./app-server-plugin-config"
 
@@ -94,6 +95,8 @@ function mergeFailedCodexPluginEntries(
       pluginId,
       pluginSource: plugin.source,
       enabled: false,
+      pluginPath: plugin.path,
+      cacheCoordinates: getCodexAppServerPluginCacheCoordinates(plugin),
       nativeActivationPolicy: {
         status: "blocked",
         canActivateNative: false,

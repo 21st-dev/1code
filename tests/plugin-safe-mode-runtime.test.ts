@@ -91,6 +91,14 @@ describe("plugin safe mode runtime source guards", () => {
     join(process.cwd(), "src/main/lib/codex/app-server-plugin-allowlist.ts"),
     "utf8",
   )
+  const codexPluginHomeSource = readFileSync(
+    join(process.cwd(), "src/main/lib/codex/app-server-plugin-home.ts"),
+    "utf8",
+  )
+  const codexAppServerAdapterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/codex/app-server-adapter.ts"),
+    "utf8",
+  )
 
   test("discovers plugin MCP servers with review gates derived in main", () => {
     expect(pluginIndexSource).toContain("recordPluginReviewScans")
@@ -158,20 +166,37 @@ describe("plugin safe mode runtime source guards", () => {
     expect(runtimeGatesSource).not.toContain("runtimeSupportsNativeLoading: true")
   })
 
-  test("keeps Codex native plugin execution deferred behind the single proof switch", () => {
+  test("keeps Codex native plugin execution behind isolated app-server home staging", () => {
     expect(runtimeNativeActivationSource).toContain(
       "PROVEN_RUNTIME_NATIVE_PLUGIN_LOADING",
     )
     expect(runtimeNativeActivationSource).toContain("claude: true")
-    expect(runtimeNativeActivationSource).toContain("codex: false")
+    expect(runtimeNativeActivationSource).toContain("codex: true")
     expect(runtimeNativeActivationSource).toContain(
-      "add-codex-app-server-plugin-run-control",
+      "isolated CODEX_HOME",
     )
     expect(codexPluginConfigSource).toContain(
-      "runtimeSupportsNativeLoading: false",
+      "runtimeSupportsProvenNativePluginLoading",
     )
     expect(codexPluginConfigSource).toContain(
-      "runtimeSupportsPerRunPluginControl: false",
+      "runtimeSupportsProvenPerRunPluginControl",
+    )
+    expect(codexPluginHomeSource).toContain(
+      "prepareCodexAppServerIsolatedPluginHome",
+    )
+    expect(codexPluginHomeSource).toContain("runtimeEnv.CODEX_HOME = codexHome")
+    expect(codexPluginHomeSource).toContain(
+      "buildCodexAppServerPluginConfigToml",
+    )
+    expect(codexPluginHomeSource).toContain(
+      'const AUTH_FILES_TO_COPY = ["auth.json", "installation_id"]',
+    )
+    expect(codexPluginHomeSource).not.toContain('"config.toml",')
+    expect(codexAppServerAdapterSource).toContain(
+      "prepareCodexAppServerIsolatedPluginHome",
+    )
+    expect(codexAppServerAdapterSource).toContain(
+      "providerBinding: appServerProviderBinding",
     )
     expect(codexPluginAllowlistSource).toContain(
       "resolveCodexAppServerPluginConfigOverrides",
