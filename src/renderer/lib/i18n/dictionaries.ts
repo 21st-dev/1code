@@ -166,7 +166,6 @@ export const en = {
   "settings.sidebar.account": "Account",
   "settings.sidebar.appearance": "Appearance",
   "settings.sidebar.keyboard": "Keyboard",
-  "settings.sidebar.beta": "Beta",
   "settings.sidebar.projects": "Projects",
   "settings.sidebar.models": "Models",
   "settings.sidebar.commands": "Commands",
@@ -194,6 +193,12 @@ export const en = {
   "settings.preferences.coAuthoredBy.title": "Include Co-Authored-By",
   "settings.preferences.coAuthoredBy.description":
     'Add a "Co-authored-by" trailer to commits created from the app',
+  "settings.preferences.rollback.title": "Rollback",
+  "settings.preferences.rollback.description":
+    "Allow rolling back to previous messages and restoring files.",
+  "settings.preferences.notifications.title": "Notifications",
+  "settings.preferences.notifications.description":
+    "Choose when Locus uses desktop and sound notifications.",
   "settings.preferences.desktopNotifications.title": "Desktop Notifications",
   "settings.preferences.desktopNotifications.description":
     "Show system notifications when agent needs input or completes work",
@@ -285,9 +290,21 @@ export const en = {
   "settings.appearance.dark": "Dark",
   "settings.appearance.darkDescription":
     "Theme to use for dark system appearance",
+  "settings.appearance.codeTheme.title": "Code block themes",
+  "settings.appearance.codeTheme.description":
+    "Choose syntax highlighting themes for rendered code blocks.",
+  "settings.appearance.codeTheme.light": "Light code theme",
+  "settings.appearance.codeTheme.lightDescription":
+    "Syntax theme to use in light appearance",
+  "settings.appearance.codeTheme.dark": "Dark code theme",
+  "settings.appearance.codeTheme.darkDescription":
+    "Syntax theme to use in dark appearance",
   "settings.appearance.workspaceIcon": "Workspace icon",
   "settings.appearance.workspaceIconDescription":
     "Show project icon in the sidebar workspace list",
+  "settings.appearance.kanbanView": "Kanban view",
+  "settings.appearance.kanbanViewDescription":
+    "Show the Kanban workspace view and its shortcut",
   "settings.appearance.alwaysExpandTodoList": "Always expand to-do list",
   "settings.appearance.alwaysExpandTodoListDescription":
     "Show the full to-do list instead of compact view",
@@ -343,6 +360,32 @@ export const en = {
   "settings.models.title": "Models",
   "settings.models.searchPlaceholder": "Search built-in models",
   "settings.models.noModelsFound": "No models found",
+  "settings.models.localModels.title": "Local models",
+  "settings.models.localModels.description":
+    "Configure Ollama and offline fallback for local model use.",
+  "settings.models.offlineMode.title": "Offline Mode",
+  "settings.models.offlineMode.description":
+    "Enable offline mode UI and Ollama integration.",
+  "settings.models.ollamaStatus": "Ollama Status",
+  "settings.models.ollamaRunning": "Running - {count} models installed",
+  "settings.models.ollamaNotRunning": "Not running or not installed",
+  "settings.models.available": "Available",
+  "settings.models.unavailable": "Unavailable",
+  "settings.models.offlineModel.title": "Model",
+  "settings.models.offlineModel.description":
+    "Select which model to use for offline mode",
+  "settings.models.offlineModel.select": "Select model",
+  "settings.models.recommended": "(recommended)",
+  "settings.models.autoOfflineMode.title": "Auto Offline Mode",
+  "settings.models.autoOfflineMode.description":
+    "Automatically use Ollama when internet is unavailable",
+  "settings.models.setupInstructions": "Setup Instructions:",
+  "settings.models.installOllamaPrefix": "Install Ollama {version}+ from",
+  "settings.models.pullRecommendedModel": "Pull the recommended model:",
+  "settings.models.copied": "Copied!",
+  "settings.models.copyCommand": "Copy command",
+  "settings.models.ollamaRunsAutomatically":
+    "Ollama will run automatically in the background",
   "settings.models.anthropicAccounts.title": "Anthropic Accounts",
   "settings.models.anthropicAccounts.description":
     "Manage local Claude Code credentials",
@@ -1682,37 +1725,6 @@ export const en = {
   "settings.plugins.sourceInstallHintCodex":
     "Codex manages this cache; install or update plugins through Codex, then refresh.",
   "settings.plugins.removeDeveloperSource": "Remove source",
-
-  "settings.beta.title": "Beta Features",
-  "settings.beta.subtitle":
-    "Enable experimental features. These may be unstable or change without notice.",
-  "settings.beta.rollback": "Rollback",
-  "settings.beta.rollbackDescription":
-    "Allow rolling back to previous messages and restoring files.",
-  "settings.beta.offlineMode": "Offline Mode",
-  "settings.beta.offlineModeDescription":
-    "Enable offline mode UI and Ollama integration.",
-  "settings.beta.offlineModeSettings": "Offline Mode Settings",
-  "settings.beta.ollamaStatus": "Ollama Status",
-  "settings.beta.ollamaRunning": "Running - {count} models installed",
-  "settings.beta.ollamaNotRunning": "Not running or not installed",
-  "settings.beta.available": "Available",
-  "settings.beta.unavailable": "Unavailable",
-  "settings.beta.model": "Model",
-  "settings.beta.modelDescription":
-    "Select which model to use for offline mode",
-  "settings.beta.selectModel": "Select model",
-  "settings.beta.recommended": "(recommended)",
-  "settings.beta.autoOfflineMode": "Auto Offline Mode",
-  "settings.beta.autoOfflineModeDescription":
-    "Automatically use Ollama when internet is unavailable",
-  "settings.beta.setupInstructions": "Setup Instructions:",
-  "settings.beta.installOllamaPrefix": "Install Ollama {version}+ from",
-  "settings.beta.pullRecommendedModel": "Pull the recommended model:",
-  "settings.beta.copied": "Copied!",
-  "settings.beta.copyCommand": "Copy command",
-  "settings.beta.ollamaRunsAutomatically":
-    "Ollama will run automatically in the background",
 
   "settings.debug.toast.offlineEnabled": "Offline simulation enabled",
   "settings.debug.toast.offlineDisabled": "Offline simulation disabled",
@@ -3513,7 +3525,6 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.sidebar.account": "账号",
   "settings.sidebar.appearance": "外观",
   "settings.sidebar.keyboard": "键盘",
-  "settings.sidebar.beta": "实验功能",
   "settings.sidebar.projects": "项目",
   "settings.sidebar.models": "模型",
   "settings.sidebar.commands": "命令",
@@ -3540,6 +3551,12 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.preferences.coAuthoredBy.title": "包含共同作者署名",
   "settings.preferences.coAuthoredBy.description":
     "在应用创建的 git 提交中加入共同作者署名",
+  "settings.preferences.rollback.title": "回滚",
+  "settings.preferences.rollback.description":
+    "允许回滚到之前的消息并恢复文件。",
+  "settings.preferences.notifications.title": "通知",
+  "settings.preferences.notifications.description":
+    "选择 Locus 何时使用桌面通知和声音提醒。",
   "settings.preferences.desktopNotifications.title": "桌面通知",
   "settings.preferences.desktopNotifications.description":
     "当智能体需要输入或完成工作时显示系统通知",
@@ -3629,9 +3646,21 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.appearance.dark": "深色",
   "settings.appearance.darkDescription":
     "系统为深色外观时使用的主题",
+  "settings.appearance.codeTheme.title": "代码块主题",
+  "settings.appearance.codeTheme.description":
+    "选择渲染代码块时使用的语法高亮主题。",
+  "settings.appearance.codeTheme.light": "浅色代码主题",
+  "settings.appearance.codeTheme.lightDescription":
+    "浅色外观下使用的语法主题",
+  "settings.appearance.codeTheme.dark": "深色代码主题",
+  "settings.appearance.codeTheme.darkDescription":
+    "深色外观下使用的语法主题",
   "settings.appearance.workspaceIcon": "工作区图标",
   "settings.appearance.workspaceIconDescription":
     "在侧边栏的工作区列表中显示项目图标",
+  "settings.appearance.kanbanView": "看板视图",
+  "settings.appearance.kanbanViewDescription":
+    "显示看板工作区视图和对应快捷键",
   "settings.appearance.alwaysExpandTodoList": "始终展开待办列表",
   "settings.appearance.alwaysExpandTodoListDescription":
     "显示完整待办列表，而不是紧凑视图",
@@ -3687,6 +3716,32 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.title": "模型",
   "settings.models.searchPlaceholder": "筛选内置模型",
   "settings.models.noModelsFound": "没有找到模型",
+  "settings.models.localModels.title": "本地模型",
+  "settings.models.localModels.description":
+    "配置 Ollama 和本地模型的离线回退。",
+  "settings.models.offlineMode.title": "离线模式",
+  "settings.models.offlineMode.description":
+    "启用离线模式界面和 Ollama 集成。",
+  "settings.models.ollamaStatus": "Ollama 状态",
+  "settings.models.ollamaRunning": "运行中 - 已安装 {count} 个模型",
+  "settings.models.ollamaNotRunning": "未运行或未安装",
+  "settings.models.available": "可用",
+  "settings.models.unavailable": "不可用",
+  "settings.models.offlineModel.title": "模型",
+  "settings.models.offlineModel.description":
+    "选择离线模式使用的模型",
+  "settings.models.offlineModel.select": "选择模型",
+  "settings.models.recommended": "（推荐）",
+  "settings.models.autoOfflineMode.title": "自动离线模式",
+  "settings.models.autoOfflineMode.description":
+    "网络不可用时自动使用 Ollama",
+  "settings.models.setupInstructions": "设置说明：",
+  "settings.models.installOllamaPrefix": "从这里安装 Ollama {version}+：",
+  "settings.models.pullRecommendedModel": "拉取推荐模型：",
+  "settings.models.copied": "已复制！",
+  "settings.models.copyCommand": "复制命令",
+  "settings.models.ollamaRunsAutomatically":
+    "Ollama 会自动在后台运行",
   "settings.models.anthropicAccounts.title": "Anthropic 账号",
   "settings.models.anthropicAccounts.description": "管理本地 Claude Code 凭证",
   "settings.models.claudeCode.refreshable": "可刷新的本地凭证",
@@ -5016,37 +5071,6 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.sourceInstallHintCodex":
     "Codex 管理这个缓存；通过 Codex 安装或更新插件，然后刷新。",
   "settings.plugins.removeDeveloperSource": "移除来源",
-
-  "settings.beta.title": "实验功能",
-  "settings.beta.subtitle":
-    "启用实验性功能。这些功能可能不稳定，也可能后续调整。",
-  "settings.beta.rollback": "回滚",
-  "settings.beta.rollbackDescription":
-    "允许回滚到之前的消息并恢复文件。",
-  "settings.beta.offlineMode": "离线模式",
-  "settings.beta.offlineModeDescription":
-    "启用离线模式界面和 Ollama 集成。",
-  "settings.beta.offlineModeSettings": "离线模式设置",
-  "settings.beta.ollamaStatus": "Ollama 状态",
-  "settings.beta.ollamaRunning": "运行中 - 已安装 {count} 个模型",
-  "settings.beta.ollamaNotRunning": "未运行或未安装",
-  "settings.beta.available": "可用",
-  "settings.beta.unavailable": "不可用",
-  "settings.beta.model": "模型",
-  "settings.beta.modelDescription":
-    "选择离线模式使用的模型",
-  "settings.beta.selectModel": "选择模型",
-  "settings.beta.recommended": "（推荐）",
-  "settings.beta.autoOfflineMode": "自动离线模式",
-  "settings.beta.autoOfflineModeDescription":
-    "网络不可用时自动使用 Ollama",
-  "settings.beta.setupInstructions": "设置说明：",
-  "settings.beta.installOllamaPrefix": "从这里安装 Ollama {version}+：",
-  "settings.beta.pullRecommendedModel": "拉取推荐模型：",
-  "settings.beta.copied": "已复制！",
-  "settings.beta.copyCommand": "复制命令",
-  "settings.beta.ollamaRunsAutomatically":
-    "Ollama 会自动在后台运行",
 
   "settings.debug.toast.offlineEnabled": "离线模拟已启用",
   "settings.debug.toast.offlineDisabled": "离线模拟已禁用",

@@ -1,44 +1,42 @@
 import { useAtom } from "jotai"
 import { useEffect, useState } from "react"
+import { APP_META, type ExternalApp } from "../../../../shared/external-apps"
+import clionIcon from "../../../assets/app-icons/clion.svg"
+// Editor icon imports
+import cursorIcon from "../../../assets/app-icons/cursor.svg"
+import fleetIcon from "../../../assets/app-icons/fleet.svg"
+import ghosttyIcon from "../../../assets/app-icons/ghostty.svg"
+import golandIcon from "../../../assets/app-icons/goland.svg"
+import intellijIcon from "../../../assets/app-icons/intellij.svg"
+import itermIcon from "../../../assets/app-icons/iterm.png"
+import phpstormIcon from "../../../assets/app-icons/phpstorm.svg"
+import pycharmIcon from "../../../assets/app-icons/pycharm.svg"
+import riderIcon from "../../../assets/app-icons/rider.svg"
+import rustroverIcon from "../../../assets/app-icons/rustrover.svg"
+import sublimeIcon from "../../../assets/app-icons/sublime.svg"
+import terminalIcon from "../../../assets/app-icons/terminal.png"
+import traeIcon from "../../../assets/app-icons/trae.svg"
+import vscodeIcon from "../../../assets/app-icons/vscode.svg"
+import vscodeInsidersIcon from "../../../assets/app-icons/vscode-insiders.svg"
+import warpIcon from "../../../assets/app-icons/warp.png"
+import webstormIcon from "../../../assets/app-icons/webstorm.svg"
+import windsurfIcon from "../../../assets/app-icons/windsurf.svg"
+import xcodeIcon from "../../../assets/app-icons/xcode.svg"
+import zedIcon from "../../../assets/app-icons/zed.png"
 import {
+  type AgentMode,
+  type AutoAdvanceTarget,
   autoAdvanceTargetAtom,
-  ctrlTabTargetAtom,
   defaultAgentModeAtom,
   desktopNotificationsEnabledAtom,
   extendedThinkingEnabledAtom,
+  historyEnabledAtom,
   notifyWhenFocusedAtom,
-  soundNotificationsEnabledAtom,
   preferredEditorAtom,
-  type AgentMode,
-  type AutoAdvanceTarget,
-  type CtrlTabTarget,
+  soundNotificationsEnabledAtom,
 } from "../../../lib/atoms"
-import { APP_META, type ExternalApp } from "../../../../shared/external-apps"
-import { LanguageSwitcher } from "../../language-switcher"
 import { useI18n } from "../../../lib/i18n"
-
-// Editor icon imports
-import cursorIcon from "../../../assets/app-icons/cursor.svg"
-import vscodeIcon from "../../../assets/app-icons/vscode.svg"
-import vscodeInsidersIcon from "../../../assets/app-icons/vscode-insiders.svg"
-import zedIcon from "../../../assets/app-icons/zed.png"
-import sublimeIcon from "../../../assets/app-icons/sublime.svg"
-import xcodeIcon from "../../../assets/app-icons/xcode.svg"
-import intellijIcon from "../../../assets/app-icons/intellij.svg"
-import webstormIcon from "../../../assets/app-icons/webstorm.svg"
-import pycharmIcon from "../../../assets/app-icons/pycharm.svg"
-import phpstormIcon from "../../../assets/app-icons/phpstorm.svg"
-import golandIcon from "../../../assets/app-icons/goland.svg"
-import clionIcon from "../../../assets/app-icons/clion.svg"
-import riderIcon from "../../../assets/app-icons/rider.svg"
-import fleetIcon from "../../../assets/app-icons/fleet.svg"
-import rustroverIcon from "../../../assets/app-icons/rustrover.svg"
-import windsurfIcon from "../../../assets/app-icons/windsurf.svg"
-import traeIcon from "../../../assets/app-icons/trae.svg"
-import itermIcon from "../../../assets/app-icons/iterm.png"
-import warpIcon from "../../../assets/app-icons/warp.png"
-import terminalIcon from "../../../assets/app-icons/terminal.png"
-import ghosttyIcon from "../../../assets/app-icons/ghostty.svg"
+import { LanguageSwitcher } from "../../language-switcher"
 
 const EDITOR_ICONS: Partial<Record<ExternalApp, string>> = {
   cursor: cursorIcon,
@@ -102,27 +100,27 @@ const JETBRAINS: EditorOption[] = [
   { id: "fleet", label: "Fleet" },
   { id: "rustrover", label: "RustRover" },
 ]
-import vscodeBaseIcon from "../../../assets/app-icons/vscode.svg"
+
+import { ChevronDown } from "lucide-react"
 import jetbrainsBaseIcon from "../../../assets/app-icons/jetbrains.svg"
+import vscodeBaseIcon from "../../../assets/app-icons/vscode.svg"
+import { trpc } from "../../../lib/trpc"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "../../ui/dropdown-menu"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
 } from "../../ui/select"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "../../ui/dropdown-menu"
-import { ChevronDown } from "lucide-react"
 import { Switch } from "../../ui/switch"
-import { trpc } from "../../../lib/trpc"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -147,10 +145,16 @@ export function AgentsPreferencesTab() {
     extendedThinkingEnabledAtom,
   )
   const [soundEnabled, setSoundEnabled] = useAtom(soundNotificationsEnabledAtom)
-  const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useAtom(desktopNotificationsEnabledAtom)
-  const [notifyWhenFocused, setNotifyWhenFocused] = useAtom(notifyWhenFocusedAtom)
-  const [ctrlTabTarget, setCtrlTabTarget] = useAtom(ctrlTabTargetAtom)
-  const [autoAdvanceTarget, setAutoAdvanceTarget] = useAtom(autoAdvanceTargetAtom)
+  const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useAtom(
+    desktopNotificationsEnabledAtom,
+  )
+  const [notifyWhenFocused, setNotifyWhenFocused] = useAtom(
+    notifyWhenFocusedAtom,
+  )
+  const [historyEnabled, setHistoryEnabled] = useAtom(historyEnabledAtom)
+  const [autoAdvanceTarget, setAutoAdvanceTarget] = useAtom(
+    autoAdvanceTargetAtom,
+  )
   const [defaultAgentMode, setDefaultAgentMode] = useAtom(defaultAgentModeAtom)
   const [preferredEditor, setPreferredEditor] = useAtom(preferredEditorAtom)
   const isNarrowScreen = useIsNarrowScreen()
@@ -256,84 +260,79 @@ export function AgentsPreferencesTab() {
             disabled={setCoAuthoredByMutation.isPending}
           />
         </div>
-      </div>
-
-      {/* Notifications */}
-      <div className="bg-background rounded-lg border border-border overflow-hidden">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              {t("settings.preferences.desktopNotifications.title")}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {t("settings.preferences.desktopNotifications.description")}
-            </span>
-          </div>
-          <Switch checked={desktopNotificationsEnabled} onCheckedChange={setDesktopNotificationsEnabled} />
-        </div>
         <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
-              {t("settings.preferences.soundNotifications.title")}
+              {t("settings.preferences.rollback.title")}
             </span>
             <span className="text-xs text-muted-foreground">
-              {t("settings.preferences.soundNotifications.description")}
-            </span>
-          </div>
-          <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
-        </div>
-        <div className="flex items-center justify-between p-4 border-t border-border">
-          <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              {t("settings.preferences.notifyWhenFocused.title")}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {t("settings.preferences.notifyWhenFocused.description")}
+              {t("settings.preferences.rollback.description")}
             </span>
           </div>
           <Switch
-            checked={notifyWhenFocused}
-            onCheckedChange={setNotifyWhenFocused}
-            disabled={!desktopNotificationsEnabled}
+            checked={historyEnabled}
+            onCheckedChange={setHistoryEnabled}
           />
+        </div>
+      </div>
+
+      {/* Notifications */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">
+            {t("settings.preferences.notifications.title")}
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.preferences.notifications.description")}
+          </p>
+        </div>
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                {t("settings.preferences.desktopNotifications.title")}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {t("settings.preferences.desktopNotifications.description")}
+              </span>
+            </div>
+            <Switch
+              checked={desktopNotificationsEnabled}
+              onCheckedChange={setDesktopNotificationsEnabled}
+            />
+          </div>
+          <div className="flex items-center justify-between p-4 border-t border-border">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                {t("settings.preferences.soundNotifications.title")}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {t("settings.preferences.soundNotifications.description")}
+              </span>
+            </div>
+            <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+          </div>
+          <div className="flex items-center justify-between p-4 border-t border-border">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                {t("settings.preferences.notifyWhenFocused.title")}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {t("settings.preferences.notifyWhenFocused.description")}
+              </span>
+            </div>
+            <Switch
+              checked={notifyWhenFocused}
+              onCheckedChange={setNotifyWhenFocused}
+              disabled={!desktopNotificationsEnabled}
+            />
+          </div>
         </div>
       </div>
 
       {/* Navigation */}
       <div className="bg-background rounded-lg border border-border overflow-hidden">
         <div className="flex items-center justify-between p-4">
-          <div className="flex flex-col space-y-1">
-            <span className="text-sm font-medium text-foreground">
-              {t("settings.preferences.quickSwitch.title")}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {t("settings.preferences.quickSwitch.description", {
-                shortcut: "⌃Tab",
-              })}
-            </span>
-          </div>
-          <Select
-            value={ctrlTabTarget}
-            onValueChange={(value: CtrlTabTarget) => setCtrlTabTarget(value)}
-          >
-            <SelectTrigger className="w-auto px-2">
-              <span className="text-xs">
-                {ctrlTabTarget === "workspaces"
-                  ? t("settings.preferences.quickSwitch.workspaces")
-                  : t("settings.preferences.quickSwitch.agents")}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="workspaces">
-                {t("settings.preferences.quickSwitch.workspaces")}
-              </SelectItem>
-              <SelectItem value="agents">
-                {t("settings.preferences.quickSwitch.agents")}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center justify-between p-4 border-t border-border">
           <div className="flex flex-col space-y-1">
             <span className="text-sm font-medium text-foreground">
               {t("settings.preferences.autoAdvance.title")}
@@ -344,7 +343,9 @@ export function AgentsPreferencesTab() {
           </div>
           <Select
             value={autoAdvanceTarget}
-            onValueChange={(value: AutoAdvanceTarget) => setAutoAdvanceTarget(value)}
+            onValueChange={(value: AutoAdvanceTarget) =>
+              setAutoAdvanceTarget(value)
+            }
           >
             <SelectTrigger className="w-auto px-2">
               <span className="text-xs">
@@ -404,7 +405,11 @@ export function AgentsPreferencesTab() {
                   className="flex items-center gap-2"
                 >
                   {EDITOR_ICONS[editor.id] ? (
-                    <img src={EDITOR_ICONS[editor.id]} alt="" className="h-4 w-4 flex-shrink-0 object-contain" />
+                    <img
+                      src={EDITOR_ICONS[editor.id]}
+                      alt=""
+                      className="h-4 w-4 flex-shrink-0 object-contain"
+                    />
                   ) : (
                     <div className="h-4 w-4 flex-shrink-0" />
                   )}
@@ -418,7 +423,11 @@ export function AgentsPreferencesTab() {
                   className="flex items-center gap-2"
                 >
                   {EDITOR_ICONS[app.id] ? (
-                    <img src={EDITOR_ICONS[app.id]} alt="" className="h-4 w-4 flex-shrink-0 object-contain" />
+                    <img
+                      src={EDITOR_ICONS[app.id]}
+                      alt=""
+                      className="h-4 w-4 flex-shrink-0 object-contain"
+                    />
                   ) : (
                     <div className="h-4 w-4 flex-shrink-0" />
                   )}
@@ -427,10 +436,18 @@ export function AgentsPreferencesTab() {
               ))}
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="flex items-center gap-2">
-                  <img src={vscodeBaseIcon} alt="" className="h-4 w-4 flex-shrink-0 object-contain" />
+                  <img
+                    src={vscodeBaseIcon}
+                    alt=""
+                    className="h-4 w-4 flex-shrink-0 object-contain"
+                  />
                   <span>VS Code</span>
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-48" sideOffset={6} alignOffset={-4}>
+                <DropdownMenuSubContent
+                  className="w-48"
+                  sideOffset={6}
+                  alignOffset={-4}
+                >
                   {VSCODE.map((app) => (
                     <DropdownMenuItem
                       key={app.id}
@@ -438,7 +455,11 @@ export function AgentsPreferencesTab() {
                       className="flex items-center gap-2"
                     >
                       {EDITOR_ICONS[app.id] ? (
-                        <img src={EDITOR_ICONS[app.id]} alt="" className="h-4 w-4 flex-shrink-0 object-contain" />
+                        <img
+                          src={EDITOR_ICONS[app.id]}
+                          alt=""
+                          className="h-4 w-4 flex-shrink-0 object-contain"
+                        />
                       ) : (
                         <div className="h-4 w-4 flex-shrink-0" />
                       )}
@@ -449,10 +470,18 @@ export function AgentsPreferencesTab() {
               </DropdownMenuSub>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="flex items-center gap-2">
-                  <img src={jetbrainsBaseIcon} alt="" className="h-4 w-4 flex-shrink-0 object-contain" />
+                  <img
+                    src={jetbrainsBaseIcon}
+                    alt=""
+                    className="h-4 w-4 flex-shrink-0 object-contain"
+                  />
                   <span>JetBrains</span>
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-48 max-h-[300px] overflow-y-auto" sideOffset={6} alignOffset={-4}>
+                <DropdownMenuSubContent
+                  className="w-48 max-h-[300px] overflow-y-auto"
+                  sideOffset={6}
+                  alignOffset={-4}
+                >
                   {JETBRAINS.map((app) => (
                     <DropdownMenuItem
                       key={app.id}
@@ -460,7 +489,11 @@ export function AgentsPreferencesTab() {
                       className="flex items-center gap-2"
                     >
                       {EDITOR_ICONS[app.id] ? (
-                        <img src={EDITOR_ICONS[app.id]} alt="" className="h-4 w-4 flex-shrink-0 object-contain" />
+                        <img
+                          src={EDITOR_ICONS[app.id]}
+                          alt=""
+                          className="h-4 w-4 flex-shrink-0 object-contain"
+                        />
                       ) : (
                         <div className="h-4 w-4 flex-shrink-0" />
                       )}
@@ -473,7 +506,6 @@ export function AgentsPreferencesTab() {
           </DropdownMenu>
         </div>
       </div>
-
     </div>
   )
 }

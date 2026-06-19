@@ -177,6 +177,11 @@ function getShikiThemeForHighlighting(themeId: string): string {
   if (isShikiBundledTheme(themeId)) {
     return themeId
   }
+
+  // Legacy code-theme choices are Shiki bundled themes surfaced in Settings.
+  if (isBuiltinTheme(themeId)) {
+    return themeId
+  }
   
   // If the theme is loaded in our cache (has tokenColors), use it directly
   if (fullThemesCache.has(themeId)) {
@@ -221,7 +226,8 @@ export async function ensureThemeLoaded(themeId: string): Promise<void> {
 
   // Check if it's a legacy builtin theme (from vscode-themes.ts)
   if (isBuiltinTheme(themeId)) {
-    // These should also be Shiki bundled, but just in case
+    const highlighter = await getHighlighter()
+    await highlighter.loadTheme(themeId as shiki.BundledTheme)
     return
   }
 

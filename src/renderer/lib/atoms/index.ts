@@ -17,63 +17,53 @@ export {
 // ============================================
 
 export {
-  // Chat atoms
-  selectedAgentChatIdAtom,
-  subChatModeAtomFamily,
-  lastSelectedModelIdAtom,
-  lastSelectedAgentIdAtom,
-  selectedProjectAtom,
-  agentsUnseenChangesAtom,
-  agentsSubChatUnseenChangesAtom,
-  loadingSubChatsAtom,
-  setLoading,
-  clearLoading,
-  MODEL_ID_MAP,
-  lastChatModesAtom,
-
+  // Mode utilities
+  AGENT_MODES,
+  type AgentMode,
+  type AgentsDebugMode,
+  type AgentsMobileViewMode,
+  // Diff atoms
+  agentsChangesPanelWidthAtom,
+  // Debug mode
+  agentsDebugModeAtom,
+  agentsFocusedDiffFileAtom,
+  // UI state
+  agentsMobileViewModeAtom,
   // Sidebar atoms
   agentsSidebarOpenAtom,
   agentsSidebarWidthAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatsSidebarWidthAtom,
-
-  // Diff atoms
-  agentsChangesPanelWidthAtom,
-  agentsFocusedDiffFileAtom,
-  filteredDiffFilesAtom,
-  subChatFilesAtom,
-
+  agentsSubChatUnseenChangesAtom,
+  agentsUnseenChangesAtom,
   // Archive atoms
   archivePopoverOpenAtom,
-  archiveSearchQueryAtom,
   archiveRepositoryFilterAtom,
-
-  // UI state
-  agentsMobileViewModeAtom,
-
-  // Debug mode
-  agentsDebugModeAtom,
-
+  archiveSearchQueryAtom,
+  clearLoading,
   // Todos
   currentTodosAtomFamily,
-
-  // AskUserQuestion
-  pendingUserQuestionsAtom,
-
-  // Types
-  type SelectedProject,
-  type AgentsMobileViewMode,
-  type AgentsDebugMode,
-  type SubChatFileChange,
-  type AgentMode,
-
-  // Mode utilities
-  AGENT_MODES,
-  getNextMode,
-
+  type DesktopView,
   // Desktop view navigation
   desktopViewAtom,
-  type DesktopView,
+  filteredDiffFilesAtom,
+  getNextMode,
+  lastChatModesAtom,
+  lastSelectedAgentIdAtom,
+  lastSelectedModelIdAtom,
+  loadingSubChatsAtom,
+  MODEL_ID_MAP,
+  // AskUserQuestion
+  pendingUserQuestionsAtom,
+  // Types
+  type SelectedProject,
+  type SubChatFileChange,
+  // Chat atoms
+  selectedAgentChatIdAtom,
+  selectedProjectAtom,
+  setLoading,
+  subChatFilesAtom,
+  subChatModeAtomFamily,
 } from "../../features/agents/atoms"
 
 // ============================================
@@ -170,10 +160,10 @@ export type SettingsTab =
   | "plugins"
   | "projects"
   | "debug"
-  | "beta"
   | "keyboard"
   | "about"
-export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("preferences")
+export const agentsSettingsDialogActiveTabAtom =
+  atom<SettingsTab>("preferences")
 export type ModelsSettingsTarget = "helper-apis" | null
 export const modelsSettingsTargetAtom = atom<ModelsSettingsTarget>(null)
 // Derived atom: maps settings open/close to desktopView navigation
@@ -181,7 +171,7 @@ export const agentsSettingsDialogOpenAtom = atom(
   (get) => get(_desktopViewAtom) === "settings",
   (_get, set, open: boolean) => {
     set(_desktopViewAtom, open ? "settings" : null)
-  }
+  },
 )
 
 export const helperApisSetupPromptPendingAtom = atomWithStorage<boolean>(
@@ -269,7 +259,7 @@ export const extendedThinkingEnabledAtom = atomWithStorage<boolean>(
 // When enabled, allow rollback to previous assistant messages
 export const historyEnabledAtom = atomWithStorage<boolean>(
   "preferences:history-enabled",
-  false, // Default OFF — beta feature
+  false, // Default OFF
   undefined,
   { getOnInit: true },
 )
@@ -314,9 +304,9 @@ export const appLanguagePreferenceAtom = atomWithStorage<AppLanguagePreference>(
 
 // Kanban board view
 // When enabled, shows Kanban button in sidebar to view workspaces as a board
-export const betaKanbanEnabledAtom = atomWithStorage<boolean>(
+export const kanbanViewEnabledAtom = atomWithStorage<boolean>(
   "preferences:beta-kanban-enabled",
-  true, // Default ON — graduated from beta
+  true, // Default ON; storage key is preserved for existing installs
   undefined,
   { getOnInit: true },
 )
@@ -345,7 +335,7 @@ export const autoAdvanceTargetAtom = atomWithStorage<AutoAdvanceTarget>(
 // Preferences - Default Agent Mode
 // Controls what mode new chats/sub-chats start in (Plan = read-only, Agent = can edit)
 // Re-using AgentMode type from features/agents/atoms
-import { type AgentMode as AgentModeType } from "../../features/agents/atoms"
+import type { AgentMode as AgentModeType } from "../../features/agents/atoms"
 
 // Migration: convert old isPlanMode boolean to new defaultAgentMode string
 // This runs once when the module loads
@@ -356,9 +346,15 @@ if (typeof window !== "undefined") {
   if (oldValue !== null && localStorage.getItem(newKey) === null) {
     // Old value was JSON boolean, new value is JSON string
     const wasInPlanMode = oldValue === "true"
-    localStorage.setItem(newKey, JSON.stringify(wasInPlanMode ? "plan" : "agent"))
+    localStorage.setItem(
+      newKey,
+      JSON.stringify(wasInPlanMode ? "plan" : "agent"),
+    )
     localStorage.removeItem(oldKey)
-    console.log("[atoms] Migrated isPlanMode to defaultAgentMode:", wasInPlanMode ? "plan" : "agent")
+    console.log(
+      "[atoms] Migrated isPlanMode to defaultAgentMode:",
+      wasInPlanMode ? "plan" : "agent",
+    )
   }
 }
 
@@ -491,6 +487,7 @@ export const allFullThemesAtom = atom<VSCodeFullTheme[]>((get) => {
 // ============================================
 
 import type { CustomHotkeysConfig } from "../hotkeys/types"
+
 export type { CustomHotkeysConfig }
 
 /**
@@ -568,12 +565,13 @@ export type OnboardingProviderMode =
 // Onboarding provider/auth selection. Named for what it does (not billing — there
 // is no payment system). Storage key kept as the legacy "onboarding:billing-method"
 // for back-compat so existing users do not re-onboard.
-export const onboardingProviderModeAtom = atomWithStorage<OnboardingProviderMode>(
-  "onboarding:billing-method",
-  null,
-  undefined,
-  { getOnInit: true },
-)
+export const onboardingProviderModeAtom =
+  atomWithStorage<OnboardingProviderMode>(
+    "onboarding:billing-method",
+    null,
+    undefined,
+    { getOnInit: true },
+  )
 
 // Whether user has completed Claude Code local auth during onboarding
 // Reset on logout

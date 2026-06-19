@@ -16,6 +16,8 @@ export interface VSCodeTheme {
  * These are the themes that come pre-bundled with Shiki
  */
 export const VSCODE_BUILTIN_THEMES: VSCodeTheme[] = [
+  { id: "github-dark", name: "GitHub Dark", type: "dark", source: "builtin" },
+  { id: "github-light", name: "GitHub Light", type: "light", source: "builtin" },
   { id: "dark-plus", name: "Dark+ (default dark)", type: "dark", source: "builtin" },
   { id: "light-plus", name: "Light+ (default light)", type: "light", source: "builtin" },
   { id: "min-dark", name: "Min Dark", type: "dark", source: "builtin" },
@@ -25,11 +27,12 @@ export const VSCODE_BUILTIN_THEMES: VSCodeTheme[] = [
   { id: "vitesse-dark", name: "Vitesse Dark", type: "dark", source: "builtin" },
   { id: "vitesse-light", name: "Vitesse Light", type: "light", source: "builtin" },
   { id: "material-theme-darker", name: "Material Theme Darker", type: "dark", source: "builtin" },
-  { id: "material-theme-default", name: "Material Theme Default", type: "dark", source: "builtin" },
+  { id: "material-theme", name: "Material Theme Default", type: "dark", source: "builtin" },
   { id: "material-theme-lighter", name: "Material Theme Lighter", type: "light", source: "builtin" },
   { id: "material-theme-ocean", name: "Material Theme Ocean", type: "dark", source: "builtin" },
   { id: "material-theme-palenight", name: "Material Theme Palenight", type: "dark", source: "builtin" },
   { id: "poimandres", name: "Poimandres", type: "dark", source: "builtin" },
+  { id: "vesper", name: "Vesper", type: "dark", source: "builtin" },
 ]
 
 /**

@@ -56,11 +56,11 @@ import {
   agentsSettingsDialogActiveTabAtom,
   agentsSidebarOpenAtom,
   autoAdvanceTargetAtom,
-  betaKanbanEnabledAtom,
   clearAgentChatSelectionAtom,
   isAgentMultiSelectModeAtom,
   isDesktopAtom,
   isFullscreenAtom,
+  kanbanViewEnabledAtom,
   selectAllAgentChatsAtom,
   selectedAgentChatIdsAtom,
   selectedAgentChatsCountAtom,
@@ -1280,7 +1280,7 @@ const ArchiveButton = memo(
 
 // Isolated Kanban Button - clears selection to show Kanban view
 const KanbanButton = memo(function KanbanButton() {
-  const kanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
+  const kanbanEnabled = useAtomValue(kanbanViewEnabledAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)

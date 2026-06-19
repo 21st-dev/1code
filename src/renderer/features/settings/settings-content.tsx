@@ -8,7 +8,6 @@ import { desktopViewAtom } from "../agents/atoms"
 import { AgentsAppearanceTab } from "../../components/dialogs/settings-tabs/agents-appearance-tab"
 import { AgentsAboutTab } from "../../components/dialogs/settings-tabs/agents-about-tab"
 import { AgentsAppAgentsTab } from "../../components/dialogs/settings-tabs/agents-app-agents-tab"
-import { AgentsBetaTab } from "../../components/dialogs/settings-tabs/agents-beta-tab"
 import { AgentsCommandGuideTab } from "../../components/dialogs/settings-tabs/agents-command-guide-tab"
 import { AgentsDebugTab } from "../../components/dialogs/settings-tabs/agents-debug-tab"
 import { AgentsKeyboardTab } from "../../components/dialogs/settings-tabs/agents-keyboard-tab"
@@ -64,8 +63,6 @@ export function SettingsContent() {
         return <AgentsPluginsTab />
       case "projects":
         return <AgentsProjectsTab />
-      case "beta":
-        return <AgentsBetaTab />
       case "debug":
         return showDebugTab ? <AgentsDebugTab /> : null
       default:

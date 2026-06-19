@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useAtom } from "jotai"
 import {
   AlertCircle,
   CheckCircle2,
@@ -8,13 +8,15 @@ import {
   RefreshCw,
   RotateCcw,
 } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { devToolsUnlockedAtom } from "../../../lib/atoms"
+import { useI18n } from "../../../lib/i18n"
+import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 import { Button } from "../../ui/button"
 import { Progress } from "../../ui/progress"
 import { Switch } from "../../ui/switch"
-import { trpc } from "../../../lib/trpc"
-import { useI18n } from "../../../lib/i18n"
-import { cn } from "../../../lib/utils"
 
 function useIsNarrowScreen(): boolean {
   const [isNarrow, setIsNarrow] = useState(false)
@@ -46,17 +48,33 @@ function formatDate(value?: string | null): string | null {
 function formatBytes(value?: number | null): string {
   if (!value || value <= 0) return "0 B"
   const units = ["B", "KB", "MB", "GB"]
-  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
-  return `${(value / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
+  const index = Math.min(
+    Math.floor(Math.log(value) / Math.log(1024)),
+    units.length - 1,
+  )
+  return `${(value / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`
 }
+
+const DEVTOOLS_UNLOCK_CLICKS = 5
 
 export function AgentsAboutTab() {
   const { t } = useI18n()
   const utils = trpc.useUtils()
   const isNarrowScreen = useIsNarrowScreen()
+  const [devToolsUnlocked, setDevToolsUnlocked] = useAtom(devToolsUnlockedAtom)
+  const versionClickCountRef = useRef(0)
+  const versionClickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const currentQuery = trpc.appUpdates.getCurrent.useQuery(undefined, {
     refetchInterval: 3000,
   })
+
+  useEffect(() => {
+    return () => {
+      if (versionClickTimeoutRef.current) {
+        clearTimeout(versionClickTimeoutRef.current)
+      }
+    }
+  }, [])
   const openExternalMutation = trpc.external.openExternal.useMutation({
     onError: (error) => toast.error(error.message),
   })
@@ -106,7 +124,8 @@ export function AgentsAboutTab() {
   const releaseDate = formatDate(state?.releaseDate ?? state?.checkedAt)
   const progressPercent = Math.round(state?.progress?.percent ?? 0)
   const isChecking = state?.status === "checking" || checkMutation.isPending
-  const isDownloading = state?.status === "downloading" || downloadMutation.isPending
+  const isDownloading =
+    state?.status === "downloading" || downloadMutation.isPending
   const canCheck = Boolean(state?.supported) && !isChecking && !isDownloading
   const canDownload =
     state?.status === "update-available" && !downloadMutation.isPending
@@ -117,6 +136,22 @@ export function AgentsAboutTab() {
     const url = data?.latestPageUrl || data?.releasesPageUrl
     if (!url) return
     openExternalMutation.mutate(url)
+  }
+
+  const handleVersionClick = () => {
+    if (devToolsUnlocked) return
+    versionClickCountRef.current++
+    if (versionClickTimeoutRef.current) {
+      clearTimeout(versionClickTimeoutRef.current)
+    }
+    versionClickTimeoutRef.current = setTimeout(() => {
+      versionClickCountRef.current = 0
+    }, 2000)
+    if (versionClickCountRef.current >= DEVTOOLS_UNLOCK_CLICKS) {
+      setDevToolsUnlocked(true)
+      versionClickCountRef.current = 0
+      window.desktopApi?.unlockDevTools()
+    }
   }
 
   const statusTitle = (() => {
@@ -188,9 +223,13 @@ export function AgentsAboutTab() {
               {t("settings.about.description")}
             </span>
           </div>
-          <span className="text-sm font-mono text-muted-foreground">
+          <button
+            type="button"
+            onClick={handleVersionClick}
+            className="text-sm font-mono text-muted-foreground cursor-default"
+          >
             v{data?.currentVersion ?? "..."}
-          </span>
+          </button>
         </div>
       </div>
 
@@ -292,7 +331,10 @@ export function AgentsAboutTab() {
                     disabled={!canCheck}
                   >
                     <RefreshCw
-                      className={cn("h-4 w-4 mr-2", isChecking && "animate-spin")}
+                      className={cn(
+                        "h-4 w-4 mr-2",
+                        isChecking && "animate-spin",
+                      )}
                     />
                     {isChecking
                       ? t("settings.about.checking")

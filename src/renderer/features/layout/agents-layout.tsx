@@ -11,13 +11,13 @@ import {
   agentsSettingsDialogOpenAtom,
   agentsSidebarOpenAtom,
   agentsSidebarWidthAtom,
-  betaKanbanEnabledAtom,
   claudeLoginModalConfigAtom,
   customHotkeysAtom,
   helperApisSetupPromptDismissedAtom,
   helperApisSetupPromptPendingAtom,
   isDesktopAtom,
   isFullscreenAtom,
+  kanbanViewEnabledAtom,
   modelsSettingsTargetAtom,
 } from "../../lib/atoms"
 import { useIsMobile } from "../../lib/hooks/use-mobile"
@@ -122,7 +122,7 @@ export function AgentsLayout() {
   const setSelectedDraftId = useSetAtom(selectedDraftIdAtom)
   const setShowNewChatForm = useSetAtom(showNewChatFormAtom)
   const setNewChatTarget = useSetAtom(newChatTargetAtom)
-  const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
+  const kanbanViewEnabled = useAtomValue(kanbanViewEnabledAtom)
   const setDesktopView = useSetAtom(desktopViewAtom)
   const claudeLoginModalConfig = useAtomValue(claudeLoginModalConfigAtom)
 
@@ -398,7 +398,7 @@ export function AgentsLayout() {
     selectedChatId,
     hasSelectedProject: Boolean(validatedProject),
     customHotkeysConfig,
-    betaKanbanEnabled,
+    kanbanViewEnabled,
   })
 
   const handleCloseSidebar = useCallback(() => {

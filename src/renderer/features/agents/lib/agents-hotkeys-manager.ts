@@ -126,7 +126,7 @@ export interface AgentsHotkeysManagerConfig {
   hasSelectedProject?: boolean
   customHotkeysConfig?: CustomHotkeysConfig
   // Feature flags
-  betaKanbanEnabled?: boolean
+  kanbanViewEnabled?: boolean
 }
 
 export interface UseAgentsHotkeysOptions {
@@ -342,7 +342,7 @@ export function useAgentsHotkeys(
       }
 
       // Check open-kanban hotkey (only if feature is enabled)
-      if (config.betaKanbanEnabled) {
+      if (config.kanbanViewEnabled) {
         const openKanbanHotkey = getHotkeyForAction("open-kanban")
         if (openKanbanHotkey && matchesHotkey(e, openKanbanHotkey)) {
           e.preventDefault()
@@ -367,7 +367,7 @@ export function useAgentsHotkeys(
     enabled,
     handleHotkeyAction,
     getHotkeyForAction,
-    config.betaKanbanEnabled,
+    config.kanbanViewEnabled,
   ])
 
   // General hotkey handler for remaining actions

@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useEffect, useMemo, useRef, useState } from "react"
+
 // import { useSearchParams, useRouter } from "next/navigation" // Desktop doesn't use next/navigation
 // Desktop: mock Next.js navigation hooks
 const useSearchParams = () => ({ get: (_key: string) => null as string | null })
@@ -9,51 +10,48 @@ const useRouter = () => ({
   push: (_href: string, _opts?: unknown) => {},
   replace: (_href: string, _opts?: unknown) => {},
 })
+
+import { useShallow } from "zustand/react/shallow"
+// import { ResizableSidebar } from "@/app/(alpha)/canvas/[id]/{components}/resizable-sidebar"
+import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
 import {
-  selectedAgentChatIdAtom,
-  previousAgentChatIdAtom,
-  selectedDraftIdAtom,
-  showNewChatFormAtom,
+  agentsQuickSwitchOpenAtom,
+  agentsQuickSwitchSelectedIndexAtom,
+  ctrlTabTargetAtom,
+  kanbanViewEnabledAtom,
+  subChatsQuickSwitchOpenAtom,
+  subChatsQuickSwitchSelectedIndexAtom,
+} from "../../../lib/atoms"
+import { useIsMobile } from "../../../lib/hooks/use-mobile"
+import { trpc } from "../../../lib/trpc"
+import { KanbanView } from "../../kanban"
+import { SettingsContent } from "../../settings/settings-content"
+import { AgentsSidebar } from "../../sidebar/agents-sidebar"
+import { AgentsSubChatsSidebar } from "../../sidebar/agents-subchats-sidebar"
+import { TerminalSidebar, terminalSidebarOpenAtomFamily } from "../../terminal"
+import { getTerminalScopeKey } from "../../terminal/utils"
+import {
   agentsMobileViewModeAtom,
   agentsSidebarOpenAtom,
   agentsSubChatsSidebarModeAtom,
   agentsSubChatsSidebarWidthAtom,
   desktopViewAtom,
+  previousAgentChatIdAtom,
+  selectedAgentChatIdAtom,
+  selectedDraftIdAtom,
+  showNewChatFormAtom,
 } from "../atoms"
-import {
-  agentsQuickSwitchOpenAtom,
-  agentsQuickSwitchSelectedIndexAtom,
-  subChatsQuickSwitchOpenAtom,
-  subChatsQuickSwitchSelectedIndexAtom,
-  ctrlTabTargetAtom,
-  betaKanbanEnabledAtom,
-} from "../../../lib/atoms"
-import { NewChatForm } from "../main/new-chat-form"
-import { KanbanView } from "../../kanban"
-import { ChatView } from "../main/active-chat"
-import { agentChatApi } from "../lib/agent-chat-api"
-import { trpc } from "../../../lib/trpc"
-import { useIsMobile } from "../../../lib/hooks/use-mobile"
-import { AgentsSidebar } from "../../sidebar/agents-sidebar"
-import { AgentsSubChatsSidebar } from "../../sidebar/agents-subchats-sidebar"
-import { AgentDiffView } from "./agent-diff-view"
-import { TerminalSidebar, terminalSidebarOpenAtomFamily } from "../../terminal"
-import { getTerminalScopeKey } from "../../terminal/utils"
-import {
-  useAgentSubChatStore,
-  type SubChatMeta,
-} from "../stores/sub-chat-store"
-import { useShallow } from "zustand/react/shallow"
-import { motion, AnimatePresence } from "motion/react"
-// import { ResizableSidebar } from "@/app/(alpha)/canvas/[id]/{components}/resizable-sidebar"
-import { ResizableSidebar } from "../../../components/ui/resizable-sidebar"
-import { Button } from "../../../components/ui/button"
-import { AlignJustify } from "lucide-react"
 import { AgentsQuickSwitchDialog } from "../components/agents-quick-switch-dialog"
 import { SubChatsQuickSwitchDialog } from "../components/subchats-quick-switch-dialog"
-import { isDesktopApp } from "../../../lib/utils/platform"
-import { SettingsContent } from "../../settings/settings-content"
+import { agentChatApi } from "../lib/agent-chat-api"
+import { ChatView } from "../main/active-chat"
+import { NewChatForm } from "../main/new-chat-form"
+import {
+  type SubChatMeta,
+  useAgentSubChatStore,
+} from "../stores/sub-chat-store"
 import { AgentWorkbench } from "../workbench/agent-workbench"
+import { AgentDiffView } from "./agent-diff-view"
 
 // Main Component
 export function AgentsContent() {
@@ -61,7 +59,7 @@ export function AgentsContent() {
   const desktopView = useAtomValue(desktopViewAtom)
   const selectedDraftId = useAtomValue(selectedDraftIdAtom)
   const showNewChatForm = useAtomValue(showNewChatFormAtom)
-  const betaKanbanEnabled = useAtomValue(betaKanbanEnabledAtom)
+  const kanbanViewEnabled = useAtomValue(kanbanViewEnabledAtom)
   const [sidebarOpen, setSidebarOpen] = useAtom(agentsSidebarOpenAtom)
   const [mobileViewMode, setMobileViewMode] = useAtom(agentsMobileViewModeAtom)
   const [subChatsSidebarMode, setSubChatsSidebarMode] = useAtom(
@@ -121,13 +119,12 @@ export function AgentsContent() {
   subChatQuickSwitchSelectedIndexRef.current = subChatQuickSwitchSelectedIndex
 
   // Get sub-chats from store with shallow comparison
-  const { allSubChats, openSubChatIds, activeSubChatId, setActiveSubChat } = useAgentSubChatStore(
+  const { allSubChats, openSubChatIds, activeSubChatId } = useAgentSubChatStore(
     useShallow((state) => ({
       allSubChats: state.allSubChats,
       openSubChatIds: state.openSubChatIds,
       activeSubChatId: state.activeSubChatId,
-      setActiveSubChat: state.setActiveSubChat,
-    }))
+    })),
   )
 
   // Update window title when active sub-chat changes
@@ -171,7 +168,10 @@ export function AgentsContent() {
   // Update previousChatId when selectedChatId changes
   useEffect(() => {
     // Only update if we're switching from one chat to another
-    if (prevSelectedChatIdRef.current && prevSelectedChatIdRef.current !== selectedChatId) {
+    if (
+      prevSelectedChatIdRef.current &&
+      prevSelectedChatIdRef.current !== selectedChatId
+    ) {
       setPreviousChatId(prevSelectedChatIdRef.current)
     }
     prevSelectedChatIdRef.current = selectedChatId
@@ -495,7 +495,9 @@ export function AgentsContent() {
     // Put active sub-chat first, keep rest in tab order, limit to 5
     if (activeSubChatId) {
       const activeChat = openSubChats.find((c) => c.id === activeSubChatId)
-      const otherChats = openSubChats.filter((c) => c.id !== activeSubChatId).slice(0, 4)
+      const otherChats = openSubChats
+        .filter((c) => c.id !== activeSubChatId)
+        .slice(0, 4)
       return activeChat ? [activeChat, ...otherChats] : openSubChats.slice(0, 5)
     }
     return openSubChats.slice(0, 5)
@@ -566,9 +568,9 @@ export function AgentsContent() {
             const activeChat = openSubChats.find(
               (c) => c.id === currentActiveId,
             )
-            const otherChats = openSubChats.filter(
-              (c) => c.id !== currentActiveId,
-            ).slice(0, 4)
+            const otherChats = openSubChats
+              .filter((c) => c.id !== currentActiveId)
+              .slice(0, 4)
             frozenSubChatsRef.current = activeChat
               ? [activeChat, ...otherChats]
               : openSubChats.slice(0, 5)
@@ -691,7 +693,11 @@ export function AgentsContent() {
         clearTimeout(subChatHoldTimerRef.current)
       }
     }
-  }, [setSubChatQuickSwitchOpen, setSubChatQuickSwitchSelectedIndex, ctrlTabTarget])
+  }, [
+    setSubChatQuickSwitchOpen,
+    setSubChatQuickSwitchSelectedIndex,
+    ctrlTabTarget,
+  ])
 
   // Note: Cmd+E archive hotkey is handled in AgentsSidebar to share undo stack
 
@@ -738,11 +744,13 @@ export function AgentsContent() {
   const worktreePath = (chatData as any)?.worktreePath as string | undefined
   const canShowDiff = !!worktreePath
   const canShowTerminal = !!worktreePath
-  const repository = (chatData?.meta as { repository?: string } | undefined)?.repository
+  const repository = (chatData?.meta as { repository?: string } | undefined)
+    ?.repository
 
   // Terminal scope key for shared terminals
   const terminalScopeKey = useMemo(() => {
-    if (!selectedChatId || !worktreePath) return `ws:${selectedChatId || "none"}`
+    if (!selectedChatId || !worktreePath)
+      return `ws:${selectedChatId || "none"}`
     return getTerminalScopeKey({
       branch: (chatData as any)?.branch ?? null,
       worktreePath: worktreePath,
@@ -895,7 +903,7 @@ export function AgentsContent() {
             <div className="h-full flex flex-col relative overflow-hidden">
               <NewChatForm key={`new-chat-${newChatFormKeyRef.current}`} />
             </div>
-          ) : betaKanbanEnabled ? (
+          ) : kanbanViewEnabled ? (
             <KanbanView />
           ) : (
             <div className="h-full flex flex-col relative overflow-hidden">

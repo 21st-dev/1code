@@ -1,41 +1,45 @@
-import { useTheme } from "next-themes"
-import { useState, useEffect, useCallback, useMemo } from "react"
-import { IconSpinner } from "../../../icons"
 import { useAtom, useSetAtom } from "jotai"
-import { motion, AnimatePresence } from "motion/react"
-import { cn } from "../../../lib/utils"
-import { useI18n } from "../../../lib/i18n"
-import {
-  selectedFullThemeIdAtom,
-  fullThemeDataAtom,
-  systemLightThemeIdAtom,
-  systemDarkThemeIdAtom,
-  showWorkspaceIconAtom,
-  alwaysExpandTodoListAtom,
-  importedThemesAtom,
-  type VSCodeFullTheme,
-} from "../../../lib/atoms"
-import {
-  BUILTIN_THEMES,
-  getBuiltinThemeById,
-  BUILTIN_THEME_NAMES,
-} from "../../../lib/themes/builtin-themes"
-import {
-  generateCSSVariables,
-  applyCSSVariables,
-  removeCSSVariables,
-  getThemeTypeFromColors,
-} from "../../../lib/themes/vscode-to-css-mapping"
+import { AnimatePresence, motion } from "motion/react"
+import { useTheme } from "next-themes"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Select,
   SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectSeparator,
-  SelectLabel,
   SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
 } from "../../../components/ui/select"
 import { Switch } from "../../../components/ui/switch"
+import { IconSpinner } from "../../../icons"
+import {
+  alwaysExpandTodoListAtom,
+  fullThemeDataAtom,
+  importedThemesAtom,
+  kanbanViewEnabledAtom,
+  selectedFullThemeIdAtom,
+  showWorkspaceIconAtom,
+  systemDarkThemeIdAtom,
+  systemLightThemeIdAtom,
+  type VSCodeFullTheme,
+  vscodeCodeThemeDarkAtom,
+  vscodeCodeThemeLightAtom,
+} from "../../../lib/atoms"
+import { useI18n } from "../../../lib/i18n"
+import {
+  BUILTIN_THEME_NAMES,
+  BUILTIN_THEMES,
+  getBuiltinThemeById,
+} from "../../../lib/themes/builtin-themes"
+import {
+  applyCSSVariables,
+  generateCSSVariables,
+  getThemeTypeFromColors,
+  removeCSSVariables,
+} from "../../../lib/themes/vscode-to-css-mapping"
+import { cn } from "../../../lib/utils"
+import { getThemesByType } from "../../../lib/vscode-themes"
 
 // Hook to detect narrow screen
 function useIsNarrowScreen(): boolean {
@@ -79,7 +83,7 @@ function ThemePreviewBox({
   className?: string
 }) {
   const bgColor = theme?.colors?.["editor.background"] || "#1a1a1a"
-  
+
   // Get accent color, preferring button.background and skipping transparent colors
   const getAccentColor = () => {
     const candidates = [
@@ -95,7 +99,7 @@ function ThemePreviewBox({
     }
     return "#0034FF"
   }
-  
+
   const accentColor = getAccentColor()
   const isDark = theme ? theme.type === "dark" : true
 
@@ -146,10 +150,23 @@ export function AgentsAppearanceTab() {
   const [importedThemes, setImportedThemes] = useAtom(importedThemesAtom)
 
   // Sidebar settings
-  const [showWorkspaceIcon, setShowWorkspaceIcon] = useAtom(showWorkspaceIconAtom)
+  const [showWorkspaceIcon, setShowWorkspaceIcon] = useAtom(
+    showWorkspaceIconAtom,
+  )
+  const [kanbanViewEnabled, setKanbanViewEnabled] = useAtom(
+    kanbanViewEnabledAtom,
+  )
 
   // To-do list preference
-  const [alwaysExpandTodoList, setAlwaysExpandTodoList] = useAtom(alwaysExpandTodoListAtom)
+  const [alwaysExpandTodoList, setAlwaysExpandTodoList] = useAtom(
+    alwaysExpandTodoListAtom,
+  )
+
+  // Code block theme settings
+  const [codeLightThemeId, setCodeLightThemeId] = useAtom(
+    vscodeCodeThemeLightAtom,
+  )
+  const [codeDarkThemeId, setCodeDarkThemeId] = useAtom(vscodeCodeThemeDarkAtom)
 
   // VS Code themes state
   const [isScanning, setIsScanning] = useState(false)
@@ -171,7 +188,7 @@ export function AgentsAppearanceTab() {
         const discovered = await api.scanVSCodeThemes()
         // Filter out themes that are already builtin
         const newThemes = discovered.filter(
-          (t) => !BUILTIN_THEME_NAMES.has(t.name.toLowerCase())
+          (t) => !BUILTIN_THEME_NAMES.has(t.name.toLowerCase()),
         )
 
         // Load all themes in parallel
@@ -185,14 +202,20 @@ export function AgentsAppearanceTab() {
                 source: "imported" as const,
               } as VSCodeFullTheme
             } catch (err) {
-              console.error("[appearance-tab] Failed to load theme:", theme.name, err)
+              console.error(
+                "[appearance-tab] Failed to load theme:",
+                theme.name,
+                err,
+              )
               return null
             }
-          })
+          }),
         )
 
         // Filter out failed loads and update imported themes
-        const validThemes = loadedThemes.filter((t): t is VSCodeFullTheme => t !== null)
+        const validThemes = loadedThemes.filter(
+          (t): t is VSCodeFullTheme => t !== null,
+        )
         setImportedThemes(validThemes)
       } catch (error) {
         console.error("Failed to load VS Code themes:", error)
@@ -213,6 +236,16 @@ export function AgentsAppearanceTab() {
     () => BUILTIN_THEMES.filter((t) => t.type === "light"),
     [],
   )
+  const codeLightThemes = useMemo(() => getThemesByType("light"), [])
+  const codeDarkThemes = useMemo(() => getThemesByType("dark"), [])
+  const selectedCodeLightTheme = useMemo(
+    () => codeLightThemes.find((theme) => theme.id === codeLightThemeId),
+    [codeLightThemes, codeLightThemeId],
+  )
+  const selectedCodeDarkTheme = useMemo(
+    () => codeDarkThemes.find((theme) => theme.id === codeDarkThemeId),
+    [codeDarkThemes, codeDarkThemeId],
+  )
 
   // Is system mode selected
   const isSystemMode = selectedThemeId === null
@@ -223,9 +256,11 @@ export function AgentsAppearanceTab() {
       return null // System mode
     }
     // Check in both builtin and imported themes
-    return BUILTIN_THEMES.find((t) => t.id === selectedThemeId) ||
-           importedThemes.find((t) => t.id === selectedThemeId) ||
-           null
+    return (
+      BUILTIN_THEMES.find((t) => t.id === selectedThemeId) ||
+      importedThemes.find((t) => t.id === selectedThemeId) ||
+      null
+    )
   }, [selectedThemeId, importedThemes])
 
   // Get theme objects for system mode selectors
@@ -261,8 +296,9 @@ export function AgentsAppearanceTab() {
       }
 
       // Check in both builtin and imported themes
-      const theme = BUILTIN_THEMES.find((t) => t.id === themeId) ||
-                    importedThemes.find((t) => t.id === themeId)
+      const theme =
+        BUILTIN_THEMES.find((t) => t.id === themeId) ||
+        importedThemes.find((t) => t.id === themeId)
       if (theme) {
         setFullThemeData(theme)
 
@@ -336,16 +372,6 @@ export function AgentsAppearanceTab() {
       }
     },
     [setSystemDarkThemeId, resolvedTheme, selectedThemeId],
-  )
-
-  // Group imported themes by type
-  const importedDarkThemes = useMemo(
-    () => importedThemes.filter((t) => t.type === "dark"),
-    [importedThemes],
-  )
-  const importedLightThemes = useMemo(
-    () => importedThemes.filter((t) => t.type === "light"),
-    [importedThemes],
   )
 
   // Re-apply theme when system preference changes
@@ -539,7 +565,8 @@ export function AgentsAppearanceTab() {
                     <div className="flex items-center gap-2 min-w-0 -ml-[3px]">
                       <ThemePreviewBox theme={systemLightTheme || null} />
                       <span className="text-xs truncate">
-                        {systemLightTheme?.name || t("settings.appearance.select")}
+                        {systemLightTheme?.name ||
+                          t("settings.appearance.select")}
                       </span>
                     </div>
                   </SelectTrigger>
@@ -575,7 +602,8 @@ export function AgentsAppearanceTab() {
                     <div className="flex items-center gap-2 min-w-0 -ml-[3px]">
                       <ThemePreviewBox theme={systemDarkTheme || null} />
                       <span className="text-xs truncate">
-                        {systemDarkTheme?.name || t("settings.appearance.select")}
+                        {systemDarkTheme?.name ||
+                          t("settings.appearance.select")}
                       </span>
                     </div>
                   </SelectTrigger>
@@ -596,6 +624,70 @@ export function AgentsAppearanceTab() {
         </AnimatePresence>
       </div>
 
+      {/* Code Theme Section */}
+      <div className="space-y-2">
+        <div className="pb-2">
+          <h4 className="text-sm font-medium text-foreground">
+            {t("settings.appearance.codeTheme.title")}
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.appearance.codeTheme.description")}
+          </p>
+        </div>
+        <div className="bg-background rounded-lg border border-border overflow-hidden">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                {t("settings.appearance.codeTheme.light")}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {t("settings.appearance.codeTheme.lightDescription")}
+              </span>
+            </div>
+            <Select
+              value={codeLightThemeId}
+              onValueChange={setCodeLightThemeId}
+            >
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs truncate">
+                  {selectedCodeLightTheme?.name || codeLightThemeId}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {codeLightThemes.map((theme) => (
+                  <SelectItem key={theme.id} value={theme.id}>
+                    {theme.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between p-4 border-t border-border">
+            <div className="flex flex-col space-y-1">
+              <span className="text-sm font-medium text-foreground">
+                {t("settings.appearance.codeTheme.dark")}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {t("settings.appearance.codeTheme.darkDescription")}
+              </span>
+            </div>
+            <Select value={codeDarkThemeId} onValueChange={setCodeDarkThemeId}>
+              <SelectTrigger className="w-auto px-2">
+                <span className="text-xs truncate">
+                  {selectedCodeDarkTheme?.name || codeDarkThemeId}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {codeDarkThemes.map((theme) => (
+                  <SelectItem key={theme.id} value={theme.id}>
+                    {theme.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
 
       {/* Display Options Section */}
       <div className="bg-background rounded-lg border border-border overflow-hidden">
@@ -611,6 +703,20 @@ export function AgentsAppearanceTab() {
           <Switch
             checked={showWorkspaceIcon}
             onCheckedChange={setShowWorkspaceIcon}
+          />
+        </div>
+        <div className="flex items-center justify-between p-4 border-t border-border">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">
+              {t("settings.appearance.kanbanView")}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {t("settings.appearance.kanbanViewDescription")}
+            </span>
+          </div>
+          <Switch
+            checked={kanbanViewEnabled}
+            onCheckedChange={setKanbanViewEnabled}
           />
         </div>
         <div className="flex items-center justify-between p-4 border-t border-border">

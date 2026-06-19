@@ -29,35 +29,35 @@
 
 ## 2. Relocate controls (preserve storage keys)
 
-- [ ] 2.1 Move the Offline / Ollama controls (`showOfflineModeFeaturesAtom`,
+- [x] 2.1 Move the Offline / Ollama controls (`showOfflineModeFeaturesAtom`,
   `autoOfflineModeAtom`, `selectedOllamaModelAtom`) into `agents-models-tab.tsx` as a
   "Local models" section.
-- [ ] 2.2 Move Rollback (`historyEnabledAtom`) into `agents-preferences-tab.tsx`
+- [x] 2.2 Move Rollback (`historyEnabledAtom`) into `agents-preferences-tab.tsx`
   (agent-behavior).
-- [ ] 2.3 Move the Kanban toggle into `agents-appearance-tab.tsx`; rename
+- [x] 2.3 Move the Kanban toggle into `agents-appearance-tab.tsx`; rename
   `betaKanbanEnabledAtom` → `kanbanViewEnabledAtom` **keeping** the
   `preferences:beta-kanban-enabled` storage key; update all readers
   (`agents-sidebar`, `agents-layout`, `agents-content`).
-- [ ] 2.4 Remove the duplicate `ctrlTabTargetAtom` control from
+- [x] 2.4 Remove the duplicate `ctrlTabTargetAtom` control from
   `agents-preferences-tab.tsx`; keep it in `agents-keyboard-tab.tsx` only.
-- [ ] 2.5 Group the 3 notification toggles (`soundNotificationsEnabledAtom`,
+- [x] 2.5 Group the 3 notification toggles (`soundNotificationsEnabledAtom`,
   `desktopNotificationsEnabledAtom`, `notifyWhenFocusedAtom`) under a labeled
   "Notifications" section in `agents-preferences-tab.tsx` (add the i18n label).
 
 ## 3. Surface the code-theme orphan
 
-- [ ] 3.1 Add light + dark code-block theme pickers in `agents-appearance-tab.tsx`
+- [x] 3.1 Add light + dark code-block theme pickers in `agents-appearance-tab.tsx`
   bound to `vscodeCodeThemeLightAtom` / `vscodeCodeThemeDarkAtom`, using the existing
   code-theme list; defaults unchanged. (Leave `usageBudget` untouched — out of scope.)
 
 ## 4. Remove the emptied Beta tab + relocate the unlock
 
-- [ ] 4.1 Delete `agents-beta-tab.tsx`, its `"beta"` case in `settings-content.tsx`,
+- [x] 4.1 Delete `agents-beta-tab.tsx`, its `"beta"` case in `settings-content.tsx`,
   and its entry in `settings-sidebar.tsx` (the `ADVANCED_TABS_BASE` list).
-- [ ] 4.2 Relocate the dev-mode unlock: move the `DEVTOOLS_UNLOCK_CLICKS` 5-click
+- [x] 4.2 Relocate the dev-mode unlock: move the `DEVTOOLS_UNLOCK_CLICKS` 5-click
   counter from the Beta nav item to the About-tab version number; keep
   `devToolsUnlockedAtom` + Debug-tab gating unchanged.
-- [ ] 4.3 Confirm nothing else imports `AgentsBetaTab` or references the removed
+- [x] 4.3 Confirm nothing else imports `AgentsBetaTab` or references the removed
   `"beta"` `SettingsTab` id.
 
 ## 5. Validation

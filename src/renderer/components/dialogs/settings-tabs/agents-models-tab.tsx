@@ -1,8 +1,10 @@
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   ChevronDown,
+  Copy,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -45,6 +47,7 @@ import {
 } from "../../../features/agents/lib/models"
 import {
   agentsLoginModalOpenAtom,
+  autoOfflineModeAtom,
   claudeLoginModalConfigAtom,
   codexLoginModalOpenAtom,
   codexOnboardingAuthMethodAtom,
@@ -54,6 +57,8 @@ import {
   normalizeCodexApiKey,
   OPENAI_TRANSCRIPTION_BASE_URL,
   OPENAI_TRANSCRIPTION_MODEL,
+  selectedOllamaModelAtom,
+  showOfflineModeFeaturesAtom,
 } from "../../../lib/atoms"
 import { useLocalOnlyMode } from "../../../lib/hooks/use-local-only-mode"
 import { type TranslationKey, useI18n } from "../../../lib/i18n"
@@ -82,7 +87,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu"
-import { ClaudeCodeIcon, CodexIcon, SearchIcon } from "../../ui/icons"
+import {
+  ClaudeCodeIcon,
+  CodexIcon,
+  ExternalLinkIcon,
+  SearchIcon,
+} from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import {
@@ -109,6 +119,215 @@ function useIsNarrowScreen(): boolean {
   }, [])
 
   return isNarrow
+}
+
+const MINIMUM_OLLAMA_VERSION = "0.14.2"
+const RECOMMENDED_MODEL = "qwen3-coder:30b"
+
+function LocalModelsSettingsSection() {
+  const { t } = useI18n()
+  const [showOfflineFeatures, setShowOfflineFeatures] = useAtom(
+    showOfflineModeFeaturesAtom,
+  )
+  const [autoOffline, setAutoOffline] = useAtom(autoOfflineModeAtom)
+  const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(
+    selectedOllamaModelAtom,
+  )
+  const [copied, setCopied] = useState(false)
+  const { data: ollamaStatus } = trpc.ollama.getStatus.useQuery(undefined, {
+    enabled: showOfflineFeatures,
+    refetchInterval: showOfflineFeatures ? 30000 : false,
+  })
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(`ollama pull ${RECOMMENDED_MODEL}`)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="pb-2">
+        <h4 className="text-sm font-medium text-foreground">
+          {t("settings.models.localModels.title")}
+        </h4>
+        <p className="text-xs text-muted-foreground">
+          {t("settings.models.localModels.description")}
+        </p>
+      </div>
+
+      <div className="bg-background rounded-lg border border-border overflow-hidden">
+        <div className="flex items-center justify-between gap-4 p-4">
+          <div className="flex flex-col space-y-1">
+            <span className="text-sm font-medium text-foreground">
+              {t("settings.models.offlineMode.title")}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {t("settings.models.offlineMode.description")}
+            </span>
+          </div>
+          <Switch
+            checked={showOfflineFeatures}
+            onCheckedChange={setShowOfflineFeatures}
+          />
+        </div>
+
+        {showOfflineFeatures && (
+          <>
+            <div className="flex items-center justify-between gap-4 p-4 border-t border-border">
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.models.ollamaStatus")}
+                </span>
+                <p className="text-xs text-muted-foreground">
+                  {ollamaStatus?.ollama.available
+                    ? t("settings.models.ollamaRunning", {
+                        count: ollamaStatus.ollama.models.length,
+                      })
+                    : t("settings.models.ollamaNotRunning")}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {ollamaStatus?.ollama.available ? (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span className="text-sm text-emerald-500">
+                      {t("settings.models.available")}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
+                    <span className="text-sm text-muted-foreground">
+                      {t("settings.models.unavailable")}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {ollamaStatus?.ollama.available &&
+              ollamaStatus.ollama.models.length > 0 && (
+                <div className="flex items-center justify-between gap-4 p-4 border-t border-border">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium text-foreground">
+                      {t("settings.models.offlineModel.title")}
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      {t("settings.models.offlineModel.description")}
+                    </p>
+                  </div>
+                  <Select
+                    value={
+                      selectedOllamaModel ||
+                      ollamaStatus.ollama.recommendedModel ||
+                      ollamaStatus.ollama.models[0]
+                    }
+                    onValueChange={(value) => setSelectedOllamaModel(value)}
+                  >
+                    <SelectTrigger className="w-auto shrink-0">
+                      <SelectValue
+                        placeholder={t("settings.models.offlineModel.select")}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ollamaStatus.ollama.models.map((model) => {
+                        const isRecommended =
+                          model === ollamaStatus.ollama.recommendedModel
+                        return (
+                          <SelectItem key={model} value={model}>
+                            <span className="truncate">
+                              {model}
+                              {isRecommended && (
+                                <span className="text-muted-foreground ml-1 text-xs">
+                                  {t("settings.models.recommended")}
+                                </span>
+                              )}
+                            </span>
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+            <div className="flex items-center justify-between gap-4 p-4 border-t border-border">
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.models.autoOfflineMode.title")}
+                </span>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.models.autoOfflineMode.description")}
+                </p>
+              </div>
+              <Switch checked={autoOffline} onCheckedChange={setAutoOffline} />
+            </div>
+
+            <div className="p-4 border-t border-border">
+              <div className="text-xs text-muted-foreground bg-muted p-3 rounded space-y-2">
+                <p className="font-medium">
+                  {t("settings.models.setupInstructions")}
+                </p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>
+                    {t("settings.models.installOllamaPrefix", {
+                      version: MINIMUM_OLLAMA_VERSION,
+                    })}{" "}
+                    <a
+                      href="https://ollama.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline inline-flex items-center gap-0.5"
+                    >
+                      ollama.com
+                      <ExternalLinkIcon className="h-3 w-3" />
+                    </a>
+                  </li>
+                  <li>
+                    {t("settings.models.pullRecommendedModel")}{" "}
+                    <code className="relative inline-flex items-center gap-1 bg-background pl-1.5 pr-0.5 py-0.5 rounded-md">
+                      <span>ollama pull {RECOMMENDED_MODEL}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopy}
+                        className="p-1 hover:bg-muted rounded transition-colors"
+                        title={
+                          copied
+                            ? t("settings.models.copied")
+                            : t("settings.models.copyCommand")
+                        }
+                      >
+                        <div className="relative w-3 h-3">
+                          <Copy
+                            className={cn(
+                              "absolute inset-0 w-3 h-3 text-muted-foreground transition-[opacity,transform] duration-200 ease-out hover:text-foreground",
+                              copied
+                                ? "opacity-0 scale-50"
+                                : "opacity-100 scale-100",
+                            )}
+                          />
+                          <Check
+                            className={cn(
+                              "absolute inset-0 w-3 h-3 text-muted-foreground transition-[opacity,transform] duration-200 ease-out",
+                              copied
+                                ? "opacity-100 scale-100"
+                                : "opacity-0 scale-50",
+                            )}
+                          />
+                        </div>
+                      </button>
+                    </code>
+                  </li>
+                  <li>{t("settings.models.ollamaRunsAutomatically")}</li>
+                </ol>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // Account row component
@@ -2047,6 +2266,8 @@ export function AgentsModelsTab() {
           </div>
         </div>
       </div>
+
+      <LocalModelsSettingsSection />
 
       {/* ===== Accounts Section ===== */}
       <div className="space-y-2">
