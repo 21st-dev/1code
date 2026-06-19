@@ -232,6 +232,7 @@ function eventPayloadForChunk(chunk: Record<string, unknown>): {
           status: "runtime-status",
           ok: chunk.ok === true,
           blocker: toJsonValue(chunk.blocker),
+          mcp: toJsonValue(chunk.mcp),
         },
       }
     }

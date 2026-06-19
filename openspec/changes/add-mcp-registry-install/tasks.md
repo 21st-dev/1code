@@ -42,6 +42,12 @@
 - [ ] 1.2 Probe Locus-managed Codex app-server runs with a known MCP server and record
   whether Locus can observe server connection, tool-list, and successful MCP
   tool-call signals.
+- 2026-06-20 code-level pre-probe recorded in
+  `codex-observability-probe-notes.md`. Locus-managed Codex app-server already
+  calls `mcpServerStatus/list` with `toolsAndAuthOnly`; the summary now preserves
+  `toolNamesByServer` and persists the redacted `mcp` runtime-status payload.
+  This is not checked because a real app-server MCP tool-call success signal is
+  still required.
 - [ ] 1.3 Define verified-state behavior from the probe results. If a runtime lacks a
   required signal, automatic `Verified` upgrades from passive run observation are
   disabled or narrowed for that runtime.

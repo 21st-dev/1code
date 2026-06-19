@@ -178,10 +178,12 @@ function appServerMcpStatusSummary(value: unknown): {
   readyServerCount: number
   serverNames: string[]
   authStatuses: string[]
+  toolNamesByServer: Record<string, string[]>
 } {
   const servers = arrayAt(value, ["data"])
   const serverNames: string[] = []
   const authStatuses: string[] = []
+  const toolNamesByServer: Record<string, string[]> = {}
   let readyServerCount = 0
 
   for (const server of servers) {
@@ -196,6 +198,9 @@ function appServerMcpStatusSummary(value: unknown): {
       typeof record.tools === "object" && record.tools !== null
         ? Object.keys(record.tools as Record<string, unknown>)
         : []
+    if (name && tools.length > 0) {
+      toolNamesByServer[name] = [...new Set(tools)].sort()
+    }
     if (
       tools.length > 0 ||
       authStatus === "unsupported" ||
@@ -211,6 +216,7 @@ function appServerMcpStatusSummary(value: unknown): {
     readyServerCount,
     serverNames,
     authStatuses,
+    toolNamesByServer,
   }
 }
 

@@ -114,6 +114,11 @@ describe("desktop stream event mapper", () => {
           component: "mcp",
           status: "ready",
         },
+        mcp: {
+          serverCount: 1,
+          readyServerCount: 1,
+          serverNames: ["locus_smoke_mcp"],
+        },
       },
     })
   })

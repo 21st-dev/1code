@@ -442,6 +442,9 @@ describe("Codex app-server adapter", () => {
         readyServerCount: 1,
         serverNames: ["smoke-mcp"],
         authStatuses: ["unsupported"],
+        toolNamesByServer: {
+          "smoke-mcp": ["smoke_echo"],
+        },
       },
     })
   })
