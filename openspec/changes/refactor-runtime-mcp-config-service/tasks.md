@@ -69,4 +69,11 @@
     rather than a second Locus write/status path. Renderer/userData scanning
     checked 22 actual token values from the isolated Claude/Codex credential
     files and found 0 matches in `/private/tmp/locus-mcp-auth-smoke`.
+  - Closeout status: the service extraction, route delegation, runtime
+    materialization, and Claude/Codex add/login/refresh paths are complete and
+    verified. This change may be proposed for closeout with a known external
+    blocker, but it is not 100% complete and this task must remain unchecked
+    until Codex logout can be verified. The follow-up product fix is tracked
+    separately and only improves the Codex logout failure UX; it must not mutate
+    Codex credential state or delete keyring entries outside the Codex CLI.
 - [x] 3.6 `openspec validate refactor-runtime-mcp-config-service --strict --no-interactive`.
