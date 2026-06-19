@@ -67,6 +67,15 @@ let codexCliCalls: CodexCliCall[] = []
 let mcpOAuthCalls: McpOAuthCall[] = []
 let tempDirs: string[] = []
 let mockHome = originalHome || realOs.tmpdir()
+let enabledPluginSources: string[] = []
+let approvedPluginMcpServers: string[] = []
+let pluginMcpConfigs: Array<{
+  pluginSource: string
+  pluginReviewKey: string
+  reviewGate: { canUseMcp: boolean; status: string; reasons: string[] }
+  mcpServers: Record<string, MockMcpServerConfig>
+  approvalIdentifiers: Record<string, string>
+}> = []
 
 function clone<T>(value: T): T {
   return value === undefined ? value : (JSON.parse(JSON.stringify(value)) as T)
@@ -223,12 +232,12 @@ mock.module("../src/main/lib/oauth", () => ({
 }))
 
 mock.module("../src/main/lib/plugins", () => ({
-  discoverPluginMcpServers: async () => [],
+  discoverPluginMcpServers: async () => clone(pluginMcpConfigs),
 }))
 
 mock.module("../src/main/lib/trpc/routers/claude-settings", () => ({
-  getApprovedPluginMcpServers: async () => [],
-  getEnabledPlugins: async () => [],
+  getApprovedPluginMcpServers: async () => clone(approvedPluginMcpServers),
+  getEnabledPlugins: async () => clone(enabledPluginSources),
 }))
 
 mock.module("../src/main/lib/claude/agent-sdk-config-dir", () => ({
@@ -262,6 +271,9 @@ beforeEach(() => {
   codexMcpListStdout = "[]"
   codexCliCalls = []
   mcpOAuthCalls = []
+  enabledPluginSources = []
+  approvedPluginMcpServers = []
+  pluginMcpConfigs = []
   runCodexCliCheckedMock.mockClear()
   claudeMcpConfig.refreshClaudeMcpConfig()
   codexMcpConfig.clearCodexMcpConfigCache()
@@ -397,6 +409,54 @@ describe("Runtime MCP config service behavior", () => {
         command: "node",
       }),
     ).rejects.toThrow("registered project path")
+  })
+
+  test("displays plugin-sourced MCP servers under plugin ownership", async () => {
+    enabledPluginSources = ["market:demo"]
+    approvedPluginMcpServers = ["approved-demo-server"]
+    pluginMcpConfigs = [
+      {
+        pluginSource: "market:demo",
+        pluginReviewKey: "sha256:review",
+        reviewGate: { canUseMcp: true, status: "trusted", reasons: [] },
+        mcpServers: {
+          approved_tool: { command: "approved-plugin-tool" },
+          pending_tool: { command: "pending-plugin-tool" },
+        },
+        approvalIdentifiers: {
+          approved_tool: "approved-demo-server",
+          pending_tool: "pending-demo-server",
+        },
+      },
+    ]
+
+    const settings = await claudeMcpConfig.getAllMcpConfigHandler()
+    const pluginGroup = settings.groups.find(
+      (group) => group.groupName === "Plugin: market:demo",
+    )
+
+    expect(pluginGroup).toMatchObject({
+      projectPath: null,
+      mcpServers: expect.arrayContaining([
+        expect.objectContaining({
+          name: "approved_tool",
+          isApproved: true,
+        }),
+        expect.objectContaining({
+          name: "pending_tool",
+          status: "pending-approval",
+          isApproved: false,
+        }),
+      ]),
+    })
+
+    const runtime = await claudeMcpConfig.resolveClaudeMcpServersForSdk({
+      isolatedConfigReady: true,
+      runtimeCwd: process.cwd(),
+    })
+
+    expect(runtime.mcpServersForSdk).toHaveProperty("approved_tool")
+    expect(runtime.mcpServersForSdk).not.toHaveProperty("pending_tool")
   })
 
   test("preserves Codex list/status/auth commands and current global-only writes", async () => {

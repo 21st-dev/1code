@@ -210,9 +210,14 @@
   `_locusMcpRegistry` without `_locusPluginMcp`, registry management sources
   cannot write plugin MCP provenance, and Plugins router/tab sources do not read
   registry provenance or `mcpRegistry` execution items.
-- [ ] 3.10 Display plugin-sourced MCP servers with source attribution only after the
+- [x] 3.10 Display plugin-sourced MCP servers with source attribution only after the
   prerequisite Plugin MCP ownership behavior has landed; defer approve/revoke/enable
   to Plugins.
+- 2026-06-20 added service/UI guard coverage: plugin MCP servers appear under a
+  `Plugin: <source>` settings group with pending approval state when unapproved,
+  only approved plugin MCP servers enter Claude SDK runtime input, and the MCP
+  tab keeps plugin-sourced edit/toggle controls disabled so Plugins retains
+  approve/revoke/enable ownership.
 
 ## 4. Local Verification
 

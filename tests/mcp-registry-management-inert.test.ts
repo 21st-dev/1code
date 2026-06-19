@@ -20,6 +20,13 @@ const pluginsTabSource = readFileSync(
   ),
   "utf8",
 )
+const mcpTabSource = readFileSync(
+  join(
+    process.cwd(),
+    "src/renderer/components/dialogs/settings-tabs/agents-mcp-tab.tsx",
+  ),
+  "utf8",
+)
 
 describe("MCP registry management-time inert boundary", () => {
   test("does not import process execution or route-local MCP helpers", () => {
@@ -60,5 +67,27 @@ describe("MCP registry management-time inert boundary", () => {
     expect(pluginsTabSource).not.toContain("_locusMcpRegistry")
     expect(pluginsTabSource).not.toContain("mcpRegistry")
     expect(pluginsTabSource).not.toContain("McpRegistry")
+  })
+
+  test("keeps plugin-sourced MCP controls owned by Plugins in the MCP tab", () => {
+    const editableBlock = mcpTabSource.slice(
+      mcpTabSource.indexOf("const isEditableServer"),
+      mcpTabSource.indexOf("const getScopeFromServer"),
+    )
+    const toggleableBlock = mcpTabSource.slice(
+      mcpTabSource.indexOf("const isToggleableServer"),
+      mcpTabSource.indexOf("const selectedCodexLogoutFailure"),
+    )
+
+    expect(mcpTabSource).toContain(
+      'groupName.toLowerCase().startsWith("plugin:")',
+    )
+    expect(editableBlock).toContain(
+      'return !item.groupName.toLowerCase().includes("plugin")',
+    )
+    expect(toggleableBlock).toContain('item.provider === "claude-code"')
+    expect(toggleableBlock).toContain(
+      '!item.groupName.toLowerCase().includes("plugin")',
+    )
   })
 })
