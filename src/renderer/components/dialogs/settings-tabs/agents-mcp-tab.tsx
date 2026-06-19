@@ -51,6 +51,7 @@ import {
   AlertDialogTitle,
 } from "../../ui/alert-dialog"
 import { Button } from "../../ui/button"
+import { Checkbox } from "../../ui/checkbox"
 import { LoadingDot, OriginalMCPIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
@@ -96,6 +97,15 @@ type McpRegistryDetailResult = {
   entry: McpRegistryEntry
   previews: McpRegistryInstallPreview[]
 }
+
+type RegistrySetupInputState = {
+  env: Record<string, string>
+  headers: Record<string, string>
+  variables: Record<string, string>
+  localDependencies: Record<string, boolean>
+}
+
+type RegistryResolvedSetupFieldValue = string | { envVar: string }
 
 // Status indicator dot - exported for reuse in other components
 export function McpStatusDot({
@@ -294,13 +304,129 @@ function canInstallRegistryPreviewToClaude(
   const claude = preview.runtimeInstallability.find(
     (item) => item.runtime === "claude-code",
   )
-  const claudeSetup = preview.setupClassifications.find(
+  return Boolean(claude?.installableConfig)
+}
+
+function getClaudeRegistrySetup(
+  preview: McpRegistryInstallPreview | null,
+): McpRegistrySetupClassification | undefined {
+  return preview?.setupClassifications.find(
     (item) => item.runtime === "claude-code",
   )
-  return (
-    claude?.status === "installable-config" &&
-    claudeSetup?.missingSetupBehavior === "none"
+}
+
+function createEmptyRegistrySetupInputState(): RegistrySetupInputState {
+  return {
+    env: {},
+    headers: {},
+    variables: {},
+    localDependencies: {},
+  }
+}
+
+function setupInputValue(
+  state: RegistrySetupInputState,
+  source: "env" | "header" | "variable",
+  key: string,
+): string {
+  if (source === "env") return state.env[key] ?? ""
+  if (source === "header") return state.headers[key] ?? ""
+  return state.variables[key] ?? ""
+}
+
+function setSetupInputValue(
+  state: RegistrySetupInputState,
+  source: "env" | "header" | "variable",
+  key: string,
+  value: string,
+): RegistrySetupInputState {
+  if (source === "env") {
+    return { ...state, env: { ...state.env, [key]: value } }
+  }
+  if (source === "header") {
+    return { ...state, headers: { ...state.headers, [key]: value } }
+  }
+  return { ...state, variables: { ...state.variables, [key]: value } }
+}
+
+function setupFieldsForSource(
+  preview: McpRegistryInstallPreview,
+  source: "env" | "header" | "variable",
+): McpRegistryInstallPreviewSetupField[] {
+  if (source === "env") return preview.env
+  if (source === "header") return preview.headers
+  return preview.variables
+}
+
+function registrySetupMissingInputs(
+  preview: McpRegistryInstallPreview | null,
+  state: RegistrySetupInputState,
+): string[] {
+  if (!preview) return []
+  const missing: string[] = []
+  for (const source of ["env", "header", "variable"] as const) {
+    for (const field of setupFieldsForSource(preview, source)) {
+      if (field.required && !setupInputValue(state, source, field.key).trim()) {
+        missing.push(`${source}:${field.key}`)
+      }
+    }
+  }
+
+  const setup = getClaudeRegistrySetup(preview)
+  if (setup?.oauthMissing) missing.push("oauth")
+  if (setup?.runtimeAuthMissing) missing.push("runtime-auth:claude-code")
+  for (const dependency of setup?.localDependencies ?? []) {
+    if (
+      dependency.missing &&
+      state.localDependencies[dependency.key] !== true
+    ) {
+      missing.push(`local-dependency:${dependency.key}`)
+    }
+  }
+
+  return missing
+}
+
+function parseRegistrySetupEnvVarReference(value: string): string | undefined {
+  const match = value.match(/^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/)
+  return match?.[1]
+}
+
+function compactSetupValues(
+  values: Record<string, string>,
+): Record<string, RegistryResolvedSetupFieldValue> | undefined {
+  const compacted = Object.fromEntries(
+    Object.entries(values)
+      .map(([key, value]) => {
+        const trimmed = value.trim()
+        const envVar = parseRegistrySetupEnvVarReference(trimmed)
+        return [key, envVar ? { envVar } : trimmed] as const
+      })
+      .filter(([, value]) =>
+        typeof value === "string" ? value.length > 0 : true,
+      ),
   )
+  return Object.keys(compacted).length > 0 ? compacted : undefined
+}
+
+function buildRegistryResolvedSetup(state: RegistrySetupInputState): {
+  env?: Record<string, RegistryResolvedSetupFieldValue>
+  headers?: Record<string, RegistryResolvedSetupFieldValue>
+  variables?: Record<string, RegistryResolvedSetupFieldValue>
+  localDependencies?: Record<string, boolean>
+} {
+  const localDependencies = Object.fromEntries(
+    Object.entries(state.localDependencies).filter(([, value]) => value),
+  )
+  const env = compactSetupValues(state.env)
+  const headers = compactSetupValues(state.headers)
+  const variables = compactSetupValues(state.variables)
+  return {
+    ...(env ? { env } : {}),
+    ...(headers ? { headers } : {}),
+    ...(variables ? { variables } : {}),
+    ...(Object.keys(localDependencies).length > 0 ? { localDependencies } : {}),
+  }
 }
 
 function runtimeSetupLabel(setup: McpRegistrySetupClassification): string {
@@ -1307,6 +1433,156 @@ function RegistrySetupFieldChips({
   )
 }
 
+function RegistrySetupInputGroup({
+  title,
+  source,
+  fields,
+  state,
+  onChange,
+}: {
+  title: string
+  source: "env" | "header" | "variable"
+  fields: McpRegistryInstallPreviewSetupField[]
+  state: RegistrySetupInputState
+  onChange: (next: RegistrySetupInputState) => void
+}) {
+  const { t } = useI18n()
+  if (fields.length === 0) return null
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <div className="grid gap-2">
+        {fields.map((field) => (
+          <div key={`${source}:${field.key}`} className="grid gap-1.5">
+            <Label
+              htmlFor={`registry-setup-${source}-${field.key}`}
+              className="flex items-center gap-1 text-xs"
+            >
+              <span>{field.key}</span>
+              {field.required && (
+                <span className="text-yellow-300">
+                  {t("settings.mcp.registryRequired")}
+                </span>
+              )}
+            </Label>
+            <Input
+              id={`registry-setup-${source}-${field.key}`}
+              type={field.secret ? "password" : "text"}
+              autoComplete="off"
+              placeholder={field.placeholder || field.description || field.key}
+              value={setupInputValue(state, source, field.key)}
+              onChange={(event) =>
+                onChange(
+                  setSetupInputValue(
+                    state,
+                    source,
+                    field.key,
+                    event.target.value,
+                  ),
+                )
+              }
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function RegistryInstallSetupForm({
+  preview,
+  state,
+  onChange,
+  missingInputs,
+}: {
+  preview: McpRegistryInstallPreview
+  state: RegistrySetupInputState
+  onChange: (next: RegistrySetupInputState) => void
+  missingInputs: string[]
+}) {
+  const { t } = useI18n()
+  const setup = getClaudeRegistrySetup(preview)
+  const dependencies = setup?.localDependencies ?? []
+  const hasSetup =
+    preview.env.length > 0 ||
+    preview.headers.length > 0 ||
+    preview.variables.length > 0 ||
+    dependencies.length > 0 ||
+    missingInputs.length > 0
+
+  if (!hasSetup) return null
+
+  return (
+    <div className="mt-3 space-y-3 rounded-md border border-border bg-background px-3 py-3">
+      <RegistrySetupInputGroup
+        title={t("settings.mcp.envKeys")}
+        source="env"
+        fields={preview.env}
+        state={state}
+        onChange={onChange}
+      />
+      <RegistrySetupInputGroup
+        title={t("settings.mcp.headerKeys")}
+        source="header"
+        fields={preview.headers}
+        state={state}
+        onChange={onChange}
+      />
+      <RegistrySetupInputGroup
+        title={t("settings.mcp.registryVariables")}
+        source="variable"
+        fields={preview.variables}
+        state={state}
+        onChange={onChange}
+      />
+      {dependencies.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t("settings.mcp.registryLocalDependencies")}
+          </p>
+          <div className="grid gap-2">
+            {dependencies.map((dependency) => (
+              <Label
+                key={dependency.key}
+                className="flex items-center gap-2 text-xs text-foreground"
+              >
+                <Checkbox
+                  checked={state.localDependencies[dependency.key] === true}
+                  onCheckedChange={(checked) =>
+                    onChange({
+                      ...state,
+                      localDependencies: {
+                        ...state.localDependencies,
+                        [dependency.key]: checked === true,
+                      },
+                    })
+                  }
+                />
+                <span className="font-mono text-[11px]">{dependency.key}</span>
+              </Label>
+            ))}
+          </div>
+        </div>
+      )}
+      {missingInputs.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {missingInputs.map((key) => (
+            <span
+              key={key}
+              className="rounded bg-yellow-500/10 px-1.5 py-0.5 font-mono text-[10px] text-yellow-200"
+            >
+              {key}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function McpRegistryPreviewCard({
   preview,
   onInstall,
@@ -1618,6 +1894,8 @@ export function AgentsMcpTab() {
     useState<CodexLogoutFailure | null>(null)
   const [registryInstallPreview, setRegistryInstallPreview] =
     useState<McpRegistryInstallPreview | null>(null)
+  const [registrySetupInput, setRegistrySetupInput] =
+    useState<RegistrySetupInputState>(createEmptyRegistrySetupInputState)
   const [deletingServer, setDeletingServer] = useState<{
     provider: McpProvider
     server: McpServer
@@ -1648,6 +1926,16 @@ export function AgentsMcpTab() {
   }, [])
 
   const showImportPreview = showImportPreviewPanel || !!importPreview
+  const missingRegistrySetupInputs = useMemo(
+    () =>
+      registrySetupMissingInputs(registryInstallPreview, registrySetupInput),
+    [registryInstallPreview, registrySetupInput],
+  )
+  const registryInstallBlockedByMissingSetup = Boolean(
+    missingRegistrySetupInputs.length > 0 &&
+      getClaudeRegistrySetup(registryInstallPreview)?.missingSetupBehavior ===
+        "block-install",
+  )
 
   const openImportPreview = useCallback((preview: McpImportPreview) => {
     setMcpViewMode("configured")
@@ -1671,6 +1959,14 @@ export function AgentsMcpTab() {
       setSelectedRegistryEntryKey(null)
     }
   }, [])
+
+  const openRegistryInstallPreview = useCallback(
+    (preview: McpRegistryInstallPreview) => {
+      setRegistrySetupInput(createEmptyRegistrySetupInputState())
+      setRegistryInstallPreview(preview)
+    },
+    [],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -1926,6 +2222,7 @@ export function AgentsMcpTab() {
         runtime: "claude-code",
         scope,
         ...(selectedProject?.path ? { projectPath: selectedProject.path } : {}),
+        resolvedSetup: buildRegistryResolvedSetup(registrySetupInput),
       })
       setRegistryInstallPreview(null)
       toast.success(
@@ -1941,6 +2238,7 @@ export function AgentsMcpTab() {
     }
   }, [
     registryInstallPreview,
+    registrySetupInput,
     selectedProject?.path,
     installRegistryMutation,
     handleRefresh,
@@ -2474,7 +2772,7 @@ export function AgentsMcpTab() {
             detail={mcpRegistryDetailQuery.data}
             isLoading={mcpRegistryDetailQuery.isLoading}
             error={mcpRegistryDetailQuery.error}
-            onInstallPreview={setRegistryInstallPreview}
+            onInstallPreview={openRegistryInstallPreview}
             installingTargetId={
               installRegistryMutation.isPending
                 ? registryInstallPreview?.targetId
@@ -2645,6 +2943,12 @@ export function AgentsMcpTab() {
                   {registryInstallPreview.targetId}
                 </span>
               </div>
+              <RegistryInstallSetupForm
+                preview={registryInstallPreview}
+                state={registrySetupInput}
+                onChange={setRegistrySetupInput}
+                missingInputs={missingRegistrySetupInputs}
+              />
             </div>
           )}
           <AlertDialogFooter>
@@ -2656,7 +2960,9 @@ export function AgentsMcpTab() {
                 void handleConfirmRegistryInstall()
               }}
               disabled={
-                !registryInstallPreview || installRegistryMutation.isPending
+                !registryInstallPreview ||
+                installRegistryMutation.isPending ||
+                registryInstallBlockedByMissingSetup
               }
             >
               {installRegistryMutation.isPending && (

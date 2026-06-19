@@ -27,6 +27,7 @@ export interface McpServerConfig {
   url?: string
   authType?: "oauth" | "bearer" | "none"
   _locusPluginMcp?: LocusPluginMcpProvenance
+  _locusMcpRegistry?: Record<string, unknown>
   _oauth?: {
     accessToken: string
     refreshToken?: string

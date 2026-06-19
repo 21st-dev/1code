@@ -136,7 +136,8 @@
   `trpc.mcpRegistry.list`/`detail`, with a redacted install-preview detail panel.
   This was later completed with a Claude setup-free install confirmation action.
 - 2026-06-20 added the renderer install confirmation action for Claude
-  setup-free targets. Targets requiring setup remain non-installable until 3.2.
+  setup-free targets. Later setup-resolution slices added resolved setup input
+  and inactive `Installed / Needs setup` staging for missing setup.
 - [ ] 3.2 Implement setup resolution for env var references, secret values,
   OAuth/runtime auth, local dependency status, and missing setup display, with secret
   values kept in main-process or runtime-owned secure storage and renderer metadata
@@ -144,9 +145,20 @@
 - 2026-06-20 registry previews now include renderer-facing setup classifications
   for Claude and Codex: required/optional/missing env, headers, variables, bearer
   token env refs, OAuth/runtime auth, local dependency blockers, and
-  `block-install` behavior. The MCP tab displays the missing setup keys without
-  secret values. Secret capture/storage and resolved setup submission remain
-  pending.
+  inactive-or-block behavior. The MCP tab displays the missing setup keys without
+  secret values.
+- 2026-06-20 Claude service/runtime slice landed: install accepts resolved env,
+  header, variable, bearer-env-ref, and local-dependency setup; secret setup
+  values are encrypted before writing Claude config and materialized only in the
+  main-process Claude runtime path. Renderer setup capture/submission and the
+  OAuth/runtime-auth product flow remain pending, so this task is not checked yet.
+- 2026-06-20 renderer install confirmation now captures required/optional env,
+  header, and variable values plus local dependency confirmation, then submits
+  redacted-preview setup through `resolvedSetup`. OAuth/runtime-auth setup remains
+  a blocker rather than a fake install path, so this task remains unchecked.
+- 2026-06-20 renderer setup submission now treats `$ENV_NAME` and `${ENV_NAME}`
+  as env-var references, while service tests prove env-var refs are stored as
+  refs and resolved only in the main-process Claude runtime path.
 - [x] 3.3 On install confirmation, write through the Runtime MCP Config service and
   target adapter, not through route-local Claude/Codex helpers.
 - 2026-06-20 added a Claude-only registry install service path that materializes
@@ -179,16 +191,25 @@
 - 2026-06-20 Claude registry install writes `_locusMcpRegistry` metadata with
   `installed-unverified`, entry fingerprint, and config fingerprint. Renderer
   status display and local verification upgrades remain pending.
-- [ ] 3.7 If required setup is missing and the adapter supports inactive config, save as
+- [x] 3.7 If required setup is missing and the adapter supports inactive config, save as
   `Installed / Needs setup` and exclude the server from runs until setup is resolved.
+- 2026-06-20 runtime exclusion slice landed: Claude Runtime MCP Config now keeps
+  `disabled` and registry `installed-needs-setup` servers out of Locus-managed
+  Claude SDK runs and reports them as disabled in Settings.
+- 2026-06-20 Claude install now writes missing-setup registry targets as disabled
+  `installed-needs-setup` configs with missing setup reasons. Runtime tests prove
+  they are excluded from Claude SDK runs until setup is resolved.
 - [x] 3.8 If required setup is missing and the adapter cannot keep the server inactive,
   block install before writing active runtime config and show the missing setup keys.
-- 2026-06-20 current Claude/Codex adapters cannot safely stage incomplete registry
-  config as inactive, so missing setup is `block-install`. The MCP tab displays
-  missing setup keys, and service tests prove install rejects before calling the
-  injected config writer.
-- [ ] 3.9 Keep registry-sourced servers MCP-only and out of Plugins as plugin execution
+- 2026-06-20 Claude now supports the inactive branch. Codex registry install remains
+  deferred/unavailable rather than writing active incomplete config. The MCP tab
+  displays missing setup keys and runtime setup behavior before confirmation.
+- [x] 3.9 Keep registry-sourced servers MCP-only and out of Plugins as plugin execution
   items.
+- 2026-06-20 added registry/plugin boundary coverage: registry install writes
+  `_locusMcpRegistry` without `_locusPluginMcp`, registry management sources
+  cannot write plugin MCP provenance, and Plugins router/tab sources do not read
+  registry provenance or `mcpRegistry` execution items.
 - [ ] 3.10 Display plugin-sourced MCP servers with source attribution only after the
   prerequisite Plugin MCP ownership behavior has landed; defer approve/revoke/enable
   to Plugins.
@@ -222,12 +243,12 @@
 - 2026-06-20 preview tests assert setup classifications expose missing keys while
   redacting registry-provided secret URL/header/env/arg values. Full setup
   resolution storage tests remain pending.
-- [ ] 5.3 Tests proving missing required setup either saves an inactive
+- [x] 5.3 Tests proving missing required setup either saves an inactive
   `Installed / Needs setup` server excluded from runs or blocks install when inactive
   state is unavailable.
-- 2026-06-20 added service coverage for the current block-install path: required
-  setup rejects before config write. The inactive `Installed / Needs setup` branch
-  remains pending until an adapter can safely stage incomplete config.
+- 2026-06-20 added service and runtime coverage for the Claude inactive branch:
+  missing setup writes disabled `installed-needs-setup` config, and
+  Locus-managed Claude SDK runs exclude disabled and registry needs-setup servers.
 - [ ] 5.4 Tests proving browse/preview/install do not execute registry server
   commands, package managers, Docker, MCP server processes, or MCP tools.
 - [ ] 5.5 Tests proving explicit Check does not call unsafe/unclassified tools.

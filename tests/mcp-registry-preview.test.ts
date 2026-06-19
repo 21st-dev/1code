@@ -115,7 +115,7 @@ describe("MCP registry install preview", () => {
         "env:SECRET_TOOLS_TOKEN",
         "local-dependency:package:npm:@example/secret-tools",
       ],
-      missingSetupBehavior: "block-install",
+      missingSetupBehavior: "save-needs-setup",
     })
     expect(
       preview.setupClassifications.find((setup) => setup.runtime === "codex"),
@@ -221,7 +221,7 @@ describe("MCP registry install preview", () => {
         },
       ],
       missingKeys: ["bearer-token-env:Authorization", "header:Authorization"],
-      missingSetupBehavior: "block-install",
+      missingSetupBehavior: "save-needs-setup",
     })
     expect(JSON.stringify(previews[0])).not.toContain("url-secret")
     expect(JSON.stringify(previews[0])).not.toContain("header-secret")

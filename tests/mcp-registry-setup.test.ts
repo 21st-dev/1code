@@ -64,8 +64,8 @@ describe("MCP registry setup classification", () => {
         "env:SETUP_TOKEN",
         "local-dependency:package:npm:@example/setup",
       ],
-      adapterCanKeepIncompleteInactive: false,
-      missingSetupBehavior: "block-install",
+      adapterCanKeepIncompleteInactive: true,
+      missingSetupBehavior: "save-needs-setup",
     })
 
     expect(

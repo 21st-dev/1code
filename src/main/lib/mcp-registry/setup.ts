@@ -5,14 +5,22 @@ import type {
 } from "./normalize"
 
 export type McpRegistrySetupResolutionInput = {
-  env?: Record<string, boolean>
-  headers?: Record<string, boolean>
-  variables?: Record<string, boolean>
+  env?: Record<string, McpRegistryResolvedSetupValue>
+  headers?: Record<string, McpRegistryResolvedSetupValue>
+  variables?: Record<string, McpRegistryResolvedSetupValue>
   bearerTokenEnvRefs?: Record<string, string | undefined>
   localDependencies?: Record<string, boolean>
   oauthAuthenticated?: boolean
   runtimeAuthenticated?: boolean
 }
+
+export type McpRegistryResolvedSetupValue =
+  | boolean
+  | string
+  | {
+      value?: string
+      envVar?: string
+    }
 
 export type McpRegistrySetupKeySummary = {
   required: string[]
@@ -49,7 +57,9 @@ export type McpRegistrySetupClassification = {
 
 function classifyFields(
   fields: McpRegistrySetupField[],
-  resolved: Record<string, boolean> | undefined,
+  resolved: Record<string, McpRegistryResolvedSetupValue> | undefined,
+  isResolved: (field: McpRegistrySetupField) => boolean = (field) =>
+    isResolvedSetupValue(resolved?.[field.name]),
 ): McpRegistrySetupKeySummary {
   const required = fields
     .filter((field) => field.required)
@@ -59,8 +69,42 @@ function classifyFields(
     .filter((field) => !field.required)
     .map((field) => field.name)
     .sort()
-  const missing = required.filter((key) => resolved?.[key] !== true).sort()
+  const missing = required
+    .filter((key) => {
+      const field = fields.find((candidate) => candidate.name === key)
+      return !field || !isResolved(field)
+    })
+    .sort()
   return { required, optional, missing }
+}
+
+function trimmed(value: string | undefined): string | undefined {
+  const next = value?.trim()
+  return next ? next : undefined
+}
+
+export function getResolvedSetupPlainValue(
+  value: McpRegistryResolvedSetupValue | undefined,
+): string | undefined {
+  if (typeof value === "string") return trimmed(value)
+  if (!value || typeof value !== "object") return undefined
+  return trimmed(value.value)
+}
+
+export function getResolvedSetupEnvVar(
+  value: McpRegistryResolvedSetupValue | undefined,
+): string | undefined {
+  if (!value || typeof value !== "object") return undefined
+  return trimmed(value.envVar)
+}
+
+export function isResolvedSetupValue(
+  value: McpRegistryResolvedSetupValue | undefined,
+): boolean {
+  if (value === true) return true
+  if (typeof value === "string") return Boolean(trimmed(value))
+  if (!value || typeof value !== "object") return false
+  return Boolean(trimmed(value.value) || trimmed(value.envVar))
 }
 
 function bearerHeaderNames(target: McpRegistryInstallTarget): string[] {
@@ -79,9 +123,7 @@ function localDependencyKeys(target: McpRegistryInstallTarget): string[] {
 }
 
 function adapterCanKeepInactive(runtime: McpRegistryRuntimeId): boolean {
-  // Current Claude/Codex write adapters do not safely stage incomplete registry
-  // installs as inactive runtime config. Missing required setup blocks install.
-  if (runtime === "claude-code") return false
+  if (runtime === "claude-code") return true
   if (runtime === "codex") return false
   return false
 }
@@ -95,6 +137,9 @@ export function classifyMcpRegistrySetup(input: {
   const headers = classifyFields(
     input.target.headerSchema,
     input.resolved?.headers,
+    (field) =>
+      isResolvedSetupValue(input.resolved?.headers?.[field.name]) ||
+      Boolean(input.resolved?.bearerTokenEnvRefs?.[field.name]?.trim()),
   )
   const variables = classifyFields(
     input.target.variableSchema,
@@ -106,7 +151,9 @@ export function classifyMcpRegistrySetup(input: {
       return {
         headerName,
         ...(envName ? { envName } : {}),
-        missing: !envName,
+        missing:
+          !envName &&
+          !isResolvedSetupValue(input.resolved?.headers?.[headerName]),
       }
     },
   )

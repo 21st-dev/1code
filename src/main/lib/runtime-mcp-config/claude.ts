@@ -30,6 +30,10 @@ import {
   getMcpAuthStatus as readMcpAuthStatus,
   startMcpOAuth as startMcpOAuthFlow,
 } from "../mcp-auth"
+import {
+  isMcpRegistryServerInactiveForRuntime,
+  materializeMcpRegistryServerConfigForRuntime,
+} from "../mcp-registry/secrets"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../oauth"
 import { discoverPluginMcpServers, type PluginMcpConfig } from "../plugins"
 import {
@@ -105,7 +109,8 @@ function getMcpServersForScope(
 }
 
 function assertWritableClaudeMcpConfig(config: McpServerConfig): void {
-  const command = typeof config.command === "string" ? config.command.trim() : ""
+  const command =
+    typeof config.command === "string" ? config.command.trim() : ""
   const url = typeof config.url === "string" ? config.url.trim() : ""
   if (!command && !url) {
     throw new Error("Claude MCP server config requires command or URL")
@@ -195,6 +200,13 @@ export function clearClaudeCaches(): void {
 }
 
 function getServerStatusFromConfig(serverConfig: McpServerConfig): string {
+  if (
+    serverConfig.disabled === true ||
+    isMcpRegistryServerInactiveForRuntime(serverConfig)
+  ) {
+    return "disabled"
+  }
+
   const headers = serverConfig.headers as Record<string, string> | undefined
   const { _oauth: oauth, authType } = serverConfig
 
@@ -217,6 +229,15 @@ function getServerStatusFromConfig(serverConfig: McpServerConfig): string {
   return "connected"
 }
 
+function shouldIncludeClaudeMcpServerInSdk(
+  serverConfig: McpServerConfig,
+): boolean {
+  return (
+    serverConfig.disabled !== true &&
+    !isMcpRegistryServerInactiveForRuntime(serverConfig)
+  )
+}
+
 const MCP_FETCH_TIMEOUT_MS = 40_000
 
 async function fetchToolsForServer(
@@ -227,22 +248,28 @@ async function fetchToolsForServer(
   )
 
   const fetchPromise = (async () => {
-    if (serverConfig.url) {
-      const headers = serverConfig.headers as Record<string, string> | undefined
+    const runtimeConfig = materializeMcpRegistryServerConfigForRuntime(
+      serverConfig,
+      { stripMetadata: true },
+    )
+    if (runtimeConfig.url) {
+      const headers = runtimeConfig.headers as
+        | Record<string, string>
+        | undefined
       try {
-        return await fetchMcpTools(serverConfig.url, headers)
+        return await fetchMcpTools(runtimeConfig.url, headers)
       } catch {
         return []
       }
     }
 
-    const command = serverConfig.command
+    const command = runtimeConfig.command
     if (command) {
       try {
         return await fetchMcpToolsStdio({
           command,
-          args: serverConfig.args,
-          env: serverConfig.env as Record<string, string> | undefined,
+          args: runtimeConfig.args,
+          env: runtimeConfig.env as Record<string, string> | undefined,
         })
       } catch {
         return []
@@ -705,10 +732,14 @@ export async function resolveClaudeMcpServersForSdk(input: {
         const scope = name in projectServers ? resolvedProjectPath : null
         const cacheKey = mcpCacheKey(scope, name)
         if (
-          workingMcpServers.get(cacheKey) === true ||
-          !workingMcpServers.has(cacheKey)
+          shouldIncludeClaudeMcpServerInSdk(srvConfig) &&
+          (workingMcpServers.get(cacheKey) === true ||
+            !workingMcpServers.has(cacheKey))
         ) {
-          filtered[name] = srvConfig
+          filtered[name] = materializeMcpRegistryServerConfigForRuntime(
+            srvConfig,
+            { stripMetadata: true },
+          ) as NonNullable<ClaudeMcpServersForSdk>[string]
         }
       }
       mcpServersForSdk = filtered
@@ -718,7 +749,18 @@ export async function resolveClaudeMcpServersForSdk(input: {
         console.log(`[claude] Filtered out ${skipped} non-working MCP(s)`)
       }
     } else {
-      mcpServersForSdk = allServers
+      mcpServersForSdk = Object.fromEntries(
+        Object.entries(allServers)
+          .filter(([, srvConfig]) =>
+            shouldIncludeClaudeMcpServerInSdk(srvConfig),
+          )
+          .map(([name, srvConfig]) => [
+            name,
+            materializeMcpRegistryServerConfigForRuntime(srvConfig, {
+              stripMetadata: true,
+            }),
+          ]),
+      ) as NonNullable<ClaudeMcpServersForSdk>
     }
   } catch (configErr) {
     console.error("[claude] Failed to read MCP config:", configErr)

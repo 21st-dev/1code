@@ -574,20 +574,20 @@ describe("Runtime MCP config service behavior", () => {
         envVars: ["CODEX_REMOTE_TOKEN", "CODEX_MISSING_ENV"],
       },
     })
-    expect(servers.find((server) => server.name === "remote_sse")).toMatchObject(
-      {
-        config: {
-          transportType: "sse",
-          url: "https://api.example.com/mcp",
-          headers: { "X-Inline": "<redacted>" },
-          envHttpHeaders: {
-            "X-Env": "CODEX_REMOTE_TOKEN",
-            "X-Missing": "CODEX_MISSING_ENV",
-          },
-          bearerTokenEnvVar: "CODEX_REMOTE_TOKEN",
+    expect(
+      servers.find((server) => server.name === "remote_sse"),
+    ).toMatchObject({
+      config: {
+        transportType: "sse",
+        url: "https://api.example.com/mcp",
+        headers: { "X-Inline": "<redacted>" },
+        envHttpHeaders: {
+          "X-Env": "CODEX_REMOTE_TOKEN",
+          "X-Missing": "CODEX_MISSING_ENV",
         },
+        bearerTokenEnvVar: "CODEX_REMOTE_TOKEN",
       },
-    )
+    })
 
     await codexMcpConfig.addCodexMcpServer({
       name: "complex_stdio",
@@ -639,24 +639,40 @@ describe("Runtime MCP config service behavior", () => {
     const tempHome = makeTempDir()
     mockHome = tempHome
     process.env.HOME = tempHome
-    writeFileSync(
-      join(tempHome, ".claude.json"),
-      JSON.stringify({
-        mcpServers: {
-          global_stdio: { command: "global-tool", args: ["--global"] },
+    const claudeRuntimeConfig: MockClaudeConfig = {
+      mcpServers: {
+        global_stdio: { command: "global-tool", args: ["--global"] },
+        disabled_global: { command: "disabled-tool", disabled: true },
+        registry_needs_setup: {
+          command: "registry-tool",
+          _locusMcpRegistry: {
+            providerId: "official-mcp-registry",
+            entryId: "io.github.example/needs-setup",
+            targetId: "package:@example/needs-setup:0",
+            runtime: "claude-code",
+            status: "installed-needs-setup",
+            entryFingerprint: "sha256:entry",
+            configFingerprint: "sha256:config",
+            installedAt: "2026-06-20T00:00:00.000Z",
+          },
         },
-        projects: {
-          [projectPath]: {
-            mcpServers: {
-              project_http: {
-                url: "https://project.example.com/mcp",
-                authType: "none",
-              },
+      },
+      projects: {
+        [projectPath]: {
+          mcpServers: {
+            project_http: {
+              url: "https://project.example.com/mcp",
+              authType: "none",
             },
           },
         },
-      }),
+      },
+    }
+    writeFileSync(
+      join(tempHome, ".claude.json"),
+      JSON.stringify(claudeRuntimeConfig),
     )
+    claudeConfig = claudeRuntimeConfig
     projectMcpJsonByPath[projectPath] = {
       project_json: { command: "json-tool" },
     }
@@ -675,6 +691,24 @@ describe("Runtime MCP config service behavior", () => {
       },
       project_json: { command: "json-tool" },
     })
+    expect(claudeRuntime.mcpServersForSdk).not.toHaveProperty("disabled_global")
+    expect(claudeRuntime.mcpServersForSdk).not.toHaveProperty(
+      "registry_needs_setup",
+    )
+
+    const claudeSettings = await claudeMcpConfig.getClaudeMcpConfig({
+      projectPath,
+    })
+    expect(
+      claudeSettings.mcpServers.find(
+        (server) => server.name === "disabled_global",
+      )?.status,
+    ).toBe("disabled")
+    expect(
+      claudeSettings.mcpServers.find(
+        (server) => server.name === "registry_needs_setup",
+      )?.status,
+    ).toBe("disabled")
 
     process.env.CODEX_REMOTE_TOKEN = "runtime-token"
     codexMcpConfig.clearCodexMcpConfigCache()

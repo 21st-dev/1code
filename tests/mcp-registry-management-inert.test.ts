@@ -9,6 +9,17 @@ const registrySources = readdirSync(registryDir)
     file,
     source: readFileSync(join(registryDir, file), "utf8"),
   }))
+const pluginsRouterSource = readFileSync(
+  join(process.cwd(), "src/main/lib/trpc/routers/plugins.ts"),
+  "utf8",
+)
+const pluginsTabSource = readFileSync(
+  join(
+    process.cwd(),
+    "src/renderer/components/dialogs/settings-tabs/agents-plugins-tab.tsx",
+  ),
+  "utf8",
+)
 
 describe("MCP registry management-time inert boundary", () => {
   test("does not import process execution or route-local MCP helpers", () => {
@@ -36,5 +47,18 @@ describe("MCP registry management-time inert boundary", () => {
       expect(source, file).not.toMatch(/\bnpm\s+(?:install|exec|run)\b/i)
       expect(source, file).not.toMatch(/\bnpx\b.*\b-y\b/i)
     }
+  })
+
+  test("keeps registry-sourced servers out of plugin execution surfaces", () => {
+    for (const { file, source } of registrySources) {
+      expect(source, file).not.toContain("_locusPluginMcp")
+    }
+
+    expect(pluginsRouterSource).not.toContain("_locusMcpRegistry")
+    expect(pluginsRouterSource).not.toContain("mcpRegistry")
+    expect(pluginsRouterSource).not.toContain("McpRegistry")
+    expect(pluginsTabSource).not.toContain("_locusMcpRegistry")
+    expect(pluginsTabSource).not.toContain("mcpRegistry")
+    expect(pluginsTabSource).not.toContain("McpRegistry")
   })
 })

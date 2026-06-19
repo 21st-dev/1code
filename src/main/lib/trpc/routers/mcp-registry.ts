@@ -32,11 +32,20 @@ const registryPreviewInstallInputSchema = registryDetailInputSchema.extend({
   targetId: z.string().trim().min(1),
 })
 
+const registrySetupValueSchema = z.union([
+  z.boolean(),
+  z.string().trim().min(1),
+  z.object({
+    value: z.string().trim().min(1).optional(),
+    envVar: optionalTrimmedStringSchema,
+  }),
+])
+
 const registrySetupResolutionSchema = z
   .object({
-    env: z.record(z.string(), z.boolean()).optional(),
-    headers: z.record(z.string(), z.boolean()).optional(),
-    variables: z.record(z.string(), z.boolean()).optional(),
+    env: z.record(z.string(), registrySetupValueSchema).optional(),
+    headers: z.record(z.string(), registrySetupValueSchema).optional(),
+    variables: z.record(z.string(), registrySetupValueSchema).optional(),
     bearerTokenEnvRefs: z.record(z.string(), z.string().optional()).optional(),
     localDependencies: z.record(z.string(), z.boolean()).optional(),
     oauthAuthenticated: z.boolean().optional(),
