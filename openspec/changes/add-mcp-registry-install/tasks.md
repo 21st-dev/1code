@@ -86,8 +86,13 @@
   official/publisher metadata, maps transports, captures runtime/package args,
   env/header/variable setup schemas, infers auth metadata conservatively, and
   leaves unknown runtime support as `unknown` instead of claiming compatibility.
-- [ ] 2.3 Add entry/config fingerprinting and provenance classification: immutable,
+- [x] 2.3 Add entry/config fingerprinting and provenance classification: immutable,
   mutable, unknown, integrity/hash present, integrity/hash missing.
+- 2026-06-20 implemented `src/main/lib/mcp-registry/fingerprints.ts` with stable
+  JSON fingerprints for normalized entries and install targets plus conservative
+  provenance/integrity classification. Exact version refs with package hashes can
+  classify as immutable; mutable refs such as `latest` classify as mutable; exact
+  refs without integrity stay unknown.
 - [ ] 2.4 Add `McpRegistryInstallPreview` separate from `McpImportPreview`; reuse
   redaction primitives but do not add apply semantics to import previews.
 - [ ] 2.5 Preview runtime installability from adapters, distinguishing declared
