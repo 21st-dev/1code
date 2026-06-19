@@ -92,3 +92,8 @@
     successfully builds main/preload, then fails starting the dev server with
     `listen EPERM: operation not permitted ::1:5173`. Manual UI smoke remains
     unchecked until a GUI/network-listen-capable local session can open Settings.
+  - 2026-06-20 retry with
+    `NODE_OPTIONS=--dns-result-order=ipv4first` moves the dev-server bind attempt
+    to `127.0.0.1:5173`, but it still fails with `listen EPERM`, confirming the
+    blocker is local listen permission in this sandbox rather than only IPv6
+    loopback resolution.
