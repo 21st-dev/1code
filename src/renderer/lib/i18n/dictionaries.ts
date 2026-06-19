@@ -1434,7 +1434,7 @@ export const en = {
   "settings.plugins.claudePackageHint":
     "Locus can stage reviewed Claude Code plugins into isolated managed-run config; component activation remains proof-gated until the runtime matrix is complete.",
   "settings.plugins.codexPackageHint":
-    "Codex plugins are Codex runtime packages. Locus keeps native activation blocked until app-server per-run filtering is proven.",
+    "Codex plugins are Codex runtime packages. App-server lists plugins and accepts no-turn thread-start config, but plugin turn execution and per-run filtering remain unproven, so Locus keeps native activation blocked.",
   "settings.plugins.source": "Source",
   "settings.plugins.path": "Path",
   "settings.plugins.homepage": "Homepage",
@@ -4728,7 +4728,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.claudePackageHint":
     "Locus 可以把已复审的 Claude Code 插件暂存进隔离的托管运行配置；组件激活仍要等运行时矩阵证明。",
   "settings.plugins.codexPackageHint":
-    "Codex 插件是 Codex 运行时包。在 app-server 单次运行过滤被证明前，Locus 会继续阻断原生激活。",
+    "Codex 插件是 Codex 运行时包。app-server 可以列出插件并接受不启动 turn 的线程启动配置，但插件 turn 执行和单次运行过滤仍未证明，所以 Locus 会继续阻断原生激活。",
   "settings.plugins.source": "来源",
   "settings.plugins.path": "路径",
   "settings.plugins.homepage": "主页",

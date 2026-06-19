@@ -46,7 +46,10 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).not.toContain("codexSettings.setPluginEnabled")
     expect(pluginsTabSource).not.toContain("executeCodexPlugin")
     expect(dictionarySource).toContain(
-      "Locus keeps native activation blocked until app-server per-run filtering is proven.",
+      "App-server lists plugins and accepts no-turn thread-start config",
+    )
+    expect(dictionarySource).toContain(
+      "plugin turn execution and per-run filtering remain unproven",
     )
   })
 

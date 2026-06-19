@@ -92,7 +92,7 @@
   ownership explicit, and remove unused/dead `setActiveTab` state.
 - [x] 5.4 Add proportional confirmation for destructive or security-sensitive plugin
   actions, including developer trust revocation and developer source removal.
-- [ ] 5.5 Hide dead unsupported Codex rows or explain blocked/native-loadable state
+- [x] 5.5 Hide dead unsupported Codex rows or explain blocked/native-loadable state
   directly from the Phase-1 matrix.
 - [x] 5.6 Update `agent-runtime-capabilities.ts` from the proof matrix.
 - [x] 5.7 Update `docs/ideas/settings-per-tab-audit.md` to mark execution-truth and
