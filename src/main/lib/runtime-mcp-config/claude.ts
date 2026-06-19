@@ -802,13 +802,19 @@ export async function startClaudeMcpOAuth(input: {
   projectPath: string
 }) {
   const serverName = normalizeMcpServerName(input.serverName)
-  const projectPath = resolveMcpProjectPathForMutation({
-    scope: "project",
-    projectPath: input.projectPath,
-  })
-  if (!projectPath) {
-    throw new Error("Project path required for MCP OAuth")
+  const requestedPath = input.projectPath?.trim()
+  let projectPath = GLOBAL_MCP_PATH
+  if (requestedPath && requestedPath !== GLOBAL_MCP_PATH) {
+    const resolvedProjectPath = resolveMcpProjectPathForMutation({
+      scope: "project",
+      projectPath: requestedPath,
+    })
+    if (!resolvedProjectPath) {
+      throw new Error("Project path required for MCP OAuth")
+    }
+    projectPath = resolvedProjectPath
   }
+
   return startMcpOAuthFlow(serverName, projectPath)
 }
 

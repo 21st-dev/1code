@@ -47,6 +47,11 @@ type CodexCliCall = {
   options?: { cwd?: string }
 }
 
+type McpOAuthCall = {
+  serverName: string
+  projectPath: string
+}
+
 const GLOBAL_MCP_PATH = "__global__"
 const originalHome = process.env.HOME
 
@@ -59,6 +64,7 @@ let projectMcpJsonByPath: Record<
 let registeredProjectPaths: string[] = []
 let codexMcpListStdout = "[]"
 let codexCliCalls: CodexCliCall[] = []
+let mcpOAuthCalls: McpOAuthCall[] = []
 let tempDirs: string[] = []
 let mockHome = originalHome || realOs.tmpdir()
 
@@ -202,7 +208,10 @@ mock.module("../src/main/lib/mcp-auth", () => ({
     url.includes("needs-auth") ? [] : [{ name: "remote_tool" }],
   fetchMcpToolsStdio: async () => [{ name: "stdio_tool" }],
   getMcpAuthStatus: async () => ({ status: "connected" }),
-  startMcpOAuth: async () => ({ success: true }),
+  startMcpOAuth: async (serverName: string, projectPath: string) => {
+    mcpOAuthCalls.push({ serverName, projectPath })
+    return { success: true }
+  },
 }))
 
 mock.module("../src/main/lib/oauth", () => ({
@@ -252,6 +261,7 @@ beforeEach(() => {
   registeredProjectPaths = []
   codexMcpListStdout = "[]"
   codexCliCalls = []
+  mcpOAuthCalls = []
   runCodexCliCheckedMock.mockClear()
   claudeMcpConfig.refreshClaudeMcpConfig()
   codexMcpConfig.clearCodexMcpConfigCache()
@@ -451,6 +461,32 @@ describe("Runtime MCP config service behavior", () => {
         command: "node",
       }),
     ).rejects.toThrow("global scope only")
+  })
+
+  test("starts Claude OAuth for global and registered project MCP servers", async () => {
+    const projectPath = makeTempDir()
+    registeredProjectPaths = [projectPath]
+
+    await claudeMcpConfig.startClaudeMcpOAuth({
+      serverName: " global_oauth ",
+      projectPath: GLOBAL_MCP_PATH,
+    })
+    await claudeMcpConfig.startClaudeMcpOAuth({
+      serverName: "project_oauth",
+      projectPath,
+    })
+
+    expect(mcpOAuthCalls).toEqual([
+      { serverName: "global_oauth", projectPath: GLOBAL_MCP_PATH },
+      { serverName: "project_oauth", projectPath },
+    ])
+
+    await expect(
+      claudeMcpConfig.startClaudeMcpOAuth({
+        serverName: "missing_project",
+        projectPath: join(projectPath, "missing"),
+      }),
+    ).rejects.toThrow("registered project path")
   })
 
   test("materializes Claude and Codex desktop-run MCP inputs through the service", async () => {
