@@ -49,19 +49,28 @@ describe("plugin target mode UI source guards", () => {
       "isolated app-server CODEX_HOME",
     )
     expect(dictionarySource).toContain(
-      "Only reviewed, enabled, identity-current components are visible",
+      "Only reviewed, enabled, identity-current components for the current run scope are visible",
+    )
+    expect(dictionarySource).not.toContain(
+      "Codex app-server native activation remains blocked",
+    )
+    expect(dictionarySource).not.toContain(
+      "per-run filtering remain unproven",
     )
   })
 
-  test("keeps Claude native plugin copy proof-gated before the activation matrix exists", () => {
+  test("keeps Claude native plugin copy behind runtime gates without stale matrix copy", () => {
     expect(dictionarySource).toContain(
-      "component activation remains proof-gated until the runtime matrix is complete.",
+      "Locus stages reviewed Claude Code plugins into isolated managed-run config.",
     )
     expect(dictionarySource).toContain(
-      "Native loading remains proof-gated",
+      "Only reviewed, enabled, identity-current components for the current run scope are visible",
     )
     expect(dictionarySource).not.toContain(
       "Enabling them exposes their commands, skills, agents, and MCP servers",
+    )
+    expect(dictionarySource).not.toContain(
+      "until the runtime matrix is complete",
     )
   })
 
@@ -92,6 +101,42 @@ describe("plugin target mode UI source guards", () => {
       "settings.plugins.runtimeNativeComponents",
       "settings.plugins.runtimeNativeBlockedReasons",
       "settings.plugins.runtimeNativeRecoveryFailed",
+    ]) {
+      expect(dictionarySource).toContain(`"${key}"`)
+    }
+  })
+
+  test("renders scoped runtime-native plugin activation controls", () => {
+    expect(pluginsTabSource).toContain("PluginScopedActivationPanel")
+    expect(pluginsTabSource).toContain("runtimeNativeScopeOptions")
+    expect(pluginsTabSource).toContain('value: "project"')
+    expect(pluginsTabSource).toContain('value: "chat"')
+    expect(pluginsTabSource).toContain('value: "subChat"')
+    expect(pluginsTabSource).toContain("settings.plugins.runtimeScopeActivation")
+    expect(pluginsTabSource).toContain("settings.plugins.scopeCustomMode")
+    expect(pluginsTabSource).toContain("settings.plugins.scopePluginVisible")
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.getRuntimeNativeScopedSelections.useQuery",
+    )
+    expect(pluginsTabSource).toContain(
+      "trpc.plugins.setRuntimeNativeScopedSelection.useMutation",
+    )
+    expect(pluginsTabSource).toContain("handleSetRuntimeNativeScopeMode")
+    expect(pluginsTabSource).toContain("handleToggleRuntimeNativeScopePlugin")
+    expect(pluginsTabSource).toContain("getScopedSelectionRecord")
+    expect(pluginsTabSource).toContain(
+      "getGloballyEnabledRuntimeNativePluginReviewKeys",
+    )
+
+    for (const key of [
+      "settings.plugins.scopeGlobal",
+      "settings.plugins.scopeProject",
+      "settings.plugins.scopeChat",
+      "settings.plugins.scopeSubChat",
+      "settings.plugins.scopeCustomModeOn",
+      "settings.plugins.scopeCustomModeOff",
+      "settings.plugins.scopePluginRequiresGlobal",
+      "settings.plugins.toast.scopeUpdated",
     ]) {
       expect(dictionarySource).toContain(`"${key}"`)
     }

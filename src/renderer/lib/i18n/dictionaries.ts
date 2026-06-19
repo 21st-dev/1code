@@ -1460,9 +1460,9 @@ export const en = {
   "settings.plugins.packageHint":
     "Plugins are capability packages. Locus shows declared commands, skills, agents, hooks, and MCP servers; runtime execution depends on the gates below.",
   "settings.plugins.claudePackageHint":
-    "Locus can stage reviewed Claude Code plugins into isolated managed-run config; component activation remains proof-gated until the runtime matrix is complete.",
+    "Locus stages reviewed Claude Code plugins into isolated managed-run config. Only reviewed, enabled, identity-current components for the current run scope are visible; unapproved MCP declarations remain blocked.",
   "settings.plugins.codexPackageHint":
-    "Codex plugins are staged into an isolated app-server CODEX_HOME per managed run. Only reviewed, enabled, identity-current components are visible to that run; unapproved MCP declarations remain blocked.",
+    "Codex plugins are staged into an isolated app-server CODEX_HOME per managed run. Only reviewed, enabled, identity-current components for the current run scope are visible; unapproved MCP declarations remain blocked.",
   "settings.plugins.source": "Source",
   "settings.plugins.path": "Path",
   "settings.plugins.homepage": "Homepage",
@@ -4782,9 +4782,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.packageHint":
     "插件是能力包。Locus 会展示它声明的命令、技能、智能体、钩子和 MCP 服务器；实际运行取决于下方门禁。",
   "settings.plugins.claudePackageHint":
-    "Locus 可以把已复审的 Claude Code 插件暂存进隔离的托管运行配置；组件激活仍要等运行时矩阵证明。",
+    "Locus 会把已复审的 Claude Code 插件暂存进隔离的托管运行配置。每次运行只会看到已复审、已启用、身份未漂移且当前运行范围允许的组件；未批准的 MCP 声明仍会被阻断。",
   "settings.plugins.codexPackageHint":
-    "Codex 插件是 Codex 运行时包。app-server 可以列出插件并接受不启动 turn 的线程启动配置，但插件 turn 执行和单次运行过滤仍未证明，所以 Locus 会继续阻断原生激活。",
+    "Codex 插件会在每次托管运行前暂存进隔离的 app-server CODEX_HOME。每次运行只会看到已复审、已启用、身份未漂移且当前运行范围允许的组件；未批准的 MCP 声明仍会被阻断。",
   "settings.plugins.source": "来源",
   "settings.plugins.path": "路径",
   "settings.plugins.homepage": "主页",

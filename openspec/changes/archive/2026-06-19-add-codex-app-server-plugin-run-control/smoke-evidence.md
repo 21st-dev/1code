@@ -45,9 +45,10 @@ isolated app-server run.
 
 ## Scoped Activation UI Check
 
-Code path inspected:
+Code path inspected and guarded:
 
 - `src/renderer/components/dialogs/settings-tabs/agents-plugins-tab.tsx`
+- `tests/plugin-target-mode-ui.test.ts`
 
 Observed facts:
 
@@ -58,12 +59,31 @@ Observed facts:
 - The switch persists through `trpc.plugins.setRuntimeNativeScopedSelection`.
 - The detail panel passes the selected scope, scope record, and update handlers into the plugin detail surface.
 
+Electron DOM smoke:
+
+- Built the app with `bun run build`.
+- Started Electron with isolated user data:
+  `LOCUS_USER_DATA_DIR=/private/tmp/locus-ui-scope-smoke node_modules/.bin/electron --remote-debugging-port=9334 .`
+- Used DevTools Protocol to open Settings, click Plugins, and read the rendered DOM text.
+- Confirmed the Plugins page rendered.
+- Confirmed the run-scope selector text rendered: `运行范围`, `全局默认`.
+- Confirmed Codex package copy now states isolated app-server `CODEX_HOME` staging and current-scope visibility.
+- Confirmed stale copy was absent: `单次运行过滤仍未证明`, `继续阻断原生激活`.
+
 ## Focused Tests
 
 Command:
 
 ```bash
-bun test tests/codex-app-server-plugin-home.test.ts tests/codex-app-server-plugin-proof.test.ts tests/plugin-update-review.test.ts tests/codex-app-server-plugin-allowlist.test.ts tests/plugin-safe-mode-runtime.test.ts
+bun test tests/plugin-target-mode-ui.test.ts tests/plugin-safe-mode-runtime.test.ts tests/codex-app-server-plugin-home.test.ts tests/codex-app-server-plugin-proof.test.ts tests/codex-app-server-plugin-allowlist.test.ts tests/plugin-update-review.test.ts
 ```
 
-Result: 39 pass, 0 fail.
+Result: 54 pass, 0 fail.
+
+OpenSpec validation:
+
+```bash
+openspec validate --all --strict --no-interactive
+```
+
+Result: 47 passed, 0 failed.
