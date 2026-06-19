@@ -26,7 +26,7 @@
 - [ ] 1.9 Codex: prove native-loaded MCP servers remain approval-gated; if Codex can
   only load an MCP-bearing package whole, block that package before MCP approval or
   mark non-MCP components partial.
-- [ ] 1.10 Produce a per-runtime, per-component activation matrix with
+- [x] 1.10 Produce a per-runtime, per-component activation matrix with
   `native-loadable`, `mcp-only`, `not-loadable`, identity completeness, and blocked
   reasons.
 - [x] 1.11 Version-probe Codex plugin inventory commands; do not require `--json` when
