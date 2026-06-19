@@ -136,12 +136,12 @@ const runtimeProfiles = new Map<string, any>([
   ],
 ])
 
+const storageModule = await import("../src/main/lib/provider-profiles/storage")
+
 mock.module("../src/main/lib/provider-profiles/storage", () => ({
+  ...storageModule,
   getProviderProfileRuntimeConfig(id: string) {
     return runtimeProfiles.get(id) ?? null
-  },
-  normalizeProviderBaseUrl(baseUrl: string) {
-    return baseUrl.trim().replace(/\/+$/, "")
   },
   saveProviderProfile(input: any) {
     return input
