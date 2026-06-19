@@ -224,8 +224,14 @@
 
 ## 4. Local Verification
 
-- [ ] 4.1 Add local verification state keyed by machine-local runtime, server name,
+- [x] 4.1 Add local verification state keyed by machine-local runtime, server name,
   registry entry fingerprint, and config fingerprint.
+- 2026-06-20 added `mcp-registry-verification-state.json` under app `userData`
+  with stable local record IDs derived from runtime, server name, entry
+  fingerprint, and config fingerprint. This is storage only: it can represent
+  `installed-unverified`, `installed-needs-setup`, `ready-to-verify`,
+  `failed-check`, and `verified-local`, but does not run Check or upgrade
+  Verified by itself.
 - [ ] 4.2 Transition `Installed / Needs setup` to `Ready to verify` only after all
   required setup is resolved without exposing secret values to renderer state.
 - [ ] 4.3 Observe real Claude runs and upgrade to `Verified on Claude` only after the

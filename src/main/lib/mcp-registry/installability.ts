@@ -13,6 +13,7 @@ export type McpRegistryRuntimeInstallabilityStatus =
   | "needs-setup"
   | "installed-unverified"
   | "installed-needs-setup"
+  | "ready-to-verify"
   | "failed-check"
   | "verified-local"
   | "codex-deferred"
@@ -29,6 +30,7 @@ export type McpRegistryRuntimeLocalState = {
   status:
     | "installed-unverified"
     | "installed-needs-setup"
+    | "ready-to-verify"
     | "failed-check"
     | "verified-local"
   reason?: string
