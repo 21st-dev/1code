@@ -115,9 +115,15 @@
 - 2026-06-20 registry previews now surface non-blocking warnings for mutable
   provenance, unknown provenance, missing integrity, mutable version refs such
   as `latest`, unknown version refs, and unknown declared runtime support.
-- [ ] 2.7 Classify required setup before install: required/optional env keys,
+- [x] 2.7 Classify required setup before install: required/optional env keys,
   header keys, bearer-token env references, OAuth/runtime auth, local dependencies,
   missing keys, and whether the target adapter can keep incomplete servers inactive.
+- 2026-06-20 implemented `src/main/lib/mcp-registry/setup.ts` as a pure setup
+  classifier. It separates required/optional env, header, and variable keys;
+  classifies bearer-token env refs, OAuth/runtime auth, package local dependency
+  status, missing setup keys, and the current adapter behavior. Current Claude
+  and Codex registry install paths cannot safely keep incomplete runtime config
+  inactive, so missing required setup produces `block-install`.
 
 ## 3. Setup Resolution + Install Flow
 
