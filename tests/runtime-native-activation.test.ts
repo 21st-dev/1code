@@ -156,7 +156,11 @@ describe("runtime native plugin activation", () => {
         mcpApprovalIdentifiers: {},
         approvedPluginMcpServers: [],
       }).current.reasons,
-    ).toEqual(["mcp-approval-required"])
+    ).toEqual([
+      "runtime-native-unsupported",
+      "per-run-plugin-control-missing",
+      "mcp-approval-required",
+    ])
   })
 
   test("reports bounded reasons for ordinary blocked states", () => {

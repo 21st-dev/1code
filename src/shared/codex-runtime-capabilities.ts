@@ -265,11 +265,11 @@ const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
     },
   },
   runtimePlugins: {
-    status: "supported",
+    status: "degraded",
     scope: "runtime-specific",
     reason:
-      "Codex app-server receives Locus-built per-run plugin config overrides that disable every discovered plugin by default and enable only reviewed, explicitly enabled, runtime-native activation-approved packages.",
-    hint: "MCP-bearing Codex plugins stay disabled until Locus can preserve the MCP approval gate for that package.",
+      "Codex app-server receives Locus-built fail-closed plugin config overrides, but runtime-native plugin loading and per-run filtering have not been proven by a managed-run proof matrix yet.",
+    hint: "Keep Codex plugin packages disabled until app-server plugin loading is proven to honor Locus per-run controls.",
     support: {
       kind: "runtime-code",
       references: [

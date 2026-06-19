@@ -127,8 +127,7 @@ export function buildRuntimeNativeActivationState(input: {
   nativeLoadFailure?: boolean
 }): RuntimeNativeActivationState {
   const supportsNativeLoading =
-    input.sourceKind !== "developer-local" &&
-    (input.runtime === "claude" || input.runtime === "codex")
+    input.sourceKind !== "developer-local" && input.runtime === "claude"
   const sharedPolicyInput = {
     safeModeEnabled: input.safeModeEnabled,
     manifestReviewStatus: input.manifestReviewStatus,

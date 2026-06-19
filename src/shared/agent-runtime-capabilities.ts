@@ -632,8 +632,8 @@ const CODEX_RUNTIME_MANIFEST = manifest({
       status: "degraded",
       scope: "runtime-specific",
       reason:
-        "Codex runtime plugin execution is adapter-specific: app-server has a Locus-controlled per-run plugin filter, while other Codex paths must not inherit that claim.",
-      hint: "Use the adapter-specific capability manifest before showing Codex plugin execute controls.",
+        "Codex runtime plugin execution is not yet proven end to end: app-server receives fail-closed plugin config overrides, and other Codex paths do not expose a Locus-controlled native plugin filter.",
+      hint: "Keep Codex plugin execute controls blocked until a managed-run proof shows app-server honors Locus per-run controls.",
     }),
     capability({
       id: "runtimeCommands",

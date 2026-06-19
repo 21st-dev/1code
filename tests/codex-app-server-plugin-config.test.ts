@@ -105,7 +105,7 @@ describe("Codex app-server plugin config", () => {
     ])
   })
 
-  test("allows resolved app-server plugin overrides only when native activation gates pass", () => {
+  test("keeps resolved app-server plugin overrides disabled until native control proof exists", () => {
     const reviewDocument = buildPluginManifestReviewDocument({
       runtime: "codex",
       marketplace: "openai-curated",
@@ -148,14 +148,17 @@ describe("Codex app-server plugin config", () => {
     })
 
     expect(result.config).toEqual({
-      "plugins.figma@openai-curated.enabled": true,
+      "plugins.figma@openai-curated.enabled": false,
     })
     expect(result.entries[0]).toMatchObject({
       pluginId: "figma@openai-curated",
-      enabled: true,
+      enabled: false,
       nativeActivationPolicy: {
-        status: "allowed",
-        reasons: [],
+        status: "blocked",
+        reasons: [
+          "runtime-native-unsupported",
+          "per-run-plugin-control-missing",
+        ],
       },
     })
   })
@@ -270,11 +273,31 @@ describe("Codex app-server plugin config", () => {
     expect(
       result.entries.map((entry) => entry.nativeActivationPolicy.reasons),
     ).toEqual([
-      ["mcp-approval-required"],
-      ["plugin-disabled"],
-      ["activation-identity-drifted"],
-      ["manifest-review-required"],
-      ["global-safe-mode"],
+      [
+        "runtime-native-unsupported",
+        "per-run-plugin-control-missing",
+        "mcp-approval-required",
+      ],
+      [
+        "plugin-disabled",
+        "runtime-native-unsupported",
+        "per-run-plugin-control-missing",
+      ],
+      [
+        "runtime-native-unsupported",
+        "per-run-plugin-control-missing",
+        "activation-identity-drifted",
+      ],
+      [
+        "manifest-review-required",
+        "runtime-native-unsupported",
+        "per-run-plugin-control-missing",
+      ],
+      [
+        "global-safe-mode",
+        "runtime-native-unsupported",
+        "per-run-plugin-control-missing",
+      ],
     ])
   })
 })

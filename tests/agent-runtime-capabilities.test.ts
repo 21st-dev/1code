@@ -129,7 +129,7 @@ describe("agent runtime capability manifests", () => {
     expect(codexPlugins.capability).toMatchObject({
       status: "degraded",
       scope: "runtime-specific",
-      hint: expect.stringContaining("adapter-specific"),
+      hint: expect.stringContaining("managed-run proof"),
     })
   })
 

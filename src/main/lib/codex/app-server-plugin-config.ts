@@ -112,8 +112,8 @@ export function buildCodexAppServerResolvedPluginConfigOverrides(input: {
       pluginEnabled: candidate.pluginEnabled,
       safeModeEnabled: candidate.safeModeEnabled,
       manifestReviewStatus: candidate.manifestReviewStatus,
-      runtimeSupportsNativeLoading: true,
-      runtimeSupportsPerRunPluginControl: true,
+      runtimeSupportsNativeLoading: false,
+      runtimeSupportsPerRunPluginControl: false,
       identity: candidate.identity,
       reviewedIdentityFingerprint: candidate.reviewedIdentityFingerprint,
       identityIncompleteAcknowledgedFingerprint:

@@ -157,7 +157,7 @@ describe("Codex app-server plugin allowlist resolver", () => {
     safeModeEnabled = false
   })
 
-  test("passes only reviewed, enabled, non-MCP Codex plugins to app-server", async () => {
+  test("keeps reviewed Codex plugins disabled until native control proof exists", async () => {
     plugins = [
       codexPlugin("figma"),
       codexPlugin("github"),
@@ -183,18 +183,33 @@ describe("Codex app-server plugin allowlist resolver", () => {
 
     expect(result.config).toEqual({
       "plugins.cloudflare@openai-curated.enabled": false,
-      "plugins.figma@openai-curated.enabled": true,
+      "plugins.figma@openai-curated.enabled": false,
       "plugins.github@openai-curated.enabled": false,
     })
+    expect(
+      result.entries.find((entry) => entry.pluginId === "figma@openai-curated")
+        ?.nativeActivationPolicy.reasons,
+    ).toEqual([
+      "runtime-native-unsupported",
+      "per-run-plugin-control-missing",
+    ])
     expect(
       result.entries.find(
         (entry) => entry.pluginId === "cloudflare@openai-curated",
       )?.nativeActivationPolicy.reasons,
-    ).toEqual(["mcp-approval-required"])
+    ).toEqual([
+      "runtime-native-unsupported",
+      "per-run-plugin-control-missing",
+      "mcp-approval-required",
+    ])
     expect(
       result.entries.find((entry) => entry.pluginId === "github@openai-curated")
         ?.nativeActivationPolicy.reasons,
-    ).toEqual(["plugin-disabled"])
+    ).toEqual([
+      "plugin-disabled",
+      "runtime-native-unsupported",
+      "per-run-plugin-control-missing",
+    ])
   })
 
   test("safe mode overrides otherwise eligible Codex native plugins", async () => {
@@ -217,6 +232,8 @@ describe("Codex app-server plugin allowlist resolver", () => {
     })
     expect(result.entries[0].nativeActivationPolicy.reasons).toEqual([
       "global-safe-mode",
+      "runtime-native-unsupported",
+      "per-run-plugin-control-missing",
     ])
   })
 
@@ -240,7 +257,7 @@ describe("Codex app-server plugin allowlist resolver", () => {
 
     expect(result.config).toEqual({
       "plugins.broken@openai-curated.enabled": false,
-      "plugins.figma@openai-curated.enabled": true,
+      "plugins.figma@openai-curated.enabled": false,
     })
     expect(
       result.entries.find((entry) => entry.pluginId === "broken@openai-curated")

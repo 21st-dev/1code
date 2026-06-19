@@ -85,7 +85,7 @@ describe("Codex runtime capabilities", () => {
     expect(getCodexRuntimeCapability("runtimePlugins")).toMatchObject({
       status: "degraded",
       scope: "runtime-specific",
-      hint: expect.stringContaining("adapter-specific"),
+      hint: expect.stringContaining("managed-run proof"),
     })
     expect(getCodexRuntimeCapability("runtimeCommands")).toMatchObject({
       status: "unsupported",
@@ -119,7 +119,6 @@ describe("Codex runtime capabilities", () => {
       "providerProfiles",
       "attachments",
       "usageMetadata",
-      "runtimePlugins",
     ])
     expect(byId.get("hardToolGuard")).toMatchObject({
       status: "degraded",
@@ -141,9 +140,9 @@ describe("Codex runtime capabilities", () => {
       scope: "unavailable",
     })
     expect(byId.get("runtimePlugins")).toMatchObject({
-      status: "supported",
+      status: "degraded",
       scope: "runtime-specific",
-      reason: expect.stringContaining("per-run plugin config overrides"),
+      reason: expect.stringContaining("fail-closed plugin config overrides"),
       support: {
         references: expect.arrayContaining([
           "src/main/lib/codex/app-server-plugin-allowlist.ts",
