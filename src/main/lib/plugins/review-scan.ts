@@ -32,6 +32,7 @@ export interface PluginDeclaredComponents {
   commands: PluginComponent[]
   skills: PluginComponent[]
   agents: PluginComponent[]
+  hooks: PluginComponent[]
   mcpServers: string[]
 }
 
@@ -99,6 +100,7 @@ function getPluginComponentPaths(plugin: PluginInfo) {
     commands: plugin.componentPaths?.commands ?? path.join(plugin.path, "commands"),
     skills: plugin.componentPaths?.skills ?? path.join(plugin.path, "skills"),
     agents: plugin.componentPaths?.agents ?? path.join(plugin.path, "agents"),
+    hooks: plugin.componentPaths?.hooks ?? path.join(plugin.path, "hooks.json"),
     mcpServers: plugin.componentPaths?.mcpServers ?? path.join(plugin.path, ".mcp.json"),
   }
 }
@@ -249,6 +251,118 @@ async function scanPluginMcpServers(mcpJsonPath: string): Promise<string[]> {
   } catch {
     return []
   }
+}
+
+async function scanPluginHooks(hooksPath: string): Promise<PluginComponent[]> {
+  const components: PluginComponent[] = []
+  const targetPath = await resolveHookPath(hooksPath)
+  if (!targetPath) return components
+
+  try {
+    const stat = await fs.stat(targetPath)
+    if (stat.isDirectory()) {
+      const entries = await fs.readdir(targetPath, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!isValidEntryName(entry.name)) continue
+        const { isDirectory, isFile } = await resolveDirentType(
+          targetPath,
+          entry,
+        )
+        if (!isDirectory && !isFile) continue
+        const baseName = entry.name.replace(/\.(json|md|ya?ml|sh)$/i, "")
+        components.push({ name: baseName })
+      }
+      return components.sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    if (!stat.isFile() || !targetPath.endsWith(".json")) return components
+    const parsed = JSON.parse(await fs.readFile(targetPath, "utf-8")) as unknown
+    return scanPluginHooksJson(parsed)
+  } catch {
+    return components
+  }
+}
+
+async function resolveHookPath(hooksPath: string): Promise<string | undefined> {
+  try {
+    await fs.access(hooksPath)
+    return hooksPath
+  } catch {
+    if (path.basename(hooksPath) !== "hooks.json") return undefined
+    const hooksDir = path.join(path.dirname(hooksPath), "hooks")
+    try {
+      await fs.access(hooksDir)
+      return hooksDir
+    } catch {
+      return undefined
+    }
+  }
+}
+
+function scanPluginHooksJson(parsed: unknown): PluginComponent[] {
+  const root = getRecordField(parsed, "hooks") ?? toRecord(parsed)
+  if (!root) return []
+
+  const components: PluginComponent[] = []
+  for (const [eventName, groups] of Object.entries(root)) {
+    if (!Array.isArray(groups)) continue
+    groups.forEach((group, groupIndex) => {
+      const groupRecord = toRecord(group)
+      const matcher = getStringField(groupRecord, "matcher")
+      const hooks = getArrayField(groupRecord, "hooks")
+      const hookEntries = hooks.length > 0 ? hooks : [group]
+      hookEntries.forEach((hook, hookIndex) => {
+        const hookRecord = toRecord(hook)
+        const hookType = getStringField(hookRecord, "type")
+        components.push({
+          name: [
+            eventName,
+            matcher,
+            hookType,
+            hookEntries.length > 1 ? String(hookIndex + 1) : undefined,
+          ]
+            .filter(Boolean)
+            .join(":"),
+          description:
+            matcher ?? (groupIndex > 0 ? `group ${groupIndex + 1}` : undefined),
+        })
+      })
+    })
+  }
+
+  return components.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function toRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
+}
+
+function getRecordField(
+  value: unknown,
+  key: string,
+): Record<string, unknown> | undefined {
+  const record = toRecord(value)
+  return toRecord(record?.[key])
+}
+
+function getArrayField(
+  value: Record<string, unknown> | undefined,
+  key: string,
+): unknown[] {
+  const candidate = value?.[key]
+  return Array.isArray(candidate) ? candidate : []
+}
+
+function getStringField(
+  value: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined {
+  const candidate = value?.[key]
+  return typeof candidate === "string" && candidate.trim().length > 0
+    ? candidate
+    : undefined
 }
 
 async function scanControlledUiManifest(pluginRoot: string): Promise<ScannedPluginReviewDocument["controlledUi"]> {
@@ -752,10 +866,11 @@ export async function scanPluginReviewDocument(
   plugin: PluginInfo,
 ): Promise<ScannedPluginReviewDocument> {
   const paths = getPluginComponentPaths(plugin)
-  const [commands, skills, agents, mcpServers, controlledUi, developerTrusted] = await Promise.all([
+  const [commands, skills, agents, hooks, mcpServers, controlledUi, developerTrusted] = await Promise.all([
     scanPluginCommands(paths.commands),
     scanPluginSkills(paths.skills),
     scanPluginAgents(paths.agents),
+    scanPluginHooks(paths.hooks),
     scanPluginMcpServers(paths.mcpServers),
     scanControlledUiManifest(plugin.path),
     scanDeveloperTrustedManifest(plugin.path),
@@ -765,6 +880,7 @@ export async function scanPluginReviewDocument(
     commands,
     skills,
     agents,
+    hooks,
     mcpServers,
   }
   const targetModeSummary =
@@ -800,6 +916,7 @@ export async function scanPluginReviewDocument(
         commands: commands.length,
         skills: skills.length,
         agents: agents.length,
+        hooks: hooks.length,
         mcpServers,
       },
       controlledUi: controlledUi.reviewDocument,

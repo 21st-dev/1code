@@ -1359,6 +1359,7 @@ export const en = {
   "settings.plugins.doctorCommandsShort": "Cmd",
   "settings.plugins.doctorSkillsShort": "Skill",
   "settings.plugins.doctorAgentsShort": "Agent",
+  "settings.plugins.doctorHooksShort": "Hook",
   "settings.plugins.doctorMcpApprovals": "MCP approvals",
   "settings.plugins.doctorDeveloperTrust": "Developer trust",
   "settings.plugins.doctorDeveloperTrustStatus": "Trust status",
@@ -1426,9 +1427,10 @@ export const en = {
   "settings.plugins.commandsCount": "Commands ({count})",
   "settings.plugins.skillsCount": "Skills ({count})",
   "settings.plugins.agentsCount": "Agents ({count})",
+  "settings.plugins.hooksCount": "Hooks ({count})",
   "settings.plugins.mcpServersCount": "MCP Servers ({count})",
   "settings.plugins.packageHint":
-    "Plugins are capability packages. Enabled plugins can expose commands, skills, agents, and MCP servers.",
+    "Plugins are capability packages. Enabled plugins can expose commands, skills, agents, hooks, and MCP servers.",
   "settings.plugins.claudePackageHint":
     "Claude Code plugins are runtime packages. Enabling them exposes their commands, skills, agents, and MCP servers to Claude Code only.",
   "settings.plugins.codexPackageHint":
@@ -4651,6 +4653,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.doctorCommandsShort": "命令",
   "settings.plugins.doctorSkillsShort": "技能",
   "settings.plugins.doctorAgentsShort": "智能体",
+  "settings.plugins.doctorHooksShort": "钩子",
   "settings.plugins.doctorMcpApprovals": "MCP 批准",
   "settings.plugins.doctorDeveloperTrust": "开发者信任",
   "settings.plugins.doctorDeveloperTrustStatus": "信任状态",
@@ -4718,9 +4721,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.commandsCount": "命令（{count}）",
   "settings.plugins.skillsCount": "技能（{count}）",
   "settings.plugins.agentsCount": "智能体（{count}）",
+  "settings.plugins.hooksCount": "钩子（{count}）",
   "settings.plugins.mcpServersCount": "MCP 服务器（{count}）",
   "settings.plugins.packageHint":
-    "插件是能力包。启用后可以提供命令、技能、智能体和 MCP 服务器。",
+    "插件是能力包。启用后可以提供命令、技能、智能体、钩子和 MCP 服务器。",
   "settings.plugins.claudePackageHint":
     "Claude Code 插件是 Claude 运行时的能力包。启用后只会影响 Claude Code。",
   "settings.plugins.codexPackageHint":

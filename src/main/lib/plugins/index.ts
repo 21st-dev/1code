@@ -38,6 +38,7 @@ interface PluginComponentPaths {
   commands?: string
   skills?: string
   agents?: string
+  hooks?: string
   mcpServers?: string
 }
 
@@ -105,6 +106,7 @@ interface CodexPluginJson {
   commands?: unknown
   skills?: unknown
   agents?: unknown
+  hooks?: unknown
   mcpServers?: unknown
   interface?: {
     displayName?: string
@@ -266,7 +268,7 @@ async function resolvePluginComponentPaths(
   pluginRoot: string,
   parsed: CodexPluginJson,
 ): Promise<PluginComponentPathsResolution> {
-  const [commands, skills, agents, mcpServers] = await Promise.all([
+  const [commands, skills, agents, hooks, mcpServers] = await Promise.all([
     resolvePluginComponentPathWithDiagnostics(
       pluginRoot,
       parsed.commands,
@@ -284,6 +286,11 @@ async function resolvePluginComponentPaths(
     ),
     resolvePluginComponentPathWithDiagnostics(
       pluginRoot,
+      parsed.hooks,
+      "hooks.json",
+    ),
+    resolvePluginComponentPathWithDiagnostics(
+      pluginRoot,
       parsed.mcpServers,
       ".mcp.json",
     ),
@@ -294,12 +301,14 @@ async function resolvePluginComponentPaths(
       commands: commands.path,
       skills: skills.path,
       agents: agents.path,
+      hooks: hooks.path,
       mcpServers: mcpServers.path,
     },
     diagnostics: [
       ...commands.diagnostics,
       ...skills.diagnostics,
       ...agents.diagnostics,
+      ...hooks.diagnostics,
       ...mcpServers.diagnostics,
     ],
   }
@@ -764,6 +773,7 @@ export function getPluginComponentPaths(plugin: PluginInfo) {
       plugin.componentPaths?.commands ?? path.join(plugin.path, "commands"),
     skills: plugin.componentPaths?.skills ?? path.join(plugin.path, "skills"),
     agents: plugin.componentPaths?.agents ?? path.join(plugin.path, "agents"),
+    hooks: plugin.componentPaths?.hooks ?? path.join(plugin.path, "hooks.json"),
     mcpServers:
       plugin.componentPaths?.mcpServers ?? path.join(plugin.path, ".mcp.json"),
   }

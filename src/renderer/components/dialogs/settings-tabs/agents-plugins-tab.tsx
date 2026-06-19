@@ -15,6 +15,7 @@ import {
   Stethoscope,
   Terminal,
   Trash2,
+  Workflow,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -388,6 +389,7 @@ interface PluginDoctorPluginDebug {
     commands: number
     skills: number
     agents: number
+    hooks: number
     mcpServers: number
   }
   controlledUi: {
@@ -751,6 +753,7 @@ interface PluginData {
     commands: PluginComponent[]
     skills: PluginComponent[]
     agents: PluginComponent[]
+    hooks: PluginComponent[]
     mcpServers: string[]
   }
   mcpApprovalIdentifiers: Record<string, string>
@@ -1885,6 +1888,7 @@ function PluginDebugPanel({
               `${t("settings.plugins.doctorCommandsShort")}:${debug.componentCounts.commands}`,
               `${t("settings.plugins.doctorSkillsShort")}:${debug.componentCounts.skills}`,
               `${t("settings.plugins.doctorAgentsShort")}:${debug.componentCounts.agents}`,
+              `${t("settings.plugins.doctorHooksShort")}:${debug.componentCounts.hooks}`,
               `MCP:${debug.componentCounts.mcpServers}`,
             ].join(" / ")}
           </p>
@@ -2257,6 +2261,7 @@ function PluginRuntimeNativeActivationPanel({ plugin }: { plugin: PluginData }) 
     `${t("settings.plugins.doctorCommandsShort")}:${plugin.components.commands.length}`,
     `${t("settings.plugins.doctorSkillsShort")}:${plugin.components.skills.length}`,
     `${t("settings.plugins.doctorAgentsShort")}:${plugin.components.agents.length}`,
+    `${t("settings.plugins.doctorHooksShort")}:${plugin.components.hooks.length}`,
     `MCP:${plugin.components.mcpServers.length}`,
   ].join(" / ")
 
@@ -3069,6 +3074,7 @@ function PluginDetail({
     plugin.components.commands.length +
     plugin.components.skills.length +
     plugin.components.agents.length +
+    plugin.components.hooks.length +
     plugin.components.mcpServers.length
   const statusLabel = getPluginStatusLabel(plugin, t)
   const runtimeLabel = getRuntimeLabel(plugin.runtime, t)
@@ -3449,6 +3455,36 @@ function PluginDetail({
             </div>
           )}
 
+          {plugin.components.hooks.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>
+                {t("settings.plugins.hooksCount", {
+                  count: plugin.components.hooks.length,
+                })}
+              </Label>
+              <div className="space-y-1">
+                {plugin.components.hooks.map((hook) => (
+                  <div
+                    key={hook.name}
+                    className="w-full flex items-start gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-left opacity-75"
+                  >
+                    <Workflow className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-mono font-medium text-foreground">
+                        {hook.name}
+                      </p>
+                      {hook.description && (
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                          {hook.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {plugin.components.mcpServers.length > 0 && (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between gap-3">
@@ -3576,6 +3612,7 @@ function PluginListItem({
     plugin.components.commands.length +
     plugin.components.skills.length +
     plugin.components.agents.length +
+    plugin.components.hooks.length +
     plugin.components.mcpServers.length
   const statusLabel =
     plugin.runtime === "codex" || plugin.safetyGate.status === "allowed"
@@ -4964,6 +5001,14 @@ export function AgentsPluginsTab() {
         return true
       if (
         p.components.agents.some(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            c.description?.toLowerCase().includes(q),
+        )
+      )
+        return true
+      if (
+        p.components.hooks.some(
           (c) =>
             c.name.toLowerCase().includes(q) ||
             c.description?.toLowerCase().includes(q),

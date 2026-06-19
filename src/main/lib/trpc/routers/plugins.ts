@@ -183,6 +183,7 @@ export interface PluginWithComponents {
     commands: PluginComponent[]
     skills: PluginComponent[]
     agents: PluginComponent[]
+    hooks: PluginComponent[]
     mcpServers: string[]
   }
   mcpApprovalIdentifiers: Record<string, string>
@@ -1150,6 +1151,7 @@ export const pluginsRouter = router({
             commands: scanned.components.commands.length,
             skills: scanned.components.skills.length,
             agents: scanned.components.agents.length,
+            hooks: scanned.components.hooks.length,
             mcpServers: scanned.components.mcpServers.length,
           },
           controlledUi: {

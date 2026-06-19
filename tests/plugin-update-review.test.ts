@@ -93,6 +93,7 @@ describe("plugin update review documents", () => {
         commands: 0,
         skills: 7,
         agents: 0,
+        hooks: 1,
         mcpServers: ["figma", "figma-write"],
       },
       sourcePins: [{ kind: "cache-version", value: "next-pin" }],
@@ -100,6 +101,7 @@ describe("plugin update review documents", () => {
 
     expect(diffPluginManifestReviewDocuments(previous, current)).toEqual([
       { field: "version", previous: "2.0.7", current: "2.0.8" },
+      { field: "hooks", previous: "0", current: "1" },
       { field: "mcpServers", previous: "figma", current: "figma, figma-write" },
       {
         field: "sourcePins",

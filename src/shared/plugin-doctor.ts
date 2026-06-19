@@ -135,6 +135,7 @@ export interface PluginDoctorPluginInput {
     commands: number
     skills: number
     agents: number
+    hooks: number
     mcpServers: number
   }
   controlledUi: {
@@ -464,6 +465,7 @@ function buildPluginChecks(plugin: PluginDoctorPluginInput): PluginDoctorCheck[]
     plugin.componentCounts.commands +
     plugin.componentCounts.skills +
     plugin.componentCounts.agents +
+    plugin.componentCounts.hooks +
     plugin.componentCounts.mcpServers
   checks.push({
     code: "components-declared",

@@ -44,12 +44,14 @@ export interface PluginManifestReviewDocument {
     commands?: string
     skills?: string
     agents?: string
+    hooks?: string
     mcpServers?: string
   }
   components: {
     commands: number
     skills: number
     agents: number
+    hooks: number
     mcpServers: string[]
   }
   controlledUi: PluginControlledUiReviewDocument
@@ -161,12 +163,14 @@ export function buildPluginManifestReviewDocument(
       commands: input.componentPaths.commands,
       skills: input.componentPaths.skills,
       agents: input.componentPaths.agents,
+      hooks: input.componentPaths.hooks,
       mcpServers: input.componentPaths.mcpServers,
     },
     components: {
       commands: input.components?.commands ?? 0,
       skills: input.components?.skills ?? 0,
       agents: input.components?.agents ?? 0,
+      hooks: input.components?.hooks ?? 0,
       mcpServers: normalizeList(input.components?.mcpServers),
     },
     controlledUi: normalizeControlledUi(input.controlledUi),
@@ -197,6 +201,7 @@ export function diffPluginManifestReviewDocuments(
   addChange("commands", previous.components.commands, current.components.commands)
   addChange("skills", previous.components.skills, current.components.skills)
   addChange("agents", previous.components.agents, current.components.agents)
+  addChange("hooks", previous.components.hooks, current.components.hooks)
   addChange("mcpServers", previous.components.mcpServers, current.components.mcpServers)
   addChange("controlledUi", previous.controlledUi, current.controlledUi)
   addChange("developerTrusted", previous.developerTrusted, current.developerTrusted)
