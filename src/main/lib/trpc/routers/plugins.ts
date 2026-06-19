@@ -48,6 +48,7 @@ import type {
   RuntimePluginWriteExecutionResult,
   RuntimePluginWritePreview,
 } from "../../../../shared/runtime-plugin-marketplace"
+import { hasClaudeNativePluginStagingFailure } from "../../claude/plugin-staging-state"
 import {
   clearPluginCache,
   discoverAllRuntimePlugins,
@@ -557,6 +558,9 @@ function buildPluginRuntimeNativeActivation(input: {
     mcpServerNames: input.scanned.components.mcpServers,
     mcpApprovalIdentifiers: input.scanned.mcpApprovalIdentifiers,
     approvedPluginMcpServers: input.approvedPluginMcpServers,
+    nativeLoadFailure:
+      input.plugin.runtime === "claude" &&
+      hasClaudeNativePluginStagingFailure(input.plugin.source),
   })
 }
 

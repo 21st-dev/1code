@@ -1,6 +1,10 @@
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import path from "node:path"
+import {
+  type ClaudeNativePluginStagingFailureInput,
+  replaceClaudeNativePluginStagingFailures,
+} from "./plugin-staging-state"
 
 type ClaudeAgentSdkConfigDirFs = {
   mkdir: typeof fs.mkdir
@@ -97,19 +101,23 @@ async function removeManagedPath(input: {
   targetPath: string
   label: string
   dependencies: ClaudeAgentSdkConfigDirDependencies
+  markIncomplete: () => void
   markError: () => void
-}): Promise<void> {
+}): Promise<boolean> {
   try {
     await input.dependencies.fs.rm(input.targetPath, {
       recursive: true,
       force: true,
     })
+    return true
   } catch (err) {
+    input.markIncomplete()
     input.markError()
     input.dependencies.logger.warn(
       `[claude] Failed to remove managed ${input.label}:`,
       (err as Error).message,
     )
+    return false
   }
 }
 
@@ -226,15 +234,29 @@ async function stageClaudePlugins(input: {
   dependencies: ClaudeAgentSdkConfigDirDependencies
   markIncomplete: () => void
   markError: () => void
-}): Promise<{ stagedEntries: ClaudePluginStagingEntry[] }> {
-  await removeManagedPath({
+}): Promise<{
+  stagedEntries: ClaudePluginStagingEntry[]
+  failedEntries: ClaudeNativePluginStagingFailureInput[]
+}> {
+  const removedPreviousPlugins = await removeManagedPath({
     targetPath: input.pluginsTarget,
     label: "plugins directory",
     dependencies: input.dependencies,
+    markIncomplete: input.markIncomplete,
     markError: input.markError,
   })
+  if (!removedPreviousPlugins) {
+    return {
+      stagedEntries: [],
+      failedEntries: input.entries.map((entry) =>
+        toStagingFailure(entry, "stage-failed"),
+      ),
+    }
+  }
 
-  if (input.entries.length === 0) return { stagedEntries: [] }
+  if (input.entries.length === 0) {
+    return { stagedEntries: [], failedEntries: [] }
+  }
 
   const marketplaces = new Map<string, ClaudePluginStagingEntry[]>()
   for (const entry of input.entries) {
@@ -246,6 +268,7 @@ async function stageClaudePlugins(input: {
   const symlinkType =
     input.dependencies.platform === "win32" ? "junction" : "dir"
   const stagedEntries: ClaudePluginStagingEntry[] = []
+  const failedEntries: ClaudeNativePluginStagingFailureInput[] = []
   for (const [marketplace, entries] of marketplaces) {
     const marketplaceRoot = path.join(
       input.pluginsTarget,
@@ -259,6 +282,15 @@ async function stageClaudePlugins(input: {
       const sourcePath = path.join("plugins", sanitizePathSegment(entry.name))
       const targetPath = path.join(marketplaceRoot, sourcePath)
       try {
+        const sourceExists = await input.dependencies.fs
+          .stat(entry.path)
+          .then(() => true)
+          .catch(() => false)
+        if (!sourceExists) {
+          input.markIncomplete()
+          failedEntries.push(toStagingFailure(entry, "source-missing"))
+          continue
+        }
         await input.dependencies.fs.mkdir(path.dirname(targetPath), {
           recursive: true,
         })
@@ -272,10 +304,15 @@ async function stageClaudePlugins(input: {
           markIncomplete: input.markIncomplete,
           markError: input.markError,
         })
-        if (linked) linkedEntries.push(entry)
+        if (linked) {
+          linkedEntries.push(entry)
+        } else {
+          failedEntries.push(toStagingFailure(entry, "symlink-failed"))
+        }
       } catch (err) {
         input.markIncomplete()
         input.markError()
+        failedEntries.push(toStagingFailure(entry, "stage-failed"))
         input.dependencies.logger.warn(
           `[claude] Failed to stage plugin ${entry.pluginSource}:`,
           (err as Error).message,
@@ -309,6 +346,11 @@ async function stageClaudePlugins(input: {
     } catch (err) {
       input.markIncomplete()
       input.markError()
+      failedEntries.push(
+        ...linkedEntries.map((entry) =>
+          toStagingFailure(entry, "marketplace-manifest-failed"),
+        ),
+      )
       input.dependencies.logger.warn(
         `[claude] Failed to write staged marketplace ${marketplace}:`,
         (err as Error).message,
@@ -319,7 +361,20 @@ async function stageClaudePlugins(input: {
     }
   }
 
-  return { stagedEntries }
+  return { stagedEntries, failedEntries }
+}
+
+function toStagingFailure(
+  entry: ClaudePluginStagingEntry,
+  reason: ClaudeNativePluginStagingFailureInput["reason"],
+): ClaudeNativePluginStagingFailureInput {
+  return {
+    pluginSource: entry.pluginSource,
+    marketplace: entry.marketplace,
+    name: entry.name,
+    path: entry.path,
+    reason,
+  }
 }
 
 function sanitizePathSegment(value: string): string {
@@ -404,6 +459,7 @@ export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
     markIncomplete,
     markError,
   })
+  replaceClaudeNativePluginStagingFailures(pluginStaging.failedEntries)
   await writeFilteredSettings({
     settingsSource,
     settingsTarget,

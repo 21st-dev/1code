@@ -16,6 +16,10 @@ import {
   ensureClaudeAgentSdkIsolatedConfigDir,
   resolveClaudeAgentSdkIsolatedConfig,
 } from "../src/main/lib/claude/agent-sdk-config-dir"
+import {
+  clearClaudeNativePluginStagingFailures,
+  getClaudeNativePluginStagingFailure,
+} from "../src/main/lib/claude/plugin-staging-state"
 
 const roots: string[] = []
 
@@ -59,10 +63,12 @@ async function createHomeClaudeDir(root: string): Promise<string> {
 
 beforeEach(() => {
   clearClaudeAgentSdkIsolatedConfigDirCache()
+  clearClaudeNativePluginStagingFailures()
 })
 
 afterEach(async () => {
   clearClaudeAgentSdkIsolatedConfigDirCache()
+  clearClaudeNativePluginStagingFailures()
   await Promise.all(
     roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
   )
@@ -302,5 +308,69 @@ describe("Claude Agent SDK isolated config dir", () => {
     expect(
       await pathExists(join(stagedMarketplacePath, "plugins", "blocked")),
     ).toBe(false)
+    expect(getClaudeNativePluginStagingFailure("market:allowed")).toBeUndefined()
+    expect(getClaudeNativePluginStagingFailure("market:blocked")).toMatchObject({
+      pluginSource: "market:blocked",
+      marketplace: "market",
+      name: "blocked",
+      path: missingPluginSourcePath,
+      reason: "source-missing",
+    })
+  })
+
+  test("fails closed when previous Claude plugin staging cannot be removed", async () => {
+    const root = await createRoot()
+    const userDataDir = join(root, "user-data")
+    const homeDir = await createHomeClaudeDir(root)
+    const pluginSourcePath = join(root, "source-plugin")
+    await mkdir(pluginSourcePath, { recursive: true })
+    const isolatedConfig = resolveClaudeAgentSdkIsolatedConfig({
+      userDataDir,
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      isUsingOllama: false,
+    })
+    const pluginsTarget = join(isolatedConfig.isolatedConfigDir, "plugins")
+
+    await ensureClaudeAgentSdkIsolatedConfigDir({
+      ...isolatedConfig,
+      dependencies: {
+        homeDir: () => homeDir,
+        getPluginSafeModeState: async () => ({ enabled: false }),
+        getClaudePluginStagingEntries: async () => [
+          {
+            pluginSource: "market:allowed",
+            marketplace: "market",
+            name: "allowed",
+            version: "1.2.3",
+            path: pluginSourcePath,
+          },
+        ],
+        fs: {
+          rm: async (targetPath, options) => {
+            if (String(targetPath) === pluginsTarget) {
+              throw new Error("locked plugin staging directory")
+            }
+            return rm(targetPath, options)
+          },
+        },
+        logger: { warn() {} },
+      },
+    })
+
+    const settings = JSON.parse(
+      await readFile(
+        join(isolatedConfig.isolatedConfigDir, "settings.json"),
+        "utf-8",
+      ),
+    )
+    expect(settings).toMatchObject({
+      includeCoAuthoredBy: false,
+      enabledPlugins: [],
+    })
+    expect(getClaudeNativePluginStagingFailure("market:allowed")).toMatchObject({
+      pluginSource: "market:allowed",
+      reason: "stage-failed",
+    })
   })
 })
