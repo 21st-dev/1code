@@ -127,45 +127,48 @@
 
 ## 3. Setup Resolution + Install Flow
 
-- [ ] 3.1 Add MCP tab registry browse/detail/install UI alongside existing manual add
+- [x] 3.1 Add MCP tab registry browse/detail/install UI alongside existing manual add
   and import surfaces.
 - 2026-06-20 added `src/main/lib/mcp-registry/service.ts` as the main-process
   service entrypoint for list/search/detail/preview. This is the API/service
-  foundation for the MCP tab UI, but 3.1 remains unchecked until the renderer
-  browse/detail/install surface is actually added.
+  foundation for the MCP tab UI.
 - 2026-06-20 added the MCP tab registry browse mode backed by
   `trpc.mcpRegistry.list`/`detail`, with a redacted install-preview detail panel.
-  The install confirmation/action surface is still pending, so 3.1 remains
-  unchecked.
+  This was later completed with a Claude setup-free install confirmation action.
+- 2026-06-20 added the renderer install confirmation action for Claude
+  setup-free targets. Targets requiring setup remain non-installable until 3.2.
 - [ ] 3.2 Implement setup resolution for env var references, secret values,
   OAuth/runtime auth, local dependency status, and missing setup display, with secret
   values kept in main-process or runtime-owned secure storage and renderer metadata
   redacted.
-- [ ] 3.3 On install confirmation, write through the Runtime MCP Config service and
+- [x] 3.3 On install confirmation, write through the Runtime MCP Config service and
   target adapter, not through route-local Claude/Codex helpers.
 - 2026-06-20 added a Claude-only registry install service path that materializes
   setup-free registry targets, then writes through
   `writeClaudeMcpServerConfig` in the Runtime MCP Config owner. The tRPC install
   mutation and renderer confirmation UI remain pending.
 - 2026-06-20 exposed `trpc.mcpRegistry.install` as an explicit install mutation
-  that delegates to the registry service. Renderer confirmation UI remains pending.
-- [ ] 3.4 Ensure browse/preview/install do not run registry server commands, package
+  that delegates to the registry service.
+- 2026-06-20 renderer confirmation now calls the install mutation for Claude
+  setup-free targets; the mutation still delegates to the registry service and
+  Runtime MCP Config owner.
+- [x] 3.4 Ensure browse/preview/install do not run registry server commands, package
   managers, Docker images, MCP server processes, or MCP tools.
 - 2026-06-20 added `tests/mcp-registry-management-inert.test.ts` to guard the
   current registry management-time service and preview code against process
   execution, runtime MCP writers, MCP tool calls, package-manager launches, and
-  Docker. This remains unchecked until the install path exists and is covered too.
+  Docker.
 - 2026-06-20 added a browse-only tRPC router test and renderer browse mode; the
-  UI only reads registry metadata/previews and does not expose an install action
-  in this slice.
-- [ ] 3.5 Allow runtime-owned config writers during install only when they write or
+  UI initially only read registry metadata/previews; install action coverage landed
+  in the later Claude setup-free slice.
+- [x] 3.5 Allow runtime-owned config writers during install only when they write or
   stage configuration and do not launch the target MCP server.
 - 2026-06-20 install service uses the Claude runtime-owned config writer only;
   tests keep the registry service inert against process execution and MCP tool
-  calls. Full install-path coverage remains pending until the route/UI slice lands.
+  calls.
 - 2026-06-20 router tests cover the install mutation envelope and assert the route
   does not call route-local Claude/Codex MCP helpers or process execution APIs.
-- [ ] 3.6 After install with setup resolved, mark the server `Installed / Unverified`
+- [x] 3.6 After install with setup resolved, mark the server `Installed / Unverified`
   for that runtime and fingerprint until local runtime proof exists.
 - 2026-06-20 Claude registry install writes `_locusMcpRegistry` metadata with
   `installed-unverified`, entry fingerprint, and config fingerprint. Renderer

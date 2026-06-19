@@ -1045,6 +1045,10 @@ export const en = {
   "settings.mcp.registryPreviewOnlyDescription":
     "Preview only. No runtime config is written and no external command is executed.",
   "settings.mcp.registryInstallPreview": "Install preview",
+  "settings.mcp.registryInstallToClaude": "Install to Claude",
+  "settings.mcp.registryInstallConfirmTitle": "Install MCP server",
+  "settings.mcp.registryInstallConfirmDescription":
+    'Install "{name}" into Claude MCP config. Locus writes configuration only and does not execute the server.',
   "settings.mcp.registryNoPreview": "No install preview is available.",
   "settings.mcp.registryVersion": "Version",
   "settings.mcp.registryTargets": "Targets",
@@ -1136,6 +1140,9 @@ export const en = {
   "settings.mcp.toast.authenticationFailed": "Authentication failed",
   "settings.mcp.toast.loggedOut": '"{name}" is logged out, refreshing...',
   "settings.mcp.toast.logoutFailed": "Logout failed",
+  "settings.mcp.toast.registryInstalled":
+    '"{name}" is installed to Claude, refreshing...',
+  "settings.mcp.toast.registryInstallFailed": "Registry install failed",
   "settings.mcp.toast.codexLogoutFailedDescription":
     "Codex CLI/keyring credential deletion failed. OAuth credentials may still exist; retry or use the manual cleanup guidance.",
   "settings.mcp.toast.enabled": '"{name}" is enabled, refreshing...',
@@ -4417,6 +4424,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.registryPreviewOnlyDescription":
     "仅预览。不会写入运行时配置，也不会执行外部命令。",
   "settings.mcp.registryInstallPreview": "安装预览",
+  "settings.mcp.registryInstallToClaude": "安装到 Claude",
+  "settings.mcp.registryInstallConfirmTitle": "安装 MCP 服务器",
+  "settings.mcp.registryInstallConfirmDescription":
+    '将 "{name}" 安装到 Claude MCP 配置。Locus 只写入配置，不会执行这个服务器。',
   "settings.mcp.registryNoPreview": "没有可用的安装预览。",
   "settings.mcp.registryVersion": "版本",
   "settings.mcp.registryTargets": "目标",
@@ -4508,6 +4519,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.toast.authenticationFailed": "授权失败",
   "settings.mcp.toast.loggedOut": '"{name}" 已退出登录，正在刷新...',
   "settings.mcp.toast.logoutFailed": "退出登录失败",
+  "settings.mcp.toast.registryInstalled":
+    '"{name}" 已安装到 Claude，正在刷新...',
+  "settings.mcp.toast.registryInstallFailed": "注册表安装失败",
   "settings.mcp.toast.codexLogoutFailedDescription":
     "Codex CLI/keyring 凭据删除失败。OAuth 凭据可能仍然存在；请重试或查看手动清理说明。",
   "settings.mcp.toast.enabled": '"{name}" 已启用，正在刷新...',

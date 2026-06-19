@@ -11,7 +11,7 @@ const registrySources = readdirSync(registryDir)
   }))
 
 describe("MCP registry management-time inert boundary", () => {
-  test("does not import process execution or runtime MCP writers", () => {
+  test("does not import process execution or route-local MCP helpers", () => {
     for (const { file, source } of registrySources) {
       expect(source, file).not.toMatch(/from ["']node:child_process["']/)
       expect(source, file).not.toMatch(/from ["']child_process["']/)

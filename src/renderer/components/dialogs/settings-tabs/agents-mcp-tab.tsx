@@ -40,6 +40,15 @@ import {
 import { useI18n } from "../../../lib/i18n"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog"
 import { Button } from "../../ui/button"
 import { LoadingDot, OriginalMCPIcon } from "../../ui/icons"
 import { Input } from "../../ui/input"
@@ -276,6 +285,21 @@ function registryPreviewTargetLabel(
         ? t("settings.mcp.registryRemoteTarget")
         : formatRegistryToken(preview.targetSource)
   return `${source} / ${formatRegistryToken(preview.transport)}`
+}
+
+function canInstallRegistryPreviewToClaude(
+  preview: McpRegistryInstallPreview,
+): boolean {
+  const claude = preview.runtimeInstallability.find(
+    (item) => item.runtime === "claude-code",
+  )
+  return (
+    claude?.status === "installable-config" &&
+    preview.env.length === 0 &&
+    preview.headers.length === 0 &&
+    preview.variables.length === 0 &&
+    !preview.auth.required
+  )
 }
 
 function getErrorMessage(error: unknown): string {
@@ -1280,10 +1304,15 @@ function RegistrySetupFieldChips({
 
 function McpRegistryPreviewCard({
   preview,
+  onInstall,
+  isInstalling,
 }: {
   preview: McpRegistryInstallPreview
+  onInstall?: (preview: McpRegistryInstallPreview) => void
+  isInstalling?: boolean
 }) {
   const { t } = useI18n()
+  const canInstall = canInstallRegistryPreviewToClaude(preview)
 
   return (
     <div className="rounded-md border border-border bg-background overflow-hidden">
@@ -1294,9 +1323,26 @@ function McpRegistryPreviewCard({
             {registryPreviewTargetLabel(preview, t)}
           </p>
         </div>
-        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          {preview.targetId}
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            {preview.targetId}
+          </span>
+          {canInstall && onInstall && (
+            <Button
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              disabled={isInstalling}
+              onClick={() => onInstall(preview)}
+            >
+              {isInstalling ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Plus className="mr-1 h-3 w-3" />
+              )}
+              {t("settings.mcp.registryInstallToClaude")}
+            </Button>
+          )}
+        </div>
       </div>
       <div className="divide-y divide-border">
         {preview.url && <ConnectionRow label="URL" value={preview.url} />}
@@ -1393,11 +1439,15 @@ function McpRegistryDetailPanel({
   detail,
   isLoading,
   error,
+  onInstallPreview,
+  installingTargetId,
 }: {
   entry: McpRegistryEntry | null
   detail: McpRegistryDetailResult | undefined
   isLoading: boolean
   error: unknown
+  onInstallPreview?: (preview: McpRegistryInstallPreview) => void
+  installingTargetId?: string | null
 }) {
   const { t } = useI18n()
   const displayEntry = detail?.entry ?? entry
@@ -1488,6 +1538,8 @@ function McpRegistryDetailPanel({
               <McpRegistryPreviewCard
                 key={preview.targetId}
                 preview={preview}
+                onInstall={onInstallPreview}
+                isInstalling={installingTargetId === preview.targetId}
               />
             ))
           ) : (
@@ -1528,6 +1580,8 @@ export function AgentsMcpTab() {
   )
   const [codexLogoutFailure, setCodexLogoutFailure] =
     useState<CodexLogoutFailure | null>(null)
+  const [registryInstallPreview, setRegistryInstallPreview] =
+    useState<McpRegistryInstallPreview | null>(null)
   const [deletingServer, setDeletingServer] = useState<{
     provider: McpProvider
     server: McpServer
@@ -1566,6 +1620,7 @@ export function AgentsMcpTab() {
     setShowAddForm(false)
     setSelectedServerKey(null)
     setSelectedRegistryEntryKey(null)
+    setRegistryInstallPreview(null)
   }, [])
 
   const switchMcpViewMode = useCallback((nextMode: McpViewMode) => {
@@ -1573,6 +1628,7 @@ export function AgentsMcpTab() {
     setSearchQuery("")
     setShowAddForm(false)
     setShowImportPreviewPanel(false)
+    setRegistryInstallPreview(null)
     if (nextMode === "registry") {
       setSelectedServerKey(null)
     } else {
@@ -1629,6 +1685,7 @@ export function AgentsMcpTab() {
   const updateMutation = trpc.claude.updateMcpServer.useMutation()
   const removeClaudeMcpMutation = trpc.claude.removeMcpServer.useMutation()
   const removeCodexMcpMutation = trpc.codex.removeMcpServer.useMutation()
+  const installRegistryMutation = trpc.mcpRegistry.install.useMutation()
 
   const sortedGroupsByProvider = useMemo(() => {
     const statusOrder: Record<string, number> = {
@@ -1822,6 +1879,37 @@ export function AgentsMcpTab() {
       t,
     ],
   )
+
+  const handleConfirmRegistryInstall = useCallback(async () => {
+    if (!registryInstallPreview) return
+    const scope = selectedProject?.path ? "project" : "global"
+    try {
+      const result = await installRegistryMutation.mutateAsync({
+        serverName: registryInstallPreview.entryId,
+        targetId: registryInstallPreview.targetId,
+        runtime: "claude-code",
+        scope,
+        ...(selectedProject?.path ? { projectPath: selectedProject.path } : {}),
+      })
+      setRegistryInstallPreview(null)
+      toast.success(
+        t("settings.mcp.toast.registryInstalled", {
+          name: result.serverName,
+        }),
+      )
+      await handleRefresh(true, "claude-code")
+    } catch (error) {
+      toast.error(t("settings.mcp.toast.registryInstallFailed"), {
+        description: getErrorMessage(error),
+      })
+    }
+  }, [
+    registryInstallPreview,
+    selectedProject?.path,
+    installRegistryMutation,
+    handleRefresh,
+    t,
+  ])
 
   const handleAuth = async (
     provider: McpProvider,
@@ -2350,6 +2438,12 @@ export function AgentsMcpTab() {
             detail={mcpRegistryDetailQuery.data}
             isLoading={mcpRegistryDetailQuery.isLoading}
             error={mcpRegistryDetailQuery.error}
+            onInstallPreview={setRegistryInstallPreview}
+            installingTargetId={
+              installRegistryMutation.isPending
+                ? registryInstallPreview?.targetId
+                : null
+            }
           />
         ) : showAddForm ? (
           <CreateMcpServerForm
@@ -2477,6 +2571,66 @@ export function AgentsMcpTab() {
           removeClaudeMcpMutation.isPending || removeCodexMcpMutation.isPending
         }
       />
+
+      <AlertDialog
+        open={!!registryInstallPreview}
+        onOpenChange={(open) => {
+          if (!open && !installRegistryMutation.isPending) {
+            setRegistryInstallPreview(null)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("settings.mcp.registryInstallConfirmTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("settings.mcp.registryInstallConfirmDescription", {
+                name: registryInstallPreview?.serverName ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {registryInstallPreview && (
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-3">
+                <span>{t("settings.mcp.scope")}</span>
+                <span className="font-medium text-foreground">
+                  {selectedProject?.path
+                    ? t("settings.mcp.scopeProjectNamed", {
+                        project: selectedProject.name ?? selectedProject.path,
+                      })
+                    : t("settings.mcp.scopeClaudeGlobal")}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <span>{t("settings.mcp.registryTargets")}</span>
+                <span className="font-mono text-foreground">
+                  {registryInstallPreview.targetId}
+                </span>
+              </div>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={installRegistryMutation.isPending}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <Button
+              onClick={() => {
+                void handleConfirmRegistryInstall()
+              }}
+              disabled={
+                !registryInstallPreview || installRegistryMutation.isPending
+              }
+            >
+              {installRegistryMutation.isPending && (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              )}
+              {t("settings.mcp.registryInstallToClaude")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
