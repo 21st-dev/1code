@@ -119,7 +119,12 @@ describe("agent runtime capability manifests", () => {
       capabilityId: "runtimePlugins",
     })
     expect(claudePlugins.ok).toBe(false)
-    expect(claudePlugins.capability.status).toBe("degraded")
+    expect(claudePlugins.capability).toMatchObject({
+      status: "degraded",
+      scope: "runtime-specific",
+      reason: expect.stringContaining("native MCP discovery skipped"),
+      hint: expect.stringContaining("identity review"),
+    })
 
     const codexPlugins = checkAgentRuntimeCapability({
       runtime: "codex",

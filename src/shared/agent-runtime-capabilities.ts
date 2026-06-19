@@ -437,8 +437,18 @@ const CLAUDE_RUNTIME_MANIFEST = manifest({
       status: "degraded",
       scope: "runtime-specific",
       reason:
-        "Claude plugin discovery and approval surfaces exist, but full lifecycle and execution semantics are not yet normalized.",
-      hint: "Keep plugin enablement, MCP approval, and execution boundaries explicit.",
+        "Claude reviewed native plugin commands, skills, agents, and hooks can be staged into isolated SDK runs with native MCP discovery skipped; safe-mode, unreviewed-global, identity-drift, and full lifecycle proofs are still incomplete.",
+      hint: "Keep plugin enablement, MCP approval, identity review, and execution boundaries explicit.",
+      support: {
+        kind: "runtime-code",
+        references: [
+          "src/main/lib/claude/agent-sdk-config-dir.ts",
+          "src/main/lib/claude/agent-sdk-runtime-startup.ts",
+          "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
+          "src/main/lib/claude/agent-sdk-query-options.ts",
+          "scripts/probe-claude-agent-sdk-plugin-loading.ts",
+        ],
+      },
     }),
     capability({
       id: "runtimeCommands",
