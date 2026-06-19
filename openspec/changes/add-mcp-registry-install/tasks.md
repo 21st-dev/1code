@@ -247,7 +247,13 @@
 - [ ] 4.4 Observe real Locus-managed Codex app-server runs and upgrade to
   `Verified on Codex` only after Codex field-materialization and observability proof
   gates pass and a tool call succeeds.
-- [ ] 4.5 Add an explicit Check action that is connect/list-only by default.
+- [x] 4.5 Add an explicit Check action that is connect/list-only by default.
+- 2026-06-20 added explicit `mcpRegistry.checkInstalled` plus an MCP tab Check
+  button for registry-managed Claude servers. The default path materializes the
+  installed config in the main process, connects/lists tools via the Runtime MCP
+  Config Claude adapter, records `ready-to-verify` or `failed-check`, and does
+  not invoke MCP tools or upgrade to Verified. Codex Check remains deferred
+  instead of offering fake support.
 - [ ] 4.6 Allow explicit Check to call a tool only when Locus has classified that tool
   as safe and side-effect-free; otherwise require a user-initiated real run for
   tool-call proof.

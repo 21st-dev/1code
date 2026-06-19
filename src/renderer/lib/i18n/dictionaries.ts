@@ -1145,6 +1145,9 @@ export const en = {
   "settings.mcp.toast.registryInstalled":
     '"{name}" is installed to Claude, refreshing...',
   "settings.mcp.toast.registryInstallFailed": "Registry install failed",
+  "settings.mcp.toast.registryCheckPassed": "Registry check passed",
+  "settings.mcp.toast.registryCheckFailed": "Registry check failed",
+  "settings.mcp.toast.registryCheckToolCount": "{count} tools listed",
   "settings.mcp.toast.codexLogoutFailedDescription":
     "Codex CLI/keyring credential deletion failed. OAuth credentials may still exist; retry or use the manual cleanup guidance.",
   "settings.mcp.toast.enabled": '"{name}" is enabled, refreshing...',
@@ -1154,6 +1157,7 @@ export const en = {
   "settings.mcp.toast.failedToRemove": "Failed to remove server",
   "agent.mcp.unknownStatus": "Unknown status",
   "settings.mcp.readyToVerify": "Ready to verify",
+  "settings.mcp.registryCheck": "Check",
   "settings.mcp.searchPlaceholder": "Search servers...",
   "settings.mcp.addServer": "Add MCP server",
   "settings.mcp.refreshServers": "Refresh MCP servers",
@@ -4527,6 +4531,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.toast.registryInstalled":
     '"{name}" 已安装到 Claude，正在刷新...',
   "settings.mcp.toast.registryInstallFailed": "注册表安装失败",
+  "settings.mcp.toast.registryCheckPassed": "注册表检查通过",
+  "settings.mcp.toast.registryCheckFailed": "注册表检查失败",
+  "settings.mcp.toast.registryCheckToolCount": "已列出 {count} 个工具",
   "settings.mcp.toast.codexLogoutFailedDescription":
     "Codex CLI/keyring 凭据删除失败。OAuth 凭据可能仍然存在；请重试或查看手动清理说明。",
   "settings.mcp.toast.enabled": '"{name}" 已启用，正在刷新...',
@@ -4536,6 +4543,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.toast.failedToRemove": "移除服务器失败",
   "agent.mcp.unknownStatus": "未知状态",
   "settings.mcp.readyToVerify": "可验证",
+  "settings.mcp.registryCheck": "检查",
   "settings.mcp.searchPlaceholder": "搜索服务器...",
   "settings.mcp.addServer": "添加 MCP 服务器",
   "settings.mcp.refreshServers": "刷新 MCP 服务器",

@@ -61,9 +61,46 @@ const registryInstallInputSchema = registryPreviewInstallInputSchema.extend({
   resolvedSetup: registrySetupResolutionSchema,
 })
 
+const registryCheckInstalledInputSchema = z.object({
+  runtime: z.enum(["claude-code", "codex"]),
+  serverName: z.string().trim().min(1),
+  scope: z.enum(["global", "project"]),
+  projectPath: optionalTrimmedStringSchema,
+})
+
+export type McpRegistryRouterDeps = {
+  checkInstalled?: (input: {
+    runtime: "claude-code" | "codex"
+    serverName: string
+    scope: "global" | "project"
+    projectPath?: string
+  }) => Promise<{
+    success: boolean
+    runtime: "claude-code"
+    serverName: string
+    status: "ready-to-verify" | "failed-check"
+    toolCount: number
+    toolNames: string[]
+    reason?: string
+  }>
+}
+
 export function createMcpRegistryRouter(
   service: McpRegistryService = createMcpRegistryService(),
+  deps: McpRegistryRouterDeps = {},
 ) {
+  const checkInstalled =
+    deps.checkInstalled ??
+    (async (input) => {
+      if (input.runtime !== "claude-code") {
+        throw new Error("Codex MCP registry check is deferred.")
+      }
+      const { checkClaudeMcpRegistryServer } = await import(
+        "../../runtime-mcp-config/claude"
+      )
+      return checkClaudeMcpRegistryServer(input)
+    })
+
   return router({
     list: publicProcedure
       .input(registryListInputSchema)
@@ -93,6 +130,12 @@ export function createMcpRegistryRouter(
       .input(registryInstallInputSchema)
       .mutation(async ({ input }) => {
         return service.installEntry(input)
+      }),
+
+    checkInstalled: publicProcedure
+      .input(registryCheckInstalledInputSchema)
+      .mutation(async ({ input }) => {
+        return checkInstalled(input)
       }),
   })
 }

@@ -4,6 +4,7 @@ import {
   encryptStringForStorage,
 } from "../secure-storage"
 import type { McpRegistryRuntimeLocalState } from "./installability"
+import type { McpRegistryVerificationKeyInput } from "./verification-state"
 
 const SECRET_PLACEHOLDER_PREFIX = "locus:mcp-registry-secret:v1"
 const ENV_REF_PLACEHOLDER_PREFIX = "locus:mcp-registry-env-ref:v1"
@@ -265,6 +266,20 @@ function registryRuntimeFromMetadata(
   metadata: McpRegistryConfigMetadata,
 ): McpRegistryRuntimeLocalState["runtime"] {
   return metadata.runtime === "codex" ? "codex" : "claude-code"
+}
+
+export function getMcpRegistryVerificationKeyFromConfig(
+  config: McpServerConfig,
+  serverName: string,
+): McpRegistryVerificationKeyInput | undefined {
+  const metadata = getMcpRegistryMetadata(config)
+  if (!metadata) return undefined
+  return {
+    runtime: registryRuntimeFromMetadata(metadata),
+    serverName,
+    entryFingerprint: metadata.entryFingerprint,
+    configFingerprint: metadata.configFingerprint,
+  }
 }
 
 function uniqueSorted(values: string[]): string[] {

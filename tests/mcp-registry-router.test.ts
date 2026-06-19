@@ -49,6 +49,7 @@ function detailResponse(): OfficialMcpRegistryServerResponse {
 function createCallerStub() {
   const calls: string[] = []
   const writes: unknown[] = []
+  const checks: unknown[] = []
   const provider: OfficialMcpRegistryProvider = {
     providerId: "official-mcp-registry",
     async listServers(input) {
@@ -72,10 +73,27 @@ function createCallerStub() {
         return { success: true, name: input.name.trim() }
       },
     }),
+    {
+      async checkInstalled(input) {
+        checks.push(input)
+        if (input.runtime !== "claude-code") {
+          throw new Error("Codex MCP registry check is deferred.")
+        }
+        return {
+          success: true,
+          runtime: "claude-code",
+          serverName: input.serverName,
+          status: "ready-to-verify",
+          toolCount: 1,
+          toolNames: ["router_tool"],
+        }
+      },
+    },
   )
   return {
     calls,
     writes,
+    checks,
     caller: router.createCaller({ getWindow: () => null }),
   }
 }
@@ -151,6 +169,45 @@ describe("MCP registry tRPC router", () => {
       },
     })
     expect(calls).toEqual(["detail:io.github.example/router-detail:latest"])
+  })
+
+  test("exposes explicit connect/list check without Codex fake support", async () => {
+    const { caller, checks } = createCallerStub()
+
+    await expect(
+      caller.checkInstalled({
+        runtime: "claude-code",
+        serverName: "router_registry",
+        scope: "global",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      runtime: "claude-code",
+      serverName: "router_registry",
+      status: "ready-to-verify",
+      toolNames: ["router_tool"],
+    })
+
+    await expect(
+      caller.checkInstalled({
+        runtime: "codex",
+        serverName: "router_registry",
+        scope: "global",
+      }),
+    ).rejects.toThrow("Codex MCP registry check is deferred")
+
+    expect(checks).toEqual([
+      {
+        runtime: "claude-code",
+        serverName: "router_registry",
+        scope: "global",
+      },
+      {
+        runtime: "codex",
+        serverName: "router_registry",
+        scope: "global",
+      },
+    ])
   })
 
   test("keeps registry writes out of route-local runtime helpers", () => {

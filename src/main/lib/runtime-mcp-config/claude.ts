@@ -31,10 +31,12 @@ import {
   startMcpOAuth as startMcpOAuthFlow,
 } from "../mcp-auth"
 import {
+  getMcpRegistryVerificationKeyFromConfig,
   isMcpRegistryServerInactiveForRuntime,
   materializeMcpRegistryServerConfigForRuntime,
   resolveMcpRegistryRuntimeLocalStateFromConfig,
 } from "../mcp-registry/secrets"
+import { upsertMcpRegistryVerificationRecord } from "../mcp-registry/verification-state"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../oauth"
 import { discoverPluginMcpServers, type PluginMcpConfig } from "../plugins"
 import {
@@ -51,6 +53,16 @@ type ClaudeMcpServerForSettings = {
   needsAuth: boolean
   config: Record<string, unknown>
   isApproved?: boolean
+}
+
+export type ClaudeMcpRegistryCheckResult = {
+  success: boolean
+  runtime: "claude-code"
+  serverName: string
+  status: "ready-to-verify" | "failed-check"
+  toolCount: number
+  toolNames: string[]
+  reason?: string
 }
 
 const MCP_SERVER_NAME_REGEX = /^[a-zA-Z0-9_-]+$/
@@ -1078,6 +1090,75 @@ export async function setClaudeMcpBearerToken(input: {
   })
 
   return { success: true }
+}
+
+export async function checkClaudeMcpRegistryServer(input: {
+  serverName: string
+  scope: "global" | "project"
+  projectPath?: string
+}): Promise<ClaudeMcpRegistryCheckResult> {
+  const serverName = normalizeMcpServerName(input.serverName)
+  const projectPath = resolveMcpProjectPathForMutation(input)
+  const config = await readClaudeConfig()
+  const servers = getMcpServersForScope(config, projectPath)
+  const serverConfig = servers?.[serverName]
+  if (!serverConfig) {
+    throw new Error(`Server "${serverName}" not found`)
+  }
+
+  const verificationKey = getMcpRegistryVerificationKeyFromConfig(
+    serverConfig,
+    serverName,
+  )
+  if (!verificationKey) {
+    throw new Error(`Server "${serverName}" is not a registry-installed MCP server`)
+  }
+
+  const localState = resolveMcpRegistryRuntimeLocalStateFromConfig({
+    config: serverConfig,
+  })
+  if (serverConfig.disabled === true || localState?.status === "installed-needs-setup") {
+    throw new Error(`Server "${serverName}" still requires setup before check`)
+  }
+
+  const materializedConfig = materializeMcpRegistryServerConfigForRuntime(
+    serverConfig,
+    { stripMetadata: true },
+  )
+
+  try {
+    const tools = await fetchToolsForServer(materializedConfig)
+    await upsertMcpRegistryVerificationRecord({
+      ...verificationKey,
+      status: "ready-to-verify",
+      reason: `tool-list-success:${tools.length}`,
+    })
+    return {
+      success: true,
+      runtime: "claude-code",
+      serverName,
+      status: "ready-to-verify",
+      toolCount: tools.length,
+      toolNames: tools.map((tool) => tool.name).sort(),
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const reason = `tool-list-failure: ${message}`
+    await upsertMcpRegistryVerificationRecord({
+      ...verificationKey,
+      status: "failed-check",
+      reason,
+    })
+    return {
+      success: false,
+      runtime: "claude-code",
+      serverName,
+      status: "failed-check",
+      toolCount: 0,
+      toolNames: [],
+      reason,
+    }
+  }
 }
 
 export async function getPendingPluginMcpApprovals(input: {

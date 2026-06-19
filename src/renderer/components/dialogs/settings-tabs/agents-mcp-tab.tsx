@@ -220,6 +220,15 @@ function isServerDisabled(server: McpServer): boolean {
   return config.disabled === true || config.enabled === false
 }
 
+function isRegistryManagedServer(server: McpServer): boolean {
+  const metadata = (server.config as Record<string, unknown>)._locusMcpRegistry
+  return Boolean(metadata && typeof metadata === "object")
+}
+
+function getScopeFromServer(item: ListedServer): ScopeType {
+  return item.projectPath ? "project" : "global"
+}
+
 function getRecordKeys(value: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return []
   return Object.keys(value as Record<string, unknown>)
@@ -535,11 +544,13 @@ function McpServerDetail({
   codexLogoutFailure,
   onDismissCodexLogoutFailure,
   onRefresh,
+  onCheck,
   onDelete,
   onToggleEnabled,
   isEditable,
   isToggleable,
   isToggling,
+  isChecking,
   isRefreshing,
 }: {
   provider: McpProvider
@@ -551,11 +562,13 @@ function McpServerDetail({
   codexLogoutFailure?: CodexLogoutFailure | null
   onDismissCodexLogoutFailure?: () => void
   onRefresh?: () => void
+  onCheck?: () => void
   onDelete?: () => void
   onToggleEnabled?: (enabled: boolean) => void
   isEditable?: boolean
   isToggleable?: boolean
   isToggling?: boolean
+  isChecking?: boolean
   isRefreshing?: boolean
 }) {
   const { t } = useI18n()
@@ -587,7 +600,7 @@ function McpServerDetail({
               ? t("settings.mcp.pendingApproval")
               : server.status === "ready-to-verify"
                 ? t("settings.mcp.readyToVerify")
-              : getStatusText(server.status)
+                : getStatusText(server.status)
   const toolsSummary = hideToolsCount
     ? t("settings.mcp.tools")
     : hasTools
@@ -634,6 +647,22 @@ function McpServerDetail({
                 )}
               />
               {t("settings.mcp.refresh")}
+            </Button>
+          )}
+          {onCheck && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={onCheck}
+              disabled={isChecking}
+            >
+              {isChecking ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              {t("settings.mcp.registryCheck")}
             </Button>
           )}
           {needsAuth && onAuth && (
@@ -2020,6 +2049,7 @@ export function AgentsMcpTab() {
   const removeClaudeMcpMutation = trpc.claude.removeMcpServer.useMutation()
   const removeCodexMcpMutation = trpc.codex.removeMcpServer.useMutation()
   const installRegistryMutation = trpc.mcpRegistry.install.useMutation()
+  const checkRegistryMutation = trpc.mcpRegistry.checkInstalled.useMutation()
 
   const sortedGroupsByProvider = useMemo(() => {
     const statusOrder: Record<string, number> = {
@@ -2247,6 +2277,36 @@ export function AgentsMcpTab() {
     t,
   ])
 
+  const handleCheckRegistryServer = useCallback(
+    async (item: ListedServer) => {
+      try {
+        const result = await checkRegistryMutation.mutateAsync({
+          runtime: item.provider,
+          serverName: item.server.name,
+          scope: getScopeFromServer(item),
+          ...(item.projectPath ? { projectPath: item.projectPath } : {}),
+        })
+        if (result.success) {
+          toast.success(t("settings.mcp.toast.registryCheckPassed"), {
+            description: t("settings.mcp.toast.registryCheckToolCount", {
+              count: result.toolCount,
+            }),
+          })
+        } else {
+          toast.error(t("settings.mcp.toast.registryCheckFailed"), {
+            description: result.reason ?? undefined,
+          })
+        }
+        await handleRefresh(true, "claude-code")
+      } catch (error) {
+        toast.error(t("settings.mcp.toast.registryCheckFailed"), {
+          description: getErrorMessage(error),
+        })
+      }
+    },
+    [checkRegistryMutation, handleRefresh, t],
+  )
+
   const handleAuth = async (
     provider: McpProvider,
     serverName: string,
@@ -2412,9 +2472,6 @@ export function AgentsMcpTab() {
     }
     return !item.groupName.toLowerCase().includes("plugin")
   }
-
-  const getScopeFromServer = (item: ListedServer): ScopeType =>
-    item.projectPath ? "project" : "global"
 
   const isToggleableServer = (item: ListedServer): boolean =>
     item.provider === "claude-code" &&
@@ -2751,7 +2808,7 @@ export function AgentsMcpTab() {
                                               })
                                         : server.status === "ready-to-verify"
                                           ? t("settings.mcp.readyToVerify")
-                                        : getStatusText(server.status)}
+                                          : getStatusText(server.status)}
                                   </span>
                                 )}
                               </div>
@@ -2836,6 +2893,15 @@ export function AgentsMcpTab() {
             onRefresh={() => {
               void handleRefresh(false, selectedServer.provider)
             }}
+            onCheck={
+              selectedServer.provider === "claude-code" &&
+              isRegistryManagedServer(selectedServer.server) &&
+              !isServerDisabled(selectedServer.server)
+                ? () => {
+                    void handleCheckRegistryServer(selectedServer)
+                  }
+                : undefined
+            }
             onDelete={
               isEditableServer(selectedServer)
                 ? () =>
@@ -2855,6 +2921,7 @@ export function AgentsMcpTab() {
             isEditable={isEditableServer(selectedServer)}
             isToggleable={isToggleableServer(selectedServer)}
             isToggling={updateMutation.isPending}
+            isChecking={checkRegistryMutation.isPending}
             isRefreshing={isRefreshingConfig}
           />
         ) : isLoadingConfig ? (

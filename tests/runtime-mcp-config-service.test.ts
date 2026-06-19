@@ -140,6 +140,17 @@ mock.module("node:os", () => ({
   homedir: () => mockHome,
 }))
 
+mock.module("electron", () => ({
+  app: {
+    getPath(name: string) {
+      if (name !== "userData") {
+        throw new Error(`unexpected app path request: ${name}`)
+      }
+      return mockHome
+    },
+  },
+}))
+
 mock.module("../src/main/lib/claude-config", () => ({
   GLOBAL_MCP_PATH,
   readClaudeConfig: async () => clone(claudeConfig),
@@ -256,6 +267,12 @@ const claudeMcpConfig = await import(
   "../src/main/lib/runtime-mcp-config/claude"
 )
 const codexMcpConfig = await import("../src/main/lib/runtime-mcp-config/codex")
+const { setElectronUserDataPathProviderForTest } = await import(
+  "../src/main/lib/electron-app"
+)
+const { getMcpRegistryVerificationRecord } = await import(
+  "../src/main/lib/mcp-registry/verification-state"
+)
 
 function makeTempDir(): string {
   const dir = mkdtempSync(join(realOs.tmpdir(), "locus-runtime-mcp-test-"))
@@ -292,6 +309,7 @@ afterEach(() => {
   } else {
     delete process.env.HOME
   }
+  setElectronUserDataPathProviderForTest(null)
 })
 
 afterAll(() => {
@@ -457,6 +475,53 @@ describe("Runtime MCP config service behavior", () => {
 
     expect(runtime.mcpServersForSdk).toHaveProperty("approved_tool")
     expect(runtime.mcpServersForSdk).not.toHaveProperty("pending_tool")
+  })
+
+  test("checks registry-installed Claude servers with connect/list only", async () => {
+    const userDataDir = makeTempDir()
+    setElectronUserDataPathProviderForTest(() => userDataDir)
+    claudeConfig = {
+      mcpServers: {
+        registry_check: {
+          command: "registry-check-tool",
+          _locusMcpRegistry: {
+            providerId: "official-mcp-registry",
+            entryId: "io.github.example/check",
+            targetId: "package:@example/check:0",
+            runtime: "claude-code",
+            status: "installed-unverified",
+            entryFingerprint: "sha256:entry-check",
+            configFingerprint: "sha256:config-check",
+            installedAt: "2026-06-20T00:00:00.000Z",
+          },
+        },
+      },
+    }
+
+    await expect(
+      claudeMcpConfig.checkClaudeMcpRegistryServer({
+        serverName: "registry_check",
+        scope: "global",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      runtime: "claude-code",
+      serverName: "registry_check",
+      status: "ready-to-verify",
+      toolNames: ["stdio_tool"],
+    })
+
+    await expect(
+      getMcpRegistryVerificationRecord({
+        runtime: "claude-code",
+        serverName: "registry_check",
+        entryFingerprint: "sha256:entry-check",
+        configFingerprint: "sha256:config-check",
+      }),
+    ).resolves.toMatchObject({
+      status: "ready-to-verify",
+      reason: "tool-list-success:1",
+    })
   })
 
   test("preserves Codex list/status/auth commands and current global-only writes", async () => {
