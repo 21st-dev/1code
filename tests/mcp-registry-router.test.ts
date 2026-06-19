@@ -48,6 +48,7 @@ function detailResponse(): OfficialMcpRegistryServerResponse {
 
 function createCallerStub() {
   const calls: string[] = []
+  const writes: unknown[] = []
   const provider: OfficialMcpRegistryProvider = {
     providerId: "official-mcp-registry",
     async listServers(input) {
@@ -63,15 +64,24 @@ function createCallerStub() {
       return detailResponse()
     },
   }
-  const router = createMcpRegistryRouter(createMcpRegistryService({ provider }))
+  const router = createMcpRegistryRouter(
+    createMcpRegistryService({
+      provider,
+      async writeClaudeConfig(input) {
+        writes.push(input)
+        return { success: true, name: input.name.trim() }
+      },
+    }),
+  )
   return {
     calls,
+    writes,
     caller: router.createCaller({ getWindow: () => null }),
   }
 }
 
 describe("MCP registry tRPC router", () => {
-  test("exposes browse, search, detail, and redacted preview without install mutation", async () => {
+  test("exposes browse, search, detail, and redacted preview", async () => {
     const { caller, calls } = createCallerStub()
 
     await expect(caller.list({ limit: 10 })).resolves.toMatchObject({
@@ -109,7 +119,41 @@ describe("MCP registry tRPC router", () => {
     ])
   })
 
-  test("keeps the registry router browse-only at this slice", () => {
+  test("exposes explicit install mutation through the registry service", async () => {
+    const { caller, calls, writes } = createCallerStub()
+
+    await expect(
+      caller.install({
+        serverName: "io.github.example/router-detail",
+        targetId: "remote:streamable_http:0",
+        runtime: "claude-code",
+        scope: "global",
+        installName: "router_registry",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      runtime: "claude-code",
+      serverName: "router_registry",
+      status: "installed-unverified",
+    })
+
+    expect(writes).toHaveLength(1)
+    expect(writes[0]).toMatchObject({
+      name: "router_registry",
+      scope: "global",
+      config: {
+        url: "https://mcp.example.com/mcp",
+        transportType: "streamable_http",
+        _locusMcpRegistry: {
+          runtime: "claude-code",
+          status: "installed-unverified",
+        },
+      },
+    })
+    expect(calls).toEqual(["detail:io.github.example/router-detail:latest"])
+  })
+
+  test("keeps registry writes out of route-local runtime helpers", () => {
     const source = readFileSync(
       "src/main/lib/trpc/routers/mcp-registry.ts",
       "utf8",

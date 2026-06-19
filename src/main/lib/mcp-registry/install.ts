@@ -1,5 +1,4 @@
 import type { McpServerConfig } from "../claude-config"
-import { writeClaudeMcpServerConfig } from "../runtime-mcp-config/claude"
 import type { McpRegistryRuntimeId } from "./installability"
 import { previewMcpRegistryRuntimeInstallability } from "./installability"
 import type { McpRegistryEntry, McpRegistryInstallTarget } from "./normalize"
@@ -9,7 +8,22 @@ import {
   type McpRegistrySetupResolutionInput,
 } from "./setup"
 
-type ClaudeMcpConfigWriter = typeof writeClaudeMcpServerConfig
+type ClaudeMcpConfigWriter = (input: {
+  name: string
+  scope: "global" | "project"
+  projectPath?: string
+  config: McpServerConfig
+}) => Promise<{ success: true; name: string }>
+
+async function defaultWriteClaudeConfig(
+  input: Parameters<ClaudeMcpConfigWriter>[0],
+): ReturnType<ClaudeMcpConfigWriter> {
+  const { writeClaudeMcpServerConfig } = await import(
+    "../runtime-mcp-config/claude"
+  )
+  const result = await writeClaudeMcpServerConfig(input)
+  return { success: true, name: result.name }
+}
 
 export type McpRegistryInstallInput = {
   entry: McpRegistryEntry
@@ -135,7 +149,7 @@ export async function installMcpRegistryTarget(
     },
   }
 
-  await (input.writeClaudeConfig ?? writeClaudeMcpServerConfig)({
+  await (input.writeClaudeConfig ?? defaultWriteClaudeConfig)({
     name: serverName,
     scope: input.scope,
     projectPath: input.projectPath,

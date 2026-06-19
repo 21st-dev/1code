@@ -147,6 +147,8 @@
   setup-free registry targets, then writes through
   `writeClaudeMcpServerConfig` in the Runtime MCP Config owner. The tRPC install
   mutation and renderer confirmation UI remain pending.
+- 2026-06-20 exposed `trpc.mcpRegistry.install` as an explicit install mutation
+  that delegates to the registry service. Renderer confirmation UI remains pending.
 - [ ] 3.4 Ensure browse/preview/install do not run registry server commands, package
   managers, Docker images, MCP server processes, or MCP tools.
 - 2026-06-20 added `tests/mcp-registry-management-inert.test.ts` to guard the
@@ -161,6 +163,8 @@
 - 2026-06-20 install service uses the Claude runtime-owned config writer only;
   tests keep the registry service inert against process execution and MCP tool
   calls. Full install-path coverage remains pending until the route/UI slice lands.
+- 2026-06-20 router tests cover the install mutation envelope and assert the route
+  does not call route-local Claude/Codex MCP helpers or process execution APIs.
 - [ ] 3.6 After install with setup resolved, mark the server `Installed / Unverified`
   for that runtime and fingerprint until local runtime proof exists.
 - 2026-06-20 Claude registry install writes `_locusMcpRegistry` metadata with
