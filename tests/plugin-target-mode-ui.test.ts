@@ -45,6 +45,21 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsRouterSource).toContain("setRuntimeNativePluginEnabled")
     expect(pluginsTabSource).not.toContain("codexSettings.setPluginEnabled")
     expect(pluginsTabSource).not.toContain("executeCodexPlugin")
+    expect(dictionarySource).toContain(
+      "Locus keeps native activation blocked until app-server per-run filtering is proven.",
+    )
+  })
+
+  test("keeps Claude native plugin copy proof-gated before the activation matrix exists", () => {
+    expect(dictionarySource).toContain(
+      "component activation remains proof-gated until the runtime matrix is complete.",
+    )
+    expect(dictionarySource).toContain(
+      "Native loading remains proof-gated",
+    )
+    expect(dictionarySource).not.toContain(
+      "Enabling them exposes their commands, skills, agents, and MCP servers",
+    )
   })
 
   test("localizes target mode and update handling copy", () => {

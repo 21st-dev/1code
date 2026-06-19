@@ -1251,7 +1251,7 @@ export const en = {
     "Review gates or safe mode currently block this action.",
   "settings.plugins.runtimeNativeActivation": "Runtime-native activation",
   "settings.plugins.runtimeNativeHint":
-    "Native loading is allowed only when review, enablement, safe mode, activation identity, per-run filtering, and MCP approval gates all pass.",
+    "Native loading remains proof-gated and is allowed only when review, enablement, safe mode, activation identity, per-run filtering, and MCP approval gates all pass.",
   "settings.plugins.runtimeNativeCurrent": "Current run",
   "settings.plugins.runtimeNativeEnableCandidate": "Enable candidate",
   "settings.plugins.runtimeNativeAllowed": "Allowed",
@@ -1430,11 +1430,11 @@ export const en = {
   "settings.plugins.hooksCount": "Hooks ({count})",
   "settings.plugins.mcpServersCount": "MCP Servers ({count})",
   "settings.plugins.packageHint":
-    "Plugins are capability packages. Enabled plugins can expose commands, skills, agents, hooks, and MCP servers.",
+    "Plugins are capability packages. Locus shows declared commands, skills, agents, hooks, and MCP servers; runtime execution depends on the gates below.",
   "settings.plugins.claudePackageHint":
-    "Claude Code plugins are runtime packages. Enabling them exposes their commands, skills, agents, and MCP servers to Claude Code only.",
+    "Locus can stage reviewed Claude Code plugins into isolated managed-run config; component activation remains proof-gated until the runtime matrix is complete.",
   "settings.plugins.codexPackageHint":
-    "Codex plugins are Codex runtime packages. Locus enables them only through the controlled app-server path after review and activation gates pass.",
+    "Codex plugins are Codex runtime packages. Locus keeps native activation blocked until app-server per-run filtering is proven.",
   "settings.plugins.source": "Source",
   "settings.plugins.path": "Path",
   "settings.plugins.homepage": "Homepage",
@@ -4547,7 +4547,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "当前复审门禁或安全模式正在阻断这个动作。",
   "settings.plugins.runtimeNativeActivation": "运行时原生激活",
   "settings.plugins.runtimeNativeHint":
-    "只有复审、启用状态、安全模式、激活身份、单次运行过滤和 MCP 批准都通过时，才允许原生加载。",
+    "原生加载仍受证明门禁约束；只有复审、启用状态、安全模式、激活身份、单次运行过滤和 MCP 批准都通过时，才允许加载。",
   "settings.plugins.runtimeNativeCurrent": "当前运行",
   "settings.plugins.runtimeNativeEnableCandidate": "启用候选",
   "settings.plugins.runtimeNativeAllowed": "允许",
@@ -4724,11 +4724,11 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.hooksCount": "钩子（{count}）",
   "settings.plugins.mcpServersCount": "MCP 服务器（{count}）",
   "settings.plugins.packageHint":
-    "插件是能力包。启用后可以提供命令、技能、智能体、钩子和 MCP 服务器。",
+    "插件是能力包。Locus 会展示它声明的命令、技能、智能体、钩子和 MCP 服务器；实际运行取决于下方门禁。",
   "settings.plugins.claudePackageHint":
-    "Claude Code 插件是 Claude 运行时的能力包。启用后只会影响 Claude Code。",
+    "Locus 可以把已复审的 Claude Code 插件暂存进隔离的托管运行配置；组件激活仍要等运行时矩阵证明。",
   "settings.plugins.codexPackageHint":
-    "Codex 插件是 Codex 运行时包。Locus 只会在复审和激活门禁通过后，通过受控 app-server 路径启用。",
+    "Codex 插件是 Codex 运行时包。在 app-server 单次运行过滤被证明前，Locus 会继续阻断原生激活。",
   "settings.plugins.source": "来源",
   "settings.plugins.path": "路径",
   "settings.plugins.homepage": "主页",
