@@ -77,10 +77,15 @@
   `v0.1` list/search/detail URL construction, page-limit clamping, timeout wiring,
   response-size bounds, and response-shape validation. No normalization, install
   writes, MCP server launch, or tool calls are included in this step.
-- [ ] 2.2 Normalize official-registry entries into a service-owned model with provider
+- [x] 2.2 Normalize official-registry entries into a service-owned model with provider
   ID, entry ID, version/ref, source URL, package/distribution identifier, transport,
   command/URL template, args, cwd, env schema, header schema, auth metadata, and
   declared runtime support.
+- 2026-06-20 implemented `src/main/lib/mcp-registry/normalize.ts`. The
+  normalized model keeps package and remote install targets separate, preserves
+  official/publisher metadata, maps transports, captures runtime/package args,
+  env/header/variable setup schemas, infers auth metadata conservatively, and
+  leaves unknown runtime support as `unknown` instead of claiming compatibility.
 - [ ] 2.3 Add entry/config fingerprinting and provenance classification: immutable,
   mutable, unknown, integrity/hash present, integrity/hash missing.
 - [ ] 2.4 Add `McpRegistryInstallPreview` separate from `McpImportPreview`; reuse
