@@ -84,6 +84,22 @@ proven. A staged package or parsed manifest alone is not native execution proof.
   drifted identity blocking before activation. `tests/plugin-update-review.test.ts`
   proves reviewed activation identity state is stored separately from manifest
   review and that a later package hash drift reports `identity-drifted`.
+- A temporary SDK probe showed Claude auto-loads plugins from
+  `CLAUDE_CONFIG_DIR/skills/<name>/.claude-plugin/plugin.json` even when the host
+  does not pass that plugin through `options.plugins`: the unreviewed test plugin
+  appeared in `system:init.plugins`, `skills`, and `slashCommands`. Locus now
+  stages `skills`, `commands`, and `agents` entry-by-entry instead of symlinking
+  the raw directories, excluding any entry with a `.claude-plugin/plugin.json` or
+  `.claude-plugin/marketplace.json`.
+- A follow-up SDK probe that first ran
+  `ensureClaudeAgentSdkIsolatedConfigDir` proved the filtered controlled path:
+  the unreviewed skills-dir plugin no longer appeared in `system:init.plugins`,
+  plugin skills, or slash commands, while a normal non-plugin `regular-skill`
+  still appeared.
+- A safe-mode SDK probe with a globally enabled skills-dir plugin and a reviewed
+  staging candidate proved `nativePluginConfigs: []`, zero plugin entries in
+  `system:init.plugins`, zero plugin skills/slash commands, and preserved
+  non-plugin `regular-skill`.
 
 ## Current Matrix
 
@@ -131,10 +147,10 @@ proven. A staged package or parsed manifest alone is not native execution proof.
 
 Claude now has managed Agent SDK proof that `options.plugins` can load plugin
 commands, skills, agents, hooks, and MCP metadata from an isolated run. Claude
-also has code-level proof that reviewed activation identity gates block drifted
-and identity-incomplete packages before native activation. Claude still needs
-manual managed-run negative evidence for unreviewed global plugins, safe mode,
-and staging failure.
+also has SDK-backed negative proof that raw skills-dir plugins are filtered out
+of controlled isolated runs and that safe mode exposes zero plugin components
+while preserving non-plugin skills. Code-level proof covers reviewed activation
+identity drift, identity-incomplete packages, and staging failure.
 
 Codex still needs a managed app-server proof run with isolated `CODEX_HOME` and
 test plugins. The proof must show whether `thread/start` or `thread/resume`

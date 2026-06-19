@@ -9,6 +9,7 @@ import {
 type ClaudeAgentSdkConfigDirFs = {
   mkdir: typeof fs.mkdir
   readFile: typeof fs.readFile
+  readdir: typeof fs.readdir
   writeFile: typeof fs.writeFile
   stat: typeof fs.stat
   lstat: typeof fs.lstat
@@ -58,6 +59,7 @@ export interface ClaudeAgentSdkIsolatedConfigDirResult {
 }
 
 const symlinksCreated = new Set<string>()
+const CLAUDE_PLUGIN_METADATA_DIR = ".claude-plugin"
 
 const defaultDependencies: ClaudeAgentSdkConfigDirDependencies = {
   fs,
@@ -182,6 +184,107 @@ async function ensureSymlink(input: {
     )
     return false
   }
+}
+
+async function hasClaudePluginManifest(input: {
+  sourcePath: string
+  dependencies: ClaudeAgentSdkConfigDirDependencies
+}): Promise<boolean> {
+  for (const manifestName of ["plugin.json", "marketplace.json"]) {
+    const manifestPath = path.join(
+      input.sourcePath,
+      CLAUDE_PLUGIN_METADATA_DIR,
+      manifestName,
+    )
+    const exists = await input.dependencies.fs
+      .stat(manifestPath)
+      .then((stat) => stat.isFile())
+      .catch(() => false)
+    if (exists) return true
+  }
+  return false
+}
+
+async function stageClaudeNonPluginAssetDirectory(input: {
+  sourcePath: string
+  targetPath: string
+  label: string
+  symlinkType: "dir" | "junction"
+  dependencies: ClaudeAgentSdkConfigDirDependencies
+  markIncomplete: () => void
+  markError: () => void
+}): Promise<boolean> {
+  const removedPreviousTarget = await removeManagedPath({
+    targetPath: input.targetPath,
+    label: input.label,
+    dependencies: input.dependencies,
+    markIncomplete: input.markIncomplete,
+    markError: input.markError,
+  })
+  if (!removedPreviousTarget) return false
+
+  const sourceStat = await input.dependencies.fs
+    .stat(input.sourcePath)
+    .catch(() => undefined)
+  if (!sourceStat?.isDirectory()) {
+    input.markIncomplete()
+    return false
+  }
+
+  let entryNames: string[]
+  try {
+    await input.dependencies.fs.mkdir(input.targetPath, { recursive: true })
+    const entries = await input.dependencies.fs.readdir(input.sourcePath, {
+      withFileTypes: true,
+    })
+    entryNames = entries.map((entry) => String(entry.name))
+  } catch (err) {
+    input.markIncomplete()
+    input.markError()
+    input.dependencies.logger.warn(
+      `[claude] Failed to stage ${input.label}:`,
+      (err as Error).message,
+    )
+    return false
+  }
+  let stagedAllAssets = true
+  for (const entryName of entryNames) {
+    if (entryName === CLAUDE_PLUGIN_METADATA_DIR) continue
+
+    const sourceEntryPath = path.join(input.sourcePath, entryName)
+    const targetEntryPath = path.join(input.targetPath, entryName)
+    const entryStat = await input.dependencies.fs
+      .stat(sourceEntryPath)
+      .catch(() => undefined)
+    if (!entryStat) {
+      input.markIncomplete()
+      stagedAllAssets = false
+      continue
+    }
+    if (
+      entryStat.isDirectory() &&
+      (await hasClaudePluginManifest({
+        sourcePath: sourceEntryPath,
+        dependencies: input.dependencies,
+      }))
+    ) {
+      continue
+    }
+
+    const linked = await ensureSymlink({
+      sourcePath: sourceEntryPath,
+      targetPath: targetEntryPath,
+      label: `${input.label} entry ${entryName}`,
+      targetKind: entryStat.isDirectory() ? "dir" : "file",
+      symlinkType: input.symlinkType,
+      dependencies: input.dependencies,
+      markIncomplete: input.markIncomplete,
+      markError: input.markError,
+    })
+    if (!linked) stagedAllAssets = false
+  }
+
+  return stagedAllAssets
 }
 
 async function writeFilteredSettings(input: {
@@ -484,40 +587,35 @@ export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
     symlinkSetupHadErrors = true
   }
 
-  const ensureManagedSymlink = (
+  const stageManagedAssetDirectory = (
     sourcePath: string,
     targetPath: string,
     label: string,
-    targetKind: "dir" | "file",
   ) =>
-    ensureSymlink({
+    stageClaudeNonPluginAssetDirectory({
       sourcePath,
       targetPath,
       label,
-      targetKind,
       symlinkType,
       dependencies,
       markIncomplete,
       markError,
     })
 
-  await ensureManagedSymlink(
+  await stageManagedAssetDirectory(
     skillsSource,
     skillsTarget,
     "skills directory",
-    "dir",
   )
-  await ensureManagedSymlink(
+  await stageManagedAssetDirectory(
     commandsSource,
     commandsTarget,
     "commands directory",
-    "dir",
   )
-  await ensureManagedSymlink(
+  await stageManagedAssetDirectory(
     agentsSource,
     agentsTarget,
     "agents directory",
-    "dir",
   )
   const pluginStagingEntries = pluginSafeMode.enabled
     ? []

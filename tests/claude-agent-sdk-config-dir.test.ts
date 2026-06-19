@@ -52,6 +52,13 @@ async function createHomeClaudeDir(root: string): Promise<string> {
           "market:allowed:server#mcp-sha256:allowed",
           "market:blocked:server#mcp-sha256:blocked",
         ],
+        mcpServers: {
+          plain: {
+            type: "stdio",
+            command: "node",
+            args: ["plain-mcp.js"],
+          },
+        },
       },
       null,
       2,
@@ -103,11 +110,43 @@ describe("Claude Agent SDK isolated config dir", () => {
     })
   })
 
-  test("links selected Claude assets and writes empty plugin settings in safe mode", async () => {
+  test("stages non-plugin Claude assets and writes empty plugin settings in safe mode", async () => {
     const root = await createRoot()
     const userDataDir = join(root, "user-data")
     const homeDir = await createHomeClaudeDir(root)
     const homeClaudeDir = join(homeDir, ".claude")
+    await mkdir(join(homeClaudeDir, "skills", "regular-skill"), {
+      recursive: true,
+    })
+    await writeFile(
+      join(homeClaudeDir, "skills", "regular-skill", "SKILL.md"),
+      "---\nname: regular-skill\ndescription: Regular skill.\n---\n",
+      "utf-8",
+    )
+    await mkdir(
+      join(homeClaudeDir, "skills", "unreviewed-plugin", ".claude-plugin"),
+      { recursive: true },
+    )
+    await writeFile(
+      join(
+        homeClaudeDir,
+        "skills",
+        "unreviewed-plugin",
+        ".claude-plugin",
+        "plugin.json",
+      ),
+      JSON.stringify({
+        name: "unreviewed-plugin",
+        version: "0.0.0",
+        skills: ["./"],
+      }),
+      "utf-8",
+    )
+    await writeFile(
+      join(homeClaudeDir, "commands", "debug.md"),
+      "---\ndescription: Debug command.\n---\n",
+      "utf-8",
+    )
     const isolatedConfig = resolveClaudeAgentSdkIsolatedConfig({
       userDataDir,
       chatId: "chat-1",
@@ -133,14 +172,21 @@ describe("Claude Agent SDK isolated config dir", () => {
     expect(result.nativePluginConfigs).toEqual([])
 
     await expect(
-      readlink(join(isolatedConfig.isolatedConfigDir, "skills")),
-    ).resolves.toBe(join(homeClaudeDir, "skills"))
+      readlink(
+        join(isolatedConfig.isolatedConfigDir, "skills", "regular-skill"),
+      ),
+    ).resolves.toBe(join(homeClaudeDir, "skills", "regular-skill"))
+    expect(
+      await pathExists(
+        join(isolatedConfig.isolatedConfigDir, "skills", "unreviewed-plugin"),
+      ),
+    ).toBe(false)
     await expect(
-      readlink(join(isolatedConfig.isolatedConfigDir, "commands")),
-    ).resolves.toBe(join(homeClaudeDir, "commands"))
-    await expect(
-      readlink(join(isolatedConfig.isolatedConfigDir, "agents")),
-    ).resolves.toBe(join(homeClaudeDir, "agents"))
+      readlink(join(isolatedConfig.isolatedConfigDir, "commands", "debug.md")),
+    ).resolves.toBe(join(homeClaudeDir, "commands", "debug.md"))
+    expect(await pathExists(join(isolatedConfig.isolatedConfigDir, "agents"))).toBe(
+      true,
+    )
     expect(
       await pathExists(join(isolatedConfig.isolatedConfigDir, "plugins")),
     ).toBe(false)
@@ -155,6 +201,13 @@ describe("Claude Agent SDK isolated config dir", () => {
     ).resolves.toMatchObject({
       includeCoAuthoredBy: false,
       enabledPlugins: [],
+      mcpServers: {
+        plain: {
+          type: "stdio",
+          command: "node",
+          args: ["plain-mcp.js"],
+        },
+      },
     })
   })
 
