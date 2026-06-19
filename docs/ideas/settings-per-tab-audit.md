@@ -205,6 +205,11 @@ hygiene. No dead controls, no missing confirms, no debt markers.
 - Likely real backend reality (`~/.claude.json` editable vs `~/.codex/config.toml`;
   Codex OAuth exposes logout). **Action:** confirm intentional and **disclose in the
   UI** (why a Codex server has no edit; why logout is Codex-only) — or fill the gap.
+- **2026-06-20 resolved:** the MCP detail panel now shows provider-specific runtime
+  behavior: Claude can update MCP config in place but has no separate logout action;
+  Codex config edits require remove + add, and logout appears only when Codex reports
+  OAuth credentials. This records the real asymmetry instead of inventing unsupported
+  controls.
 
 ### 🟡 B. Cross-tab MCP overlap with Plugins
 
@@ -232,7 +237,8 @@ hygiene. No dead controls, no missing confirms, no debt markers.
   registry field set and produce real app-server runtime proof.
 
 ### Decisions to ratify (MCP)
-1. **Asymmetry (A)** — disclose in UI, or fill the Codex-edit / Claude-logout gaps? *[recommend disclose]*
+1. **Asymmetry (A)** — **RESOLVED: disclose in UI.** Do not fill the Codex-edit /
+   Claude-logout gaps until the runtime adapters expose real support.
 2. **Cross-tab overlap (B)** — coordinate with the plugin-execution change (already owns it). *[recommend no duplicate work]*
 3. **MCP store / registry browse (C)** — **DECIDED: build it here.** Current
    state is browse + redacted preview + Claude install/check, with Verified and

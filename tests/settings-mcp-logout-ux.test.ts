@@ -17,6 +17,43 @@ function getFunctionBlock(source: string, functionName: string): string {
 }
 
 describe("Settings MCP Codex logout failure UX", () => {
+  test("explains Claude and Codex MCP capability asymmetry in the detail panel", () => {
+    const source = readFileSync(
+      "src/renderer/components/dialogs/settings-tabs/agents-mcp-tab.tsx",
+      "utf8",
+    )
+
+    expect(source).toContain("settings.mcp.runtimeBehavior")
+    expect(source).toContain("settings.mcp.claudeRuntimeBehaviorDescription")
+    expect(source).toContain("settings.mcp.codexRuntimeBehaviorDescription")
+
+    expect(en["settings.mcp.claudeRuntimeBehaviorDescription"]).toContain(
+      "in-place update path",
+    )
+    expect(en["settings.mcp.claudeRuntimeBehaviorDescription"]).toContain(
+      "separate MCP logout action is not exposed",
+    )
+    expect(en["settings.mcp.codexRuntimeBehaviorDescription"]).toContain(
+      "remove and add the server again",
+    )
+    expect(en["settings.mcp.codexRuntimeBehaviorDescription"]).toContain(
+      "OAuth credentials",
+    )
+
+    expect(zhCN["settings.mcp.claudeRuntimeBehaviorDescription"]).toContain(
+      "原地更新路径",
+    )
+    expect(zhCN["settings.mcp.claudeRuntimeBehaviorDescription"]).toContain(
+      "不提供单独的 MCP 退出登录",
+    )
+    expect(zhCN["settings.mcp.codexRuntimeBehaviorDescription"]).toContain(
+      "删除后重新添加",
+    )
+    expect(zhCN["settings.mcp.codexRuntimeBehaviorDescription"]).toContain(
+      "OAuth 凭据",
+    )
+  })
+
   test("keeps Codex logout failure honest and retryable", () => {
     const source = readFileSync(
       "src/renderer/components/dialogs/settings-tabs/agents-mcp-tab.tsx",

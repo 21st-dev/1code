@@ -608,6 +608,10 @@ function McpServerDetail({
         ? t("settings.mcp.oneTool")
         : t("settings.mcp.toolCount", { count: tools.length })
       : t("settings.mcp.noTools")
+  const runtimeBehaviorDescription =
+    provider === "codex"
+      ? t("settings.mcp.codexRuntimeBehaviorDescription")
+      : t("settings.mcp.claudeRuntimeBehaviorDescription")
 
   return (
     <div className="h-full overflow-y-auto">
@@ -763,6 +767,15 @@ function McpServerDetail({
           />
           <SummaryItem label={t("settings.mcp.scope")} value={scopeLabel} />
           <SummaryItem label={t("settings.mcp.source")} value={source} />
+        </div>
+
+        <div className="rounded-md border border-border bg-muted/20 px-3.5 py-3">
+          <h5 className="text-xs font-medium text-foreground">
+            {t("settings.mcp.runtimeBehavior")}
+          </h5>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            {runtimeBehaviorDescription}
+          </p>
         </div>
 
         {/* Enable/Disable Toggle */}

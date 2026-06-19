@@ -1018,6 +1018,11 @@ export const en = {
   "settings.mcp.pendingApproval": "Pending approval",
   "settings.mcp.status": "Status",
   "settings.mcp.source": "Source",
+  "settings.mcp.runtimeBehavior": "Runtime behavior",
+  "settings.mcp.claudeRuntimeBehaviorDescription":
+    "Claude MCP entries use Locus's in-place update path for supported settings. A separate MCP logout action is not exposed here; reconnect or remove the server when auth needs to change.",
+  "settings.mcp.codexRuntimeBehaviorDescription":
+    "Codex MCP entries do not have an in-place update path in this UI yet; remove and add the server again to change its config. Logout appears only when Codex reports OAuth credentials for this server.",
   "settings.mcp.pageTitle": "MCP Servers",
   "settings.mcp.pageDescription":
     "Tool connections that Agents can call. Manage connectivity, auth, exposed tools, and diagnostics here.",
@@ -4404,6 +4409,11 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.pendingApproval": "等待批准",
   "settings.mcp.status": "状态",
   "settings.mcp.source": "来源",
+  "settings.mcp.runtimeBehavior": "运行时行为",
+  "settings.mcp.claudeRuntimeBehaviorDescription":
+    "Claude MCP 条目会通过 Locus 的原地更新路径处理受支持的设置。这里不提供单独的 MCP 退出登录；授权需要变更时请重新连接或删除服务器。",
+  "settings.mcp.codexRuntimeBehaviorDescription":
+    "这个界面目前不提供 Codex MCP 条目的原地更新路径；需要修改配置时请删除后重新添加。只有当 Codex 报告该服务器存在 OAuth 凭据时，才会显示退出登录。",
   "settings.mcp.pageTitle": "MCP 服务器",
   "settings.mcp.pageDescription":
     "智能体可调用的工具连接。这里管理连接、授权、工具和诊断状态。",
