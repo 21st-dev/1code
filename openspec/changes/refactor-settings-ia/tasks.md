@@ -71,6 +71,11 @@
 - [ ] 5.6 Manual smoke: each moved toggle is in its new tab and **keeps its prior
   value** (no pref reset); the Notifications group renders; the code-theme pickers
   work; the Debug tab is still unlockable via 5 clicks on the About version.
+- 2026-06-20 added `manual-smoke-evidence.md` plus
+  `bun run settings-ia:smoke:evidence` as the evidence gate for this GUI smoke.
+  Current scenarios remain blocked by this sandbox's Electron startup and local
+  listen restrictions, so this task stays unchecked until a GUI-capable local
+  session records passed evidence.
 - [x] 5.7 Mark the §1 IA-smell items resolved in
   `docs/ideas/settings-reconciliation-ledger.md`.
   - 2026-06-20 validation: `bun run ts:check`, `bun run lint`,
