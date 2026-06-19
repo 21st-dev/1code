@@ -104,6 +104,23 @@ function requiredRemoteSetupDetailResponse(): OfficialMcpRegistryServerResponse 
   }
 }
 
+function oauthRemoteSetupDetailResponse(): OfficialMcpRegistryServerResponse {
+  return {
+    server: {
+      name: "io.github.example/oauth-remote",
+      version: "1.0.0",
+      compatibility: { runtimes: ["claude-code"] },
+      remotes: [
+        {
+          type: "streamable-http",
+          url: "https://oauth.example.com/mcp",
+          authType: "oauth",
+        },
+      ],
+    },
+  }
+}
+
 function createProviderStub(): {
   provider: OfficialMcpRegistryProvider
   calls: string[]
@@ -349,6 +366,54 @@ describe("MCP registry service", () => {
       "_locusPluginMcp",
     )
     expect(calls).toEqual(["detail:io.github.example/needs-setup"])
+  })
+
+  test("saves oauth registry targets inactive until runtime auth is completed", async () => {
+    const writes: unknown[] = []
+    const provider: OfficialMcpRegistryProvider = {
+      providerId: "official-mcp-registry",
+      async listServers() {
+        throw new Error("not used")
+      },
+      async searchServers() {
+        throw new Error("not used")
+      },
+      async getServerDetail() {
+        return oauthRemoteSetupDetailResponse()
+      },
+    }
+    const service = createMcpRegistryService({
+      provider,
+      async writeClaudeConfig(input) {
+        writes.push(input)
+        return { success: true, name: input.name.trim() }
+      },
+    })
+
+    await expect(
+      service.installEntry({
+        serverName: "io.github.example/oauth-remote",
+        targetId: "remote:streamable_http:0",
+        runtime: "claude-code",
+        scope: "global",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      status: "installed-needs-setup",
+    })
+
+    expect(writes).toHaveLength(1)
+    expect(writes[0]).toMatchObject({
+      config: {
+        url: "https://oauth.example.com/mcp",
+        authType: "oauth",
+        disabled: true,
+        disabledReason: expect.stringContaining("oauth"),
+        _locusMcpRegistry: {
+          status: "installed-needs-setup",
+        },
+      },
+    })
   })
 
   test("installs resolved package setup with encrypted env values", async () => {

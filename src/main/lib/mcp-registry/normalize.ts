@@ -238,7 +238,7 @@ function inferAuthMetadata(input: {
   const normalizedAuthType = authType?.toLowerCase()
 
   if (normalizedAuthType?.includes("oauth")) {
-    return { kind: "oauth", required, headerNames, envNames }
+    return { kind: "oauth", required: true, headerNames, envNames }
   }
   if (
     headerNames.some((name) => name.toLowerCase() === "authorization") ||

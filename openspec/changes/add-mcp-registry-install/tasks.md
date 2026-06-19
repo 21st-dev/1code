@@ -138,7 +138,7 @@
 - 2026-06-20 added the renderer install confirmation action for Claude
   setup-free targets. Later setup-resolution slices added resolved setup input
   and inactive `Installed / Needs setup` staging for missing setup.
-- [ ] 3.2 Implement setup resolution for env var references, secret values,
+- [x] 3.2 Implement setup resolution for env var references, secret values,
   OAuth/runtime auth, local dependency status, and missing setup display, with secret
   values kept in main-process or runtime-owned secure storage and renderer metadata
   redacted.
@@ -150,15 +150,18 @@
 - 2026-06-20 Claude service/runtime slice landed: install accepts resolved env,
   header, variable, bearer-env-ref, and local-dependency setup; secret setup
   values are encrypted before writing Claude config and materialized only in the
-  main-process Claude runtime path. Renderer setup capture/submission and the
-  OAuth/runtime-auth product flow remain pending, so this task is not checked yet.
+  main-process Claude runtime path.
 - 2026-06-20 renderer install confirmation now captures required/optional env,
   header, and variable values plus local dependency confirmation, then submits
-  redacted-preview setup through `resolvedSetup`. OAuth/runtime-auth setup remains
-  a blocker rather than a fake install path, so this task remains unchecked.
+  redacted-preview setup through `resolvedSetup`.
 - 2026-06-20 renderer setup submission now treats `$ENV_NAME` and `${ENV_NAME}`
   as env-var references, while service tests prove env-var refs are stored as
   refs and resolved only in the main-process Claude runtime path.
+- 2026-06-20 OAuth/runtime-auth setup is intentionally not auto-executed during
+  registry install. OAuth registry targets are classified as required auth setup
+  even without header/env schemas; Claude saves them inactive as
+  `Installed / Needs setup`, while Codex/runtime-auth remains `block-install`
+  until the target runtime can safely stage inactive config.
 - [x] 3.3 On install confirmation, write through the Runtime MCP Config service and
   target adapter, not through route-local Claude/Codex helpers.
 - 2026-06-20 added a Claude-only registry install service path that materializes
