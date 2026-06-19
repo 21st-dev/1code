@@ -59,7 +59,7 @@
   commands, skills, agents, hooks, or MCP servers.
 - [x] 3.5 Ensure native-loaded plugin MCP servers are not active tool connections until
   the current redacted MCP configuration fingerprint is approved.
-- [ ] 3.6 Ensure plugin staging/load failures block the offending plugin/component,
+- [x] 3.6 Ensure plugin staging/load failures block the offending plugin/component,
   preserve non-plugin runtime startup, and surface Doctor/Debug diagnostics.
 - [x] 3.7 Preserve non-plugin settings and non-plugin MCP behavior.
 - [x] 3.8 `bun run ts:check` passes.
@@ -103,11 +103,11 @@
 
 - [x] 6.1 `bun run ts:check`.
 - [x] 6.2 `bun run lint`.
-- [ ] 6.3 Full test suite, including filtered settings, safe mode, review gates,
+- [x] 6.3 Full test suite, including filtered settings, safe mode, review gates,
   activation-identity drift, identity-incomplete behavior, MCP-approval gates,
   review-state recomputation, failed-load recovery, Codex version probe, and Codex
   no-filter blocker behavior.
-- [ ] 6.4 Architecture guard.
+- [x] 6.4 Architecture guard.
 - [x] 6.5 `openspec validate add-runtime-native-plugin-execution --strict --no-interactive`.
 - [ ] 6.6 Manual managed-run proof: reviewed plugin components activate; unreviewed
   globally enabled plugins do not; activation identity drift blocks activation;
