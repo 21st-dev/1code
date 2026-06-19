@@ -3,6 +3,7 @@ import {
   decryptStringFromStorage,
   encryptStringForStorage,
 } from "../secure-storage"
+import type { McpRegistryRuntimeLocalState } from "./installability"
 
 const SECRET_PLACEHOLDER_PREFIX = "locus:mcp-registry-secret:v1"
 const ENV_REF_PLACEHOLDER_PREFIX = "locus:mcp-registry-env-ref:v1"
@@ -38,6 +39,7 @@ export type McpRegistryConfigMetadata = {
   entryFingerprint: string
   configFingerprint: string
   installedAt: string
+  missingSetupKeys?: string[]
   encryptedSetup?: McpRegistryEncryptedSetup
   envVarRefs?: McpRegistryEnvVarRefs
   templates?: McpRegistryTemplateValues
@@ -84,8 +86,10 @@ function getMcpRegistryMetadata(
 export function isMcpRegistryServerInactiveForRuntime(
   config: McpServerConfig,
 ): boolean {
-  const metadata = getMcpRegistryMetadata(config)
-  return metadata?.status === "installed-needs-setup"
+  return (
+    resolveMcpRegistryRuntimeLocalStateFromConfig({ config })?.status ===
+    "installed-needs-setup"
+  )
 }
 
 export function encryptedMcpRegistrySetupValue(input: {
@@ -255,6 +259,116 @@ export function materializeMcpRegistryServerConfigForRuntime(
   }
 
   return next
+}
+
+function registryRuntimeFromMetadata(
+  metadata: McpRegistryConfigMetadata,
+): McpRegistryRuntimeLocalState["runtime"] {
+  return metadata.runtime === "codex" ? "codex" : "claude-code"
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))].sort()
+}
+
+function hasUnresolvedTemplateToken(value: string): boolean {
+  return (
+    /\{\{[A-Za-z_][A-Za-z0-9_]*\}\}/.test(value) ||
+    /\{[A-Za-z_][A-Za-z0-9_]*\}/.test(value) ||
+    /\$\{[A-Za-z_][A-Za-z0-9_]*\}/.test(value)
+  )
+}
+
+function isUnresolvedSetupPlaceholder(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    (value.startsWith(SECRET_PLACEHOLDER_PREFIX) ||
+      value.startsWith(ENV_REF_PLACEHOLDER_PREFIX))
+  )
+}
+
+function unresolvedPlaceholderKeys(input: {
+  config: McpServerConfig
+  metadata: McpRegistryConfigMetadata
+}): string[] {
+  const missing: string[] = []
+  for (const [key, value] of Object.entries(input.config.env ?? {})) {
+    if (isUnresolvedSetupPlaceholder(value)) missing.push(`env:${key}`)
+  }
+  for (const [key, value] of Object.entries(input.config.headers ?? {})) {
+    if (isUnresolvedSetupPlaceholder(value)) missing.push(`header:${key}`)
+  }
+  if (isUnresolvedSetupPlaceholder(input.config.bearerTokenEnvVar)) {
+    missing.push("bearer-token-env:Authorization")
+  }
+  if (
+    input.metadata.templates?.url &&
+    typeof input.config.url === "string" &&
+    input.config.url === input.metadata.templates.url &&
+    hasUnresolvedTemplateToken(input.config.url)
+  ) {
+    missing.push("variable:url")
+  }
+  if (input.metadata.templates?.args && Array.isArray(input.config.args)) {
+    input.config.args.forEach((arg, index) => {
+      if (
+        typeof arg === "string" &&
+        arg === input.metadata.templates?.args?.[index] &&
+        hasUnresolvedTemplateToken(arg)
+      ) {
+        missing.push(`variable:args:${index}`)
+      }
+    })
+  }
+  if (
+    input.metadata.templates?.cwd &&
+    typeof input.config.cwd === "string" &&
+    input.config.cwd === input.metadata.templates.cwd &&
+    hasUnresolvedTemplateToken(input.config.cwd)
+  ) {
+    missing.push("variable:cwd")
+  }
+  return uniqueSorted(missing)
+}
+
+export function resolveMcpRegistryRuntimeLocalStateFromConfig(input: {
+  config: McpServerConfig
+  env?: NodeJS.ProcessEnv
+}): McpRegistryRuntimeLocalState | undefined {
+  const metadata = getMcpRegistryMetadata(input.config)
+  if (!metadata) return undefined
+  if (
+    metadata.status !== "installed-unverified" &&
+    metadata.status !== "installed-needs-setup" &&
+    metadata.status !== "ready-to-verify" &&
+    metadata.status !== "failed-check" &&
+    metadata.status !== "verified-local"
+  ) {
+    return undefined
+  }
+
+  const runtime = registryRuntimeFromMetadata(metadata)
+  if (metadata.status !== "installed-needs-setup") {
+    return { runtime, status: metadata.status }
+  }
+
+  const materialized = materializeMcpRegistryServerConfigForRuntime(
+    input.config,
+    { env: input.env },
+  )
+  const missingKeys = uniqueSorted([
+    ...(metadata.missingSetupKeys ?? []),
+    ...unresolvedPlaceholderKeys({ config: materialized, metadata }),
+    ...(input.config.disabled === true ? ["disabled"] : []),
+  ])
+
+  return {
+    runtime,
+    status: missingKeys.length > 0 ? "installed-needs-setup" : "ready-to-verify",
+    ...(missingKeys.length > 0
+      ? { reason: `missing setup: ${missingKeys.join(", ")}` }
+      : {}),
+  }
 }
 
 export function createMcpRegistrySetupMetadata(input: {

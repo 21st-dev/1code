@@ -5,7 +5,10 @@ import type {
   OfficialMcpRegistryServerListResponse,
   OfficialMcpRegistryServerResponse,
 } from "../src/main/lib/mcp-registry/official-provider"
-import { materializeMcpRegistryServerConfigForRuntime } from "../src/main/lib/mcp-registry/secrets"
+import {
+  materializeMcpRegistryServerConfigForRuntime,
+  resolveMcpRegistryRuntimeLocalStateFromConfig,
+} from "../src/main/lib/mcp-registry/secrets"
 import { createMcpRegistryService } from "../src/main/lib/mcp-registry/service"
 import {
   setElectronSafeStorageForTest,
@@ -359,6 +362,10 @@ describe("MCP registry service", () => {
         disabledReason: expect.stringContaining("env:REQUIRED_TOKEN"),
         _locusMcpRegistry: {
           status: "installed-needs-setup",
+          missingSetupKeys: [
+            "env:REQUIRED_TOKEN",
+            "local-dependency:package:npm:@example/needs-setup",
+          ],
         },
       },
     })
@@ -411,9 +418,67 @@ describe("MCP registry service", () => {
         disabledReason: expect.stringContaining("oauth"),
         _locusMcpRegistry: {
           status: "installed-needs-setup",
+          missingSetupKeys: ["oauth"],
         },
       },
     })
+  })
+
+  test("transitions needs-setup config to ready-to-verify only after setup is resolved", () => {
+    const readyConfig: McpServerConfig = {
+      command: "npx",
+      args: ["@example/needs-setup"],
+      env: {
+        REQUIRED_TOKEN: "locus:mcp-registry-secret:v1:env:REQUIRED_TOKEN",
+      },
+      _locusMcpRegistry: {
+        providerId: "official-mcp-registry",
+        entryId: "io.github.example/needs-setup",
+        targetId: "package:@example/needs-setup:0",
+        runtime: "claude-code",
+        status: "installed-needs-setup",
+        entryFingerprint: "sha256:entry",
+        configFingerprint: "sha256:config",
+        installedAt: "2026-06-20T00:00:00.000Z",
+        missingSetupKeys: [],
+        encryptedSetup: {
+          version: 1,
+          env: {
+            REQUIRED_TOKEN: Buffer.from(
+              "encrypted:runtime-secret",
+              "utf-8",
+            ).toString("base64"),
+          },
+        },
+      },
+    }
+    const unresolvedConfig: McpServerConfig = {
+      ...readyConfig,
+      disabled: true,
+      _locusMcpRegistry: {
+        ...readyConfig._locusMcpRegistry,
+        missingSetupKeys: ["env:REQUIRED_TOKEN"],
+      },
+    }
+
+    expect(
+      resolveMcpRegistryRuntimeLocalStateFromConfig({
+        config: unresolvedConfig,
+      }),
+    ).toMatchObject({
+      runtime: "claude-code",
+      status: "installed-needs-setup",
+      reason: expect.stringContaining("env:REQUIRED_TOKEN"),
+    })
+
+    const readyState = resolveMcpRegistryRuntimeLocalStateFromConfig({
+      config: readyConfig,
+    })
+    expect(readyState).toEqual({
+      runtime: "claude-code",
+      status: "ready-to-verify",
+    })
+    expect(JSON.stringify(readyState)).not.toContain("runtime-secret")
   })
 
   test("installs resolved package setup with encrypted env values", async () => {

@@ -705,12 +705,28 @@ describe("Runtime MCP config service behavior", () => {
         disabled_global: { command: "disabled-tool", disabled: true },
         registry_needs_setup: {
           command: "registry-tool",
+          disabled: true,
           _locusMcpRegistry: {
             providerId: "official-mcp-registry",
             entryId: "io.github.example/needs-setup",
             targetId: "package:@example/needs-setup:0",
             runtime: "claude-code",
             status: "installed-needs-setup",
+            missingSetupKeys: ["env:REQUIRED_TOKEN"],
+            entryFingerprint: "sha256:entry",
+            configFingerprint: "sha256:config",
+            installedAt: "2026-06-20T00:00:00.000Z",
+          },
+        },
+        registry_ready_to_verify: {
+          command: "registry-ready-tool",
+          _locusMcpRegistry: {
+            providerId: "official-mcp-registry",
+            entryId: "io.github.example/ready",
+            targetId: "package:@example/ready:0",
+            runtime: "claude-code",
+            status: "installed-needs-setup",
+            missingSetupKeys: [],
             entryFingerprint: "sha256:entry",
             configFingerprint: "sha256:config",
             installedAt: "2026-06-20T00:00:00.000Z",
@@ -745,6 +761,7 @@ describe("Runtime MCP config service behavior", () => {
     expect(claudeRuntime.mcpReadinessStatus).toBe("ready")
     expect(claudeRuntime.mcpServersForSdk).toMatchObject({
       global_stdio: { command: "global-tool", args: ["--global"] },
+      registry_ready_to_verify: { command: "registry-ready-tool" },
       project_http: {
         url: "https://project.example.com/mcp",
         authType: "none",
@@ -769,6 +786,11 @@ describe("Runtime MCP config service behavior", () => {
         (server) => server.name === "registry_needs_setup",
       )?.status,
     ).toBe("disabled")
+    expect(
+      claudeSettings.mcpServers.find(
+        (server) => server.name === "registry_ready_to_verify",
+      )?.status,
+    ).toBe("ready-to-verify")
 
     process.env.CODEX_REMOTE_TOKEN = "runtime-token"
     codexMcpConfig.clearCodexMcpConfigCache()

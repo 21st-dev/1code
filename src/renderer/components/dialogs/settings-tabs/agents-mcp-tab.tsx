@@ -585,6 +585,8 @@ function McpServerDetail({
             ? t("common.connecting")
             : server.status === "pending-approval"
               ? t("settings.mcp.pendingApproval")
+              : server.status === "ready-to-verify"
+                ? t("settings.mcp.readyToVerify")
               : getStatusText(server.status)
   const toolsSummary = hideToolsCount
     ? t("settings.mcp.tools")
@@ -2747,6 +2749,8 @@ export function AgentsMcpTab() {
                                             : t("settings.mcp.toolCount", {
                                                 count: server.tools.length,
                                               })
+                                        : server.status === "ready-to-verify"
+                                          ? t("settings.mcp.readyToVerify")
                                         : getStatusText(server.status)}
                                   </span>
                                 )}

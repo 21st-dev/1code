@@ -422,6 +422,9 @@ export async function installMcpRegistryTarget(
       entryFingerprint: preview.entryFingerprint,
       configFingerprint: preview.configFingerprint,
       installedAt: new Date().toISOString(),
+      ...(setup.missingKeys.length > 0
+        ? { missingSetupKeys: setup.missingKeys }
+        : {}),
       ...createMcpRegistrySetupMetadata({
         encryptedSetup: materialized.encryptedSetup,
         envVarRefs: materialized.envVarRefs,

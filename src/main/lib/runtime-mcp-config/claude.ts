@@ -33,6 +33,7 @@ import {
 import {
   isMcpRegistryServerInactiveForRuntime,
   materializeMcpRegistryServerConfigForRuntime,
+  resolveMcpRegistryRuntimeLocalStateFromConfig,
 } from "../mcp-registry/secrets"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../oauth"
 import { discoverPluginMcpServers, type PluginMcpConfig } from "../plugins"
@@ -200,8 +201,20 @@ export function clearClaudeCaches(): void {
 }
 
 function getServerStatusFromConfig(serverConfig: McpServerConfig): string {
+  const registryState =
+    resolveMcpRegistryRuntimeLocalStateFromConfig({ config: serverConfig })
+  if (registryState?.status === "ready-to-verify") {
+    return "ready-to-verify"
+  }
+  if (registryState?.status === "failed-check") {
+    return "failed"
+  }
+  if (registryState?.status === "verified-local") {
+    return "connected"
+  }
   if (
     serverConfig.disabled === true ||
+    registryState?.status === "installed-needs-setup" ||
     isMcpRegistryServerInactiveForRuntime(serverConfig)
   ) {
     return "disabled"

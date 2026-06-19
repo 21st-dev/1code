@@ -232,8 +232,15 @@
   `installed-unverified`, `installed-needs-setup`, `ready-to-verify`,
   `failed-check`, and `verified-local`, but does not run Check or upgrade
   Verified by itself.
-- [ ] 4.2 Transition `Installed / Needs setup` to `Ready to verify` only after all
+- [x] 4.2 Transition `Installed / Needs setup` to `Ready to verify` only after all
   required setup is resolved without exposing secret values to renderer state.
+- 2026-06-20 registry install metadata now records renderer-safe
+  `missingSetupKeys`; Runtime MCP Config derives `ready-to-verify` only when a
+  registry needs-setup config is no longer disabled, has no missing setup keys,
+  and has no unresolved secret/env-ref/template placeholders after main-process
+  materialization. Tests assert unresolved needs-setup stays excluded from
+  Claude SDK runs, ready-to-verify enters Claude SDK input, and returned state
+  does not expose secret values.
 - [ ] 4.3 Observe real Claude runs and upgrade to `Verified on Claude` only after the
   Phase-0 probe proves Locus can observe the required MCP signals and a tool call
   succeeds.
