@@ -66,7 +66,7 @@
 
 ## 4. Phase 4 - Codex Controlled Native Execution
 
-- [x] 4.1 If Phase 1 proves app-server supports per-run filtering, wire Codex plugin
+- [ ] 4.1 If Phase 1 proves app-server supports per-run filtering, wire Codex plugin
   lifecycle/status and pass only reviewed+enabled plugins to that managed thread.
 - [ ] 4.2 If Phase 1 proves app-server has no per-run filtering, stop Codex native
   execution work for this change, keep Codex marked unsupported or explicitly
@@ -83,7 +83,7 @@
 
 ## 5. Phase 5 - UI Truth And Plugins-Tab Cleanup
 
-- [x] 5.1 Settings > Plugins shows per-plugin installed, enabled, reviewed,
+- [ ] 5.1 Settings > Plugins shows per-plugin installed, enabled, reviewed,
   runtime-loadable, component status, activation identity status, MCP approval state,
   recovery state, and blocked reasons from the activation matrix.
 - [x] 5.2 Keep Plugins inside Settings; do not promote it to a standalone extension
@@ -92,9 +92,9 @@
   ownership explicit, and remove unused/dead `setActiveTab` state.
 - [x] 5.4 Add proportional confirmation for destructive or security-sensitive plugin
   actions, including developer trust revocation and developer source removal.
-- [x] 5.5 Hide dead unsupported Codex rows or explain blocked/native-loadable state
+- [ ] 5.5 Hide dead unsupported Codex rows or explain blocked/native-loadable state
   directly from the Phase-1 matrix.
-- [x] 5.6 Update `agent-runtime-capabilities.ts` from the proof matrix.
+- [ ] 5.6 Update `agent-runtime-capabilities.ts` from the proof matrix.
 - [x] 5.7 Update `docs/ideas/settings-per-tab-audit.md` to mark execution-truth and
   in-tab trust fixes as folded into this change, while the standalone navigation
   decision remains deferred.
