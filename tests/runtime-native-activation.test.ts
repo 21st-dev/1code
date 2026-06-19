@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   buildRuntimeNativeActivationIdentity,
   buildRuntimeNativeActivationPolicy,
+  buildRuntimeNativeActivationState,
 } from "../src/main/lib/plugins/runtime-native-activation"
 import {
   buildPluginManifestReviewDocument,
@@ -107,6 +108,55 @@ describe("runtime native plugin activation", () => {
       identityStatus: "reviewed",
       reasons: [],
     })
+  })
+
+  test("derives per-runtime MCP approval behavior in the shared owner", () => {
+    const identity = buildRuntimeNativeActivationIdentity({
+      reviewDocument: reviewDocument(),
+      reviewFingerprint: "manifest-a",
+    })
+
+    expect(
+      buildRuntimeNativeActivationState({
+        runtime: "claude",
+        sourceKind: "local-marketplace",
+        pluginEnabled: true,
+        safeModeEnabled: false,
+        manifestReviewStatus: "reviewed",
+        identity,
+        reviewedIdentityFingerprint: identity.identityFingerprint,
+        hasMcpServers: true,
+        mcpServerNames: ["context"],
+        mcpApprovalIdentifiers: {
+          context: "anthropic:context-tools@0.1.0:context#mcp-sha256:abc",
+        },
+        approvedPluginMcpServers: [
+          "anthropic:context-tools@0.1.0:context#mcp-sha256:abc",
+        ],
+      }).current,
+    ).toMatchObject({
+      status: "allowed",
+      reasons: [],
+    })
+
+    expect(
+      buildRuntimeNativeActivationState({
+        runtime: "codex",
+        sourceKind: "cache",
+        pluginEnabled: true,
+        safeModeEnabled: false,
+        manifestReviewStatus: "reviewed",
+        identity: {
+          ...identity,
+          runtime: "codex",
+        },
+        reviewedIdentityFingerprint: identity.identityFingerprint,
+        hasMcpServers: true,
+        mcpServerNames: ["context"],
+        mcpApprovalIdentifiers: {},
+        approvedPluginMcpServers: [],
+      }).current.reasons,
+    ).toEqual(["mcp-approval-required"])
   })
 
   test("reports bounded reasons for ordinary blocked states", () => {

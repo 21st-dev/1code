@@ -85,7 +85,7 @@ import {
 } from "../../plugins/runtime-marketplace-actions"
 import {
   buildRuntimeNativeActivationIdentity,
-  buildRuntimeNativeActivationPolicy,
+  buildRuntimeNativeActivationState,
   type RuntimeNativeActivationIdentity,
   type RuntimeNativeActivationPolicy,
 } from "../../plugins/runtime-native-activation"
@@ -543,52 +543,20 @@ function buildPluginRuntimeNativeActivation(input: {
   pluginEnabled: boolean
   approvedPluginMcpServers: string[]
 }): PluginWithComponents["runtimeNativeActivation"] {
-  const hasMcpServers = input.scanned.components.mcpServers.length > 0
-  const supportsNativeLoading =
-    input.plugin.sourceKind !== "developer-local" &&
-    (input.plugin.runtime === "claude" || input.plugin.runtime === "codex")
-  const mcpServersApprovedOrFiltered =
-    input.plugin.runtime === "claude"
-      ? areScannedPluginMcpServersApproved({
-          scanned: input.scanned,
-          approvedPluginMcpServers: input.approvedPluginMcpServers,
-        })
-      : !hasMcpServers
-  const sharedPolicyInput = {
+  return buildRuntimeNativeActivationState({
+    runtime: input.plugin.runtime,
+    sourceKind: input.plugin.sourceKind,
+    pluginEnabled: input.pluginEnabled,
     safeModeEnabled: input.safeMode.enabled,
     manifestReviewStatus: input.updateReview.status,
-    runtimeSupportsNativeLoading: supportsNativeLoading,
-    runtimeSupportsPerRunPluginControl: supportsNativeLoading,
     identity: input.scanned.runtimeNativeActivationIdentity,
     reviewedIdentityFingerprint:
       input.updateReview.runtimeNativeActivation
         ?.lastReviewedIdentityFingerprint,
-    hasMcpServers,
-    mcpServersApprovedOrFiltered,
-  }
-
-  return {
-    current: buildRuntimeNativeActivationPolicy({
-      ...sharedPolicyInput,
-      pluginEnabled: input.pluginEnabled,
-    }),
-    enableCandidate: buildRuntimeNativeActivationPolicy({
-      ...sharedPolicyInput,
-      pluginEnabled: true,
-    }),
-  }
-}
-
-function areScannedPluginMcpServersApproved(input: {
-  scanned: ScannedPlugin
-  approvedPluginMcpServers: string[]
-}): boolean {
-  if (input.scanned.components.mcpServers.length === 0) return true
-
-  const approved = new Set(input.approvedPluginMcpServers)
-  return input.scanned.components.mcpServers.every((serverName) => {
-    const identifier = input.scanned.mcpApprovalIdentifiers[serverName]
-    return Boolean(identifier && approved.has(identifier))
+    hasMcpServers: input.scanned.components.mcpServers.length > 0,
+    mcpServerNames: input.scanned.components.mcpServers,
+    mcpApprovalIdentifiers: input.scanned.mcpApprovalIdentifiers,
+    approvedPluginMcpServers: input.approvedPluginMcpServers,
   })
 }
 

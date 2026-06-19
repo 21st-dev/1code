@@ -57,6 +57,11 @@ export interface RuntimeNativeActivationPolicy {
   reasons: RuntimeNativeActivationBlockedReason[]
 }
 
+export interface RuntimeNativeActivationState {
+  current: RuntimeNativeActivationPolicy
+  enableCandidate: RuntimeNativeActivationPolicy
+}
+
 export function buildRuntimeNativeActivationIdentity(input: {
   reviewDocument: PluginManifestReviewDocument
   reviewFingerprint: string
@@ -105,6 +110,71 @@ export function buildRuntimeNativeActivationIdentity(input: {
     status: missingFields.length === 0 ? "complete" : "identity-incomplete",
     missingFields,
   }
+}
+
+export function buildRuntimeNativeActivationState(input: {
+  runtime: PluginRuntime
+  sourceKind: string
+  pluginEnabled: boolean
+  safeModeEnabled: boolean
+  manifestReviewStatus?: PluginUpdateReviewStatus
+  identity: RuntimeNativeActivationIdentity
+  reviewedIdentityFingerprint?: string
+  hasMcpServers: boolean
+  mcpServerNames: string[]
+  mcpApprovalIdentifiers: Record<string, string>
+  approvedPluginMcpServers: string[]
+  nativeLoadFailure?: boolean
+}): RuntimeNativeActivationState {
+  const supportsNativeLoading =
+    input.sourceKind !== "developer-local" &&
+    (input.runtime === "claude" || input.runtime === "codex")
+  const sharedPolicyInput = {
+    safeModeEnabled: input.safeModeEnabled,
+    manifestReviewStatus: input.manifestReviewStatus,
+    runtimeSupportsNativeLoading: supportsNativeLoading,
+    runtimeSupportsPerRunPluginControl: supportsNativeLoading,
+    identity: input.identity,
+    reviewedIdentityFingerprint: input.reviewedIdentityFingerprint,
+    hasMcpServers: input.hasMcpServers,
+    mcpServersApprovedOrFiltered: areRuntimeNativeMcpServersApprovedOrFiltered({
+      runtime: input.runtime,
+      mcpServerNames: input.mcpServerNames,
+      mcpApprovalIdentifiers: input.mcpApprovalIdentifiers,
+      approvedPluginMcpServers: input.approvedPluginMcpServers,
+    }),
+    nativeLoadFailure: input.nativeLoadFailure,
+  }
+
+  return {
+    current: buildRuntimeNativeActivationPolicy({
+      ...sharedPolicyInput,
+      pluginEnabled: input.pluginEnabled,
+    }),
+    enableCandidate: buildRuntimeNativeActivationPolicy({
+      ...sharedPolicyInput,
+      pluginEnabled: true,
+    }),
+  }
+}
+
+function areRuntimeNativeMcpServersApprovedOrFiltered(input: {
+  runtime: PluginRuntime
+  mcpServerNames: string[]
+  mcpApprovalIdentifiers: Record<string, string>
+  approvedPluginMcpServers: string[]
+}): boolean {
+  if (input.mcpServerNames.length === 0) return true
+
+  if (input.runtime === "claude") {
+    const approved = new Set(input.approvedPluginMcpServers)
+    return input.mcpServerNames.every((serverName) => {
+      const identifier = input.mcpApprovalIdentifiers[serverName]
+      return Boolean(identifier && approved.has(identifier))
+    })
+  }
+
+  return false
 }
 
 export function buildRuntimeNativeActivationPolicy(input: {

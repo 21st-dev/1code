@@ -132,8 +132,8 @@ describe("plugin safe mode runtime source guards", () => {
 
   test("reports Claude runtime-native activation from staged config and MCP approvals", () => {
     expect(pluginsRouterSource).toContain("getApprovedPluginMcpServers")
-    expect(pluginsRouterSource).toContain("areScannedPluginMcpServersApproved")
-    expect(pluginsRouterSource).toContain("input.plugin.runtime === \"claude\"")
+    expect(pluginsRouterSource).toContain("buildRuntimeNativeActivationState")
+    expect(pluginsRouterSource).not.toContain("areScannedPluginMcpServersApproved")
     expect(pluginsRouterSource).not.toContain("supportsCodexNativeLoading")
   })
 
