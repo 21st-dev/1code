@@ -1,13 +1,13 @@
 ## 1. Phase 1 - Research / Proof
 
-- [ ] 1.1 Claude: with a test plugin and isolated Agent SDK config, prove which
+- [x] 1.1 Claude: with a test plugin and isolated Agent SDK config, prove which
   component types activate: commands, skills, agents, hooks, and MCP.
 - [ ] 1.2 Claude: prove the controlled path blocks an installed/global-enabled but
   unreviewed plugin by using filtered plugin staging and filtered settings rather
   than raw `~/.claude/settings.json`.
 - [ ] 1.3 Claude: prove safe mode exposes zero plugin components while preserving
   non-plugin settings and non-plugin MCP behavior.
-- [ ] 1.4 Claude: prove a native-loaded plugin with an unapproved MCP server does not
+- [x] 1.4 Claude: prove a native-loaded plugin with an unapproved MCP server does not
   create an active tool connection.
 - [ ] 1.5 Claude: identify the stable activation identity fields available for a
   native-loaded plugin (manifest/component declarations plus package identity,
