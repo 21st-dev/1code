@@ -129,6 +129,10 @@
 
 - [ ] 3.1 Add MCP tab registry browse/detail/install UI alongside existing manual add
   and import surfaces.
+- 2026-06-20 added `src/main/lib/mcp-registry/service.ts` as the main-process
+  service entrypoint for list/search/detail/preview. This is the API/service
+  foundation for the MCP tab UI, but 3.1 remains unchecked until the renderer
+  browse/detail/install surface is actually added.
 - [ ] 3.2 Implement setup resolution for env var references, secret values,
   OAuth/runtime auth, local dependency status, and missing setup display, with secret
   values kept in main-process or runtime-owned secure storage and renderer metadata
@@ -137,6 +141,10 @@
   target adapter, not through route-local Claude/Codex helpers.
 - [ ] 3.4 Ensure browse/preview/install do not run registry server commands, package
   managers, Docker images, MCP server processes, or MCP tools.
+- 2026-06-20 added `tests/mcp-registry-management-inert.test.ts` to guard the
+  current registry management-time service and preview code against process
+  execution, runtime MCP writers, MCP tool calls, package-manager launches, and
+  Docker. This remains unchecked until the install path exists and is covered too.
 - [ ] 3.5 Allow runtime-owned config writers during install only when they write or
   stage configuration and do not launch the target MCP server.
 - [ ] 3.6 After install with setup resolved, mark the server `Installed / Unverified`
