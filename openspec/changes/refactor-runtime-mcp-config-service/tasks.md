@@ -17,11 +17,11 @@
 
 ## 2. Regression Coverage
 
-- [ ] 2.1 Add behavior tests proving existing Claude MCP add/remove/list/status and
+- [x] 2.1 Add behavior tests proving existing Claude MCP add/remove/list/status and
   project/global scope behavior are preserved.
-- [ ] 2.2 Add behavior tests proving existing Codex MCP add/remove/list/status/auth
+- [x] 2.2 Add behavior tests proving existing Codex MCP add/remove/list/status/auth
   behavior and current limitations are preserved.
-- [ ] 2.3 Add runtime materialization tests proving Claude and Codex runs receive the
+- [x] 2.3 Add runtime materialization tests proving Claude and Codex runs receive the
   same MCP server inputs before and after extraction.
 - [x] 2.4 Add architecture guard or focused tests proving routes delegate to the
   Runtime MCP Config service and do not keep a second MCP config write/status path.
