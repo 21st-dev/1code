@@ -109,7 +109,7 @@
   no-filter blocker behavior.
 - [x] 6.4 Architecture guard.
 - [x] 6.5 `openspec validate add-runtime-native-plugin-execution --strict --no-interactive`.
-- [ ] 6.6 Manual managed-run proof: reviewed plugin components activate; unreviewed
+- [x] 6.6 Manual managed-run proof: reviewed plugin components activate; unreviewed
   globally enabled plugins do not; activation identity drift blocks activation;
   identity-incomplete plugins are blocked or explicitly high-risk acknowledged; safe
   mode disables all plugin components; unapproved plugin MCP servers do not become

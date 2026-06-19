@@ -117,6 +117,26 @@ proven. A staged package or parsed manifest alone is not native execution proof.
   staging candidate proved `nativePluginConfigs: []`, zero plugin entries in
   `system:init.plugins`, zero plugin skills/slash commands, and preserved
   non-plugin `regular-skill`.
+- `bun scripts/probe-runtime-native-managed-run.ts --timeout-ms=15000` provides
+  the managed-run proof path: it first calls
+  `ensureClaudeAgentSdkIsolatedConfigDir`, then passes the returned
+  `nativePluginConfigs` into the Claude Agent SDK and closes after `system:init`
+  before any model turn. The run returned `pass: true` with these facts:
+  - controlled mode produced one staged native plugin config and SDK init listed
+    `locus-managed-reviewed` plus its command, skill, agent, and hook marker;
+  - a globally enabled plugin hidden under the raw `skills/` directory did not
+    appear in `plugins`, `skills`, `agents`, or `slashCommands`;
+  - `regular-skill` remained visible in controlled, safe-mode, and staging-failure
+    runs;
+  - plugin MCP discovery remained skipped (`mcpServerNames: []`) while the plugin
+    `.mcp.json` existed;
+  - safe mode produced `nativePluginConfigs: []`, no plugin hook output, and no
+    reviewed plugin in SDK init;
+  - a missing plugin source produced a `source-missing` staging failure and no
+    native plugin config;
+  - runtime-native policy checks blocked drifted activation identity,
+    identity-incomplete packages, and Codex native activation with
+    `runtime-native-unsupported` plus `per-run-plugin-control-missing`.
 
 ## Current Matrix
 
@@ -162,12 +182,13 @@ proven. A staged package or parsed manifest alone is not native execution proof.
 
 ## Remaining Proof Needed
 
-Claude now has managed Agent SDK proof that `options.plugins` can load plugin
-commands, skills, agents, hooks, and MCP metadata from an isolated run. Claude
-also has SDK-backed negative proof that raw skills-dir plugins are filtered out
-of controlled isolated runs and that safe mode exposes zero plugin components
-while preserving non-plugin skills. Code-level proof covers reviewed activation
-identity drift, identity-incomplete packages, and staging failure.
+Claude now has managed Agent SDK proof that the Locus isolated-config staging
+path can load reviewed plugin commands, skills, agents, hooks, and MCP metadata
+from a controlled run. Claude also has SDK-backed negative proof that raw
+skills-dir plugins are filtered out of controlled isolated runs, safe mode
+exposes zero plugin components while preserving non-plugin skills, and staging
+failure fails closed. Runtime-native policy checks cover reviewed activation
+identity drift, identity-incomplete packages, and Codex blocked state.
 
 Codex app-server now has an isolated `CODEX_HOME` seeded-plugin proof: global
 installed/enabled plugin state reaches app-server inventory and the global skill
