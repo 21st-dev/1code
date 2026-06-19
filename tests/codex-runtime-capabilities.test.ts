@@ -85,7 +85,8 @@ describe("Codex runtime capabilities", () => {
     expect(getCodexRuntimeCapability("runtimePlugins")).toMatchObject({
       status: "degraded",
       scope: "runtime-specific",
-      hint: expect.stringContaining("managed-run proof"),
+      reason: expect.stringContaining("no-turn thread/start"),
+      hint: expect.stringContaining("plugin turn execution"),
     })
     expect(getCodexRuntimeCapability("runtimeCommands")).toMatchObject({
       status: "unsupported",
@@ -142,11 +143,14 @@ describe("Codex runtime capabilities", () => {
     expect(byId.get("runtimePlugins")).toMatchObject({
       status: "degraded",
       scope: "runtime-specific",
-      reason: expect.stringContaining("fail-closed plugin config overrides"),
+      reason: expect.stringContaining("fail-closed plugin config keys"),
       support: {
         references: expect.arrayContaining([
           "src/main/lib/codex/app-server-plugin-allowlist.ts",
+          "src/main/lib/codex/app-server-plugin-proof.ts",
+          "scripts/probe-codex-app-server-plugin-protocol.ts",
           "tests/codex-app-server-plugin-config.test.ts",
+          "tests/codex-app-server-plugin-proof.test.ts",
         ]),
       },
     })

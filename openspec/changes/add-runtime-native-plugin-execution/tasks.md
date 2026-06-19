@@ -94,7 +94,7 @@
   actions, including developer trust revocation and developer source removal.
 - [ ] 5.5 Hide dead unsupported Codex rows or explain blocked/native-loadable state
   directly from the Phase-1 matrix.
-- [ ] 5.6 Update `agent-runtime-capabilities.ts` from the proof matrix.
+- [x] 5.6 Update `agent-runtime-capabilities.ts` from the proof matrix.
 - [x] 5.7 Update `docs/ideas/settings-per-tab-audit.md` to mark execution-truth and
   in-tab trust fixes as folded into this change, while the standalone navigation
   decision remains deferred.

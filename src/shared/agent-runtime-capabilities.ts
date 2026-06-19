@@ -632,8 +632,8 @@ const CODEX_RUNTIME_MANIFEST = manifest({
       status: "degraded",
       scope: "runtime-specific",
       reason:
-        "Codex runtime plugin execution is not yet proven end to end: app-server receives fail-closed plugin config overrides, and other Codex paths do not expose a Locus-controlled native plugin filter.",
-      hint: "Keep Codex plugin execute controls blocked until a managed-run proof shows app-server honors Locus per-run controls.",
+        "Codex runtime plugin execution remains blocked: app-server exposes global plugin inventory and accepts a no-turn thread/start with fail-closed plugin config keys, but no managed turn proof shows plugin execution or Locus-controlled per-run filtering.",
+      hint: "Keep Codex plugin execute controls blocked until a managed-run proof covers plugin turn execution and app-server per-run enforcement.",
     }),
     capability({
       id: "runtimeCommands",

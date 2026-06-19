@@ -268,15 +268,18 @@ const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
     status: "degraded",
     scope: "runtime-specific",
     reason:
-      "Codex app-server receives Locus-built fail-closed plugin config overrides, but runtime-native plugin loading and per-run filtering have not been proven by a managed-run proof matrix yet.",
-    hint: "Keep Codex plugin packages disabled until app-server plugin loading is proven to honor Locus per-run controls.",
+      "Codex app-server exposes global plugin inventory and accepts no-turn thread/start with Locus-built fail-closed plugin config keys, but runtime-native plugin turn execution and per-run filtering have not been proven by the proof matrix yet.",
+    hint: "Keep Codex plugin packages disabled until app-server plugin loading is proven to honor Locus per-run controls during a managed turn.",
     support: {
       kind: "runtime-code",
       references: [
         "src/main/lib/codex/app-server-plugin-allowlist.ts",
         "src/main/lib/codex/app-server-plugin-config.ts",
+        "src/main/lib/codex/app-server-plugin-proof.ts",
+        "scripts/probe-codex-app-server-plugin-protocol.ts",
         "tests/codex-app-server-plugin-allowlist.test.ts",
         "tests/codex-app-server-plugin-config.test.ts",
+        "tests/codex-app-server-plugin-proof.test.ts",
       ],
     },
   },
