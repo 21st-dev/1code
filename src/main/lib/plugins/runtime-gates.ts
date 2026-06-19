@@ -16,6 +16,8 @@ import {
   buildRuntimeNativeActivationIdentity,
   buildRuntimeNativeActivationPolicy,
   type RuntimeNativeActivationPolicy,
+  runtimeSupportsProvenNativePluginLoading,
+  runtimeSupportsProvenPerRunPluginControl,
 } from "./runtime-native-activation"
 import {
   hashPluginManifestReviewDocument,
@@ -160,8 +162,15 @@ export async function discoverAllowedClaudeNativePluginRuntimeComponents(input: 
         pluginEnabled: true,
         safeModeEnabled: reviewResult.safeMode.enabled,
         manifestReviewStatus: updateReview.status,
-        runtimeSupportsNativeLoading: true,
-        runtimeSupportsPerRunPluginControl: true,
+        runtimeSupportsNativeLoading: runtimeSupportsProvenNativePluginLoading({
+          runtime: plugin.runtime,
+          sourceKind: plugin.sourceKind,
+        }),
+        runtimeSupportsPerRunPluginControl:
+          runtimeSupportsProvenPerRunPluginControl({
+            runtime: plugin.runtime,
+            sourceKind: plugin.sourceKind,
+          }),
         identity: runtimeNativeActivationIdentity,
         reviewedIdentityFingerprint:
           updateReview.runtimeNativeActivation?.lastReviewedIdentityFingerprint,

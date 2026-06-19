@@ -135,8 +135,15 @@ describe("plugin safe mode runtime source guards", () => {
     expect(pluginsRouterSource).toContain("buildRuntimeNativeActivationState")
     expect(pluginsRouterSource).toContain("hasClaudeNativePluginStagingFailure")
     expect(pluginsRouterSource).toContain("nativeLoadFailure:")
+    expect(runtimeGatesSource).toContain(
+      "runtimeSupportsProvenNativePluginLoading",
+    )
+    expect(runtimeGatesSource).toContain(
+      "runtimeSupportsProvenPerRunPluginControl",
+    )
     expect(pluginsRouterSource).not.toContain("areScannedPluginMcpServersApproved")
     expect(pluginsRouterSource).not.toContain("supportsCodexNativeLoading")
+    expect(runtimeGatesSource).not.toContain("runtimeSupportsNativeLoading: true")
   })
 
   test("gates plugin commands, skills, and agents before runtime discovery", () => {

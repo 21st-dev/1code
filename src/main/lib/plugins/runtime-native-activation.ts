@@ -62,6 +62,26 @@ export interface RuntimeNativeActivationState {
   enableCandidate: RuntimeNativeActivationPolicy
 }
 
+const PROVEN_RUNTIME_NATIVE_PLUGIN_LOADING: Record<PluginRuntime, boolean> = {
+  claude: false,
+  codex: false,
+}
+
+export function runtimeSupportsProvenNativePluginLoading(input: {
+  runtime: PluginRuntime
+  sourceKind: string
+}): boolean {
+  if (input.sourceKind === "developer-local") return false
+  return PROVEN_RUNTIME_NATIVE_PLUGIN_LOADING[input.runtime] === true
+}
+
+export function runtimeSupportsProvenPerRunPluginControl(input: {
+  runtime: PluginRuntime
+  sourceKind: string
+}): boolean {
+  return runtimeSupportsProvenNativePluginLoading(input)
+}
+
 export function buildRuntimeNativeActivationIdentity(input: {
   reviewDocument: PluginManifestReviewDocument
   reviewFingerprint: string
@@ -126,13 +146,17 @@ export function buildRuntimeNativeActivationState(input: {
   approvedPluginMcpServers: string[]
   nativeLoadFailure?: boolean
 }): RuntimeNativeActivationState {
-  const supportsNativeLoading =
-    input.sourceKind !== "developer-local" && input.runtime === "claude"
+  const runtimeSupportInput = {
+    runtime: input.runtime,
+    sourceKind: input.sourceKind,
+  }
   const sharedPolicyInput = {
     safeModeEnabled: input.safeModeEnabled,
     manifestReviewStatus: input.manifestReviewStatus,
-    runtimeSupportsNativeLoading: supportsNativeLoading,
-    runtimeSupportsPerRunPluginControl: supportsNativeLoading,
+    runtimeSupportsNativeLoading:
+      runtimeSupportsProvenNativePluginLoading(runtimeSupportInput),
+    runtimeSupportsPerRunPluginControl:
+      runtimeSupportsProvenPerRunPluginControl(runtimeSupportInput),
     identity: input.identity,
     reviewedIdentityFingerprint: input.reviewedIdentityFingerprint,
     hasMcpServers: input.hasMcpServers,

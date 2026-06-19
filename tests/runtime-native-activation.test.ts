@@ -110,7 +110,7 @@ describe("runtime native plugin activation", () => {
     })
   })
 
-  test("derives per-runtime MCP approval behavior in the shared owner", () => {
+  test("keeps runtime-derived native activation blocked until proof exists", () => {
     const identity = buildRuntimeNativeActivationIdentity({
       reviewDocument: reviewDocument(),
       reviewFingerprint: "manifest-a",
@@ -135,8 +135,11 @@ describe("runtime native plugin activation", () => {
         ],
       }).current,
     ).toMatchObject({
-      status: "allowed",
-      reasons: [],
+      status: "blocked",
+      reasons: [
+        "runtime-native-unsupported",
+        "per-run-plugin-control-missing",
+      ],
     })
 
     expect(
