@@ -37,7 +37,7 @@
 - [x] 2.1 Add `src/main/lib/plugins/runtime-native-activation.ts` as the shared owner
   for activation decisions, activation identity, blocked reasons, recovery posture,
   and capability-matrix inputs.
-- [ ] 2.2 Keep route code limited to request validation and owner calls; do not copy
+- [x] 2.2 Keep route code limited to request validation and owner calls; do not copy
   review/safe-mode/MCP/loadability logic into route handlers.
 - [x] 2.3 Add tests for reviewed/enabled, unreviewed, disabled, safe-mode, failed-load,
   drifted identity, identity-incomplete, and MCP-approval combinations.
