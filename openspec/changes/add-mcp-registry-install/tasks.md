@@ -317,9 +317,9 @@
 - 2026-06-20 passed: `node scripts/check-architecture-guards.mjs`.
 - [x] 5.11 `openspec validate add-mcp-registry-install --strict --no-interactive`.
 - 2026-06-20 passed: change is valid.
-- [ ] 5.12 Record the resolved MCP registry install behavior in
+- [x] 5.12 Record the resolved MCP registry install behavior in
   `docs/ideas/settings-per-tab-audit.md`.
-- 2026-06-20 not checked: the target audit doc currently contains user-owned
-  uncommitted audit additions, so this change should not stage or commit that
-  file without coordination. Resolved behavior is recorded in this OpenSpec task
-  list for now.
+- 2026-06-20 recorded the resolved behavior in the MCP audit section: the MCP tab
+  is the registry/store home; browse, redacted preview, setup-aware Claude
+  install, and connect/list-only Check have landed; `Verified on Claude` and
+  Codex registry support remain proof-gated by real runtime evidence.

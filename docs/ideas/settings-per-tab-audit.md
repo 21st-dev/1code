@@ -185,3 +185,145 @@ trust, update review, and per-plugin MCP management.
 3. **Codex "unsupported" entries** (§D) → **DECIDED: hide dead rows or explain the
    blocked/native-loadable state from the activation matrix; folded into
    `add-runtime-native-plugin-execution`.**
+
+---
+
+## MCP (`agents-mcp-tab.tsx`, 1,589 lines)
+
+**The healthiest tab audited.** Symmetric for **both** runtimes (CLAUDE CODE + CODEX
+sections): add / remove / refresh / OAuth, status-aware (connected / pending /
+needs-auth / failed), search. Delete **is** confirmed (`deletingServer` → dialog,
+line 1581) — unlike Plugins. Config import goes through a **redacted preview**
+(`McpImportPreviewPanel` + `RedactedFieldChips`) before applying — good secret
+hygiene. No dead controls, no missing confirms, no debt markers.
+
+### 🟡 A. Per-runtime capability asymmetry
+
+- **Evidence:** Claude has `updateMcpServer` (edit in place); Codex has **no**
+  `updateMcpServer`. Codex has `logoutMcpServer`; Claude has none. So a Codex server
+  can't be edited (only remove + re-add), and only Codex offers MCP logout.
+- Likely real backend reality (`~/.claude.json` editable vs `~/.codex/config.toml`;
+  Codex OAuth exposes logout). **Action:** confirm intentional and **disclose in the
+  UI** (why a Codex server has no edit; why logout is Codex-only) — or fill the gap.
+
+### 🟡 B. Cross-tab MCP overlap with Plugins
+
+- **Evidence:** both this tab and the Plugins tab read the same `getAllMcpConfig`;
+  Plugins also approves/revokes *plugin-provided* MCP servers. So a plugin's MCP
+  server appears in **both** tabs, managed two ways.
+- **Action:** one clear ownership story / bridge. *Already owned* by the
+  `add-runtime-native-plugin-execution` "Plugin MCP ownership is clear" requirement —
+  coordinate, don't double-solve.
+
+### 📌 C. MCP registry/store layer — decided and partially landed
+
+- **Resolved direction:** the MCP tab is the right home for the cross-vendor
+  registry/store layer. `add-mcp-registry-install` adds official-registry browse,
+  detail, redacted install preview, setup classification, Claude install through
+  Runtime MCP Config, inactive `Installed / Needs setup`, `Installed / Unverified`,
+  `Ready to verify`, `Failed check`, and explicit Check.
+- **Safety bar:** browse / preview / install stay management-time inert: they do not
+  run registry server commands, package managers, Docker, MCP server processes, or
+  MCP tools. Explicit Check is connect/list-only until a safe side-effect-free tool
+  classifier exists.
+- **Still proof-gated:** do **not** claim `Verified on Claude` until a real Claude
+  run proves discovery, connection, tool listing, and a tool call. Codex registry
+  install / `Verified on Codex` remain deferred until Codex can write the full
+  registry field set and produce real app-server runtime proof.
+
+### Decisions to ratify (MCP)
+1. **Asymmetry (A)** — disclose in UI, or fill the Codex-edit / Claude-logout gaps? *[recommend disclose]*
+2. **Cross-tab overlap (B)** — coordinate with the plugin-execution change (already owns it). *[recommend no duplicate work]*
+3. **MCP store / registry browse (C)** — **DECIDED: build it here.** Current
+   state is browse + redacted preview + Claude install/check, with Verified and
+   Codex still gated by real runtime proof.
+
+---
+
+## Skills (`agents-skills-tab.tsx`, 1,712 lines) + Commands
+
+This tab manages **both** skills and slash commands (`SkillsViewMode = "skills" |
+"commands"`) plus a runtime-aware **registry/store** (claude + codex) with
+install / update / rollback / browse-only collections. Backend surface:
+`skills.{list, registryList, registryCollections, registryInstall,
+registryRollback, create, update, delete}` + `commands.delete`.
+
+**Positives (not findings).** Read-only protection for plugin & registry items is
+correct (`isReadOnly`, line 160; delete hidden when read-only, 705) — you can't
+edit/delete a plugin-owned or registry-owned skill from here. Delete (recursive
+`fs.rm` of the skill dir) routes through the app `AlertDialog`. The registry has
+hash-based drift detection (`installedHash`/`contentHash` → `modified`).
+
+### 🔴 A. The Skills store ships at the OLD acceptance bar — "installed" = files written, no "verified" (headline)
+
+- **Evidence:** `RegistrySkillStatus = not-installed | installed | update-available
+  | modified` (`skills/registry.ts:24`). There is no "verified-usable" state;
+  `registryInstall` writes files and the entry goes green immediately.
+- **Why it matters:** this is the exact false-confidence model you just **rejected**
+  for MCP. `add-mcp-registry-install` is being held to "Installed/Unverified vs
+  Verified on Claude/Codex" + runtime-local proof — while the **already-shipped**
+  Skills store does one-click install with zero verification. Two stores, two bars.
+- **Action (PRODUCT CALL):** reconcile the bar. Either (a) Skills registry adopts
+  the Installed/Unverified→Verified model to match `add-mcp-registry-install`, or
+  (b) accept that skills are genuinely lower-risk (they are markdown prompt text,
+  not a launched process/server) and **document why** the MCP bar is higher.
+  *Recommended:* (b) is defensible — but still surface "did the runtime actually
+  pick this up" rather than only "files written," and align the vocabulary.
+
+### 🔴 B. Codex registry install writes to GLOBAL `~/.codex/skills` — invisible to the isolated managed run (confirmed)
+
+- **Evidence:** Codex registry skills install to `~/.codex/skills`
+  (`skills/registry.ts` `getSkillsRoot("codex")`). But every Codex app-server
+  managed run now uses an **isolated** `CODEX_HOME` at
+  `{userData}/codex-sessions/{ownerId}` (`app-server-adapter.ts:368` default path →
+  `prepareCodexAppServerIsolatedPluginHome`), which copies **only** `auth.json` +
+  `installation_id` and symlinks **only** staged plugins
+  (`app-server-plugin-home.ts:60,156`). It never includes `~/.codex/skills`.
+- **Why it matters:** a Codex registry skill shows **"installed"** yet is **not
+  present** in the run that's supposed to use it — the literal "装了不能用"
+  failure, in shipped code. The plugin-isolation feature (prevent global leakage)
+  incidentally hides legitimately-installed Codex skills. The plain `list` query
+  doesn't even scan `~/.codex/skills` (`skills.ts:136` scans only `~/.claude/skills`).
+- **Action (VERIFY + DECIDE):** confirm whether Codex loads skills from
+  `CODEX_HOME/skills` at all; if so, either **stage `~/.codex/skills` into the
+  isolated home** (like plugins) or **block/relabel the Codex skill target** until
+  it's proven. Same isolation-coherence question the plugin proof raised — now it
+  applies to skills, which were never proof-gated.
+
+### 🟡 C. Mixed confirmation rigor — the file-clobbering path uses the weak popup
+
+- **Evidence:** delete uses the styled `AlertDialog` (good), but **force-overwrite
+  of an existing user skill** / "replace local changes" (`window.confirm`, line 307)
+  and **force-install-to-both-runtimes** (`window.confirm`, 1396) use the native
+  browser popup. The path that can **destroy local skill edits** is on the weaker
+  confirm; `AlertDialog` is imported (19-26) but not used there.
+- **Action:** route the overwrite confirms through `AlertDialog` too (same as Models
+  §F); rigor should track "this clobbers your local edits."
+
+### 🟡 D. Skills tab also does full Commands CRUD — overlaps the separate Command Guide tab
+
+- **Evidence:** `SkillsViewMode = "skills" | "commands"`; this tab creates/edits/
+  deletes slash commands (`.claude/commands/`, `commands.delete`). There is **also**
+  a separate `agents-command-guide-tab.tsx` in the same settings dialog.
+- **Action (IA CALL):** clarify ownership — is Command Guide a read-only reference
+  while Skills>commands is the editor? Two command surfaces in Settings is a "混乱"
+  candidate for the Phase-3 IA reorg. Decide whether commands live in Skills, in
+  Command Guide, or one merged surface.
+
+### 🟢 E. Cross-tab: Skills already HAS the store MCP wants
+
+- **Note:** the runtime-aware registry (claude+codex), install/rollback, browse-only
+  collections, and hash drift detection here are the **working precedent** for
+  `add-mcp-registry-install`. Recommend that change reuse these patterns — and that
+  the §A reconciliation flow **both ways** (MCP store learns the registry plumbing;
+  Skills store learns the verified-vs-installed bar).
+
+### Decisions to ratify (Skills)
+1. **Acceptance-bar reconciliation (§A)** — make the Skills registry match
+   Installed/Unverified→Verified, or document why skills get a lighter bar?
+   *[product call — ties directly to `add-mcp-registry-install`]*
+2. **Codex skill isolation coherence (§B)** — verify `~/.codex/skills` is consumed
+   by the isolated run; stage it or relabel/block the Codex target if not.
+   *[must-verify; confirmed gap in code]*
+3. **Overwrite confirms → app `AlertDialog` (§C)?** *[recommend yes]*
+4. **Commands ownership vs Command Guide (§D)?** *[IA call — Phase 3]*
