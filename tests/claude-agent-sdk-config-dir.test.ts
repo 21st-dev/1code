@@ -318,6 +318,82 @@ describe("Claude Agent SDK isolated config dir", () => {
     })
   })
 
+  test("fails closed for sanitized Claude plugin staging path collisions", async () => {
+    const root = await createRoot()
+    const userDataDir = join(root, "user-data")
+    const homeDir = await createHomeClaudeDir(root)
+    const firstPluginSourcePath = join(root, "source-plugin-one")
+    const secondPluginSourcePath = join(root, "source-plugin-two")
+    await mkdir(firstPluginSourcePath, { recursive: true })
+    await mkdir(secondPluginSourcePath, { recursive: true })
+    const isolatedConfig = resolveClaudeAgentSdkIsolatedConfig({
+      userDataDir,
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      isUsingOllama: false,
+    })
+
+    await ensureClaudeAgentSdkIsolatedConfigDir({
+      ...isolatedConfig,
+      dependencies: {
+        homeDir: () => homeDir,
+        getPluginSafeModeState: async () => ({ enabled: false }),
+        getClaudePluginStagingEntries: async () => [
+          {
+            pluginSource: "market:allowed/a",
+            marketplace: "market",
+            name: "allowed/a",
+            version: "1.2.3",
+            path: firstPluginSourcePath,
+          },
+          {
+            pluginSource: "market:allowed_a",
+            marketplace: "market",
+            name: "allowed_a",
+            version: "1.2.3",
+            path: secondPluginSourcePath,
+          },
+        ],
+        logger: { warn() {} },
+      },
+    })
+
+    const settings = JSON.parse(
+      await readFile(
+        join(isolatedConfig.isolatedConfigDir, "settings.json"),
+        "utf-8",
+      ),
+    )
+    expect(settings).toMatchObject({
+      includeCoAuthoredBy: false,
+      enabledPlugins: [],
+    })
+    expect(
+      await pathExists(
+        join(
+          isolatedConfig.isolatedConfigDir,
+          "plugins",
+          "marketplaces",
+          "market",
+          ".claude-plugin",
+          "marketplace.json",
+        ),
+      ),
+    ).toBe(false)
+    expect(getClaudeNativePluginStagingFailure("market:allowed/a")).toMatchObject(
+      {
+        pluginSource: "market:allowed/a",
+        reason: "stage-failed",
+      },
+    )
+    expect(getClaudeNativePluginStagingFailure("market:allowed_a")).toMatchObject(
+      {
+        pluginSource: "market:allowed_a",
+        reason: "stage-failed",
+      },
+    )
+  })
+
   test("fails closed when previous Claude plugin staging cannot be removed", async () => {
     const root = await createRoot()
     const userDataDir = join(root, "user-data")

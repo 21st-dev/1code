@@ -265,21 +265,46 @@ async function stageClaudePlugins(input: {
     marketplaces.set(entry.marketplace, existing)
   }
 
+  const collidingMarketplaceSegments = findDuplicatePathSegments(
+    Array.from(marketplaces.keys()),
+  )
   const symlinkType =
     input.dependencies.platform === "win32" ? "junction" : "dir"
   const stagedEntries: ClaudePluginStagingEntry[] = []
   const failedEntries: ClaudeNativePluginStagingFailureInput[] = []
   for (const [marketplace, entries] of marketplaces) {
+    const marketplaceSegment = sanitizePathSegment(marketplace)
+    if (collidingMarketplaceSegments.has(marketplaceSegment)) {
+      input.markIncomplete()
+      failedEntries.push(
+        ...entries.map((entry) => toStagingFailure(entry, "stage-failed")),
+      )
+      input.dependencies.logger.warn(
+        `[claude] Refusing to stage marketplace ${marketplace}: sanitized marketplace path collision`,
+      )
+      continue
+    }
+
     const marketplaceRoot = path.join(
       input.pluginsTarget,
       "marketplaces",
-      sanitizePathSegment(marketplace),
+      marketplaceSegment,
     )
     const marketplaceMetaDir = path.join(marketplaceRoot, ".claude-plugin")
+    const collidingPluginSourcePaths = findDuplicatePluginSourcePaths(entries)
 
     const linkedEntries: ClaudePluginStagingEntry[] = []
     for (const entry of entries) {
       const sourcePath = path.join("plugins", sanitizePathSegment(entry.name))
+      if (collidingPluginSourcePaths.has(sourcePath)) {
+        input.markIncomplete()
+        failedEntries.push(toStagingFailure(entry, "stage-failed"))
+        input.dependencies.logger.warn(
+          `[claude] Refusing to stage plugin ${entry.pluginSource}: sanitized plugin path collision`,
+        )
+        continue
+      }
+
       const targetPath = path.join(marketplaceRoot, sourcePath)
       try {
         const sourceExists = await input.dependencies.fs
@@ -380,6 +405,34 @@ function toStagingFailure(
 function sanitizePathSegment(value: string): string {
   const normalized = value.replace(/[^a-zA-Z0-9._-]/g, "_")
   return normalized.length > 0 ? normalized : "plugin"
+}
+
+function findDuplicatePathSegments(values: string[]): Set<string> {
+  const counts = new Map<string, number>()
+  for (const value of values) {
+    const segment = sanitizePathSegment(value)
+    counts.set(segment, (counts.get(segment) ?? 0) + 1)
+  }
+  return new Set(
+    Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([segment]) => segment),
+  )
+}
+
+function findDuplicatePluginSourcePaths(
+  entries: ClaudePluginStagingEntry[],
+): Set<string> {
+  const counts = new Map<string, number>()
+  for (const entry of entries) {
+    const sourcePath = path.join("plugins", sanitizePathSegment(entry.name))
+    counts.set(sourcePath, (counts.get(sourcePath) ?? 0) + 1)
+  }
+  return new Set(
+    Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([sourcePath]) => sourcePath),
+  )
 }
 
 export async function ensureClaudeAgentSdkIsolatedConfigDir(input: {
