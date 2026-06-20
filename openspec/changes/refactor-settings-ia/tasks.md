@@ -68,7 +68,7 @@
   the Beta module is fully deleted and every remaining tab module is rendered).
 - [x] 5.4 Run the full test suite.
 - [x] 5.5 `openspec validate refactor-settings-ia --strict --no-interactive`.
-- [ ] 5.6 Manual smoke: each moved toggle is in its new tab and **keeps its prior
+- [x] 5.6 Manual smoke: each moved toggle is in its new tab and **keeps its prior
   value** (no pref reset); the Notifications group renders; the code-theme pickers
   work; the Debug tab is still unlockable via 5 clicks on the About version.
 - 2026-06-20 added `manual-smoke-evidence.md` plus
@@ -110,3 +110,16 @@
     to `127.0.0.1:5173`, but it still fails with `listen EPERM`, confirming the
     blocker is local listen permission in this sandbox rather than only IPv6
     loopback resolution.
+  - 2026-06-20 GUI smoke completed from a real Terminal-launched dev app with
+    isolated app data (`LOCUS_USER_DATA_DIR=/private/tmp/locus-settings-ia-smoke-real`)
+    and isolated Codex home
+    (`CODEX_HOME=/private/tmp/locus-settings-ia-home-real/.codex`). User-observed
+    Settings screenshots confirmed Models / Offline controls, Preferences /
+    Notifications and Rollback, Appearance / Kanban and code-theme pickers,
+    Keyboard quick-switch ownership, and About showing `v0.0.80` with Beta absent
+    and Debug visible. User confirmed the remaining Settings checks were OK after
+    interaction, including persistence through closing/reopening Settings. The
+    About version was clicked 5 times; the dev build showed no visible delta
+    because Debug is already visible under `isDevelopment || devToolsUnlocked`,
+    and source check confirmed the About click path still updates
+    `devToolsUnlockedAtom`.
