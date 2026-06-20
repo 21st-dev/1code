@@ -307,9 +307,10 @@
   run discovers, connects, lists tools, and calls a tool.
 - 2026-06-20 added `runtime-proof-evidence.md` plus
   `bun run mcp-registry:proof:evidence` as the evidence gate for the remaining
-  real-runtime proof tasks. The current scenarios stay blocked, so this task
-  remains unchecked until a GUI/runtime-capable environment records passed
-  Claude run evidence without secrets.
+  real-runtime proof tasks. `runtime-proof-runbook.md` records the isolated
+  launch and redacted evidence steps. The current scenarios stay blocked, so
+  this task remains unchecked until a GUI/runtime-capable environment records
+  passed Claude run evidence without secrets.
 - [x] 5.7 Manual proof for Codex app-server only if proof gates pass; otherwise record
   Codex deferred/unavailable reason and verify the UI does not offer fake Codex
   verified support.
