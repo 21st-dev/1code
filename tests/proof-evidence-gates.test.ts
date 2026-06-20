@@ -14,6 +14,21 @@ function read(path: string): string {
 }
 
 describe("OpenSpec proof evidence gates", () => {
+  test("package scripts keep proof gates on the main test path", () => {
+    const packageJson = JSON.parse(read("package.json")) as {
+      scripts: Record<string, string>
+    }
+
+    expect(packageJson.scripts["settings-ia:smoke:evidence"]).toBe(
+      "node scripts/check-settings-ia-smoke-evidence.mjs",
+    )
+    expect(packageJson.scripts["mcp-registry:proof:evidence"]).toBe(
+      "node scripts/check-mcp-registry-proof-evidence.mjs",
+    )
+    expect(packageJson.scripts.test).toBe("bun test tests")
+    expect(packageJson.scripts.check).toContain("bun run test")
+  })
+
   test("Settings IA manual smoke evidence gate stays enforced", () => {
     const result = runEvidenceGate(
       "scripts/check-settings-ia-smoke-evidence.mjs",
