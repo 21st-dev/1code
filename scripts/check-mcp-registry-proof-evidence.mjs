@@ -13,6 +13,15 @@ const scenarioTaskMap = new Map([
   ["codex-verified-upgrade", ["4.4"]],
   ["claude-registry-real-run", ["5.6"]],
 ])
+const requiredRunbookMarkers = [
+  "Provider call authorization: required",
+  "HOME=/private/tmp/locus-mcp-registry-home",
+  "CODEX_HOME=/private/tmp/locus-mcp-registry-home/.codex",
+  "LOCUS_USER_DATA_DIR=/private/tmp/locus-mcp-registry-smoke",
+  "Do not paste raw OAuth tokens",
+  "Do not offer or record `Verified on Codex` if any of those signals are missing.",
+  "bun run mcp-registry:proof:evidence",
+]
 const secretPatterns = [
   /Bearer\s+[A-Za-z0-9._~+/=-]+/,
   /\bsk-[A-Za-z0-9_-]{16,}\b/,
@@ -52,12 +61,20 @@ function taskIsChecked(tasks, taskId) {
 
 const changeDir = findChangeDir()
 const evidencePath = join(changeDir, "runtime-proof-evidence.md")
+const runbookPath = join(changeDir, "runtime-proof-runbook.md")
 const tasksPath = join(changeDir, "tasks.md")
 const evidence = read(evidencePath)
+const runbook = read(runbookPath)
 const tasks = read(tasksPath)
 
 if (!evidence.includes("Provider call authorization: required")) {
   fail(`${evidencePath} must state provider call authorization is required.`)
+}
+
+for (const marker of requiredRunbookMarkers) {
+  if (!runbook.includes(marker)) {
+    fail(`${runbookPath} is missing required marker: ${marker}`)
+  }
 }
 
 for (const pattern of secretPatterns) {

@@ -10,6 +10,14 @@ const requiredScenarios = [
   "code-theme-pickers",
   "about-version-debug-unlock",
 ]
+const requiredRunbookMarkers = [
+  "Provider call authorization: not required",
+  "HOME=/private/tmp/locus-settings-ia-home",
+  "CODEX_HOME=/private/tmp/locus-settings-ia-home/.codex",
+  "LOCUS_USER_DATA_DIR=/private/tmp/locus-settings-ia-smoke",
+  "Do not check task 5.6 from source inspection alone.",
+  "bun run settings-ia:smoke:evidence",
+]
 const allowedStatuses = new Set(["pending", "passed", "failed", "blocked"])
 
 function fail(message) {
@@ -40,8 +48,10 @@ function findChangeDir() {
 
 const changeDir = findChangeDir()
 const evidencePath = join(changeDir, "manual-smoke-evidence.md")
+const runbookPath = join(changeDir, "manual-smoke-runbook.md")
 const tasksPath = join(changeDir, "tasks.md")
 const evidence = read(evidencePath)
+const runbook = read(runbookPath)
 const tasks = read(tasksPath)
 const task56Checked =
   /- \[x\] 5\.6 Manual smoke: each moved toggle is in its new tab/.test(tasks)
@@ -59,6 +69,12 @@ if (!evidence.includes("Provider call authorization: not required")) {
   fail(
     `${evidencePath} must state provider call authorization is not required.`,
   )
+}
+
+for (const marker of requiredRunbookMarkers) {
+  if (!runbook.includes(marker)) {
+    fail(`${runbookPath} is missing required marker: ${marker}`)
+  }
 }
 
 for (const scenarioId of requiredScenarios) {
