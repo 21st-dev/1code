@@ -16,4 +16,17 @@ describe("provider profile onboarding", () => {
       'setLastSelectedClaudeModelSource("custom-provider")',
     )
   })
+
+  test("surfaces Provider Profile save failures during onboarding", () => {
+    const source = readFileSync(
+      "src/renderer/features/onboarding/api-key-onboarding-page.tsx",
+      "utf8",
+    )
+
+    expect(source).toContain("const [submissionError, setSubmissionError]")
+    expect(source).toContain("onError: (error) =>")
+    expect(source).toContain("} catch (error) {")
+    expect(source).toContain("toast.models.failedToSaveProviderProfile")
+    expect(source).toContain("{submissionError && (")
+  })
 })

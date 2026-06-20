@@ -2,7 +2,9 @@
 
 import { useAtomValue, useSetAtom } from "jotai"
 import { ChevronLeft, Info } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { toast } from "sonner"
+import { providerProfileSource } from "../../../shared/provider-profile-types"
 import { LanguageSwitcher } from "../../components/language-switcher"
 import {
   IconSpinner,
@@ -20,10 +22,9 @@ import {
 import { useI18n } from "../../lib/i18n"
 import { trpc } from "../../lib/trpc"
 import { cn } from "../../lib/utils"
-import { providerProfileSource } from "../../../shared/provider-profile-types"
 import {
-  lastSelectedClaudeModelSourceAtom,
   type ClaudeModelSource,
+  lastSelectedClaudeModelSourceAtom,
 } from "../agents/atoms"
 
 type OnboardingProviderAuthMode = "api_key" | "auth_token"
@@ -36,6 +37,10 @@ function toProviderProfileAuthMode(mode: OnboardingProviderAuthMode) {
 const isValidApiKey = (key: string) => {
   const trimmed = key.trim()
   return trimmed.startsWith("sk-ant-") && trimmed.length > 20
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export function ApiKeyOnboardingPage() {
@@ -65,8 +70,10 @@ export function ApiKeyOnboardingPage() {
     useState<OnboardingProviderAuthMode>("auth_token")
   const [useForUtilityApis, setUseForUtilityApis] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submissionError, setSubmissionError] = useState<string | null>(null)
 
   const handleBack = () => {
+    setSubmissionError(null)
     setOnboardingProviderMode(null)
   }
 
@@ -74,6 +81,7 @@ export function ApiKeyOnboardingPage() {
   const submitApiKey = (key: string) => {
     if (!isValidApiKey(key)) return
 
+    setSubmissionError(null)
     setIsSubmitting(true)
 
     saveProviderProfile.mutate(
@@ -101,6 +109,13 @@ export function ApiKeyOnboardingPage() {
           )
           setApiKeyOnboardingCompleted(true)
         },
+        onError: (error) => {
+          const message = getErrorMessage(error)
+          setSubmissionError(message)
+          toast.error(t("toast.models.failedToSaveProviderProfile"), {
+            description: message,
+          })
+        },
         onSettled: () => setIsSubmitting(false),
       },
     )
@@ -114,6 +129,7 @@ export function ApiKeyOnboardingPage() {
 
     if (!trimmedModel || !trimmedToken || !trimmedBaseUrl) return
 
+    setSubmissionError(null)
     setIsSubmitting(true)
 
     try {
@@ -152,6 +168,12 @@ export function ApiKeyOnboardingPage() {
         providerProfileSource(result.profile.id) as ClaudeModelSource,
       )
       setApiKeyOnboardingCompleted(true)
+    } catch (error) {
+      const message = getErrorMessage(error)
+      setSubmissionError(message)
+      toast.error(t("toast.models.failedToSaveProviderProfile"), {
+        description: message,
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -160,6 +182,7 @@ export function ApiKeyOnboardingPage() {
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setApiKey(value)
+    setSubmissionError(null)
 
     // Auto-submit if valid API key is pasted
     if (isValidApiKey(value)) {
@@ -191,6 +214,7 @@ export function ApiKeyOnboardingPage() {
 
         {/* Back button - fixed in top left corner below traffic lights */}
         <button
+          type="button"
           onClick={handleBack}
           className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
         >
@@ -247,6 +271,14 @@ export function ApiKeyOnboardingPage() {
             <p className="text-xs text-muted-foreground text-center">
               {t("onboarding.apiKey.hint")}
             </p>
+            {submissionError && (
+              <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <p className="font-medium">
+                  {t("toast.models.failedToSaveProviderProfile")}
+                </p>
+                <p className="mt-1 leading-relaxed">{submissionError}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -266,6 +298,7 @@ export function ApiKeyOnboardingPage() {
 
       {/* Back button - fixed in top left corner below traffic lights */}
       <button
+        type="button"
         onClick={handleBack}
         className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
       >
@@ -330,7 +363,10 @@ export function ApiKeyOnboardingPage() {
             </Label>
             <Input
               value={model}
-              onChange={(e) => setModel(e.target.value)}
+              onChange={(e) => {
+                setModel(e.target.value)
+                setSubmissionError(null)
+              }}
               placeholder="claude-sonnet-4-6"
               className="w-full"
             />
@@ -347,7 +383,10 @@ export function ApiKeyOnboardingPage() {
             <Input
               type="password"
               value={token}
-              onChange={(e) => setToken(e.target.value)}
+              onChange={(e) => {
+                setToken(e.target.value)
+                setSubmissionError(null)
+              }}
               placeholder="sk-ant-..."
               className="w-full"
             />
@@ -364,7 +403,10 @@ export function ApiKeyOnboardingPage() {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setAuthMode("api_key")}
+                onClick={() => {
+                  setAuthMode("api_key")
+                  setSubmissionError(null)
+                }}
                 className={cn(
                   "h-8 rounded-lg border text-xs font-medium transition-colors",
                   authMode === "api_key"
@@ -376,7 +418,10 @@ export function ApiKeyOnboardingPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setAuthMode("auth_token")}
+                onClick={() => {
+                  setAuthMode("auth_token")
+                  setSubmissionError(null)
+                }}
                 className={cn(
                   "h-8 rounded-lg border text-xs font-medium transition-colors",
                   authMode === "auth_token"
@@ -394,7 +439,10 @@ export function ApiKeyOnboardingPage() {
             <Label className="text-sm font-medium">{t("common.baseUrl")}</Label>
             <Input
               value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
+              onChange={(e) => {
+                setBaseUrl(e.target.value)
+                setSubmissionError(null)
+              }}
               placeholder="https://api.anthropic.com"
               className="w-full"
             />
@@ -403,6 +451,15 @@ export function ApiKeyOnboardingPage() {
             </p>
           </div>
         </div>
+
+        {submissionError && (
+          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
+            <p className="font-medium">
+              {t("toast.models.failedToSaveProviderProfile")}
+            </p>
+            <p className="mt-1">{submissionError}</p>
+          </div>
+        )}
 
         {/* Continue Button */}
         <button
