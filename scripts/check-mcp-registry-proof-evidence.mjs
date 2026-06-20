@@ -20,6 +20,7 @@ const requiredRunbookMarkers = [
   "LOCUS_USER_DATA_DIR=/private/tmp/locus-mcp-registry-smoke",
   "Do not paste raw OAuth tokens",
   "Do not offer or record `Verified on Codex` if any of those signals are missing.",
+  "not the token strings.",
   "bun run mcp-registry:proof:evidence",
 ]
 const secretPatterns = [
@@ -59,6 +60,15 @@ function taskIsChecked(tasks, taskId) {
   return new RegExp(`^- \\[x\\] ${escaped}\\b`, "m").test(tasks)
 }
 
+function assertNoSecretLikeValues(path, content) {
+  for (const pattern of secretPatterns) {
+    if (pattern.test(content)) {
+      fail(`${path} appears to contain an unredacted secret-like value.`)
+      break
+    }
+  }
+}
+
 const changeDir = findChangeDir()
 const evidencePath = join(changeDir, "runtime-proof-evidence.md")
 const runbookPath = join(changeDir, "runtime-proof-runbook.md")
@@ -77,12 +87,8 @@ for (const marker of requiredRunbookMarkers) {
   }
 }
 
-for (const pattern of secretPatterns) {
-  if (pattern.test(evidence)) {
-    fail(`${evidencePath} appears to contain an unredacted secret-like value.`)
-    break
-  }
-}
+assertNoSecretLikeValues(evidencePath, evidence)
+assertNoSecretLikeValues(runbookPath, runbook)
 
 const statusByScenario = new Map()
 const scenarioPattern = /^## Scenario: ([a-z0-9-]+)\n\nStatus: ([a-z]+)$/gm
