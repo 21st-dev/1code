@@ -75,6 +75,10 @@
   `bun run settings-ia:smoke:evidence` as the evidence gate for this GUI smoke.
   `manual-smoke-runbook.md` records the isolated launch and evidence steps for a
   GUI-capable local session.
+- 2026-06-20 added `tests/settings-ia-placement.test.ts` as a source-level
+  regression guard for the moved controls, duplicate Ctrl+Tab removal, Beta tab
+  removal, and About-version Debug unlock. This does not replace the required
+  GUI smoke.
   Current scenarios remain blocked by this sandbox's Electron startup and local
   listen restrictions, so this task stays unchecked until a GUI-capable local
   session records passed evidence.
