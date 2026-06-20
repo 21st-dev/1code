@@ -311,6 +311,8 @@
   launch and redacted evidence steps. The current scenarios stay blocked, so
   this task remains unchecked until a GUI/runtime-capable environment records
   passed Claude run evidence without secrets.
+- 2026-06-20 added `tests/proof-evidence-gates.test.ts` so the runtime-proof
+  evidence gate also runs under the test suite.
 - [x] 5.7 Manual proof for Codex app-server only if proof gates pass; otherwise record
   Codex deferred/unavailable reason and verify the UI does not offer fake Codex
   verified support.
