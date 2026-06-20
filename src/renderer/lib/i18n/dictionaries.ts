@@ -83,7 +83,10 @@ export const en = {
   "onboarding.customModel.modelHint": "Model identifier for API requests",
   "onboarding.customModel.apiToken": "API token",
   "onboarding.customModel.tokenHint": "Your API key or token",
-  "onboarding.customModel.authEnv": "Auth env",
+  "onboarding.customModel.authEnv": "Auth mode",
+  "onboarding.customModel.authNone": "No auth",
+  "onboarding.customModel.authNoneHint":
+    "Use only for local providers or trusted proxies that do not require a token.",
   "onboarding.customModel.baseUrlHint": "API endpoint URL",
 
   "onboarding.repo.selectTitle": "Open a Project",
@@ -3487,7 +3490,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.customModel.modelHint": "API 请求使用的模型标识",
   "onboarding.customModel.apiToken": "API 令牌",
   "onboarding.customModel.tokenHint": "你的 API 密钥或令牌",
-  "onboarding.customModel.authEnv": "认证环境变量",
+  "onboarding.customModel.authEnv": "认证方式",
+  "onboarding.customModel.authNone": "无认证",
+  "onboarding.customModel.authNoneHint":
+    "仅用于不需要令牌的本地提供方或可信代理。",
   "onboarding.customModel.baseUrlHint": "API 端点 URL",
 
   "onboarding.repo.selectTitle": "打开项目",

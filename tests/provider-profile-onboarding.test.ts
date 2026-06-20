@@ -29,4 +29,22 @@ describe("provider profile onboarding", () => {
     expect(source).toContain("toast.models.failedToSaveProviderProfile")
     expect(source).toContain("{submissionError && (")
   })
+
+  test("supports no-auth custom model onboarding without token storage", () => {
+    const source = readFileSync(
+      "src/renderer/features/onboarding/api-key-onboarding-page.tsx",
+      "utf8",
+    )
+
+    expect(source).toContain(
+      'type OnboardingProviderAuthMode = "api_key" | "auth_token" | "none"',
+    )
+    expect(source).toContain('if (mode === "none") return "none"')
+    expect(source).toContain("const customModelTokenRequired = authMode !==")
+    expect(source).toContain(
+      "token: customModelTokenRequired ? trimmedToken : undefined",
+    )
+    expect(source).toContain('setAuthMode("none")')
+    expect(source).toContain("onboarding.customModel.authNone")
+  })
 })

@@ -27,10 +27,12 @@ import {
   lastSelectedClaudeModelSourceAtom,
 } from "../agents/atoms"
 
-type OnboardingProviderAuthMode = "api_key" | "auth_token"
+type OnboardingProviderAuthMode = "api_key" | "auth_token" | "none"
 
 function toProviderProfileAuthMode(mode: OnboardingProviderAuthMode) {
-  return mode === "api_key" ? "x-api-key" : "bearer"
+  if (mode === "api_key") return "x-api-key"
+  if (mode === "none") return "none"
+  return "bearer"
 }
 
 // Check if the key looks like a valid Anthropic API key
@@ -71,6 +73,7 @@ export function ApiKeyOnboardingPage() {
   const [useForUtilityApis, setUseForUtilityApis] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submissionError, setSubmissionError] = useState<string | null>(null)
+  const customModelTokenRequired = authMode !== "none"
 
   const handleBack = () => {
     setSubmissionError(null)
@@ -127,7 +130,13 @@ export function ApiKeyOnboardingPage() {
     const trimmedToken = token.trim()
     const trimmedBaseUrl = baseUrl.trim()
 
-    if (!trimmedModel || !trimmedToken || !trimmedBaseUrl) return
+    if (
+      !trimmedModel ||
+      !trimmedBaseUrl ||
+      (customModelTokenRequired && !trimmedToken)
+    ) {
+      return
+    }
 
     setSubmissionError(null)
     setIsSubmitting(true)
@@ -140,12 +149,12 @@ export function ApiKeyOnboardingPage() {
         baseUrl: trimmedBaseUrl,
         defaultModel: trimmedModel,
         authMode: toProviderProfileAuthMode(authMode),
-        token: trimmedToken,
+        token: customModelTokenRequired ? trimmedToken : undefined,
         targetRuntimes: ["claude"],
         capabilities: { claude: true, streaming: true, tools: true },
       })
 
-      if (useForUtilityApis) {
+      if (useForUtilityApis && customModelTokenRequired) {
         await Promise.all([
           saveLocalApiProviderConfig.mutateAsync({
             purpose: "sub_chat_title",
@@ -197,7 +206,9 @@ export function ApiKeyOnboardingPage() {
   }
 
   const canSubmitCustomModel = Boolean(
-    model.trim() && token.trim() && baseUrl.trim(),
+    model.trim() &&
+      baseUrl.trim() &&
+      (!customModelTokenRequired || token.trim()),
   )
 
   // Simple API key input mode
@@ -346,6 +357,7 @@ export function ApiKeyOnboardingPage() {
               </div>
               <Switch
                 checked={useForUtilityApis}
+                disabled={!customModelTokenRequired}
                 onCheckedChange={setUseForUtilityApis}
                 aria-label={t("onboarding.customModel.utilityApisTitle")}
                 className="mt-0.5"
@@ -375,32 +387,33 @@ export function ApiKeyOnboardingPage() {
             </p>
           </div>
 
-          {/* API Token */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">
-              {t("onboarding.customModel.apiToken")}
-            </Label>
-            <Input
-              type="password"
-              value={token}
-              onChange={(e) => {
-                setToken(e.target.value)
-                setSubmissionError(null)
-              }}
-              placeholder="sk-ant-..."
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">
-              {t("onboarding.customModel.tokenHint")}
-            </p>
-          </div>
+          {customModelTokenRequired && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">
+                {t("onboarding.customModel.apiToken")}
+              </Label>
+              <Input
+                type="password"
+                value={token}
+                onChange={(e) => {
+                  setToken(e.target.value)
+                  setSubmissionError(null)
+                }}
+                placeholder="sk-ant-..."
+                className="w-full"
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("onboarding.customModel.tokenHint")}
+              </p>
+            </div>
+          )}
 
           {/* Auth Mode */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
               {t("onboarding.customModel.authEnv")}
             </Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -431,7 +444,28 @@ export function ApiKeyOnboardingPage() {
               >
                 ANTHROPIC_AUTH_TOKEN
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("none")
+                  setUseForUtilityApis(false)
+                  setSubmissionError(null)
+                }}
+                className={cn(
+                  "h-8 rounded-lg border text-xs font-medium transition-colors",
+                  authMode === "none"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-background text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t("onboarding.customModel.authNone")}
+              </button>
             </div>
+            {authMode === "none" && (
+              <p className="text-xs text-muted-foreground">
+                {t("onboarding.customModel.authNoneHint")}
+              </p>
+            )}
           </div>
 
           {/* Base URL */}
