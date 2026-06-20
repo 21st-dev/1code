@@ -86,5 +86,6 @@ After passed evidence is recorded:
 
 ```bash
 bun run mcp-registry:proof:evidence
+bun test tests/proof-evidence-gates.test.ts
 bunx openspec validate add-mcp-registry-install --strict --no-interactive
 ```

@@ -22,6 +22,7 @@ const requiredRunbookMarkers = [
   "Do not offer or record `Verified on Codex` if any of those signals are missing.",
   "not the token strings.",
   "bun run mcp-registry:proof:evidence",
+  "bun test tests/proof-evidence-gates.test.ts",
 ]
 const secretPatterns = [
   /Bearer\s+[A-Za-z0-9._~+/=-]+/,

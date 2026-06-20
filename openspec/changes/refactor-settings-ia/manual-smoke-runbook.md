@@ -70,5 +70,6 @@ After recording passed evidence:
 
 ```bash
 bun run settings-ia:smoke:evidence
+bun test tests/proof-evidence-gates.test.ts
 bunx openspec validate refactor-settings-ia --strict --no-interactive
 ```

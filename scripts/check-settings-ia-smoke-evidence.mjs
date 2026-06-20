@@ -17,6 +17,7 @@ const requiredRunbookMarkers = [
   "LOCUS_USER_DATA_DIR=/private/tmp/locus-settings-ia-smoke",
   "Do not check task 5.6 from source inspection alone.",
   "bun run settings-ia:smoke:evidence",
+  "bun test tests/proof-evidence-gates.test.ts",
 ]
 const allowedStatuses = new Set(["pending", "passed", "failed", "blocked"])
 

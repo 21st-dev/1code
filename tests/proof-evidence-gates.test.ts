@@ -48,6 +48,7 @@ describe("OpenSpec proof evidence gates", () => {
     expect(source).toContain(
       "Do not check task 5.6 from source inspection alone.",
     )
+    expect(source).toContain("bun test tests/proof-evidence-gates.test.ts")
     expect(source).toContain("task56Checked && notPassed.length > 0")
     expect(source).toContain("!task56Checked && notPassed.length === 0")
   })
@@ -71,6 +72,7 @@ describe("OpenSpec proof evidence gates", () => {
     expect(source).toContain("requiredRunbookMarkers")
     expect(source).toContain("assertNoSecretLikeValues(evidencePath, evidence)")
     expect(source).toContain("assertNoSecretLikeValues(runbookPath, runbook)")
+    expect(source).toContain("bun test tests/proof-evidence-gates.test.ts")
     expect(source).toContain("taskIsChecked(tasks, taskId)")
     expect(source).toContain('checked && status !== "passed"')
     expect(source).toContain('!checked && status === "passed"')
