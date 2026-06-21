@@ -52,9 +52,17 @@
   `toolNamesByServer` and persists the redacted `mcp` runtime-status payload.
   This is not checked because a real app-server MCP tool-call success signal is
   still required.
-- [ ] 1.3 Define verified-state behavior from the probe results. If a runtime lacks a
+- [x] 1.3 Define verified-state behavior from the probe results. If a runtime lacks a
   required signal, automatic `Verified` upgrades from passive run observation are
   disabled or narrowed for that runtime.
+- 2026-06-22 policy landed for Claude-only automatic upgrade: a registry server
+  may become `verified-local` only when the Locus-managed Claude stream observes
+  a matching `mcp__<server>__<tool>` `tool-input-available` followed by
+  `tool-output-available` for the same `toolCallId`, keyed to the injected
+  registry runtime/server/fingerprint target. Unmatched tools, tool errors,
+  non-registry tools, and Codex targets do not upgrade. Codex Verified remains
+  deferred until Codex app-server field materialization and real tool-call
+  observability proof pass.
 - [x] 1.4 Probe Codex app-server adapter installability for registry-relevant fields:
   env, env-var references, HTTP headers, env-header references, bearer-token env,
   cwd, transport type, enabled state, and scope/capability reporting.
@@ -248,6 +256,10 @@
 - [ ] 4.3 Observe real Claude runs and upgrade to `Verified on Claude` only after the
   Phase-0 probe proves Locus can observe the required MCP signals and a tool call
   succeeds.
+- 2026-06-22 implementation support landed for Claude runtime observation and
+  SDK HTTP/SSE MCP materialization, but this task remains unchecked until a
+  fresh real Claude GUI/runtime run records the matching local `verified-local`
+  state file.
 - [ ] 4.4 Observe real Locus-managed Codex app-server runs and upgrade to
   `Verified on Codex` only after Codex field-materialization and observability proof
   gates pass and a tool call succeeds.

@@ -66,7 +66,7 @@ Current status:
 
 ## Scenario: verified-state-policy
 
-Status: blocked
+Status: passed
 
 Required before checking tasks: 1.3
 
@@ -78,11 +78,27 @@ Evidence required:
   or deferred instead of producing fake verified state.
 
 Current status:
-- Claude real-runtime proof is now available for the calculator server, but
-  Codex real-runtime proof remains deferred and no local `verified-local`
-  upgrade has been observed. Keep this policy scenario blocked until the change
-  either implements/proves the Claude verified upgrade or explicitly narrows
-  `Verified` behavior to manual/check-only evidence.
+- 2026-06-22 policy implemented and narrowed:
+  - Claude may upgrade a registry server to `verified-local` only when the
+    Locus-managed Claude stream observes a matching
+    `tool-input-available` for `mcp__<server>__<tool>` followed by
+    `tool-output-available` for the same `toolCallId`.
+  - The observed server must be present in the runtime-injected registry
+    verification target map for the same runtime, server name, entry
+    fingerprint, and config fingerprint.
+  - `tool-output-error`, unmatched tools, non-registry tools, and Codex targets
+    do not upgrade local verification state.
+  - Codex `Verified` remains deferred until Codex app-server field
+    materialization and tool-call observability proof pass.
+- Code evidence:
+  `src/main/lib/claude/agent-sdk-mcp-registry-verification.ts` and
+  `tests/claude-agent-sdk-mcp-registry-verification.test.ts`.
+- Verification run:
+  `bun test tests/claude-agent-sdk-mcp-registry-verification.test.ts
+  tests/claude-agent-sdk-stream-consumer.test.ts
+  tests/runtime-mcp-config-service.test.ts
+  tests/claude-agent-sdk-adapter-runner.test.ts
+  tests/claude-agent-sdk-runtime-lifecycle.test.ts`.
 
 ## Scenario: claude-verified-upgrade
 
@@ -103,6 +119,10 @@ Current status:
   `/private/tmp/locus-mcp-registry-smoke/mcp-registry-verification-state.json`
   file was present after the run and no `verified-local` record was observed.
   This scenario remains blocked.
+- 2026-06-22 code support for this upgrade path landed, including the Claude
+  stream observer and SDK HTTP/SSE materialization fix. This scenario remains
+  blocked until a fresh real Claude GUI/runtime run using the updated code
+  writes and records the matching `verified-local` state file.
 
 ## Scenario: codex-verified-upgrade
 
