@@ -33,12 +33,16 @@
 
 ## 1. Phase-0 Proof Gates
 
-- [ ] 1.1 Probe Claude Agent SDK runs with a known MCP server and record whether Locus
+- [x] 1.1 Probe Claude Agent SDK runs with a known MCP server and record whether Locus
   can observe server connection, tool-list, and successful MCP tool-call signals.
 - 2026-06-20 code-level pre-probe recorded in `observability-probe-notes.md`.
   Locus already parses Claude SDK init `mcp_servers`/`tools` and MCP-prefixed
   tool input/output chunks, but this is not checked because a real Claude run
   with a known harmless MCP server is still required.
+- 2026-06-21 real Claude Agent SDK proof recorded in
+  `runtime-proof-evidence.md`: `calculator-mcp-server` appeared as a pending MCP
+  server, ToolSearch surfaced `mcp__calculator-mcp-server__calculate`, the run
+  executed that MCP tool for `2 + 2`, and the matching tool result returned `4`.
 - [ ] 1.2 Probe Locus-managed Codex app-server runs with a known MCP server and record
   whether Locus can observe server connection, tool-list, and successful MCP
   tool-call signals.
@@ -303,7 +307,7 @@
 - 2026-06-20 source guard covers the explicit registry Check implementation:
   it lists tools, records `ready-to-verify`, does not contain MCP tool-call
   invocation paths, and does not write `verified-local`.
-- [ ] 5.6 Manual proof: official-registry MCP server installed to Claude; real Claude
+- [x] 5.6 Manual proof: official-registry MCP server installed to Claude; real Claude
   run discovers, connects, lists tools, and calls a tool.
 - 2026-06-20 added `runtime-proof-evidence.md` plus
   `bun run mcp-registry:proof:evidence` as the evidence gate for the remaining
@@ -313,6 +317,12 @@
   passed Claude run evidence without secrets.
 - 2026-06-20 added `tests/proof-evidence-gates.test.ts` so the runtime-proof
   evidence gate also runs under the test suite.
+- 2026-06-21 Claude-only runtime proof passed for official-registry
+  `io.github.cyanheads/calculator-mcp-server` target
+  `remote:streamable_http:0`: Settings check showed one tool and the real Claude
+  run executed `mcp__calculator-mcp-server__calculate` with result `4`. This does
+  not complete `Verified on Claude`; task 4.3 stays unchecked because no
+  `verified-local` record was observed.
 - [x] 5.7 Manual proof for Codex app-server only if proof gates pass; otherwise record
   Codex deferred/unavailable reason and verify the UI does not offer fake Codex
   verified support.

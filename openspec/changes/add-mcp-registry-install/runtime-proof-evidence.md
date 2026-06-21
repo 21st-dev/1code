@@ -9,7 +9,7 @@ files here.
 
 ## Scenario: claude-agent-sdk-mcp-observability
 
-Status: blocked
+Status: passed
 
 Required before checking tasks: 1.1
 
@@ -23,7 +23,29 @@ Evidence required:
 
 Current status:
 - Code-level pre-probe is recorded in `observability-probe-notes.md`.
-- Real Claude Agent SDK run evidence is still missing in this sandbox.
+- 2026-06-21 real Claude Agent SDK run evidence captured with isolated app
+  state:
+  - app userData: `/private/tmp/locus-mcp-registry-smoke`
+  - Claude config home: `/private/tmp/locus-mcp-registry-home`
+  - CODEX_HOME: `/private/tmp/locus-mcp-registry-home/.codex`
+  - real macOS `HOME` retained for keychain-backed Claude login.
+- Server: `calculator-mcp-server`; tool:
+  `mcp__calculator-mcp-server__calculate`.
+- Evidence path:
+  `/private/tmp/locus-mcp-registry-smoke/claude-sessions/mqnq6k876a0v021o/projects/-Users-ethan-Code-GitHub-agent-code-for-me/807cfc13-eadd-451b-b011-fe3dbf6bce92.jsonl`.
+- JSONL evidence:
+  - line 3 records the user-initiated prompt requesting calculator `2 + 2`.
+  - line 4 records `pendingMcpServers:["calculator-mcp-server"]`.
+  - line 10 records ToolSearch returning
+    `mcp__calculator-mcp-server__calculate`.
+  - line 11 records assistant `tool_use` for
+    `mcp__calculator-mcp-server__calculate` with input
+    `{"expression":"2 + 2"}`.
+  - line 12 records the matching tool result:
+    `{"result":"4","resultType":"number","expression":"2 + 2","operation":"evaluate"}`.
+  - line 13 records deferred tools updated with
+    `mcp__calculator-mcp-server__calculate` and no remaining pending MCP
+    servers.
 
 ## Scenario: codex-app-server-mcp-observability
 
@@ -56,8 +78,11 @@ Evidence required:
   or deferred instead of producing fake verified state.
 
 Current status:
-- Claude and Codex real-runtime proof is incomplete, so this policy remains
-  intentionally unresolved.
+- Claude real-runtime proof is now available for the calculator server, but
+  Codex real-runtime proof remains deferred and no local `verified-local`
+  upgrade has been observed. Keep this policy scenario blocked until the change
+  either implements/proves the Claude verified upgrade or explicitly narrows
+  `Verified` behavior to manual/check-only evidence.
 
 ## Scenario: claude-verified-upgrade
 
@@ -73,7 +98,11 @@ Evidence required:
   runtime, server name, entry fingerprint, and config fingerprint.
 
 Current status:
-- No real Claude `verified-local` upgrade has been proven.
+- 2026-06-21 successful Claude MCP tool-call proof exists for
+  `calculator-mcp-server`, but no
+  `/private/tmp/locus-mcp-registry-smoke/mcp-registry-verification-state.json`
+  file was present after the run and no `verified-local` record was observed.
+  This scenario remains blocked.
 
 ## Scenario: codex-verified-upgrade
 
@@ -93,7 +122,7 @@ Current status:
 
 ## Scenario: claude-registry-real-run
 
-Status: blocked
+Status: passed
 
 Required before checking tasks: 5.6
 
@@ -106,5 +135,21 @@ Evidence required:
 - Logs/renderer state show no plaintext token, authorization header, or secret.
 
 Current status:
-- Claude registry browse/install/check are implemented, but the real Claude run
-  and tool-call evidence are still missing in this sandbox.
+- 2026-06-21 passed for Claude-only proof using official-registry
+  `io.github.cyanheads/calculator-mcp-server` with target
+  `remote:streamable_http:0`.
+- Install/check path was exercised through Settings > MCP before the run;
+  Settings showed `calculator-mcp-server` connected with one tool.
+- Real Claude run evidence:
+  - screenshot:
+    `/var/folders/_g/cmqkvs694c7g4rmksh2jd5hr0000gn/T/codex-clipboard-0043f57b-2fd7-46ad-92ca-cd260d082a85.png`
+    shows the final response: calculator MCP server `calculate` evaluated
+    `2 + 2 = 4`.
+  - JSONL path:
+    `/private/tmp/locus-mcp-registry-smoke/claude-sessions/mqnq6k876a0v021o/projects/-Users-ethan-Code-GitHub-agent-code-for-me/807cfc13-eadd-451b-b011-fe3dbf6bce92.jsonl`.
+  - line 10: tool inventory/deferred lookup surfaced
+    `mcp__calculator-mcp-server__calculate`.
+  - line 11: real MCP tool call executed.
+  - line 12: matching MCP tool result returned `4`.
+- No OAuth token, authorization header, cookie, API key, or plaintext secret is
+  recorded in this evidence.
