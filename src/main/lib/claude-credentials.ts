@@ -45,11 +45,6 @@ export type ClaudeCodeCredentialMetadata = {
   encryptionAvailable: boolean
 }
 
-type ActiveCredentialRow = {
-  account: typeof anthropicAccounts.$inferSelect | null
-  legacy: typeof claudeCodeCredentials.$inferSelect | null
-}
-
 type ClaudeCredentialDatabase = ReturnType<typeof getDatabase>
 type ClaudeCredentialTransaction = Parameters<
   Parameters<ClaudeCredentialDatabase["transaction"]>[0]
@@ -61,7 +56,7 @@ const LEGACY_CLAUDE_CODE_ACCOUNT_ID = "legacy-default"
 const LEGACY_CLAUDE_CODE_CREDENTIAL_ID = "default"
 const ANTHROPIC_SETTINGS_ID = "singleton"
 export const CLAUDE_CODE_LOCAL_CREDENTIAL_INVALID_MESSAGE =
-  "Local Claude Code credentials are expired or revoked. Sign in with Claude Code again instead of importing local credentials."
+  "Claude Code credentials are expired or revoked. Sign in with Claude Code again."
 
 function isLocalClaudeCodeSource(
   source: ClaudeCodeCredentialEnvelope["source"],
@@ -86,6 +81,10 @@ function decryptSecret(encrypted: string): string | null {
 
 function toIsoString(value: Date | null | undefined): string | null {
   return value?.toISOString() ?? null
+}
+
+function isTokenActuallyExpired(expiresAt?: number): boolean {
+  return expiresAt ? Date.now() >= expiresAt : false
 }
 
 export function decryptClaudeCodeCredential(
@@ -136,6 +135,9 @@ function getLegacyClaudeCodeCredential(db: ClaudeCredentialDatabase) {
 }
 
 function clearLegacyClaudeCodeCredential(db: ClaudeCredentialDatabase): boolean {
+  const legacy = getLegacyClaudeCodeCredential(db)
+  if (!legacy) return false
+
   const result = db.delete(claudeCodeCredentials)
     .where(eq(claudeCodeCredentials.id, LEGACY_CLAUDE_CODE_CREDENTIAL_ID))
     .run()
@@ -146,6 +148,10 @@ function setActiveClaudeCodeAccountSetting(
   db: ClaudeCredentialDatabase,
   activeAccountId: string | null,
 ): void {
+  const settings = getSettings(db)
+  if (!settings && activeAccountId === null) return
+  if (settings?.activeAccountId === activeAccountId) return
+
   const now = new Date()
 
   db.insert(anthropicSettings)
@@ -262,17 +268,17 @@ export function ensureLegacyClaudeCodeCredentialMigrated(
 
 function getActiveCredentialRow(
   db: ClaudeCredentialDatabase = getDatabase(),
-): ActiveCredentialRow {
+): { account: typeof anthropicAccounts.$inferSelect | null } {
   const migration = ensureLegacyClaudeCodeCredentialMigrated(db)
   if (migration.reason === "migration_failed") {
-    return { account: null, legacy: null }
+    return { account: null }
   }
 
   const account = migration.activeAccountId
     ? getAccountById(db, migration.activeAccountId)
     : null
 
-  return { account, legacy: null }
+  return { account }
 }
 
 function parseActiveCredential(
@@ -280,25 +286,22 @@ function parseActiveCredential(
 ): {
   stored: StoredClaudeCodeCredential | null
   account: typeof anthropicAccounts.$inferSelect | null
-  legacy: typeof claudeCodeCredentials.$inferSelect | null
 } {
-  const { account, legacy } = getActiveCredentialRow(db)
+  const { account } = getActiveCredentialRow(db)
 
   if (account?.oauthToken) {
     return {
       stored: decryptClaudeCodeCredential(account.oauthToken),
       account,
-      legacy,
     }
   }
 
-  return { stored: null, account, legacy }
+  return { stored: null, account }
 }
 
 function credentialMetadataFromStored(
   stored: StoredClaudeCodeCredential | null,
   account: typeof anthropicAccounts.$inferSelect | null,
-  legacy: typeof claudeCodeCredentials.$inferSelect | null,
 ): ClaudeCodeCredentialMetadata {
   const envelope = stored?.envelope
   const expiresAt = envelope?.expiresAt ? new Date(envelope.expiresAt) : null
@@ -307,13 +310,13 @@ function credentialMetadataFromStored(
     isConnected: Boolean(envelope?.accessToken),
     accountId: account?.id ?? null,
     displayName: account?.displayName ?? null,
-    connectedAt: toIsoString(account?.connectedAt ?? legacy?.connectedAt),
+    connectedAt: toIsoString(account?.connectedAt),
     source: envelope?.source ?? null,
     storageFormat: stored?.storageFormat ?? null,
     hasRefreshToken: Boolean(envelope?.refreshToken),
     refreshable: Boolean(envelope?.refreshToken),
     expiresAt: expiresAt?.toISOString() ?? null,
-    isExpired: isTokenExpired(envelope?.expiresAt),
+    isExpired: isTokenActuallyExpired(envelope?.expiresAt),
     isExpiringSoon: isTokenExpired(envelope?.expiresAt),
     importedAt: envelope?.importedAt ?? null,
     updatedAt: envelope?.updatedAt ?? null,
@@ -324,8 +327,8 @@ function credentialMetadataFromStored(
 export function getClaudeCodeCredentialMetadata(
   db: ClaudeCredentialDatabase = getDatabase(),
 ): ClaudeCodeCredentialMetadata {
-  const { stored, account, legacy } = parseActiveCredential(db)
-  return credentialMetadataFromStored(stored, account, legacy)
+  const { stored, account } = parseActiveCredential(db)
+  return credentialMetadataFromStored(stored, account)
 }
 
 function persistCredentialEnvelope(
@@ -579,11 +582,11 @@ export async function getValidClaudeCodeCredential(options: {
   metadata: ClaudeCodeCredentialMetadata
 }> {
   const db = options.db ?? getDatabase()
-  const { stored, account, legacy } = parseActiveCredential(db)
+  const { stored, account } = parseActiveCredential(db)
   if (!stored?.envelope.accessToken) {
     return {
       accessToken: null,
-      metadata: credentialMetadataFromStored(stored, account, legacy),
+      metadata: credentialMetadataFromStored(stored, account),
     }
   }
 
@@ -591,13 +594,13 @@ export async function getValidClaudeCodeCredential(options: {
   if (!isTokenExpired(envelope.expiresAt)) {
     return {
       accessToken: envelope.accessToken,
-      metadata: credentialMetadataFromStored(stored, account, legacy),
+      metadata: credentialMetadataFromStored(stored, account),
     }
   }
 
   if (!envelope.refreshToken) {
     throw new Error(
-      "Claude Code credentials are expired and cannot be refreshed. Re-import local Claude Code credentials.",
+      "Claude Code credentials are expired and cannot be refreshed. Sign in with Claude Code again.",
     )
   }
 
@@ -641,7 +644,6 @@ export async function getValidClaudeCodeCredential(options: {
     metadata: credentialMetadataFromStored(
       { envelope: refreshedEnvelope, storageFormat: "envelope" },
       account,
-      legacy,
     ),
   }
 }

@@ -83,6 +83,15 @@ describe("Claude Code local credential validation", () => {
 
   const credentialDb = () => db as unknown as CredentialDb
 
+  test("uses generic reconnect guidance for stale Claude Code credentials", () => {
+    expect(CLAUDE_CODE_LOCAL_CREDENTIAL_INVALID_MESSAGE).toContain(
+      "Sign in with Claude Code again",
+    )
+    expect(CLAUDE_CODE_LOCAL_CREDENTIAL_INVALID_MESSAGE).not.toContain(
+      "instead of importing local credentials",
+    )
+  })
+
   test("rejects revoked local credentials before storing them", async () => {
     await expect(
       importLocalClaudeCodeCredential({

@@ -119,7 +119,6 @@ export const anthropicAccountsRouter = router({
   list: publicProcedure.query(() => {
     const db = getDatabase()
 
-    ensureLegacyClaudeCodeCredentialMigrated(db)
     compactDuplicateLocalClaudeCodeAccounts(db)
     reconcileClaudeCodeCredentialStorage(db)
 
@@ -144,7 +143,6 @@ export const anthropicAccountsRouter = router({
   getActive: publicProcedure.query(() => {
     const db = getDatabase()
 
-    ensureLegacyClaudeCodeCredentialMigrated(db)
     compactDuplicateLocalClaudeCodeAccounts(db)
     const { activeAccountId } = reconcileClaudeCodeCredentialStorage(db)
     if (!activeAccountId) return null
@@ -332,7 +330,6 @@ export const anthropicAccountsRouter = router({
    */
   hasAccounts: publicProcedure.query(() => {
     const db = getDatabase()
-    ensureLegacyClaudeCodeCredentialMigrated(db)
     compactDuplicateLocalClaudeCodeAccounts(db)
     reconcileClaudeCodeCredentialStorage(db)
     const countResult = db

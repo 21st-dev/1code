@@ -80,5 +80,7 @@ describe("Anthropic onboarding Claude Code auth", () => {
     expect(dictionaries).toContain("onboarding.claude.secureStorageUnavailable")
     expect(dictionaries).toContain("onboarding.claude.localCredentialsInvalid")
     expect(dictionaries).toContain("系统钥匙串不可用")
+    expect(dictionaries).not.toContain("instead of importing local credentials")
+    expect(dictionaries).not.toContain("请不要导入本机凭据")
   })
 })

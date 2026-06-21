@@ -98,6 +98,12 @@ Settings and onboarding SHALL let users choose a fresh Claude Code OAuth login
 even when local system credentials exist. The presence of a system credential
 must not force the UI down the import path.
 
+Manual raw access-token import remains a non-refreshable escape hatch because it
+does not provide a refresh token or expiry proof to validate. It SHALL be stored
+only in the canonical account ledger and reported as non-refreshable; system
+credential refresh validation requirements do not imply that a raw pasted access
+token can be made refreshable.
+
 ### Normal Write Path
 
 New credential writes and refresh writes SHALL write only to

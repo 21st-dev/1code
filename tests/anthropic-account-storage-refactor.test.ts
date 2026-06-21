@@ -13,4 +13,26 @@ describe("Anthropic account storage ownership", () => {
     expect(source).not.toContain("claudeCodeCredentials")
     expect(source).not.toContain("where(eq(claudeCodeCredentials.id")
   })
+
+  test("read routes do not explicitly run legacy migration before reconciliation", () => {
+    const source = anthropicAccountsRouterSource()
+
+    for (const routeName of ["list", "getActive", "hasAccounts"]) {
+      const routeStart = source.indexOf(`${routeName}: publicProcedure`)
+      const nextRouteStart = source.indexOf(
+        "publicProcedure",
+        routeStart + `${routeName}: publicProcedure`.length,
+      )
+      const routeSource = source.slice(
+        routeStart,
+        nextRouteStart === -1 ? undefined : nextRouteStart,
+      )
+
+      expect(routeStart).toBeGreaterThanOrEqual(0)
+      expect(routeSource).toContain("reconcileClaudeCodeCredentialStorage(db)")
+      expect(routeSource).not.toContain(
+        "ensureLegacyClaudeCodeCredentialMigrated(db)",
+      )
+    }
+  })
 })

@@ -83,10 +83,10 @@ function seedAccount(
     .run()
 }
 
-function encryptedCredential(accessToken: string) {
+function encryptedCredential(accessToken: string, expiresAt?: number) {
   return encryptStringForStorage(
     JSON.stringify(
-      createClaudeCodeCredentialEnvelope({ accessToken }, "legacy_db"),
+      createClaudeCodeCredentialEnvelope({ accessToken, expiresAt }, "legacy_db"),
     ),
   )
 }
@@ -135,13 +135,7 @@ describe("Claude Code account deletion storage reconciliation", () => {
 
     expect(db.select().from(anthropicAccounts).all()).toEqual([])
     expect(db.select().from(claudeCodeCredentials).all()).toEqual([])
-    expect(
-      db
-        .select()
-        .from(anthropicSettings)
-        .where(eq(anthropicSettings.id, "singleton"))
-        .get()?.activeAccountId,
-    ).toBeNull()
+    expect(db.select().from(anthropicSettings).all()).toEqual([])
   })
 
   test("removing the active account selects the next account without mirroring legacy storage", () => {
@@ -249,6 +243,37 @@ describe("Claude Code account deletion storage reconciliation", () => {
     expect(db.select().from(claudeCodeCredentials).all()).toEqual([])
   })
 
+  test("reconcile does not create settings when no account or legacy credential exists", () => {
+    const result = reconcileClaudeCodeCredentialStorage(credentialDb())
+
+    expect(result.activeAccountId).toBeNull()
+    expect(db.select().from(anthropicSettings).all()).toEqual([])
+    expect(db.select().from(claudeCodeCredentials).all()).toEqual([])
+  })
+
+  test("reconcile does not bump active settings when active account is already correct", () => {
+    const updatedAt = new Date("2026-06-01T00:00:00.000Z")
+    seedAccount(db, {
+      id: "account-1",
+      token: "canonical-token",
+      connectedAt: new Date("2026-06-01T00:00:00.000Z"),
+    })
+    db.insert(anthropicSettings)
+      .values({ id: "singleton", activeAccountId: "account-1", updatedAt })
+      .run()
+
+    const result = reconcileClaudeCodeCredentialStorage(credentialDb())
+
+    expect(result.activeAccountId).toBe("account-1")
+    expect(
+      db
+        .select()
+        .from(anthropicSettings)
+        .where(eq(anthropicSettings.id, "singleton"))
+        .get()?.updatedAt,
+    ).toEqual(updatedAt)
+  })
+
   test("credential metadata migrates a legacy-only credential before reporting connection", () => {
     db.insert(claudeCodeCredentials)
       .values({
@@ -289,5 +314,21 @@ describe("Claude Code account deletion storage reconciliation", () => {
     expect(metadata.accountId).toBe("account-1")
     expect(metadata.displayName).toBe("account-1")
     expect(db.select().from(claudeCodeCredentials).all()).toEqual([])
+  })
+
+  test("credential metadata distinguishes expired from expiring soon", () => {
+    seedAccount(db, {
+      id: "account-1",
+      token: encryptedCredential("soon-expiring-token", Date.now() + 120_000),
+      connectedAt: new Date("2026-06-01T00:00:00.000Z"),
+    })
+    db.insert(anthropicSettings)
+      .values({ id: "singleton", activeAccountId: "account-1" })
+      .run()
+
+    const metadata = getClaudeCodeCredentialMetadata(credentialDb())
+
+    expect(metadata.isExpired).toBe(false)
+    expect(metadata.isExpiringSoon).toBe(true)
   })
 })

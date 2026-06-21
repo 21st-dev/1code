@@ -122,7 +122,7 @@ export const en = {
   "onboarding.claude.failedToImportLocalCredentials":
     "Failed to import local Claude Code credentials",
   "onboarding.claude.localCredentialsInvalid":
-    "The local Claude Code credentials on this machine are expired or revoked. Sign in again with Claude Code instead of importing local credentials.",
+    "Claude Code credentials are expired or revoked. Sign in again with Claude Code.",
   "onboarding.claude.pasteCode": "Paste your authentication code here...",
   "onboarding.claude.submitCode": "Submit code",
   "onboarding.claude.submittingCode":
@@ -3533,7 +3533,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.claude.failedToImportLocalCredentials":
     "导入本地 Claude Code 凭证失败",
   "onboarding.claude.localCredentialsInvalid":
-    "这台设备上的 Claude Code 本机凭据已失效或被撤销。请不要导入本机凭据，改为重新网页登录 Claude Code。",
+    "Claude Code 凭据已失效或被撤销。请重新网页登录 Claude Code。",
   "onboarding.claude.pasteCode": "在这里粘贴授权码...",
   "onboarding.claude.submitCode": "提交授权码",
   "onboarding.claude.submittingCode":
