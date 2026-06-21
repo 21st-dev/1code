@@ -189,6 +189,14 @@
   `bun test tests/codex-app-server-plugin-home.test.ts
   tests/runtime-capability-projection.test.ts
   tests/skill-registry-managed-state.test.ts`.
-- [ ] 6.6 Run real or equivalent smoke proving a registry-managed Codex skill
+- [x] 6.6 Run real or equivalent smoke proving a registry-managed Codex skill
   appears in the isolated managed run home.
+- 2026-06-22 completed with equivalent isolated-home smoke:
+  `bun test tests/codex-app-server-plugin-home.test.ts
+  tests/runtime-capability-projection.test.ts
+  tests/skill-registry-managed-state.test.ts
+  tests/skill-registry-packaging.test.ts`. The Codex app-server home test
+  creates temporary managed skill state, prepares an isolated `CODEX_HOME`, and
+  proves `CODEX_HOME/skills/find-skills` is a symlink to the registry-managed
+  skill while unmanaged global skills are excluded.
 - [ ] 6.7 Run `bun run check`.
