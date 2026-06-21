@@ -100,7 +100,11 @@
 - 2026-06-22 completed: Codex skill projection clears the isolated
   `CODEX_HOME/skills` target and repopulates it only from managed skill records;
   it does not copy or scan unmanaged global Codex skill directories.
-- [ ] 3.4 Preserve local modified/update/rollback behavior.
+- [x] 3.4 Preserve local modified/update/rollback behavior.
+- 2026-06-22 completed: focused managed-state tests prove registry-managed
+  Codex skills still report `update-available` from older managed metadata,
+  `modified` after local file edits, and rollback restores a previous user-owned
+  skill while removing the managed install record.
 - [ ] 3.5 Keep Claude skill discovery behavior unchanged in Phase 1 except for
   install/availability wording and shared owner alignment.
 
@@ -144,7 +148,11 @@
   `CODEX_HOME/skills` and a stale isolated skill being removed.
 - [ ] 6.3 Add tests for availability state serialization and renderer-safe
   diagnostics.
-- [ ] 6.4 Run focused Skills registry tests.
+- [x] 6.4 Run focused Skills registry tests.
+- 2026-06-22 completed for managed install state:
+  `bun test tests/skill-registry-managed-state.test.ts
+  tests/codex-app-server-plugin-home.test.ts
+  tests/runtime-capability-projection.test.ts`.
 - [x] 6.5 Run focused Codex app-server home preparation tests.
 - 2026-06-22 completed for this slice:
   `bun test tests/codex-app-server-plugin-home.test.ts
