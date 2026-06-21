@@ -57,6 +57,21 @@ export type DesktopRunMcpReadiness = {
   }>
 }
 
+export type DesktopRunMcpSessionServer =
+  | {
+      name: string
+      type: "stdio"
+      command: string
+      args: string[]
+      env: Array<{ name: string; value: string }>
+    }
+  | {
+      name: string
+      type: "http"
+      url: string
+      headers: Array<{ name: string; value: string }>
+    }
+
 export type DesktopRunAttachmentRef = {
   kind: "image" | "long-text"
   attachmentId?: string
@@ -75,6 +90,7 @@ export type DesktopRunRequest = AgentRuntimeRunRequestBase<
   DesktopRunProviderBinding
 > & {
   mcp: DesktopRunMcpReadiness
+  mcpSessionServers?: DesktopRunMcpSessionServer[]
   attachments: DesktopRunAttachmentRef[]
   trace: DesktopTraceObserver
   session: {

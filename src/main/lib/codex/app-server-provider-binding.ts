@@ -26,7 +26,7 @@ export class CodexAppServerProviderBindingError extends Error {
 }
 
 const RENDERER_SECRET_KEY_PATTERN =
-  /(?:api[_-]?key|auth[_-]?config|authorization|bearer|client[_-]?secret|cookie|custom[_-]?env|env(?:ironment)?|env[_-]?vars|env[_-]?http[_-]?headers|gateway[_-]?token|headers?|http[_-]?headers|mcp[_-]?servers|oauth|password|process[_-]?env|provider[_-]?config|provider[_-]?token|refresh[_-]?token|secret|shell[_-]?env|token)/i
+  /(?:api[_-]?key|auth[_-]?config|authorization|bearer|client[_-]?secret|cookie|custom[_-]?env|env(?:ironment)?|env[_-]?vars|env[_-]?http[_-]?headers|gateway[_-]?token|headers?|http[_-]?headers|mcp[_-]?servers|mcp[_-]?session[_-]?servers|oauth|password|process[_-]?env|provider[_-]?config|provider[_-]?token|refresh[_-]?token|secret|shell[_-]?env|token)/i
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -35,10 +35,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function assertNoCodexAppServerRendererSecrets(
   value: unknown,
   path = "input",
+  options: {
+    trustedSubtreePaths?: string[]
+  } = {},
 ): void {
+  if (isTrustedCodexAppServerRendererSecretSubtree(path, options)) {
+    return
+  }
+
   if (Array.isArray(value)) {
     value.forEach((item, index) =>
-      assertNoCodexAppServerRendererSecrets(item, `${path}[${index}]`),
+      assertNoCodexAppServerRendererSecrets(
+        item,
+        `${path}[${index}]`,
+        options,
+      ),
     )
     return
   }
@@ -47,13 +58,32 @@ export function assertNoCodexAppServerRendererSecrets(
 
   for (const [key, child] of Object.entries(value)) {
     const childPath = `${path}.${key}`
+    if (
+      isTrustedCodexAppServerRendererSecretSubtree(childPath, options)
+    ) {
+      continue
+    }
     if (RENDERER_SECRET_KEY_PATTERN.test(key)) {
       throw new CodexAppServerProviderBindingError(
         `Secret-bearing Codex app-server renderer input is not allowed: ${childPath}.`,
       )
     }
-    assertNoCodexAppServerRendererSecrets(child, childPath)
+    assertNoCodexAppServerRendererSecrets(child, childPath, options)
   }
+}
+
+function isTrustedCodexAppServerRendererSecretSubtree(
+  path: string,
+  options: { trustedSubtreePaths?: string[] },
+): boolean {
+  return (
+    options.trustedSubtreePaths?.some(
+      (trustedPath) =>
+        path === trustedPath ||
+        path.startsWith(`${trustedPath}.`) ||
+        path.startsWith(`${trustedPath}[`),
+    ) ?? false
+  )
 }
 
 export function buildCodexAppServerProviderBinding({

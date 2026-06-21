@@ -6,15 +6,40 @@ Updated: 2026-06-22
 
 ## Status
 
-Task 1.2 is not complete yet. This pass records the current Locus-managed Codex
-app-server observability surface and adds one narrow code change so tool-list
-metadata returned by the app-server is not discarded.
+Task 1.2 remains unchecked. This pass records the current Locus-managed Codex
+app-server observability surface and the 2026-06-22 real smoke result after the
+isolated `CODEX_HOME` MCP materialization fix.
 
 Do not mark `Verified on Codex` design work complete from this note alone.
 
-2026-06-22 re-audit: still blocked. Current code proves app-server MCP
-readiness/tool-name observability, but it does not expose a durable MCP tool
-input/output success pair that can be tied to a registry config fingerprint.
+2026-06-22 real smoke proves app-server MCP readiness/tool-list observability and
+one `locus_edit.propose_file_edit` tool-call request from a Locus-managed Codex
+run. It still does not expose a durable post-execution MCP tool output success
+pair that can be tied to a registry config fingerprint.
+
+## Real App-Server Smoke
+
+Command class: Electron desktop smoke with isolated app user-data and inherited
+Codex auth. No provider token or authorization header is recorded here.
+
+Evidence path:
+
+```text
+.tmp-app-server-smoke/evidence/locus-codex-app-server-mcp-tool-proof/locus-edit-adoption.json
+```
+
+Result summary:
+
+- Scenario: `locus-edit-adoption`
+- Model: `gpt-5.5`
+- `mcpServerStatus/list` returned `serverNames:["codex_apps","locus_edit"]`
+  and `readyServerCount:2`.
+- `toolNamesByServer.locus_edit` returned `["propose_file_edit"]`.
+- The model issued one `locus_edit.propose_file_edit` request with operation
+  `create`.
+- Locus surfaced one approval prompt headed `locus_edit`.
+- The canary file was not written because this smoke only proves approval-gated
+  MCP tool-call request observability, not automatic execution.
 
 ## Signals Already Available
 
@@ -100,6 +125,8 @@ shape equivalent to Claude's `tool-input-available` plus
   `mcpServerStatus/list`, summarized as ready counts and server names.
 - Tool list: candidate signal exists from `mcpServerStatus/list` with
   `toolsAndAuthOnly`, now preserved as `toolNamesByServer`.
+- Tool call request: proven for `locus_edit.propose_file_edit` in the real
+  app-server smoke.
 - Tool call success: not proven. Current app-server stream mapper does not expose
   an app-server notification that unambiguously maps an MCP tool call and its
   successful output to a server/config fingerprint.
@@ -108,10 +135,8 @@ shape equivalent to Claude's `tool-input-available` plus
 
 ## Missing Before Task 1.2 Can Be Checked
 
-- A real Locus-managed Codex app-server run with a known harmless MCP server.
-- Evidence that `mcpServerStatus/list` returns the expected server and tools in
-  the real transport.
-- Evidence that a user-initiated run can call a harmless MCP tool.
+- A registry-backed real Locus-managed Codex app-server run with a known
+  harmless MCP server.
 - A real app-server event or mapped chunk proving the MCP tool call succeeded.
 - A mapping from observed server/tool names back to the registry entry
   fingerprint and config fingerprint.

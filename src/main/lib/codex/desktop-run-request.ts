@@ -1,9 +1,10 @@
 import type { AgentJobMode } from "../../../shared/agent-jobs"
 import {
   createDesktopRunContextFromPreflight,
-  getDesktopRunRequestedCapabilities,
+  type DesktopRunMcpSessionServer,
   type DesktopRunProviderBinding,
   type DesktopRunRequest,
+  getDesktopRunRequestedCapabilities,
 } from "../agent-runtime/desktop-run-request"
 import type { DesktopPermissionPolicy } from "../agent-runtime/permission-policy"
 import type { DesktopRunPreflightResult } from "../agent-runtime/preflight"
@@ -24,9 +25,7 @@ export type CodexDesktopRunLongTextAttachment = {
   byteLength?: number
 }
 
-export type CodexDesktopRunMcpServer = {
-  name: string
-}
+export type CodexDesktopRunMcpServer = DesktopRunMcpSessionServer
 
 export type CreateCodexDesktopRunRequestInput = {
   runId: string
@@ -66,11 +65,7 @@ export function createCodexDesktopRunRequest({
       runId,
       jobId,
     },
-    context: createDesktopRunContextFromPreflight(
-      "codex",
-      mode,
-      preflight,
-    ),
+    context: createDesktopRunContextFromPreflight("codex", mode, preflight),
     prompt,
     requestedCapabilities: getDesktopRunRequestedCapabilities(permissionPolicy),
     permissionPolicy,
@@ -87,6 +82,7 @@ export function createCodexDesktopRunRequest({
       serverNames: mcpServers.map((server) => server.name),
       blockers: [],
     },
+    mcpSessionServers: mcpServers,
     attachments: [
       ...(images ?? []).map((image) => ({
         kind: "image" as const,

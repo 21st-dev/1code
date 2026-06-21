@@ -46,7 +46,15 @@ describe("runtime run contract", () => {
         providerProfileId: "profile-1",
         authMode: "provider-profile",
       },
-      mcpServers: [{ name: "filesystem" }],
+      mcpServers: [
+        {
+          name: "filesystem",
+          type: "stdio",
+          command: "node",
+          args: ["server.js"],
+          env: [],
+        },
+      ],
       signal: new AbortController().signal,
       emitTrace: (event) => emitted.push(event),
     })
@@ -77,6 +85,15 @@ describe("runtime run contract", () => {
       status: "ready",
       serverNames: ["filesystem"],
     })
+    expect(request.mcpSessionServers).toEqual([
+      {
+        name: "filesystem",
+        type: "stdio",
+        command: "node",
+        args: ["server.js"],
+        env: [],
+      },
+    ])
     expect(request.providerBinding).not.toHaveProperty("apiKey")
     expect(request.providerBinding).not.toHaveProperty("headers")
     expect(emitted).toEqual([{ type: "status" }])

@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import path from "node:path"
+import type { DesktopRunMcpSessionServer } from "../agent-runtime/desktop-run-request"
 import { getElectronUserDataPath } from "../electron-app"
 import type {
   CodexAppServerResolvedPluginConfigEntry,
@@ -97,6 +98,7 @@ export async function prepareCodexAppServerIsolatedPluginHome(input: {
   subChatId?: string | null
   runtimeEnv: EnvSource
   pluginConfig: CodexAppServerResolvedPluginConfigOverrides
+  mcpServers?: DesktopRunMcpSessionServer[]
   dependencies?: Partial<CodexAppServerPluginHomeDependencies>
 }): Promise<CodexAppServerPluginHomeResult> {
   const dependencies = withDefaultDependencies(input.dependencies)
@@ -177,7 +179,10 @@ export async function prepareCodexAppServerIsolatedPluginHome(input: {
 
   await dependencies.fs.writeFile(
     path.join(codexHome, "config.toml"),
-    buildCodexAppServerPluginConfigToml(config),
+    buildCodexAppServerConfigToml({
+      pluginConfig: config,
+      mcpServers: input.mcpServers ?? [],
+    }),
     "utf-8",
   )
 
@@ -199,8 +204,66 @@ export async function prepareCodexAppServerIsolatedPluginHome(input: {
 export function buildCodexAppServerPluginConfigToml(
   config: Record<string, boolean>,
 ): string {
+  return buildCodexAppServerConfigToml({
+    pluginConfig: config,
+    mcpServers: [],
+  })
+}
+
+export function buildCodexAppServerConfigToml(input: {
+  pluginConfig: Record<string, boolean>
+  mcpServers: DesktopRunMcpSessionServer[]
+}): string {
   const lines = ["# Managed by Locus. This file is rebuilt before each run.", ""]
-  const entries = Object.entries(config)
+  const mcpServers = [...input.mcpServers].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )
+
+  for (const server of mcpServers) {
+    lines.push(`[mcp_servers."${escapeTomlBasicString(server.name)}"]`)
+    if (server.type === "stdio") {
+      lines.push(`command = "${escapeTomlBasicString(server.command)}"`)
+      lines.push(
+        `args = [${server.args
+          .map((arg) => `"${escapeTomlBasicString(arg)}"`)
+          .join(", ")}]`,
+      )
+      lines.push("")
+      if (server.env.length > 0) {
+        lines.push(
+          `[mcp_servers."${escapeTomlBasicString(server.name)}".env]`,
+        )
+        for (const entry of [...server.env].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        )) {
+          lines.push(
+            `"${escapeTomlBasicString(entry.name)}" = "${escapeTomlBasicString(
+              entry.value,
+            )}"`,
+          )
+        }
+        lines.push("")
+      }
+      continue
+    }
+
+    lines.push(`url = "${escapeTomlBasicString(server.url)}"`)
+    if (server.headers.length > 0) {
+      const headers = [...server.headers]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(
+          (entry) =>
+            `"${escapeTomlBasicString(entry.name)}" = "${escapeTomlBasicString(
+              entry.value,
+            )}"`,
+        )
+        .join(", ")
+      lines.push(`http_headers = { ${headers} }`)
+    }
+    lines.push("")
+  }
+
+  const entries = Object.entries(input.pluginConfig)
     .map(([key, enabled]) => {
       const match = /^plugins\.(.+)\.enabled$/.exec(key)
       return match ? { pluginId: match[1], enabled } : null

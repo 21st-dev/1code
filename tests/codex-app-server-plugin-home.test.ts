@@ -110,7 +110,15 @@ describe("Codex app-server isolated plugin home", () => {
     )
     await writeFile(
       join(sourceCodexHome, "config.toml"),
-      '[plugins."global@openai-curated"]\nenabled = true\n',
+      [
+        '[plugins."global@openai-curated"]',
+        "enabled = true",
+        "",
+        '[mcp_servers."global_mcp"]',
+        'command = "node"',
+        'args = ["global.js"]',
+        "",
+      ].join("\n"),
       "utf-8",
     )
 
@@ -153,6 +161,27 @@ describe("Codex app-server isolated plugin home", () => {
           }),
         ],
       },
+      mcpServers: [
+        {
+          name: "locus_edit",
+          type: "stdio",
+          command: "/usr/bin/node",
+          args: ["server.js", "--flag"],
+          env: [
+            { name: "B_TOKEN", value: "two" },
+            { name: "A_TOKEN", value: "one" },
+          ],
+        },
+        {
+          name: "remote_http",
+          type: "http",
+          url: "https://api.example.com/mcp",
+          headers: [
+            { name: "X-Trace", value: "trace" },
+            { name: "Authorization", value: "Bearer secret" },
+          ],
+        },
+      ],
       dependencies: {
         userDataDir: () => userDataDir,
         logger: { warn: () => {} },
@@ -192,9 +221,22 @@ describe("Codex app-server isolated plugin home", () => {
       join(result.codexHome, "config.toml"),
       "utf-8",
     )
+    expect(configToml).toContain('[mcp_servers."locus_edit"]')
+    expect(configToml).toContain('command = "/usr/bin/node"')
+    expect(configToml).toContain('args = ["server.js", "--flag"]')
+    expect(configToml).toContain('[mcp_servers."locus_edit".env]')
+    expect(configToml.indexOf('"A_TOKEN"')).toBeLessThan(
+      configToml.indexOf('"B_TOKEN"'),
+    )
+    expect(configToml).toContain('[mcp_servers."remote_http"]')
+    expect(configToml).toContain('url = "https://api.example.com/mcp"')
+    expect(configToml).toContain(
+      'http_headers = { "Authorization" = "Bearer secret", "X-Trace" = "trace" }',
+    )
     expect(configToml).toContain('[plugins."figma@openai-curated"]')
     expect(configToml).toContain('[plugins."github@openai-curated"]')
     expect(configToml).not.toContain("global@openai-curated")
+    expect(configToml).not.toContain("global_mcp")
   })
 
   test("fails closed when an enabled plugin has no safe cache coordinates", async () => {

@@ -56,6 +56,14 @@
   provides readiness/tool-name evidence, while `item/tool/call` is handled as a
   pre-execution approval request and is not post-execution MCP tool-output
   evidence.
+- 2026-06-22 real Locus-managed Codex app-server smoke after the isolated
+  `CODEX_HOME` materialization fix recorded partial proof:
+  `mcpServerStatus/list` returned `codex_apps` and `locus_edit`,
+  `toolNamesByServer.locus_edit` contained `propose_file_edit`, and the model
+  issued one `locus_edit.propose_file_edit` tool-call request. This remains
+  unchecked because the app-server evidence is still approval-request evidence,
+  not a post-execution successful MCP tool-output signal keyed to a registry
+  fingerprint.
 - [x] 1.3 Define verified-state behavior from the probe results. If a runtime lacks a
   required signal, automatic `Verified` upgrades from passive run observation are
   disabled or narrowed for that runtime.
@@ -273,6 +281,10 @@
 - [ ] 4.4 Observe real Locus-managed Codex app-server runs and upgrade to
   `Verified on Codex` only after Codex field-materialization and observability proof
   gates pass and a tool call succeeds.
+- 2026-06-22 partial Codex app-server runtime proof exists for materialized
+  `locus_edit` readiness/tool-list/tool-call-request observability, but no
+  `verified-local` record was written and no successful post-execution MCP tool
+  output signal was observed. `Verified on Codex` remains deferred.
 - [x] 4.5 Add an explicit Check action that is connect/list-only by default.
 - 2026-06-20 added explicit `mcpRegistry.checkInstalled` plus an MCP tab Check
   button for registry-managed Claude servers. The default path materializes the
@@ -356,6 +368,11 @@
   Codex preview/installability reports `codex-deferred` with deferred reasons,
   Codex registry install/check reject with deferred errors, and the MCP tab UI
   only offers registry install/check for Claude.
+- 2026-06-22 follow-up Codex app-server smoke confirms the deferred boundary is
+  still honest: Locus-managed app-server can now see materialized MCP readiness
+  and a `locus_edit` tool-call request, but Codex registry install/check/Verified
+  are still not offered because full registry writes and post-execution tool
+  output verification remain unavailable.
 - [x] 5.8 `bun run ts:check`.
 - 2026-06-20 passed: `tsc --noEmit`.
 - [x] 5.9 `bun run lint`.

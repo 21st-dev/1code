@@ -1,69 +1,70 @@
+import type { ResolvedChatImageAttachment } from "../../../shared/chat-attachments"
+import type { ValidatedAgentScopeContract } from "../agent-guard"
 import { CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA } from "../agent-runtime/desktop-adapter-metadata"
 import type {
+  DesktopRunMcpSessionServer,
   DesktopRunRequest,
   DesktopRunResult,
 } from "../agent-runtime/desktop-run-request"
 import { emitDesktopRuntimeAdapterStarted } from "../agent-runtime/desktop-runner"
 import {
-  getCodexAppServerPermissionMapping,
   type CodexAppServerPermissionMapping,
+  getCodexAppServerPermissionMapping,
 } from "../agent-runtime/permission-policy"
 import { mapDesktopStreamChunkToRunEvents } from "../agent-runtime/stream-event-mapper"
-import type { ResolvedChatImageAttachment } from "../../../shared/chat-attachments"
-import type { ValidatedAgentScopeContract } from "../agent-guard"
 import type { CodexDesktopAdapter } from "./adapter-types"
 import {
-  createCodexAppServerApprovalBridge,
   type CodexAppServerApplyPatchApprovalParams,
   type CodexAppServerCommandExecutionRequestApprovalParams,
   type CodexAppServerExecCommandApprovalParams,
   type CodexAppServerFileChangeRequestApprovalParams,
   type CodexAppServerPermissionsRequestApprovalParams,
+  createCodexAppServerApprovalBridge,
 } from "./app-server-approval"
-import {
-  buildCodexControlledEditDynamicToolSpec,
-  codexControlledEditDeveloperInstructions,
-  type CodexAppServerDynamicToolCallParams,
-  type CodexAppServerDynamicToolSpec,
-} from "./app-server-controlled-edit"
 import {
   buildCodexAppServerUserInputItems,
   prepareCodexAppServerPromptWithLongText,
 } from "./app-server-attachments"
 import {
+  buildCodexControlledEditDynamicToolSpec,
+  type CodexAppServerDynamicToolCallParams,
+  type CodexAppServerDynamicToolSpec,
+  codexControlledEditDeveloperInstructions,
+} from "./app-server-controlled-edit"
+import type { CodexAppServerResolvedPluginConfigOverrides } from "./app-server-plugin-config"
+import {
+  type CodexAppServerPluginHomeResult,
+  prepareCodexAppServerIsolatedPluginHome,
+} from "./app-server-plugin-home"
+import {
+  assertNoCodexAppServerRendererSecrets,
   buildCodexAppServerProviderBinding,
   type CodexAppServerProviderBinding,
 } from "./app-server-provider-binding"
-import { assertNoCodexAppServerRendererSecrets } from "./app-server-provider-binding"
 import {
-  prepareCodexAppServerIsolatedPluginHome,
-  type CodexAppServerPluginHomeResult,
-} from "./app-server-plugin-home"
-import type { CodexAppServerResolvedPluginConfigOverrides } from "./app-server-plugin-config"
-import {
-  dispatchCodexAppServerServerRequest,
   type CodexAppServerServerRequest,
+  dispatchCodexAppServerServerRequest,
 } from "./app-server-safety"
-import {
-  createCodexAppServerRuntimeEventMapper,
-  type CodexAppServerNotification,
-} from "./app-server-stream-events"
 import {
   assertCodexAppServerShellSnapshotsScrubbed,
   scrubCodexAppServerShellSnapshots,
 } from "./app-server-shell-snapshots"
 import {
-  createCodexAppServerUserInteractionBridge,
+  type CodexAppServerNotification,
+  createCodexAppServerRuntimeEventMapper,
+} from "./app-server-stream-events"
+import {
+  type CodexAppServerTransport,
+  type CodexAppServerTransportServerRequest,
+  createCodexAppServerStdioTransport,
+} from "./app-server-transport"
+import {
   buildCodexAppServerMcpElicitationResponse,
   buildCodexAppServerUserInputResponse,
   type CodexAppServerMcpElicitationRequestParams,
   type CodexAppServerToolRequestUserInputParams,
+  createCodexAppServerUserInteractionBridge,
 } from "./app-server-user-interaction"
-import {
-  createCodexAppServerStdioTransport,
-  type CodexAppServerTransport,
-  type CodexAppServerTransportServerRequest,
-} from "./app-server-transport"
 import type { CodexAskUserQuestionPending } from "./ask-user-question"
 
 export type CreateCodexAppServerAdapterInput = {
@@ -76,6 +77,7 @@ export type CreateCodexAppServerAdapterInput = {
     request: DesktopRunRequest
     runtimeEnv: Record<string, string>
     pluginConfig: CodexAppServerResolvedPluginConfigOverrides
+    mcpServers: DesktopRunMcpSessionServer[]
   }) => Promise<CodexAppServerPluginHomeResult>
   createTransport?: (input: {
     request: DesktopRunRequest
@@ -343,7 +345,9 @@ export function createCodexAppServerAdapter({
         throw new CodexAppServerAdapterDisabledError()
       }
 
-      assertNoCodexAppServerRendererSecrets(request, "request")
+      assertNoCodexAppServerRendererSecrets(request, "request", {
+        trustedSubtreePaths: ["request.mcpSessionServers"],
+      })
       const permission = assertCodexAppServerPermissionPolicyReady(request)
 
       const providerBinding = buildCodexAppServerProviderBinding({
@@ -362,6 +366,7 @@ export function createCodexAppServerAdapter({
             request,
             runtimeEnv: providerBinding.runtimeEnv,
             pluginConfig: resolvedPluginConfig,
+            mcpServers: request.mcpSessionServers ?? [],
           })
         : createTransport
           ? Promise.resolve({
@@ -371,12 +376,13 @@ export function createCodexAppServerAdapter({
               stagedEntries: [],
               blockedEntries: [],
             } satisfies CodexAppServerPluginHomeResult)
-        : prepareCodexAppServerIsolatedPluginHome({
-            chatId: request.context.chatId,
-            subChatId: request.context.subChatId,
-            runtimeEnv: providerBinding.runtimeEnv,
-            pluginConfig: resolvedPluginConfig,
-          }))
+          : prepareCodexAppServerIsolatedPluginHome({
+              chatId: request.context.chatId,
+              subChatId: request.context.subChatId,
+              runtimeEnv: providerBinding.runtimeEnv,
+              pluginConfig: resolvedPluginConfig,
+              mcpServers: request.mcpSessionServers ?? [],
+            }))
       const appServerProviderBinding: CodexAppServerProviderBinding = {
         ...providerBinding,
         runtimeEnv: pluginHome.runtimeEnv,

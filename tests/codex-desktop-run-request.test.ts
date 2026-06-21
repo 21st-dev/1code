@@ -32,7 +32,15 @@ describe("Codex desktop run request", () => {
         gatewayEndpoint: "http://127.0.0.1:1234/v1",
         authMode: "provider-profile",
       },
-      mcpServers: [{ name: "filesystem" }],
+      mcpServers: [
+        {
+          name: "filesystem",
+          type: "stdio",
+          command: "node",
+          args: ["server.js"],
+          env: [{ name: "TOKEN", value: "secret" }],
+        },
+      ],
       images: [
         {
           attachmentId: "image-1",
@@ -88,6 +96,15 @@ describe("Codex desktop run request", () => {
       serverNames: ["filesystem"],
       blockers: [],
     })
+    expect(request.mcpSessionServers).toEqual([
+      {
+        name: "filesystem",
+        type: "stdio",
+        command: "node",
+        args: ["server.js"],
+        env: [{ name: "TOKEN", value: "secret" }],
+      },
+    ])
     expect(request.attachments).toEqual([
       {
         kind: "image",

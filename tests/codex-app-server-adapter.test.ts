@@ -894,7 +894,19 @@ describe("Codex app-server adapter", () => {
         )
         return transport
       },
-    }).run(createRequest(appServerPolicy()))
+    }).run(
+      createRequest(appServerPolicy(), {
+        mcpSessionServers: [
+          {
+            name: "locus_edit",
+            type: "stdio",
+            command: "/usr/bin/node",
+            args: ["server.js"],
+            env: [{ name: "TOKEN", value: "secret" }],
+          },
+        ],
+      }),
+    )
 
     expect(prepareCalls).toHaveLength(1)
     expect(prepareCalls[0]).toMatchObject({
@@ -903,6 +915,15 @@ describe("Codex app-server adapter", () => {
           "plugins.figma@openai-curated.enabled": true,
         },
       },
+      mcpServers: [
+        {
+          name: "locus_edit",
+          type: "stdio",
+          command: "/usr/bin/node",
+          args: ["server.js"],
+          env: [{ name: "TOKEN", value: "secret" }],
+        },
+      ],
     })
     const threadStart = transport.requests.find(
       (request) => request.method === "thread/start",

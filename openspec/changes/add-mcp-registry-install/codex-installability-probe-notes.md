@@ -27,6 +27,12 @@ existing Codex MCP config into app-server runs:
 - `enabled: false` entries are excluded from the app-server session.
 - project-scoped lookup through the Codex CLI `cwd` for desktop runs.
 
+2026-06-22 real Locus-managed Codex app-server smoke added runtime evidence for
+the materialization path. The isolated app-server `CODEX_HOME/config.toml`
+received the materialized `locus_edit` stdio server, `mcpServerStatus/list`
+returned `locus_edit`, and `toolNamesByServer.locus_edit` contained
+`propose_file_edit`.
+
 The current write path is narrower. `addCodexMcpServer` calls
 `codex mcp add` and supports only global basic stdio `command`/`args` or HTTP
 `url`. It does not write or stage registry-required fields such as env var
@@ -44,6 +50,11 @@ until both of these are true:
   tool-call signals for a Locus-managed run.
 
 Claude remains the first shippable registry install target.
+
+2026-06-22 update: connection and tool-list signals now have real app-server
+evidence, and one approval-gated MCP tool-call request was observed. The
+successful post-execution tool-output signal is still missing, so the decision
+does not change.
 
 ## Evidence
 

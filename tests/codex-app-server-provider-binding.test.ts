@@ -158,6 +158,7 @@ describe("Codex app-server provider binding", () => {
       { http_headers: { Authorization: "Bearer raw" } },
       { providerConfig: { baseUrl: "https://provider.example.com" } },
       { mcpServers: { docs: { env: { TOKEN: "raw" } } } },
+      { mcpSessionServers: [{ name: "docs", url: "https://example.com/mcp" }] },
     ]
 
     for (const input of forbiddenInputs) {
@@ -179,6 +180,24 @@ describe("Codex app-server provider binding", () => {
           blockers: [],
         },
       }),
+    ).not.toThrow()
+
+    expect(() =>
+      assertNoCodexAppServerRendererSecrets(
+        {
+          providerProfileId: "profile-1",
+          mcpSessionServers: [
+            {
+              name: "docs",
+              type: "http",
+              url: "https://example.com/mcp",
+              headers: [{ name: "Authorization", value: "Bearer selected" }],
+            },
+          ],
+        },
+        "request",
+        { trustedSubtreePaths: ["request.mcpSessionServers"] },
+      ),
     ).not.toThrow()
   })
 })

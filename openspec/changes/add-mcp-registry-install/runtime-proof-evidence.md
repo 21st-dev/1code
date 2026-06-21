@@ -62,7 +62,25 @@ Evidence required:
 
 Current status:
 - Code-level pre-probe is recorded in `codex-observability-probe-notes.md`.
-- Codex registry support is deferred until tool-call observability is proven.
+- 2026-06-22 real Locus-managed Codex app-server smoke recorded partial proof
+  after the isolated `CODEX_HOME` MCP materialization fix:
+  - evidence path:
+    `.tmp-app-server-smoke/evidence/locus-codex-app-server-mcp-tool-proof/locus-edit-adoption.json`
+  - isolated app userData:
+    `/private/tmp/locus-codex-app-server-mcp-tool-userdata`
+  - smoke scenario: `locus-edit-adoption`
+  - model: `gpt-5.5`
+  - app-server runtime status recorded `serverNames:["codex_apps","locus_edit"]`
+    and `readyServerCount:2`.
+  - `toolNamesByServer.locus_edit` contained `propose_file_edit`.
+  - the run issued one `locus_edit.propose_file_edit` request with a create
+    operation and surfaced a `locus_edit` approval prompt.
+  - the canary file did not exist after the run because this signal is
+    approval-request evidence, not automatic post-execution tool-output
+    evidence.
+- Codex registry support remains deferred until a post-execution successful MCP
+  tool-output signal is available and can be tied to registry entry/config
+  fingerprints.
 
 ## Scenario: verified-state-policy
 
@@ -169,7 +187,11 @@ Evidence required:
   runtime, server name, entry fingerprint, and config fingerprint.
 
 Current status:
-- Codex registry install/check remains deferred for this change.
+- 2026-06-22 Codex app-server materialization/readiness/tool-call-request proof
+  exists for `locus_edit`, but no local `verified-local` record was written and
+  no successful post-execution MCP tool output was observed.
+- Codex registry install/check and `Verified on Codex` remain deferred for this
+  change.
 
 ## Scenario: claude-registry-real-run
 
