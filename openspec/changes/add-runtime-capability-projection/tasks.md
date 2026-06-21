@@ -62,9 +62,20 @@
 
 ## 2. Projection Service
 
-- [ ] 2.1 Create the Runtime Capability Projection service owner.
-- [ ] 2.2 Define shared projection result types and non-secret diagnostics.
-- [ ] 2.3 Add a Skill projection adapter contract.
+- [x] 2.1 Create the Runtime Capability Projection service owner.
+- 2026-06-22 completed: added
+  `src/main/lib/runtime-capability-projection/` with an explicit service owner
+  and adapter registry; unregistered kinds return no projection records instead
+  of placeholder adapters.
+- [x] 2.2 Define shared projection result types and non-secret diagnostics.
+- 2026-06-22 completed: added shared projection states, records, source
+  metadata, registered/missing-adapter result types, and validation that rejects
+  secret-like diagnostic text before records can be exposed to renderer
+  surfaces.
+- [x] 2.3 Add a Skill projection adapter contract.
+- 2026-06-22 completed: added the first concrete adapter contract for
+  registry-managed Skill projection requests and records without registering
+  MCP or Plugin placeholder adapters.
 - [ ] 2.4 Ensure route/UI code calls the service instead of deriving projection
   state directly.
 
