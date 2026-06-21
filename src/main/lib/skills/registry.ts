@@ -4,8 +4,13 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import * as electron from "electron"
+import type { AgentRuntimeId } from "../../../shared/agent-runtime-capabilities"
 import { getElectronUserDataPath } from "../electron-app"
 import { assertOfficialCloudAllowed } from "../local-only"
+import {
+  buildSkillProjectionAvailabilityRecord,
+  type SkillProjectionRecord,
+} from "../runtime-capability-projection/skill"
 
 const SKILL_ID_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 const STATE_VERSION = 1
@@ -143,6 +148,7 @@ export interface RegistrySkillView {
   lastBackupPath?: string
   hasRollback: boolean
   statusMessage?: string
+  projection: SkillProjectionRecord
 }
 
 export interface RegistryCollectionView {
@@ -399,6 +405,23 @@ function getManifestRuntimes(
       (value): value is SkillRuntime => value === "claude" || value === "codex",
     ) ?? []
   return Array.from(new Set([...manifestRuntimes, runtime])).sort()
+}
+
+function getManifestEligibleRuntimes(
+  skill: Pick<RegistrySkillManifestEntry, "compatibility">,
+): SkillRuntime[] {
+  const manifestRuntimes =
+    skill.compatibility?.runtimes?.filter(
+      (value): value is SkillRuntime => value === "claude" || value === "codex",
+    ) ?? []
+  const defaultRuntimes: SkillRuntime[] = ["claude", "codex"]
+  return Array.from(
+    new Set(manifestRuntimes.length > 0 ? manifestRuntimes : defaultRuntimes),
+  ).sort()
+}
+
+function skillRuntimeToAgentRuntimeId(runtime: SkillRuntime): AgentRuntimeId {
+  return runtime === "claude" ? "claude-code" : "codex"
 }
 
 function managedRecordToInstalledSkillState(
@@ -773,6 +796,19 @@ async function readSkillStatus(
       statusMessage = "A user-created skill already exists with this id."
     }
   }
+  const projection = buildSkillProjectionAvailabilityRecord({
+    skillId: skill.id,
+    registryId: skill.registryId,
+    version: skill.version,
+    contentHash: currentHash ?? installed?.contentHash ?? skill.sha256,
+    runtimeId: skillRuntimeToAgentRuntimeId(runtime),
+    eligibleRuntimes: getManifestEligibleRuntimes(skill).map(
+      skillRuntimeToAgentRuntimeId,
+    ),
+    installStatus: status,
+    hasRuntimeInstallRecord: !!installed,
+    statusMessage,
+  })
 
   return {
     id: skill.id,
@@ -795,6 +831,7 @@ async function readSkillStatus(
       !!installed?.lastBackup?.path &&
       fssync.existsSync(installed.lastBackup.path),
     statusMessage,
+    projection,
   }
 }
 

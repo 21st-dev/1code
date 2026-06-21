@@ -1,23 +1,27 @@
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import * as fs from "fs/promises"
-import * as path from "path"
-import * as os from "os"
-import { getPluginComponentPaths } from "../../plugins"
-import { discoverAllowedClaudePluginRuntimeComponents } from "../../plugins/runtime-gates"
 import { isDirentDirectory } from "../../fs/dirent"
 import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
-import { getEnabledPlugins } from "./claude-settings"
+import { getPluginComponentPaths } from "../../plugins"
+import { discoverAllowedClaudePluginRuntimeComponents } from "../../plugins/runtime-gates"
+import type { SkillProjectionRecord } from "../../runtime-capability-projection"
 import {
   installRegistrySkill,
   listRegistryCollections,
   listRegistrySkills,
-  rollbackRegistrySkill,
   type RegistrySkillStatus,
+  rollbackRegistrySkill,
   type SkillRuntime,
 } from "../../skills/registry"
+import { publicProcedure, router } from "../index"
+import { getEnabledPlugins } from "./claude-settings"
 
-const skillRuntimeSchema = z.enum(["claude", "codex"]) satisfies z.ZodType<SkillRuntime>
+const skillRuntimeSchema = z.enum([
+  "claude",
+  "codex",
+]) satisfies z.ZodType<SkillRuntime>
 
 export interface FileSkill {
   name: string
@@ -34,18 +38,24 @@ export interface FileSkill {
     installedVersion?: string
     registryId: string
     hasRollback: boolean
+    projection: SkillProjectionRecord
   }
 }
 
 /**
  * Parse SKILL.md frontmatter to extract name and description
  */
-function parseSkillMd(rawContent: string): { name?: string; description?: string; content: string } {
+function parseSkillMd(rawContent: string): {
+  name?: string
+  description?: string
+  content: string
+} {
   try {
     const { data, content } = parseMarkdownFrontmatter(rawContent)
     return {
       name: typeof data.name === "string" ? data.name : undefined,
-      description: typeof data.description === "string" ? data.description : undefined,
+      description:
+        typeof data.description === "string" ? data.description : undefined,
       content: content.trim(),
     }
   } catch (err) {
@@ -80,7 +90,11 @@ async function scanSkillsDirectory(
       if (!isDir) continue
 
       // Validate entry name for security (prevent path traversal)
-      if (entry.name.includes("..") || entry.name.includes("/") || entry.name.includes("\\")) {
+      if (
+        entry.name.includes("..") ||
+        entry.name.includes("/") ||
+        entry.name.includes("\\")
+      ) {
         console.warn(`[skills] Skipping invalid directory name: ${entry.name}`)
         continue
       }
@@ -139,22 +153,31 @@ const listSkillsProcedure = publicProcedure
     let projectSkillsPromise = Promise.resolve<FileSkill[]>([])
     if (input?.cwd) {
       const projectSkillsDir = path.join(input.cwd, ".claude", "skills")
-      projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project", input.cwd)
+      projectSkillsPromise = scanSkillsDirectory(
+        projectSkillsDir,
+        "project",
+        input.cwd,
+      )
     }
 
     // Discover plugin skills
     const enabledPluginSources = await getEnabledPlugins()
     const allowedPluginComponents =
       await discoverAllowedClaudePluginRuntimeComponents(enabledPluginSources)
-    const pluginSkillsPromises = allowedPluginComponents.map(async ({ plugin }) => {
-      const paths = getPluginComponentPaths(plugin)
-      try {
-        const skills = await scanSkillsDirectory(paths.skills, "plugin")
-        return skills.map((skill) => ({ ...skill, pluginName: plugin.source }))
-      } catch {
-        return []
-      }
-    })
+    const pluginSkillsPromises = allowedPluginComponents.map(
+      async ({ plugin }) => {
+        const paths = getPluginComponentPaths(plugin)
+        try {
+          const skills = await scanSkillsDirectory(paths.skills, "plugin")
+          return skills.map((skill) => ({
+            ...skill,
+            pluginName: plugin.source,
+          }))
+        } catch {
+          return []
+        }
+      },
+    )
 
     // Scan all directories in parallel
     const [userSkills, projectSkills, registrySkills, ...pluginSkillsArrays] =
@@ -192,6 +215,7 @@ const listSkillsProcedure = publicProcedure
           installedVersion: registry.installedVersion,
           registryId: registry.registryId,
           hasRollback: registry.hasRollback,
+          projection: registry.projection,
         },
       }
     })
@@ -202,7 +226,11 @@ const listSkillsProcedure = publicProcedure
 /**
  * Generate SKILL.md content from name, description, and body
  */
-function generateSkillMd(skill: { name: string; description: string; content: string }): string {
+function generateSkillMd(skill: {
+  name: string
+  description: string
+  content: string
+}): string {
   const frontmatter: string[] = []
   frontmatter.push(`name: ${skill.name}`)
   if (skill.description) {
@@ -239,10 +267,12 @@ export const skillsRouter = router({
    */
   registryList: publicProcedure
     .input(
-      z.object({
-        checkRemote: z.boolean().optional(),
-        runtime: skillRuntimeSchema.optional(),
-      }).optional(),
+      z
+        .object({
+          checkRemote: z.boolean().optional(),
+          runtime: skillRuntimeSchema.optional(),
+        })
+        .optional(),
     )
     .query(async ({ input }) => {
       return listRegistrySkills({
@@ -256,9 +286,11 @@ export const skillsRouter = router({
    */
   registryCollections: publicProcedure
     .input(
-      z.object({
-        checkRemote: z.boolean().optional(),
-      }).optional(),
+      z
+        .object({
+          checkRemote: z.boolean().optional(),
+        })
+        .optional(),
     )
     .query(async ({ input }) => {
       return listRegistryCollections({
@@ -306,12 +338,18 @@ export const skillsRouter = router({
         content: z.string(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-      const safeName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+      const safeName = input.name
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
       if (!safeName) {
-        throw new Error("Skill name must contain at least one alphanumeric character")
+        throw new Error(
+          "Skill name must contain at least one alphanumeric character",
+        )
       }
 
       let targetDir: string
@@ -366,12 +404,13 @@ export const skillsRouter = router({
         description: z.string(),
         content: z.string(),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-      const absolutePath = input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
-        ? path.join(input.cwd, input.path)
-        : resolveSkillPath(input.path)
+      const absolutePath =
+        input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
+          ? path.join(input.cwd, input.path)
+          : resolveSkillPath(input.path)
 
       // Verify file exists before writing
       await fs.access(absolutePath)
@@ -395,16 +434,17 @@ export const skillsRouter = router({
       z.object({
         path: z.string(),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       if (input.path.includes("..")) {
         throw new Error("Invalid path")
       }
 
-      const absolutePath = input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
-        ? path.join(input.cwd, input.path)
-        : resolveSkillPath(input.path)
+      const absolutePath =
+        input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
+          ? path.join(input.cwd, input.path)
+          : resolveSkillPath(input.path)
 
       // Skills are directories containing SKILL.md — delete the parent directory
       const skillDir = path.dirname(absolutePath)

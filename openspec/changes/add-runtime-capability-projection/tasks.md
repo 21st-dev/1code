@@ -76,8 +76,12 @@
 - 2026-06-22 completed: added the first concrete adapter contract for
   registry-managed Skill projection requests and records without registering
   MCP or Plugin placeholder adapters.
-- [ ] 2.4 Ensure route/UI code calls the service instead of deriving projection
+- [x] 2.4 Ensure route/UI code calls the service instead of deriving projection
   state directly.
+- 2026-06-22 completed: `listRegistrySkills` now asks the Runtime Capability
+  Projection owner to build renderer-safe Skill availability records, tRPC
+  returns those projection records, and Skills UI displays the returned records
+  instead of deriving availability from runtime names or filesystem paths.
 
 ## 3. Codex Skill Projection
 
@@ -114,12 +118,22 @@
 
 ## 4. Runtime Availability UI
 
-- [ ] 4.1 Replace ambiguous `installed` runtime labels with install plus
+- [x] 4.1 Replace ambiguous `installed` runtime labels with install plus
   availability state.
-- [ ] 4.2 Show `Available`, `Unavailable`, `Incompatible`, and `Not projected` per
+- 2026-06-22 completed: registry skill runtime cards now show separate
+  `Install` and `Availability` rows for each runtime.
+- [x] 4.2 Show `Available`, `Unavailable`, `Incompatible`, and `Not projected` per
   runtime where applicable.
-- [ ] 4.3 Show concise non-secret reasons and remediation hints.
-- [ ] 4.4 Keep plugin-owned and registry-owned protections intact.
+- 2026-06-22 completed: the projection owner exposes all four projection states
+  and Skills UI renders the backend state per runtime; incompatible runtimes are
+  also excluded from install actions.
+- [x] 4.3 Show concise non-secret reasons and remediation hints.
+- 2026-06-22 completed: projection records carry validated non-secret
+  diagnostics and Skills UI shows the first message plus remediation hint.
+- [x] 4.4 Keep plugin-owned and registry-owned protections intact.
+- 2026-06-22 completed: source-level packaging tests keep the existing
+  plugin-owned and registry-owned edit protections visible while adding runtime
+  availability UI.
 
 ## 5. Shared Capability Alignment
 

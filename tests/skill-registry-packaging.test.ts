@@ -29,4 +29,33 @@ describe("skill registry packaging", () => {
     expect(source).toContain('useState<SkillFilter>("all")')
     expect(source).not.toContain('useState<SkillFilter>("installed")')
   })
+
+  test("shows runtime availability separately from registry install state", () => {
+    const source = readFileSync(
+      "src/renderer/components/dialogs/settings-tabs/agents-skills-tab.tsx",
+      "utf-8",
+    )
+    const dictionaries = readFileSync(
+      "src/renderer/lib/i18n/dictionaries.ts",
+      "utf-8",
+    )
+
+    expect(source).toContain("runtimeState?.projection?.state")
+    expect(source).toContain("settings.skills.installState")
+    expect(source).toContain("settings.skills.runtimeAvailability")
+    expect(source).toContain("availabilityDiagnostic.message")
+    expect(dictionaries).toContain('"settings.skills.installState"')
+    expect(dictionaries).toContain('"settings.skills.availabilityNotProjected"')
+  })
+
+  test("keeps plugin-owned and registry-owned skill protections visible in source", () => {
+    const source = readFileSync(
+      "src/renderer/components/dialogs/settings-tabs/agents-skills-tab.tsx",
+      "utf-8",
+    )
+
+    expect(source).toContain('item.source !== "plugin"')
+    expect(source).toContain('item.kind !== "registry-skill"')
+    expect(source).toContain('item.kind !== "registry-collection"')
+  })
 })

@@ -82,6 +82,17 @@ describe("skill registry managed install state", () => {
       (skill) => skill.id === "find-skills",
     )
     expect(listed?.status).toBe("installed")
+    expect(listed?.projection).toMatchObject({
+      kind: "skill",
+      capabilityId: "find-skills",
+      runtimeId: "codex",
+      state: "available",
+      source: {
+        type: "registry",
+        id: "locus-core-skills",
+        version: "1.0.0",
+      },
+    })
     expect(listed?.installedHash).toBe(
       "9cce43cc9a19538ed44988f81456813146530413bd27736cf355b2b93986c6b8",
     )
@@ -177,5 +188,16 @@ describe("skill registry managed install state", () => {
       (skill) => skill.id === "changelog-generator",
     )
     expect(codexView?.status).toBe("not-installed")
+    expect(codexView?.projection).toMatchObject({
+      kind: "skill",
+      capabilityId: "changelog-generator",
+      runtimeId: "codex",
+      state: "incompatible",
+      diagnostics: [
+        {
+          code: "skill.runtime-incompatible",
+        },
+      ],
+    })
   })
 })

@@ -8,8 +8,11 @@ export {
   RuntimeCapabilityProjectionService,
 } from "./service"
 export {
+  buildSkillProjectionAvailabilityRecord,
   SKILL_PROJECTION_KIND,
   type SkillProjectionAdapter,
+  type SkillProjectionAvailabilityInput,
+  type SkillProjectionAvailabilityInstallStatus,
   type SkillProjectionCandidate,
   type SkillProjectionInstallStatus,
   type SkillProjectionKind,

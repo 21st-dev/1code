@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  buildSkillProjectionAvailabilityRecord,
   createRuntimeCapabilityProjectionService,
   SKILL_PROJECTION_KIND,
   type SkillProjectionAdapter,
@@ -142,5 +143,53 @@ describe("runtime capability projection", () => {
         },
       }),
     ).rejects.toThrow("secret-like text")
+  })
+
+  test("builds renderer-safe skill availability separate from install state", () => {
+    expect(
+      buildSkillProjectionAvailabilityRecord({
+        skillId: "reviewer",
+        registryId: "bundled",
+        version: "1.0.0",
+        contentHash: "a".repeat(64),
+        runtimeId: "codex",
+        eligibleRuntimes: ["claude"],
+        installStatus: "not-installed",
+      }),
+    ).toMatchObject({
+      kind: "skill",
+      capabilityId: "reviewer",
+      runtimeId: "codex",
+      state: "incompatible",
+      diagnostics: [
+        {
+          code: "skill.runtime-incompatible",
+        },
+      ],
+    })
+
+    expect(
+      buildSkillProjectionAvailabilityRecord({
+        skillId: "reviewer",
+        registryId: "bundled",
+        version: "1.0.0",
+        contentHash: "a".repeat(64),
+        runtimeId: "codex",
+        eligibleRuntimes: ["codex"],
+        installStatus: "not-installed",
+      }).state,
+    ).toBe("not_projected")
+
+    expect(
+      buildSkillProjectionAvailabilityRecord({
+        skillId: "reviewer",
+        registryId: "bundled",
+        version: "1.0.0",
+        contentHash: "a".repeat(64),
+        runtimeId: "codex",
+        eligibleRuntimes: ["codex"],
+        installStatus: "installed",
+      }).state,
+    ).toBe("available")
   })
 })
