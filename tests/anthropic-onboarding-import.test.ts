@@ -83,4 +83,16 @@ describe("Anthropic onboarding Claude Code auth", () => {
     expect(dictionaries).not.toContain("instead of importing local credentials")
     expect(dictionaries).not.toContain("请不要导入本机凭据")
   })
+
+  test("does not describe unvalidated system credentials as refreshable", () => {
+    const source = onboardingSource()
+    const dictionaries = dictionarySource()
+
+    expect(source).toContain("onboarding.claude.credentialsWithRefreshToken")
+    expect(source).not.toContain("onboarding.claude.refreshableCredentials")
+    expect(dictionaries).toContain(
+      "Local credentials with a refresh token were found. They will be verified when imported.",
+    )
+    expect(dictionaries).toContain("导入时会验证是否仍可使用")
+  })
 })

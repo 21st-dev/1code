@@ -115,8 +115,8 @@ export const en = {
   "onboarding.claude.signInWithClaudeCode": "Sign in with Claude Code",
   "onboarding.claude.signInAgainWithClaudeCode":
     "Sign in again with Claude Code",
-  "onboarding.claude.refreshableCredentials":
-    "Refreshable local credentials are available on this machine.",
+  "onboarding.claude.credentialsWithRefreshToken":
+    "Local credentials with a refresh token were found. They will be verified when imported.",
   "onboarding.claude.nonRefreshableCredentials":
     "Local credentials are available, but no refresh token was found.",
   "onboarding.claude.failedToImportLocalCredentials":
@@ -398,7 +398,8 @@ export const en = {
   "settings.models.anthropicAccounts.title": "Anthropic Accounts",
   "settings.models.anthropicAccounts.description":
     "Manage local Claude Code credentials",
-  "settings.models.claudeCode.refreshable": "Refreshable local credential",
+  "settings.models.claudeCode.refreshable":
+    "Local credential with refresh token",
   "settings.models.claudeCode.nonRefreshable": "Non-refreshable legacy token",
   "settings.models.accountFallback": "Anthropic Account",
   "settings.models.accountConnected": "Connected {date}",
@@ -3526,8 +3527,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.claude.signInWithClaudeCode": "使用 Claude Code 登录",
   "onboarding.claude.signInAgainWithClaudeCode":
     "重新网页登录 Claude Code",
-  "onboarding.claude.refreshableCredentials":
-    "这台设备上发现可刷新的本地凭证。",
+  "onboarding.claude.credentialsWithRefreshToken":
+    "这台设备上发现包含刷新令牌的本地凭证，导入时会验证是否仍可使用。",
   "onboarding.claude.nonRefreshableCredentials":
     "这台设备上发现本地凭证，但没有刷新令牌。",
   "onboarding.claude.failedToImportLocalCredentials":
@@ -3804,7 +3805,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "Ollama 会自动在后台运行",
   "settings.models.anthropicAccounts.title": "Anthropic 账号",
   "settings.models.anthropicAccounts.description": "管理本地 Claude Code 凭证",
-  "settings.models.claudeCode.refreshable": "可刷新的本地凭证",
+  "settings.models.claudeCode.refreshable": "包含刷新令牌的本地凭证",
   "settings.models.claudeCode.nonRefreshable": "不可刷新的旧版令牌",
   "settings.models.accountFallback": "Anthropic 账号",
   "settings.models.accountConnected": "已连接 {date}",

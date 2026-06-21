@@ -65,7 +65,7 @@ export function AnthropicOnboardingPage() {
   const shouldOfferExistingToken =
     checkedExistingToken && hasExistingToken && !ignoredExistingToken
   const existingCredentialDescription = existingCredential?.hasRefreshToken
-    ? t("onboarding.claude.refreshableCredentials")
+    ? t("onboarding.claude.credentialsWithRefreshToken")
     : t("onboarding.claude.nonRefreshableCredentials")
   const formatClaudeCodeAuthError = (message: string | null | undefined) => {
     if (!message) return ""
