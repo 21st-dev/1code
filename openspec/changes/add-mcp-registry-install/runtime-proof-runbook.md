@@ -10,14 +10,16 @@ change.
 
 ## Isolated Launch
 
-Use throwaway runtime state even when using a real login:
+Use throwaway runtime state even when using a real login. Keep `HOME` pointed at
+the real user account so macOS can access the login keychain; isolate Claude MCP
+configuration with `LOCUS_CLAUDE_CONFIG_HOME` instead of overriding `HOME`.
 
 ```bash
 rm -rf /private/tmp/locus-mcp-registry-home /private/tmp/locus-mcp-registry-smoke
 mkdir -p /private/tmp/locus-mcp-registry-home/.codex
 
-HOME=/private/tmp/locus-mcp-registry-home \
 CODEX_HOME=/private/tmp/locus-mcp-registry-home/.codex \
+LOCUS_CLAUDE_CONFIG_HOME=/private/tmp/locus-mcp-registry-home \
 LOCUS_USER_DATA_DIR=/private/tmp/locus-mcp-registry-smoke \
 NODE_OPTIONS=--dns-result-order=ipv4first \
 bun run dev
@@ -42,7 +44,7 @@ GUI-capable session, keep all scenarios in `runtime-proof-evidence.md` blocked.
 6. Start a real Claude run with a user prompt that intentionally calls one
    harmless MCP tool.
 7. Record redacted evidence:
-   - isolated `HOME` and app `userData` paths
+   - isolated Claude config home, `CODEX_HOME`, and app `userData` paths
    - Claude `session-init` MCP server status
    - tool inventory containing `mcp__<server>__<tool>`
    - prompt text that triggered the tool

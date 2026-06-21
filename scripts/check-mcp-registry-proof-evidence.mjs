@@ -15,8 +15,8 @@ const scenarioTaskMap = new Map([
 ])
 const requiredRunbookMarkers = [
   "Provider call authorization: required",
-  "HOME=/private/tmp/locus-mcp-registry-home",
   "CODEX_HOME=/private/tmp/locus-mcp-registry-home/.codex",
+  "LOCUS_CLAUDE_CONFIG_HOME=/private/tmp/locus-mcp-registry-home",
   "LOCUS_USER_DATA_DIR=/private/tmp/locus-mcp-registry-smoke",
   "Do not paste raw OAuth tokens",
   "Do not offer or record `Verified on Codex` if any of those signals are missing.",
