@@ -153,6 +153,7 @@ mock.module("electron", () => ({
 
 mock.module("../src/main/lib/claude-config", () => ({
   GLOBAL_MCP_PATH,
+  getClaudeConfigPath: () => join(mockHome, ".claude.json"),
   readClaudeConfig: async () => clone(claudeConfig),
   readClaudeDirConfig: async () => clone(claudeDirConfig),
   readProjectMcpJson: async (projectPath: string) =>
@@ -863,6 +864,22 @@ describe("Runtime MCP config service behavior", () => {
             installedAt: "2026-06-20T00:00:00.000Z",
           },
         },
+        registry_remote_streamable: {
+          url: "https://registry.example.com/mcp",
+          transportType: "streamable_http",
+          headers: { "X-Registry": "present" },
+          _locusMcpRegistry: {
+            providerId: "official-mcp-registry",
+            entryId: "io.github.example/remote",
+            targetId: "remote:streamable_http:0",
+            runtime: "claude-code",
+            status: "installed-unverified",
+            missingSetupKeys: [],
+            entryFingerprint: "sha256:entry-remote",
+            configFingerprint: "sha256:config-remote",
+            installedAt: "2026-06-20T00:00:00.000Z",
+          },
+        },
       },
       projects: {
         [projectPath]: {
@@ -870,6 +887,10 @@ describe("Runtime MCP config service behavior", () => {
             project_http: {
               url: "https://project.example.com/mcp",
               authType: "none",
+            },
+            project_sse: {
+              url: "https://project-sse.example.com/mcp",
+              transportType: "sse",
             },
           },
         },
@@ -893,16 +914,45 @@ describe("Runtime MCP config service behavior", () => {
     expect(claudeRuntime.mcpServersForSdk).toMatchObject({
       global_stdio: { command: "global-tool", args: ["--global"] },
       registry_ready_to_verify: { command: "registry-ready-tool" },
+      registry_remote_streamable: {
+        type: "http",
+        url: "https://registry.example.com/mcp",
+        headers: { "X-Registry": "present" },
+      },
       project_http: {
+        type: "http",
         url: "https://project.example.com/mcp",
-        authType: "none",
+      },
+      project_sse: {
+        type: "sse",
+        url: "https://project-sse.example.com/mcp",
       },
       project_json: { command: "json-tool" },
     })
+    expect(
+      claudeRuntime.mcpServersForSdk?.registry_remote_streamable,
+    ).not.toHaveProperty("transportType")
+    expect(claudeRuntime.mcpServersForSdk?.project_http).not.toHaveProperty(
+      "authType",
+    )
     expect(claudeRuntime.mcpServersForSdk).not.toHaveProperty("disabled_global")
     expect(claudeRuntime.mcpServersForSdk).not.toHaveProperty(
       "registry_needs_setup",
     )
+    expect(claudeRuntime.mcpRegistryVerificationTargets).toEqual({
+      registry_ready_to_verify: {
+        runtime: "claude-code",
+        serverName: "registry_ready_to_verify",
+        entryFingerprint: "sha256:entry",
+        configFingerprint: "sha256:config",
+      },
+      registry_remote_streamable: {
+        runtime: "claude-code",
+        serverName: "registry_remote_streamable",
+        entryFingerprint: "sha256:entry-remote",
+        configFingerprint: "sha256:config-remote",
+      },
+    })
 
     const claudeSettings = await claudeMcpConfig.getClaudeMcpConfig({
       projectPath,

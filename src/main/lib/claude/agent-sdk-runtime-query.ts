@@ -1,32 +1,32 @@
+import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import {
   getActiveGuardedContract,
   type ValidatedAgentScopeContract,
 } from "../agent-guard"
-import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import {
-  getClaudePermissionMapping,
   type ClaudePermissionMapping,
+  getClaudePermissionMapping,
 } from "../agent-runtime/permission-policy"
+import type { ClaudeMcpRegistryVerificationTargets } from "./agent-sdk-mcp-registry-verification"
 import {
-  createClaudeAgentSdkDesktopRuntimeQueryOptions,
-  prepareClaudeAgentSdkMcpServers,
-  type ClaudeAgentSdkQueryParams,
-  type CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput,
-  type PrepareClaudeAgentSdkMcpServersInput,
-} from "./agent-sdk-query-options"
-import {
-  prepareClaudeAgentSdkPromptContext,
   type PrepareClaudeAgentSdkPromptContextResult,
+  prepareClaudeAgentSdkPromptContext,
   type readClaudeAgentSdkProjectAgentsMd,
 } from "./agent-sdk-project-context"
+import {
+  type ClaudeAgentSdkQueryParams,
+  type CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput,
+  createClaudeAgentSdkDesktopRuntimeQueryOptions,
+  type PrepareClaudeAgentSdkMcpServersInput,
+  prepareClaudeAgentSdkMcpServers,
+} from "./agent-sdk-query-options"
 import { getClaudePendingToolApprovalStore } from "./tool-approvals"
 
-const ensureClaudeAgentSdkMcpTokensFresh: PrepareClaudeAgentSdkMcpServersInput[
-  "ensureTokensFresh"
-] = async (servers, projectPath) => {
-  const { ensureMcpTokensFresh } = await import("../mcp-auth")
-  return ensureMcpTokensFresh(servers, projectPath)
-}
+const ensureClaudeAgentSdkMcpTokensFresh: PrepareClaudeAgentSdkMcpServersInput["ensureTokensFresh"] =
+  async (servers, projectPath) => {
+    const { ensureMcpTokensFresh } = await import("../mcp-auth")
+    return ensureMcpTokensFresh(servers, projectPath)
+  }
 
 export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput,
@@ -46,27 +46,22 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
   prompt: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["prompt"]
   existingMessages: any[]
   rawMcpServers?: PrepareClaudeAgentSdkMcpServersInput["mcpServers"]
+  mcpRegistryVerificationTargets?: ClaudeMcpRegistryVerificationTargets
   projectPath?: string
   cwd?: string
   resolvedModel?: string | null
   ensureTokensFresh?: PrepareClaudeAgentSdkMcpServersInput["ensureTokensFresh"]
-  pendingToolApprovals?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput[
-    "pendingToolApprovals"
-  ]
+  pendingToolApprovals?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["pendingToolApprovals"]
   getPendingToolApprovals?: typeof getClaudePendingToolApprovalStore
   getGuardedContract?: (
     contractId: string,
   ) => ValidatedAgentScopeContract | undefined
   permission?: ClaudePermissionMapping
-  permissionPolicy?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput[
-    "permissionPolicy"
-  ]
+  permissionPolicy?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["permissionPolicy"]
   subChatId?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["subChatId"]
   guardEvents?: AgentGuardEvent[]
   parts?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["parts"]
-  stderrLines?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput[
-    "stderrLines"
-  ]
+  stderrLines?: CreateClaudeAgentSdkDesktopRuntimeQueryOptionsInput["stderrLines"]
   readAgentsMd?: typeof readClaudeAgentSdkProjectAgentsMd
   log?: (...args: any[]) => void
 }
@@ -74,6 +69,7 @@ export type PrepareClaudeAgentSdkDesktopRuntimeQueryInput = Omit<
 export type PrepareClaudeAgentSdkDesktopRuntimeQueryResult = {
   queryOptions: ClaudeAgentSdkQueryParams
   mcpServers: PrepareClaudeAgentSdkMcpServersInput["mcpServers"] | undefined
+  mcpRegistryVerificationTargets?: ClaudeMcpRegistryVerificationTargets
   promptContext: PrepareClaudeAgentSdkPromptContextResult
   guardEvents: AgentGuardEvent[]
 }
@@ -83,6 +79,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   request,
   existingMessages,
   rawMcpServers,
+  mcpRegistryVerificationTargets,
   projectPath,
   cwd,
   resolvedModel,
@@ -97,9 +94,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
   readAgentsMd,
   log,
   ...queryInput
-}: PrepareClaudeAgentSdkDesktopRuntimeQueryInput): Promise<
-  PrepareClaudeAgentSdkDesktopRuntimeQueryResult
-> {
+}: PrepareClaudeAgentSdkDesktopRuntimeQueryInput): Promise<PrepareClaudeAgentSdkDesktopRuntimeQueryResult> {
   const runtimeGuardEvents = guardEvents ?? []
   const runtimeCwd = cwd ?? request.context.cwd
   const runtimePermissionPolicy =
@@ -126,6 +121,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
 
   return {
     mcpServers,
+    mcpRegistryVerificationTargets,
     promptContext,
     guardEvents: runtimeGuardEvents,
     queryOptions: createClaudeAgentSdkDesktopRuntimeQueryOptions({
@@ -139,8 +135,7 @@ export async function prepareClaudeAgentSdkDesktopRuntimeQuery({
         permission ?? getClaudePermissionMapping(runtimePermissionPolicy),
       permissionPolicy: runtimePermissionPolicy,
       subChatId: runtimeSubChatId,
-      pendingToolApprovals:
-        pendingToolApprovals ?? getPendingToolApprovals(),
+      pendingToolApprovals: pendingToolApprovals ?? getPendingToolApprovals(),
       parts,
       stderrLines,
       getGuardedContract,

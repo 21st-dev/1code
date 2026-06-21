@@ -211,7 +211,11 @@ export const claudeRouter = router({
               },
             } = runStartup
 
-            const { mcpServersForSdk, mcpReadinessStatus } =
+            const {
+              mcpServersForSdk,
+              mcpReadinessStatus,
+              mcpRegistryVerificationTargets,
+            } =
               await resolveClaudeMcpServersForSdk({
                 isolatedConfigReady,
                 projectPath: input.projectPath,
@@ -225,6 +229,7 @@ export const claudeRouter = router({
                 runtimeQuery: {
                   existingMessages,
                   rawMcpServers: mcpServersForSdk,
+                  mcpRegistryVerificationTargets,
                   shouldForkResume,
                   forkResumeAtUuid,
                   resumeAtUuid,

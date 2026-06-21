@@ -1,14 +1,15 @@
 import * as fs from "node:fs/promises"
-import * as os from "node:os"
 import path from "node:path"
 import { sanitizeMcpConfigForRenderer } from "../../../shared/mcp-import-preview"
 import { clearClaudeAgentSdkIsolatedConfigDirCache } from "../claude/agent-sdk-config-dir"
 import type { ClaudeAgentSdkDesktopRunMcpReadinessStatus } from "../claude/agent-sdk-desktop-run-runtime"
+import type { ClaudeMcpRegistryVerificationTargets } from "../claude/agent-sdk-mcp-registry-verification"
 import { clearClaudeAgentSdkQueryCache } from "../claude/agent-sdk-query-loader"
 import type { PrepareClaudeAgentSdkMcpServersInput } from "../claude/agent-sdk-query-options"
 import {
   type ClaudeConfig,
   GLOBAL_MCP_PATH,
+  getClaudeConfigPath,
   getMatchingLocusPluginMcpServerConfig,
   getMergedGlobalMcpServers,
   getMergedLocalProjectMcpServers,
@@ -45,6 +46,7 @@ import {
 } from "../trpc/routers/claude-settings"
 
 type ClaudeMcpServersForSdk = PrepareClaudeAgentSdkMcpServersInput["mcpServers"]
+type ClaudeMcpServerForSdk = NonNullable<ClaudeMcpServersForSdk>[string]
 
 type ClaudeMcpServerForSettings = {
   name: string
@@ -80,7 +82,9 @@ function classifyRegistryCheckFailure(input: {
   if (/auth|unauthori[sz]ed|forbidden|401|403/i.test(message)) {
     return `missing-auth: ${message}`
   }
-  if (/connect|network|fetch|timeout|ECONN|ENOTFOUND|EAI_AGAIN/i.test(message)) {
+  if (
+    /connect|network|fetch|timeout|ECONN|ENOTFOUND|EAI_AGAIN/i.test(message)
+  ) {
     return `connection-failure: ${message}`
   }
   return `tool-list-failure: ${message}`
@@ -234,8 +238,9 @@ export function clearClaudeCaches(): void {
 }
 
 function getServerStatusFromConfig(serverConfig: McpServerConfig): string {
-  const registryState =
-    resolveMcpRegistryRuntimeLocalStateFromConfig({ config: serverConfig })
+  const registryState = resolveMcpRegistryRuntimeLocalStateFromConfig({
+    config: serverConfig,
+  })
   if (registryState?.status === "ready-to-verify") {
     return "ready-to-verify"
   }
@@ -282,6 +287,99 @@ function shouldIncludeClaudeMcpServerInSdk(
     serverConfig.disabled !== true &&
     !isMcpRegistryServerInactiveForRuntime(serverConfig)
   )
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => typeof entry === "string")
+  )
+}
+
+function getClaudeSdkMcpCommonFields(
+  serverConfig: McpServerConfig,
+): Record<string, unknown> {
+  const commonFields: Record<string, unknown> = {}
+  if (typeof serverConfig.timeout === "number") {
+    commonFields.timeout = serverConfig.timeout
+  }
+  if (typeof serverConfig.alwaysLoad === "boolean") {
+    commonFields.alwaysLoad = serverConfig.alwaysLoad
+  }
+  if (Array.isArray(serverConfig.tools)) {
+    commonFields.tools = serverConfig.tools
+  }
+  return commonFields
+}
+
+function resolveClaudeSdkRemoteMcpType(
+  serverConfig: McpServerConfig,
+): "http" | "sse" {
+  const transportType =
+    typeof serverConfig.transportType === "string"
+      ? serverConfig.transportType.trim().toLowerCase()
+      : ""
+  const sdkType =
+    typeof serverConfig.type === "string"
+      ? serverConfig.type.trim().toLowerCase()
+      : ""
+
+  return transportType === "sse" || sdkType === "sse" ? "sse" : "http"
+}
+
+function materializeClaudeMcpServerConfigForSdk(
+  serverConfig: McpServerConfig,
+): ClaudeMcpServerForSdk | undefined {
+  const runtimeConfig = materializeMcpRegistryServerConfigForRuntime(
+    serverConfig,
+    { stripMetadata: true },
+  )
+  const commonFields = getClaudeSdkMcpCommonFields(runtimeConfig)
+  const url =
+    typeof runtimeConfig.url === "string" ? runtimeConfig.url.trim() : ""
+
+  if (url) {
+    return {
+      ...commonFields,
+      type: resolveClaudeSdkRemoteMcpType(runtimeConfig),
+      url,
+      ...(isStringRecord(runtimeConfig.headers)
+        ? { headers: runtimeConfig.headers }
+        : {}),
+    } as ClaudeMcpServerForSdk
+  }
+
+  const command =
+    typeof runtimeConfig.command === "string"
+      ? runtimeConfig.command.trim()
+      : ""
+  if (command) {
+    return {
+      ...commonFields,
+      command,
+      ...(Array.isArray(runtimeConfig.args)
+        ? { args: runtimeConfig.args.filter((arg) => typeof arg === "string") }
+        : {}),
+      ...(isStringRecord(runtimeConfig.env) ? { env: runtimeConfig.env } : {}),
+    } as ClaudeMcpServerForSdk
+  }
+
+  return undefined
+}
+
+function addClaudeMcpRegistryVerificationTarget(input: {
+  targets: ClaudeMcpRegistryVerificationTargets
+  serverName: string
+  serverConfig: McpServerConfig
+}): void {
+  const verificationKey = getMcpRegistryVerificationKeyFromConfig(
+    input.serverConfig,
+    input.serverName,
+  )
+  if (verificationKey?.runtime !== "claude-code") return
+  input.targets[input.serverName] = verificationKey
 }
 
 const MCP_FETCH_TIMEOUT_MS = 40_000
@@ -679,16 +777,23 @@ export async function resolveClaudeMcpServersForSdk(input: {
 }): Promise<{
   mcpServersForSdk: ClaudeMcpServersForSdk | undefined
   mcpReadinessStatus: ClaudeAgentSdkDesktopRunMcpReadinessStatus
+  mcpRegistryVerificationTargets: ClaudeMcpRegistryVerificationTargets
 }> {
   let mcpReadinessStatus: ClaudeAgentSdkDesktopRunMcpReadinessStatus =
     input.isolatedConfigReady ? "ready" : "skipped"
   let mcpServersForSdk: ClaudeMcpServersForSdk | undefined
+  const mcpRegistryVerificationTargets: ClaudeMcpRegistryVerificationTargets =
+    {}
 
   if (!input.isolatedConfigReady) {
-    return { mcpServersForSdk, mcpReadinessStatus }
+    return {
+      mcpServersForSdk,
+      mcpReadinessStatus,
+      mcpRegistryVerificationTargets,
+    }
   }
 
-  const claudeJsonSource = path.join(os.homedir(), ".claude.json")
+  const claudeJsonSource = getClaudeConfigPath()
   try {
     const stats = await fs.stat(claudeJsonSource).catch(() => null)
     const currentMtime = stats?.mtimeMs ?? 0
@@ -780,10 +885,16 @@ export async function resolveClaudeMcpServersForSdk(input: {
           (workingMcpServers.get(cacheKey) === true ||
             !workingMcpServers.has(cacheKey))
         ) {
-          filtered[name] = materializeMcpRegistryServerConfigForRuntime(
-            srvConfig,
-            { stripMetadata: true },
-          ) as NonNullable<ClaudeMcpServersForSdk>[string]
+          const runtimeConfig =
+            materializeClaudeMcpServerConfigForSdk(srvConfig)
+          if (runtimeConfig) {
+            filtered[name] = runtimeConfig
+            addClaudeMcpRegistryVerificationTarget({
+              targets: mcpRegistryVerificationTargets,
+              serverName: name,
+              serverConfig: srvConfig,
+            })
+          }
         }
       }
       mcpServersForSdk = filtered
@@ -793,17 +904,21 @@ export async function resolveClaudeMcpServersForSdk(input: {
         console.log(`[claude] Filtered out ${skipped} non-working MCP(s)`)
       }
     } else {
+      const entries: Array<[string, ClaudeMcpServerForSdk]> = []
+      for (const [name, srvConfig] of Object.entries(allServers)) {
+        if (!shouldIncludeClaudeMcpServerInSdk(srvConfig)) continue
+        const runtimeConfig = materializeClaudeMcpServerConfigForSdk(srvConfig)
+        if (runtimeConfig) {
+          entries.push([name, runtimeConfig])
+          addClaudeMcpRegistryVerificationTarget({
+            targets: mcpRegistryVerificationTargets,
+            serverName: name,
+            serverConfig: srvConfig,
+          })
+        }
+      }
       mcpServersForSdk = Object.fromEntries(
-        Object.entries(allServers)
-          .filter(([, srvConfig]) =>
-            shouldIncludeClaudeMcpServerInSdk(srvConfig),
-          )
-          .map(([name, srvConfig]) => [
-            name,
-            materializeMcpRegistryServerConfigForRuntime(srvConfig, {
-              stripMetadata: true,
-            }),
-          ]),
+        entries,
       ) as NonNullable<ClaudeMcpServersForSdk>
     }
   } catch (configErr) {
@@ -811,7 +926,11 @@ export async function resolveClaudeMcpServersForSdk(input: {
     mcpReadinessStatus = "skipped"
   }
 
-  return { mcpServersForSdk, mcpReadinessStatus }
+  return {
+    mcpServersForSdk,
+    mcpReadinessStatus,
+    mcpRegistryVerificationTargets,
+  }
 }
 
 export async function getClaudeMcpConfig(input: { projectPath: string }) {
@@ -1130,7 +1249,9 @@ export async function checkClaudeMcpRegistryServer(input: {
     serverName,
   )
   if (!verificationKey) {
-    throw new Error(`Server "${serverName}" is not a registry-installed MCP server`)
+    throw new Error(
+      `Server "${serverName}" is not a registry-installed MCP server`,
+    )
   }
 
   const localState = resolveMcpRegistryRuntimeLocalStateFromConfig({

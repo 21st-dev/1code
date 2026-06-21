@@ -97,7 +97,7 @@ export type RunClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQueryInput = Omit<
 > & {
   runtimeQuery: Pick<
     PrepareClaudeAgentSdkDesktopRuntimeQueryResult,
-    "queryOptions" | "mcpServers"
+    "queryOptions" | "mcpServers" | "mcpRegistryVerificationTargets"
   >
 }
 
@@ -192,6 +192,8 @@ export async function runClaudeAgentSdkDesktopAdapterWithPreparedRuntimeQuery({
     ...input,
     queryOptions: runtimeQuery.queryOptions,
     mcpServers: runtimeQuery.mcpServers as Record<string, unknown> | undefined,
+    mcpRegistryVerificationTargets:
+      runtimeQuery.mcpRegistryVerificationTargets,
   })
 }
 

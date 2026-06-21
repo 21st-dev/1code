@@ -1,8 +1,18 @@
-import type { FinalizeClaudeAgentSdkGuardMetadataInput } from "./agent-sdk-guard-metadata"
+import type { ClaudeAgentSdkStreamConsumer } from "./agent-sdk-adapter"
 import {
   createClaudeAgentSdkEmbeddedErrorContext,
   handleClaudeAgentSdkEmbeddedErrorMessage,
 } from "./agent-sdk-embedded-error-finalization"
+import type { FinalizeClaudeAgentSdkGuardMetadataInput } from "./agent-sdk-guard-metadata"
+import {
+  type ClaudeMcpRegistryVerificationTargets,
+  createClaudeMcpRegistryVerificationObserver,
+} from "./agent-sdk-mcp-registry-verification"
+import type { ClaudeAgentSdkPolicyRetryState } from "./agent-sdk-policy-retry"
+import {
+  shouldStopClaudeAgentSdkStreamForAbort,
+  shouldStopClaudeAgentSdkStreamForClosedObserver,
+} from "./agent-sdk-stream-control"
 import { finalizeClaudeAgentSdkStreamError } from "./agent-sdk-stream-error-finalization"
 import {
   completeClaudeAgentSdkStreamIteration,
@@ -14,12 +24,6 @@ import {
   processClaudeAgentSdkStreamMessage,
   syncClaudeAgentSdkStreamProcessingState,
 } from "./agent-sdk-stream-processor"
-import {
-  shouldStopClaudeAgentSdkStreamForAbort,
-  shouldStopClaudeAgentSdkStreamForClosedObserver,
-} from "./agent-sdk-stream-control"
-import type { ClaudeAgentSdkStreamConsumer } from "./agent-sdk-adapter"
-import type { ClaudeAgentSdkPolicyRetryState } from "./agent-sdk-policy-retry"
 import type { ClaudeAgentSdkTransformer } from "./agent-sdk-transformed-chunks"
 import type { UIMessageChunk } from "./types"
 
@@ -124,6 +128,7 @@ export type CreateClaudeAgentSdkStreamConsumerInput = {
   resolvedModel?: string | null
   oauthToken?: string | null
   mcpServers?: Record<string, unknown> | null
+  mcpRegistryVerificationTargets?: ClaudeMcpRegistryVerificationTargets | null
   transform: ClaudeAgentSdkTransformer
   parts: Array<Record<string, any>>
   historyEnabled: boolean
@@ -159,6 +164,7 @@ export function createClaudeAgentSdkStreamConsumer({
   resolvedModel,
   oauthToken,
   mcpServers,
+  mcpRegistryVerificationTargets,
   transform,
   parts,
   historyEnabled,
@@ -177,6 +183,17 @@ export function createClaudeAgentSdkStreamConsumer({
   state,
 }: CreateClaudeAgentSdkStreamConsumerInput): ClaudeAgentSdkStreamConsumer {
   return async ({ stream }) => {
+    const mcpRegistryVerificationObserver =
+      createClaudeMcpRegistryVerificationObserver({
+        targets: mcpRegistryVerificationTargets,
+      })
+    const emitWithMcpRegistryVerification = (chunk: UIMessageChunk) => {
+      mcpRegistryVerificationObserver.observeChunk(chunk)
+      return emit(chunk)
+    }
+    const flushMcpRegistryVerification = async () => {
+      await mcpRegistryVerificationObserver.flush()
+    }
     const streamIteration = startClaudeAgentSdkStreamIteration({
       isUsingOllama,
       model,
@@ -231,13 +248,14 @@ export function createClaudeAgentSdkStreamConsumer({
           }),
           subId,
           chunkCount: state.getChunkCount(),
-          emit,
+          emit: emitWithMcpRegistryVerification,
           complete,
         })
         if (embeddedError.status === "retry") {
           break
         }
         if (embeddedError.status === "failed") {
+          await flushMcpRegistryVerification()
           return {
             status: "failed" as const,
             error: embeddedError.error,
@@ -254,7 +272,7 @@ export function createClaudeAgentSdkStreamConsumer({
           mode,
           subId,
           subChatId,
-          emit,
+          emit: emitWithMcpRegistryVerification,
         })
         syncClaudeAgentSdkStreamProcessingState(streamProcessing, {
           setMetadata: state.setMetadata,
@@ -307,19 +325,21 @@ export function createClaudeAgentSdkStreamConsumer({
         subId,
         chunkCount: state.getChunkCount(),
         lastChunkType: state.getLastChunkType(),
-        emit,
+        emit: emitWithMcpRegistryVerification,
         complete,
         getContract,
         deleteContract,
       })
       state.setCurrentText(streamFailure.currentText)
       state.setMetadata(streamFailure.metadata)
+      await flushMcpRegistryVerification()
       return {
         status: "failed" as const,
         error: streamFailure.error,
       }
     }
 
+    await flushMcpRegistryVerification()
     return {
       status: "succeeded" as const,
       sessionId: state.getMetadata().sessionId,
