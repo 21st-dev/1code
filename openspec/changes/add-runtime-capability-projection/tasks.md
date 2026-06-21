@@ -105,8 +105,12 @@
   Codex skills still report `update-available` from older managed metadata,
   `modified` after local file edits, and rollback restores a previous user-owned
   skill while removing the managed install record.
-- [ ] 3.5 Keep Claude skill discovery behavior unchanged in Phase 1 except for
+- [x] 3.5 Keep Claude skill discovery behavior unchanged in Phase 1 except for
   install/availability wording and shared owner alignment.
+- 2026-06-22 completed: focused tests prove Claude registry installs still write
+  to `.claude/skills`, managed state records only the Claude runtime for a
+  Claude-only skill, and Codex registry listing does not report that Claude
+  install as Codex-installed.
 
 ## 4. Runtime Availability UI
 
@@ -119,10 +123,18 @@
 
 ## 5. Shared Capability Alignment
 
-- [ ] 5.1 Register Skills as the first projection-backed capability kind.
-- [ ] 5.2 Define extension-point shape for future MCP and Plugins projection
+- [x] 5.1 Register Skills as the first projection-backed capability kind.
+- 2026-06-22 completed: `SKILL_PROJECTION_KIND` is the only concrete
+  projection kind with an implemented adapter, and Codex app-server isolated
+  home preparation registers the Codex Skill projection adapter before staging
+  managed skills.
+- [x] 5.2 Define extension-point shape for future MCP and Plugins projection
   registration without requiring consumers or placeholder adapters before those
   kinds are explicitly registered.
+- 2026-06-22 completed: the projection service exposes a generic adapter
+  contract and returns `registered: false` with no projection records when a
+  kind/runtime has no registered adapter; tests cover an unregistered MCP kind
+  producing no placeholder records.
 - [x] 5.3 Confirm MCP still uses connection/tools/tool-call proof for verified
   state.
 - 2026-06-22 confirmed: `add-mcp-registry-install` keeps MCP verified usability
@@ -140,14 +152,19 @@
 
 ## 6. Tests And Smoke
 
-- [ ] 6.1 Add unit tests for projection selection and exclusion of unmanaged global
+- [x] 6.1 Add unit tests for projection selection and exclusion of unmanaged global
   Codex skills.
+- 2026-06-22 completed: Codex app-server home tests now include an unmanaged
+  source Codex skill and prove it is not copied into isolated
+  `CODEX_HOME/skills`; only managed records are projected.
 - [x] 6.2 Add tests for Codex isolated home skill staging.
 - 2026-06-22 completed: `tests/codex-app-server-plugin-home.test.ts` covers a
   managed Codex registry skill being symlinked into isolated
   `CODEX_HOME/skills` and a stale isolated skill being removed.
-- [ ] 6.3 Add tests for availability state serialization and renderer-safe
+- [x] 6.3 Add tests for availability state serialization and renderer-safe
   diagnostics.
+- 2026-06-22 completed: projection service tests assert projection results are
+  JSON-serializable and reject secret-bearing renderer diagnostics.
 - [x] 6.4 Run focused Skills registry tests.
 - 2026-06-22 completed for managed install state:
   `bun test tests/skill-registry-managed-state.test.ts

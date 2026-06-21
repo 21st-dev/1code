@@ -68,6 +68,7 @@ describe("runtime capability projection", () => {
         diagnostics: [],
       },
     ])
+    expect(JSON.parse(JSON.stringify(result))).toEqual(result)
   })
 
   test("does not create placeholder records for unregistered kinds", async () => {

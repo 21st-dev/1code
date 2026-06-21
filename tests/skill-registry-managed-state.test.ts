@@ -140,4 +140,42 @@ describe("skill registry managed install state", () => {
     )
     expect(await listManagedSkillInstallRecords()).toEqual([])
   })
+
+  test("keeps Claude registry installs on the Claude skill path", async () => {
+    const root = await createTempRoot()
+    const home = join(root, "home")
+    const userDataDir = join(root, "user-data")
+    await mkdir(home, { recursive: true })
+    await mkdir(userDataDir, { recursive: true })
+    setElectronUserDataPathProviderForTest(() => userDataDir)
+    setSkillRegistryRuntimeRootProviderForTest((runtime) =>
+      join(home, runtime === "codex" ? ".codex" : ".claude"),
+    )
+
+    const installed = await installRegistrySkill({
+      id: "changelog-generator",
+      runtime: "claude",
+    })
+    const installPath = join(home, ".claude", "skills", "changelog-generator")
+
+    expect(installed.status).toBe("installed")
+    expect(installed.installPath).toBe(installPath)
+    const records = await listManagedSkillInstallRecords()
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({
+      id: "changelog-generator",
+      eligibleRuntimes: ["claude"],
+      runtimes: {
+        claude: {
+          runtime: "claude",
+          installPath,
+        },
+      },
+    })
+
+    const codexView = (await listRegistrySkills({ runtime: "codex" })).find(
+      (skill) => skill.id === "changelog-generator",
+    )
+    expect(codexView?.status).toBe("not-installed")
+  })
 })

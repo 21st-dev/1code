@@ -108,9 +108,17 @@ describe("Codex app-server isolated plugin home", () => {
     )
     await writeFile(join(skillSource, "SKILL.md"), "# find-skills\n", "utf-8")
     await mkdir(sourceCodexHome, { recursive: true })
+    await mkdir(join(sourceCodexHome, "skills", "unmanaged-global"), {
+      recursive: true,
+    })
     await writeFile(
       join(sourceCodexHome, "auth.json"),
       '{"account":"test"}\n',
+      "utf-8",
+    )
+    await writeFile(
+      join(sourceCodexHome, "skills", "unmanaged-global", "SKILL.md"),
+      "# unmanaged\n",
       "utf-8",
     )
     await writeFile(
@@ -248,6 +256,9 @@ describe("Codex app-server isolated plugin home", () => {
     ).toBe(true)
     expect(await readlink(stagedSkill)).toBe(skillSource)
     expect(await exists(staleSkill)).toBe(false)
+    expect(
+      await exists(join(result.codexHome, "skills", "unmanaged-global")),
+    ).toBe(false)
     expect(result.skillProjection).toEqual({
       registered: true,
       kind: "skill",
