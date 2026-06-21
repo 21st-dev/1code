@@ -55,5 +55,12 @@
 - [x] 4.7 Run targeted Claude credential/account tests.
 - [x] 4.8 Run `bun run lint:changed`, `bun run ts:check`, and
       `bun run architecture:check`.
-- [ ] 4.9 Run manual GUI smoke: delete stale account, reconnect with fresh OAuth,
+- [x] 4.9 Run manual GUI smoke: delete stale account, reconnect with fresh OAuth,
       run a plain Claude prompt, then rerun the calculator MCP prompt.
+      Evidence: 2026-06-21 real OAuth smoke used isolated
+      `LOCUS_USER_DATA_DIR=/private/tmp/locus-real-oauth-smoke-20260621-220318/user-data`.
+      The UI exposed fresh "使用 Anthropic 授权" alongside local credential
+      import, completed OAuth for the temporary Locus DB, left
+      `claude_code_credentials` empty, passed `scripts/smoke-local-claude-code.cjs`,
+      and passed the calculator MCP prompt with `mcp__calculator__calculate`
+      returning `391`.
