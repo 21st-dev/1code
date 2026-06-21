@@ -1,17 +1,28 @@
-import { createHash } from "crypto"
+import { createHash } from "node:crypto"
+import * as fssync from "node:fs"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 import * as electron from "electron"
-import * as fs from "fs/promises"
-import * as fssync from "fs"
-import * as os from "os"
-import * as path from "path"
+import { getElectronUserDataPath } from "../electron-app"
 import { assertOfficialCloudAllowed } from "../local-only"
 
 const SKILL_ID_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 const STATE_VERSION = 1
+const MANAGED_STATE_FILE_NAME = "skill-registry-managed-state.json"
 const DEFAULT_REMOTE_REGISTRY_URL = process.env.ONECODE_SKILL_REGISTRY_URL
 const SKIP_NAMES = new Set([".DS_Store", ".git", "__pycache__"])
 
 export type SkillRuntime = "claude" | "codex"
+
+let runtimeRootProviderForTest: ((runtime: SkillRuntime) => string) | null =
+  null
+
+export function setSkillRegistryRuntimeRootProviderForTest(
+  provider: ((runtime: SkillRuntime) => string) | null,
+): void {
+  runtimeRootProviderForTest = provider
+}
 
 function getElectronApp(): Electron.App | undefined {
   const electronModule = electron as unknown as {
@@ -86,6 +97,33 @@ interface SkillRegistryState {
   installed: Record<string, InstalledSkillState>
 }
 
+export interface ManagedSkillRuntimeInstallRecord {
+  runtime: SkillRuntime
+  installPath: string
+  installedAt: string
+  lastCheckedAt: string
+  lastBackupPath?: string
+  lastBackupCreatedAt?: string
+}
+
+export interface ManagedSkillInstallRecord {
+  id: string
+  registryId: string
+  version: string
+  contentHash: string
+  sourceType: "bundled" | "remote"
+  source?: string
+  eligibleRuntimes: SkillRuntime[]
+  installedAt: string
+  updatedAt: string
+  runtimes: Partial<Record<SkillRuntime, ManagedSkillRuntimeInstallRecord>>
+}
+
+interface ManagedSkillRegistryState {
+  schemaVersion: 1
+  installed: Record<string, ManagedSkillInstallRecord>
+}
+
 export interface RegistrySkillView {
   id: string
   displayName: string
@@ -154,6 +192,7 @@ function getCodexRoot(): string {
 }
 
 function getRuntimeRoot(runtime: SkillRuntime): string {
+  if (runtimeRootProviderForTest) return runtimeRootProviderForTest(runtime)
   return runtime === "codex" ? getCodexRoot() : getClaudeRoot()
 }
 
@@ -169,13 +208,22 @@ function getBackupRoot(runtime: SkillRuntime = "claude"): string {
   return path.join(getRuntimeRoot(runtime), "skill-registry-backups")
 }
 
+export function getManagedSkillRegistryStatePath(
+  userDataPath = getElectronUserDataPath(),
+): string {
+  return path.join(userDataPath, MANAGED_STATE_FILE_NAME)
+}
+
 function normalizeRelativePath(filePath: string): string {
   return filePath.split(path.sep).join("/")
 }
 
 function isPathInside(parent: string, child: string): boolean {
   const relative = path.relative(parent, child)
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+  )
 }
 
 async function readJsonFile<T>(filePath: string): Promise<T> {
@@ -189,7 +237,9 @@ async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
   await fs.rename(tmpPath, filePath)
 }
 
-async function readState(runtime: SkillRuntime = "claude"): Promise<SkillRegistryState> {
+async function readState(
+  runtime: SkillRuntime = "claude",
+): Promise<SkillRegistryState> {
   try {
     const state = await readJsonFile<SkillRegistryState>(getStatePath(runtime))
     if (state.schemaVersion !== STATE_VERSION || !state.installed) {
@@ -201,8 +251,264 @@ async function readState(runtime: SkillRuntime = "claude"): Promise<SkillRegistr
   }
 }
 
-async function writeState(state: SkillRegistryState, runtime: SkillRuntime = "claude"): Promise<void> {
+function emptyManagedState(): ManagedSkillRegistryState {
+  return { schemaVersion: STATE_VERSION, installed: {} }
+}
+
+function getManagedStatePathOrNull(): string | null {
+  try {
+    return getManagedSkillRegistryStatePath()
+  } catch {
+    return null
+  }
+}
+
+function normalizeSkillRuntime(value: unknown): SkillRuntime | null {
+  return value === "claude" || value === "codex" ? value : null
+}
+
+function normalizeManagedSkillRuntimeInstallRecord(
+  value: unknown,
+): ManagedSkillRuntimeInstallRecord | null {
+  if (!value || typeof value !== "object") return null
+  const record = value as Partial<ManagedSkillRuntimeInstallRecord>
+  const runtime = normalizeSkillRuntime(record.runtime)
+  if (
+    !runtime ||
+    typeof record.installPath !== "string" ||
+    typeof record.installedAt !== "string" ||
+    typeof record.lastCheckedAt !== "string"
+  ) {
+    return null
+  }
+
+  return {
+    runtime,
+    installPath: record.installPath,
+    installedAt: record.installedAt,
+    lastCheckedAt: record.lastCheckedAt,
+    ...(typeof record.lastBackupPath === "string" && record.lastBackupPath
+      ? { lastBackupPath: record.lastBackupPath }
+      : {}),
+    ...(typeof record.lastBackupCreatedAt === "string" &&
+    record.lastBackupCreatedAt
+      ? { lastBackupCreatedAt: record.lastBackupCreatedAt }
+      : {}),
+  }
+}
+
+function normalizeManagedSkillInstallRecord(
+  id: string,
+  value: unknown,
+): ManagedSkillInstallRecord | null {
+  if (!value || typeof value !== "object") return null
+  const record = value as Partial<ManagedSkillInstallRecord>
+  if (
+    record.id !== id ||
+    typeof record.registryId !== "string" ||
+    typeof record.version !== "string" ||
+    typeof record.contentHash !== "string" ||
+    (record.sourceType !== "bundled" && record.sourceType !== "remote") ||
+    typeof record.installedAt !== "string" ||
+    typeof record.updatedAt !== "string" ||
+    !record.runtimes ||
+    typeof record.runtimes !== "object"
+  ) {
+    return null
+  }
+
+  const runtimes: Partial<
+    Record<SkillRuntime, ManagedSkillRuntimeInstallRecord>
+  > = {}
+  for (const [runtimeKey, runtimeValue] of Object.entries(record.runtimes)) {
+    const runtime = normalizeSkillRuntime(runtimeKey)
+    const runtimeRecord =
+      normalizeManagedSkillRuntimeInstallRecord(runtimeValue)
+    if (!runtime || !runtimeRecord || runtimeRecord.runtime !== runtime)
+      continue
+    runtimes[runtime] = runtimeRecord
+  }
+
+  const eligibleRuntimes = Array.from(
+    new Set(
+      (Array.isArray(record.eligibleRuntimes) ? record.eligibleRuntimes : [])
+        .map(normalizeSkillRuntime)
+        .filter((runtime): runtime is SkillRuntime => !!runtime),
+    ),
+  ).sort()
+
+  return {
+    id,
+    registryId: record.registryId,
+    version: record.version,
+    contentHash: record.contentHash,
+    sourceType: record.sourceType,
+    ...(typeof record.source === "string" && record.source
+      ? { source: record.source }
+      : {}),
+    eligibleRuntimes,
+    installedAt: record.installedAt,
+    updatedAt: record.updatedAt,
+    runtimes,
+  }
+}
+
+async function readManagedState(): Promise<ManagedSkillRegistryState> {
+  const statePath = getManagedStatePathOrNull()
+  if (!statePath) return emptyManagedState()
+
+  try {
+    const parsed =
+      await readJsonFile<Partial<ManagedSkillRegistryState>>(statePath)
+    const installed: Record<string, ManagedSkillInstallRecord> = {}
+    if (parsed.schemaVersion !== STATE_VERSION || !parsed.installed) {
+      return emptyManagedState()
+    }
+    for (const [id, value] of Object.entries(parsed.installed)) {
+      if (!SKILL_ID_RE.test(id)) continue
+      const record = normalizeManagedSkillInstallRecord(id, value)
+      if (record) installed[id] = record
+    }
+    return { schemaVersion: STATE_VERSION, installed }
+  } catch {
+    return emptyManagedState()
+  }
+}
+
+async function writeManagedState(
+  state: ManagedSkillRegistryState,
+): Promise<void> {
+  const statePath = getManagedStatePathOrNull()
+  if (!statePath) return
+  await writeJsonAtomic(statePath, state)
+}
+
+async function writeState(
+  state: SkillRegistryState,
+  runtime: SkillRuntime = "claude",
+): Promise<void> {
   await writeJsonAtomic(getStatePath(runtime), state)
+}
+
+function getManifestRuntimes(
+  skill: Pick<RegistrySkillManifestEntry, "compatibility">,
+  runtime: SkillRuntime,
+): SkillRuntime[] {
+  const manifestRuntimes =
+    skill.compatibility?.runtimes?.filter(
+      (value): value is SkillRuntime => value === "claude" || value === "codex",
+    ) ?? []
+  return Array.from(new Set([...manifestRuntimes, runtime])).sort()
+}
+
+function managedRecordToInstalledSkillState(
+  record: ManagedSkillInstallRecord | undefined,
+  runtime: SkillRuntime,
+): InstalledSkillState | undefined {
+  const runtimeRecord = record?.runtimes[runtime]
+  if (!record || !runtimeRecord) return undefined
+
+  return {
+    id: record.id,
+    registryId: record.registryId,
+    version: record.version,
+    contentHash: record.contentHash,
+    installPath: runtimeRecord.installPath,
+    installedAt: runtimeRecord.installedAt,
+    lastCheckedAt: runtimeRecord.lastCheckedAt,
+    sourceType: record.sourceType,
+    ...(runtimeRecord.lastBackupPath
+      ? {
+          lastBackup: {
+            path: runtimeRecord.lastBackupPath,
+            createdAt:
+              runtimeRecord.lastBackupCreatedAt ?? runtimeRecord.lastCheckedAt,
+          },
+        }
+      : {}),
+  }
+}
+
+async function upsertManagedSkillInstallRecord(input: {
+  skill?: RegistrySkillManifestEntry & {
+    registryId: string
+    registrySource: "bundled" | "remote"
+  }
+  runtime: SkillRuntime
+  install: InstalledSkillState
+  now: string
+}): Promise<void> {
+  const managedState = await readManagedState()
+  const existing = managedState.installed[input.install.id]
+  const eligibleRuntimes = Array.from(
+    new Set([
+      ...(existing?.eligibleRuntimes ?? []),
+      ...(input.skill
+        ? getManifestRuntimes(input.skill, input.runtime)
+        : [input.runtime]),
+    ]),
+  ).sort()
+  const runtimes = {
+    ...(existing?.runtimes ?? {}),
+    [input.runtime]: {
+      runtime: input.runtime,
+      installPath: input.install.installPath,
+      installedAt: input.install.installedAt,
+      lastCheckedAt: input.install.lastCheckedAt,
+      ...(input.install.lastBackup?.path
+        ? {
+            lastBackupPath: input.install.lastBackup.path,
+            lastBackupCreatedAt: input.install.lastBackup.createdAt,
+          }
+        : {}),
+    },
+  }
+
+  managedState.installed[input.install.id] = {
+    id: input.install.id,
+    registryId: input.install.registryId,
+    version: input.install.version,
+    contentHash: input.install.contentHash,
+    sourceType: input.install.sourceType,
+    ...((input.skill?.source ?? existing?.source)
+      ? { source: input.skill?.source ?? existing?.source }
+      : {}),
+    eligibleRuntimes,
+    installedAt: existing?.installedAt ?? input.install.installedAt,
+    updatedAt: input.now,
+    runtimes,
+  }
+  await writeManagedState(managedState)
+}
+
+async function removeManagedSkillRuntime(input: {
+  id: string
+  runtime: SkillRuntime
+  now: string
+}): Promise<void> {
+  const managedState = await readManagedState()
+  const existing = managedState.installed[input.id]
+  if (!existing) return
+
+  const runtimes = { ...existing.runtimes }
+  delete runtimes[input.runtime]
+  if (Object.keys(runtimes).length === 0) {
+    delete managedState.installed[input.id]
+  } else {
+    managedState.installed[input.id] = {
+      ...existing,
+      updatedAt: input.now,
+      runtimes,
+    }
+  }
+  await writeManagedState(managedState)
+}
+
+export async function listManagedSkillInstallRecords(): Promise<
+  ManagedSkillInstallRecord[]
+> {
+  const state = await readManagedState()
+  return Object.values(state.installed).sort((a, b) => a.id.localeCompare(b.id))
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -227,7 +533,9 @@ async function collectFiles(root: string): Promise<string[]> {
       const relativePath = path.join(relativeBase, entry.name)
 
       if (entry.isSymbolicLink()) {
-        throw new Error(`Registry packages cannot contain symlinks: ${relativePath}`)
+        throw new Error(
+          `Registry packages cannot contain symlinks: ${relativePath}`,
+        )
       }
 
       if (entry.isDirectory()) {
@@ -259,7 +567,9 @@ export async function hashSkillDirectory(root: string): Promise<string | null> {
   return hash.digest("hex")
 }
 
-function validateManifest(manifest: SkillRegistryManifest): SkillRegistryManifest {
+function validateManifest(
+  manifest: SkillRegistryManifest,
+): SkillRegistryManifest {
   if (manifest.schemaVersion !== STATE_VERSION) {
     throw new Error("Unsupported skill registry manifest version")
   }
@@ -269,7 +579,11 @@ function validateManifest(manifest: SkillRegistryManifest): SkillRegistryManifes
 
   for (const skill of manifest.skills) {
     assertValidSkillId(skill.id)
-    if (!skill.version || !skill.source || !/^[a-f0-9]{64}$/i.test(skill.sha256)) {
+    if (
+      !skill.version ||
+      !skill.source ||
+      !/^[a-f0-9]{64}$/i.test(skill.sha256)
+    ) {
       throw new Error(`Invalid registry skill entry: ${skill.id}`)
     }
   }
@@ -281,7 +595,9 @@ function validateManifest(manifest: SkillRegistryManifest): SkillRegistryManifes
     }
     const sourceUrl = new URL(collection.sourceUrl)
     if (sourceUrl.protocol !== "https:") {
-      throw new Error(`Invalid registry collection source URL: ${collection.id}`)
+      throw new Error(
+        `Invalid registry collection source URL: ${collection.id}`,
+      )
     }
   }
 
@@ -290,7 +606,9 @@ function validateManifest(manifest: SkillRegistryManifest): SkillRegistryManifes
 
 export async function loadBundledRegistryManifest(): Promise<SkillRegistryManifest> {
   const manifestPath = path.join(getRegistryRoot(), "manifest.json")
-  return validateManifest(await readJsonFile<SkillRegistryManifest>(manifestPath))
+  return validateManifest(
+    await readJsonFile<SkillRegistryManifest>(manifestPath),
+  )
 }
 
 async function fetchRemoteRegistryManifest(): Promise<SkillRegistryManifest | null> {
@@ -314,16 +632,35 @@ async function fetchRemoteRegistryManifest(): Promise<SkillRegistryManifest | nu
 function mergeRegistries(
   bundled: SkillRegistryManifest,
   remote: SkillRegistryManifest | null,
-): Array<RegistrySkillManifestEntry & { registryId: string; registrySource: "bundled" | "remote" }> {
-  const merged = new Map<string, RegistrySkillManifestEntry & { registryId: string; registrySource: "bundled" | "remote" }>()
+): Array<
+  RegistrySkillManifestEntry & {
+    registryId: string
+    registrySource: "bundled" | "remote"
+  }
+> {
+  const merged = new Map<
+    string,
+    RegistrySkillManifestEntry & {
+      registryId: string
+      registrySource: "bundled" | "remote"
+    }
+  >()
 
   for (const skill of bundled.skills) {
-    merged.set(skill.id, { ...skill, registryId: bundled.registryId, registrySource: "bundled" })
+    merged.set(skill.id, {
+      ...skill,
+      registryId: bundled.registryId,
+      registrySource: "bundled",
+    })
   }
 
   if (remote) {
     for (const skill of remote.skills) {
-      merged.set(skill.id, { ...skill, registryId: remote.registryId, registrySource: "remote" })
+      merged.set(skill.id, {
+        ...skill,
+        registryId: remote.registryId,
+        registrySource: "remote",
+      })
     }
   }
 
@@ -333,8 +670,19 @@ function mergeRegistries(
 function mergeRegistryCollections(
   bundled: SkillRegistryManifest,
   remote: SkillRegistryManifest | null,
-): Array<RegistryCollectionManifestEntry & { registryId: string; registrySource: "bundled" | "remote" }> {
-  const merged = new Map<string, RegistryCollectionManifestEntry & { registryId: string; registrySource: "bundled" | "remote" }>()
+): Array<
+  RegistryCollectionManifestEntry & {
+    registryId: string
+    registrySource: "bundled" | "remote"
+  }
+> {
+  const merged = new Map<
+    string,
+    RegistryCollectionManifestEntry & {
+      registryId: string
+      registrySource: "bundled" | "remote"
+    }
+  >()
 
   for (const collection of bundled.collections ?? []) {
     merged.set(collection.id, {
@@ -372,13 +720,21 @@ function resolveBundledSourceDir(source: string): string {
 }
 
 async function readSkillStatus(
-  skill: RegistrySkillManifestEntry & { registryId: string; registrySource: "bundled" | "remote" },
-  state: SkillRegistryState,
+  skill: RegistrySkillManifestEntry & {
+    registryId: string
+    registrySource: "bundled" | "remote"
+  },
+  legacyState: SkillRegistryState,
+  managedState: ManagedSkillRegistryState,
   now: string,
   runtime: SkillRuntime,
 ): Promise<RegistrySkillView> {
   const installPath = getInstallPath(skill.id, runtime)
-  const installed = state.installed[skill.id]
+  const installed =
+    managedRecordToInstalledSkillState(
+      managedState.installed[skill.id],
+      runtime,
+    ) ?? legacyState.installed[skill.id]
   const currentHash = await hashSkillDirectory(installPath)
 
   let status: RegistrySkillStatus = "not-installed"
@@ -404,7 +760,10 @@ async function readSkillStatus(
       } else if (currentHash !== installed.contentHash) {
         status = "modified"
         statusMessage = "Installed files were modified locally."
-      } else if (installed.version !== skill.version || installed.contentHash !== skill.sha256) {
+      } else if (
+        installed.version !== skill.version ||
+        installed.contentHash !== skill.sha256
+      ) {
         status = "update-available"
       } else {
         status = "installed"
@@ -432,28 +791,44 @@ async function readSkillStatus(
     installPath,
     lastCheckedAt: installed?.lastCheckedAt ?? now,
     lastBackupPath: installed?.lastBackup?.path,
-    hasRollback: !!installed?.lastBackup?.path && fssync.existsSync(installed.lastBackup.path),
+    hasRollback:
+      !!installed?.lastBackup?.path &&
+      fssync.existsSync(installed.lastBackup.path),
     statusMessage,
   }
 }
 
-export async function listRegistrySkills(options?: { checkRemote?: boolean; runtime?: SkillRuntime }): Promise<RegistrySkillView[]> {
+export async function listRegistrySkills(options?: {
+  checkRemote?: boolean
+  runtime?: SkillRuntime
+}): Promise<RegistrySkillView[]> {
   const runtime = options?.runtime ?? "claude"
   const now = new Date().toISOString()
-  const [bundled, state] = await Promise.all([
+  const [bundled, legacyState, managedState] = await Promise.all([
     loadBundledRegistryManifest(),
     readState(runtime),
+    readManagedState(),
   ])
-  const remote = options?.checkRemote ? await fetchRemoteRegistryManifest() : null
+  const remote = options?.checkRemote
+    ? await fetchRemoteRegistryManifest()
+    : null
   const entries = mergeRegistries(bundled, remote)
 
-  return Promise.all(entries.map((skill) => readSkillStatus(skill, state, now, runtime)))
+  return Promise.all(
+    entries.map((skill) =>
+      readSkillStatus(skill, legacyState, managedState, now, runtime),
+    ),
+  )
 }
 
-export async function listRegistryCollections(options?: { checkRemote?: boolean }): Promise<RegistryCollectionView[]> {
+export async function listRegistryCollections(options?: {
+  checkRemote?: boolean
+}): Promise<RegistryCollectionView[]> {
   const [bundled, remote] = await Promise.all([
     loadBundledRegistryManifest(),
-    options?.checkRemote ? fetchRemoteRegistryManifest() : Promise.resolve(null),
+    options?.checkRemote
+      ? fetchRemoteRegistryManifest()
+      : Promise.resolve(null),
   ])
   const collections = mergeRegistryCollections(bundled, remote)
 
@@ -466,16 +841,20 @@ export async function listRegistryCollections(options?: { checkRemote?: boolean 
     sourceUrl: collection.sourceUrl,
     installHint: collection.installHint,
     recommendedAction: collection.recommendedAction,
-    runtimes: collection.compatibility?.runtimes?.filter((runtime): runtime is SkillRuntime =>
-      runtime === "claude" || runtime === "codex",
+    runtimes: collection.compatibility?.runtimes?.filter(
+      (runtime): runtime is SkillRuntime =>
+        runtime === "claude" || runtime === "codex",
     ),
     license: collection.license,
   }))
 }
 
-async function getRegistryEntry(
-  id: string,
-): Promise<RegistrySkillManifestEntry & { registryId: string; registrySource: "bundled" | "remote" }> {
+async function getRegistryEntry(id: string): Promise<
+  RegistrySkillManifestEntry & {
+    registryId: string
+    registrySource: "bundled" | "remote"
+  }
+> {
   assertValidSkillId(id)
   const skills = mergeRegistries(await loadBundledRegistryManifest(), null)
   const skill = skills.find((entry) => entry.id === id)
@@ -540,7 +919,9 @@ async function backupExistingSkill(
   }
 }
 
-export async function installRegistrySkill(input: InstallRegistrySkillInput): Promise<RegistrySkillView> {
+export async function installRegistrySkill(
+  input: InstallRegistrySkillInput,
+): Promise<RegistrySkillView> {
   const { id, runtime = "claude", force = false } = input
   const skill = await getRegistryEntry(id)
   if (skill.registrySource !== "bundled") {
@@ -554,13 +935,27 @@ export async function installRegistrySkill(input: InstallRegistrySkillInput): Pr
   const currentHash = await hashSkillDirectory(targetDir)
 
   if (currentHash && !previousState && !force) {
-    throw new Error(`Skill "${id}" already exists as a user skill. Confirm restore before replacing it.`)
+    throw new Error(
+      `Skill "${id}" already exists as a user skill. Confirm restore before replacing it.`,
+    )
   }
-  if (currentHash && previousState && currentHash !== previousState.contentHash && !force) {
-    throw new Error(`Skill "${id}" was modified locally. Confirm restore before replacing it.`)
+  if (
+    currentHash &&
+    previousState &&
+    currentHash !== previousState.contentHash &&
+    !force
+  ) {
+    throw new Error(
+      `Skill "${id}" was modified locally. Confirm restore before replacing it.`,
+    )
   }
 
-  const lastBackup = await backupExistingSkill(id, targetDir, runtime, previousState)
+  const lastBackup = await backupExistingSkill(
+    id,
+    targetDir,
+    runtime,
+    previousState,
+  )
   await fs.rm(targetDir, { recursive: true, force: true })
   await fs.mkdir(path.dirname(targetDir), { recursive: true })
   await fs.cp(sourceDir, targetDir, {
@@ -570,7 +965,7 @@ export async function installRegistrySkill(input: InstallRegistrySkillInput): Pr
   })
 
   const now = new Date().toISOString()
-  state.installed[id] = {
+  const installState: InstalledSkillState = {
     id,
     registryId: skill.registryId,
     version: skill.version,
@@ -581,12 +976,21 @@ export async function installRegistrySkill(input: InstallRegistrySkillInput): Pr
     sourceType: skill.registrySource,
     lastBackup,
   }
+  state.installed[id] = installState
   await writeState(state, runtime)
+  await upsertManagedSkillInstallRecord({
+    skill,
+    runtime,
+    install: installState,
+    now,
+  })
 
   return (await listRegistrySkills({ runtime })).find((item) => item.id === id)!
 }
 
-export async function rollbackRegistrySkill(input: RollbackRegistrySkillInput): Promise<RegistrySkillView | null> {
+export async function rollbackRegistrySkill(
+  input: RollbackRegistrySkillInput,
+): Promise<RegistrySkillView | null> {
   const { id, runtime = "claude" } = input
   assertValidSkillId(id)
 
@@ -622,7 +1026,20 @@ export async function rollbackRegistrySkill(input: RollbackRegistrySkillInput): 
   }
 
   await writeState(state, runtime)
-  return (await listRegistrySkills({ runtime })).find((item) => item.id === id) ?? null
+  const now = new Date().toISOString()
+  if (state.installed[id]) {
+    await upsertManagedSkillInstallRecord({
+      runtime,
+      install: state.installed[id],
+      now,
+    })
+  } else {
+    await removeManagedSkillRuntime({ id, runtime, now })
+  }
+  return (
+    (await listRegistrySkills({ runtime })).find((item) => item.id === id) ??
+    null
+  )
 }
 
 export async function getRegistryMetadataForSkillId(id: string): Promise<{

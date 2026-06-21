@@ -81,8 +81,14 @@
 
 ## 3. Codex Skill Projection
 
-- [ ] 3.1 Store registry-managed skill install metadata as Locus canonical install
+- [x] 3.1 Store registry-managed skill install metadata as Locus canonical install
   truth.
+- 2026-06-22 completed: registry skill installs now write
+  `skill-registry-managed-state.json` under Locus user data with package
+  metadata plus per-runtime install records. `listRegistrySkills` prefers this
+  managed state and only falls back to legacy runtime-local state for
+  compatibility; focused tests prove Codex installed status survives after the
+  old `~/.codex/skill-registry-state.json` file is removed.
 - [ ] 3.2 Implement Codex registry skill projection into managed isolated
   `CODEX_HOME/skills`.
 - [ ] 3.3 Exclude unmanaged global Codex skills from isolated homes unless they are
