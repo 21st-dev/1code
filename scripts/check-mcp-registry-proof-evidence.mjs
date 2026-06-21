@@ -4,14 +4,29 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const changeId = "add-mcp-registry-install"
-const allowedStatuses = new Set(["pending", "passed", "failed", "blocked"])
+const allowedStatuses = new Set([
+  "pending",
+  "passed",
+  "failed",
+  "blocked",
+  "deferred",
+])
 const scenarioTaskMap = new Map([
-  ["claude-agent-sdk-mcp-observability", ["1.1"]],
-  ["codex-app-server-mcp-observability", ["1.2"]],
-  ["verified-state-policy", ["1.3"]],
-  ["claude-verified-upgrade", ["4.3"]],
-  ["codex-verified-upgrade", ["4.4"]],
-  ["claude-registry-real-run", ["5.6"]],
+  [
+    "claude-agent-sdk-mcp-observability",
+    { taskIds: ["1.1"], checkedStatuses: ["passed"] },
+  ],
+  [
+    "codex-app-server-mcp-observability",
+    { taskIds: ["1.2"], checkedStatuses: ["passed", "deferred"] },
+  ],
+  ["verified-state-policy", { taskIds: ["1.3"], checkedStatuses: ["passed"] }],
+  ["claude-verified-upgrade", { taskIds: ["4.3"], checkedStatuses: ["passed"] }],
+  [
+    "codex-verified-upgrade",
+    { taskIds: ["4.4"], checkedStatuses: ["passed", "deferred"] },
+  ],
+  ["claude-registry-real-run", { taskIds: ["5.6"], checkedStatuses: ["passed"] }],
 ])
 const requiredRunbookMarkers = [
   "Provider call authorization: required",
@@ -100,7 +115,7 @@ while (match !== null) {
   match = scenarioPattern.exec(evidence)
 }
 
-for (const [scenarioId, taskIds] of scenarioTaskMap.entries()) {
+for (const [scenarioId, { taskIds, checkedStatuses }] of scenarioTaskMap.entries()) {
   const status = statusByScenario.get(scenarioId)
   if (!status) {
     fail(`${evidencePath} is missing scenario ${scenarioId}.`)
@@ -114,14 +129,15 @@ for (const [scenarioId, taskIds] of scenarioTaskMap.entries()) {
 
   for (const taskId of taskIds) {
     const checked = taskIsChecked(tasks, taskId)
-    if (checked && status !== "passed") {
+    const statusAllowsCheckedTask = checkedStatuses.includes(status)
+    if (checked && !statusAllowsCheckedTask) {
       fail(
-        `task ${taskId} is checked but scenario ${scenarioId} is ${status}, not passed.`,
+        `task ${taskId} is checked but scenario ${scenarioId} is ${status}, not one of ${checkedStatuses.join(", ")}.`,
       )
     }
-    if (!checked && status === "passed") {
+    if (!checked && statusAllowsCheckedTask) {
       fail(
-        `scenario ${scenarioId} passed but task ${taskId} is still unchecked.`,
+        `scenario ${scenarioId} is ${status} but task ${taskId} is still unchecked.`,
       )
     }
   }

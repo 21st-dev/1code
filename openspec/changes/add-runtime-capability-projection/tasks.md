@@ -12,7 +12,7 @@
 
 ## 1. Prerequisites
 
-- [ ] 1.1 Confirm `add-mcp-registry-install` has landed with its MCP
+- [x] 1.1 Confirm `add-mcp-registry-install` has landed with its MCP
   verified/setup semantics preserved.
 - 2026-06-20 not satisfied: `add-mcp-registry-install` is still active at 39/45
   with real Claude/Codex runtime proof and verified-state tasks intentionally
@@ -22,6 +22,12 @@
   upgrade are now recorded; the remaining unchecked tasks are Codex app-server
   tool-call observability and `Verified on Codex`, which stay deferred/blocked
   instead of being faked.
+- 2026-06-22 satisfied: `add-mcp-registry-install` is archived at
+  `openspec/changes/archive/2026-06-21-add-mcp-registry-install/`, current
+  `openspec/specs/mcp-registry-install/spec.md` preserves Claude setup/check/
+  verified semantics, and Codex registry install/check/`Verified on Codex`
+  remain explicitly deferred when proof gates do not pass. Runtime Capability
+  Projection may now proceed without taking over MCP verified-state ownership.
 - [x] 1.2 Confirm this change is implemented as Phase 1 Codex registry skill
   projection first, not a bundled rewrite of Skills, MCP, and Plugins.
 - 2026-06-22 confirmed from `design.md` and specs: Phase 1 is only Codex

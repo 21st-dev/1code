@@ -6,9 +6,9 @@ Updated: 2026-06-22
 
 ## Status
 
-Task 1.2 remains unchecked. This pass records the current Locus-managed Codex
-app-server observability surface and the 2026-06-22 real smoke result after the
-isolated `CODEX_HOME` MCP materialization fix.
+Task 1.2 is complete as a deferred Codex outcome. This pass records the current
+Locus-managed Codex app-server observability surface and the 2026-06-22 real
+smoke result after the isolated `CODEX_HOME` MCP materialization fix.
 
 Do not mark `Verified on Codex` design work complete from this note alone.
 

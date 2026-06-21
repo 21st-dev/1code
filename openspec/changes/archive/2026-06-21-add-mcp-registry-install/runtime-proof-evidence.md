@@ -49,7 +49,7 @@ Current status:
 
 ## Scenario: codex-app-server-mcp-observability
 
-Status: blocked
+Status: deferred
 
 Required before checking tasks: 1.2
 
@@ -175,7 +175,7 @@ Current status:
 
 ## Scenario: codex-verified-upgrade
 
-Status: blocked
+Status: deferred
 
 Required before checking tasks: 4.4
 

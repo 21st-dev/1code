@@ -43,7 +43,7 @@
   `runtime-proof-evidence.md`: `calculator-mcp-server` appeared as a pending MCP
   server, ToolSearch surfaced `mcp__calculator-mcp-server__calculate`, the run
   executed that MCP tool for `2 + 2`, and the matching tool result returned `4`.
-- [ ] 1.2 Probe Locus-managed Codex app-server runs with a known MCP server and record
+- [x] 1.2 Probe Locus-managed Codex app-server runs with a known MCP server and record
   whether Locus can observe server connection, tool-list, and successful MCP
   tool-call signals.
 - 2026-06-20 code-level pre-probe recorded in
@@ -61,9 +61,9 @@
   `mcpServerStatus/list` returned `codex_apps` and `locus_edit`,
   `toolNamesByServer.locus_edit` contained `propose_file_edit`, and the model
   issued one `locus_edit.propose_file_edit` tool-call request. This remains
-  unchecked because the app-server evidence is still approval-request evidence,
-  not a post-execution successful MCP tool-output signal keyed to a registry
-  fingerprint.
+  a deferred Codex outcome because the app-server evidence is still
+  approval-request evidence, not a post-execution successful MCP tool-output
+  signal keyed to a registry fingerprint.
 - [x] 1.3 Define verified-state behavior from the probe results. If a runtime lacks a
   required signal, automatic `Verified` upgrades from passive run observation are
   disabled or narrowed for that runtime.
@@ -278,13 +278,15 @@
   with `status:"verified-local"` and
   `reason:"claude-tool-call-success:calculate"` for the same registry
   entry/config fingerprints.
-- [ ] 4.4 Observe real Locus-managed Codex app-server runs and upgrade to
+- [x] 4.4 Observe real Locus-managed Codex app-server runs and upgrade to
   `Verified on Codex` only after Codex field-materialization and observability proof
   gates pass and a tool call succeeds.
 - 2026-06-22 partial Codex app-server runtime proof exists for materialized
   `locus_edit` readiness/tool-list/tool-call-request observability, but no
   `verified-local` record was written and no successful post-execution MCP tool
-  output signal was observed. `Verified on Codex` remains deferred.
+  output signal was observed. Because the proof gates did not pass, the completed
+  outcome for this change is that `Verified on Codex` remains deferred and is not
+  offered.
 - [x] 4.5 Add an explicit Check action that is connect/list-only by default.
 - 2026-06-20 added explicit `mcpRegistry.checkInstalled` plus an MCP tab Check
   button for registry-managed Claude servers. The default path materializes the

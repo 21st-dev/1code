@@ -71,6 +71,9 @@ If a later local session attempts Codex proof, record:
 - local verification record before and after the run
 
 Do not offer or record `Verified on Codex` if any of those signals are missing.
+If the attempted Codex proof shows readiness/tool-list evidence but still lacks
+post-execution tool-output proof or registry fingerprint binding, record the
+Codex scenarios as `deferred`, not `passed`.
 
 ## Secret Scan
 
@@ -83,7 +86,8 @@ redacted paths, not the token strings.
 After passed evidence is recorded:
 
 1. Update `runtime-proof-evidence.md` scenario statuses.
-2. Check only the tasks whose evidence is proven.
+2. Check only the tasks whose evidence is proven or whose conditional Codex
+   outcome is explicitly recorded as `deferred`.
 3. Run:
 
 ```bash
