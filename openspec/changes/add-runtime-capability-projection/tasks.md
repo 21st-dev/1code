@@ -84,10 +84,20 @@
 - [ ] 5.2 Define extension-point shape for future MCP and Plugins projection
   registration without requiring consumers or placeholder adapters before those
   kinds are explicitly registered.
-- [ ] 5.3 Confirm MCP still uses connection/tools/tool-call proof for verified
+- [x] 5.3 Confirm MCP still uses connection/tools/tool-call proof for verified
   state.
-- [ ] 5.4 Confirm Plugins still use runtime-native activation identity for
+- 2026-06-22 confirmed: `add-mcp-registry-install` keeps MCP verified usability
+  under MCP-specific proof gates. Claude requires connection/tool inventory plus
+  successful tool-call evidence; Codex remains deferred when those proof signals
+  are unavailable. Projection availability alone must not create `Verified on
+  Claude` or `Verified on Codex`.
+- [x] 5.4 Confirm Plugins still use runtime-native activation identity for
   verified/native state.
+- 2026-06-22 confirmed: current `runtime-plugins` spec requires bounded
+  runtime-native activation identity, drift/review gates, safe mode, and MCP
+  approval before native plugin activation. This projection change does not
+  replace plugin activation identity or register a placeholder Plugin projection
+  adapter.
 
 ## 6. Tests And Smoke
 
