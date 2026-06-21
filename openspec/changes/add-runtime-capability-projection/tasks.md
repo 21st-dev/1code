@@ -199,4 +199,7 @@
   creates temporary managed skill state, prepares an isolated `CODEX_HOME`, and
   proves `CODEX_HOME/skills/find-skills` is a symlink to the registry-managed
   skill while unmanaged global skills are excluded.
-- [ ] 6.7 Run `bun run check`.
+- [x] 6.7 Run `bun run check`.
+- 2026-06-22 completed: `bun run check` passed after hardening Claude Code
+  credential tests to use explicit secure-storage test overrides instead of
+  relying on `electron` mock load order.

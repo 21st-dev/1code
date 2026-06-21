@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite"
-import { beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { eq } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/bun-sqlite"
 import * as schema from "../src/main/lib/db/schema"
@@ -9,23 +9,25 @@ import {
   claudeCodeCredentials,
 } from "../src/main/lib/db/schema"
 
+const testSafeStorage = {
+  isEncryptionAvailable() {
+    return true
+  },
+  encryptString(value: string) {
+    return Buffer.from(`encrypted:${value}`, "utf-8")
+  },
+  decryptString(value: Buffer) {
+    return value.toString("utf-8").replace(/^encrypted:/, "")
+  },
+}
+
 mock.module("electron", () => ({
   app: {
     getPath() {
       return "/tmp/locus-test-user-data"
     },
   },
-  safeStorage: {
-    isEncryptionAvailable() {
-      return true
-    },
-    encryptString(value: string) {
-      return Buffer.from(`encrypted:${value}`, "utf-8")
-    },
-    decryptString(value: Buffer) {
-      return value.toString("utf-8").replace(/^encrypted:/, "")
-    },
-  },
+  safeStorage: testSafeStorage,
 }))
 
 const {
@@ -36,9 +38,11 @@ const {
   removeClaudeCodeAccount,
   reconcileClaudeCodeCredentialStorage,
 } = await import("../src/main/lib/claude-credentials")
-const { encryptStringForStorage } = await import(
-  "../src/main/lib/secure-storage"
-)
+const {
+  encryptStringForStorage,
+  setElectronSafeStorageForTest,
+  setSecureStorageMacKeychainPreflightForTest,
+} = await import("../src/main/lib/secure-storage")
 
 type CredentialDb = NonNullable<Parameters<typeof removeClaudeCodeAccount>[1]>
 
@@ -95,7 +99,14 @@ describe("Claude Code account deletion storage reconciliation", () => {
   let db: ReturnType<typeof createCredentialTestDb>
 
   beforeEach(() => {
+    setSecureStorageMacKeychainPreflightForTest(true)
+    setElectronSafeStorageForTest(testSafeStorage)
     db = createCredentialTestDb()
+  })
+
+  afterEach(() => {
+    setSecureStorageMacKeychainPreflightForTest(null)
+    setElectronSafeStorageForTest(null)
   })
 
   const credentialDb = () => db as unknown as CredentialDb
