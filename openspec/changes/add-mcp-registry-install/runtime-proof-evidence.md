@@ -102,7 +102,7 @@ Current status:
 
 ## Scenario: claude-verified-upgrade
 
-Status: blocked
+Status: passed
 
 Required before checking tasks: 4.3
 
@@ -123,6 +123,40 @@ Current status:
   stream observer and SDK HTTP/SSE materialization fix. This scenario remains
   blocked until a fresh real Claude GUI/runtime run using the updated code
   writes and records the matching `verified-local` state file.
+- 2026-06-22 real Claude GUI/runtime proof passed using the updated `main`
+  branch:
+  - app userData:
+    `/private/tmp/locus-mcp-registry-smoke`
+  - Claude config home:
+    `/private/tmp/locus-mcp-registry-home`
+  - CODEX_HOME:
+    `/private/tmp/locus-mcp-registry-home/.codex`
+  - registry config source:
+    `/private/tmp/locus-mcp-registry-home/.claude.json`
+  - server: `calculator-mcp-server`
+  - entry fingerprint:
+    `sha256:64c67a45623c1e4b350108027d5fdc1f3df16c93e6fa3b4d7d776dbf488fbcb3`
+  - config fingerprint:
+    `sha256:a40d89dd2fc59eb83e9a06713a003fd43319d823566aa4ae029758ee558f7f8f`
+  - Claude JSONL evidence:
+    `/private/tmp/locus-mcp-registry-smoke/claude-sessions/mqnrftnrw5lyimhn/projects/-Users-ethan-Code-GitHub-agent-code-for-me/08958b6e-681e-42df-a7db-ee1dc9cd261c.jsonl`
+  - JSONL line 4 records `pendingMcpServers:["calculator-mcp-server"]`.
+  - JSONL line 9 records ToolSearch surfacing
+    `mcp__calculator-mcp-server__calculate`.
+  - JSONL line 10 records the real `tool_use` call with input
+    `{"expression":"2 + 2"}`.
+  - JSONL line 11 records the matching tool result:
+    `{"result":"4","resultType":"number","expression":"2 + 2","operation":"evaluate"}`.
+  - JSONL line 12 records deferred tools updated with
+    `mcp__calculator-mcp-server__calculate` and no remaining pending MCP
+    servers.
+  - JSONL line 14 records the final assistant response attributed to
+    `calculator-mcp-server` / `calculate`.
+  - Local verification record after the run:
+    `/private/tmp/locus-mcp-registry-smoke/mcp-registry-verification-state.json`
+    records `status:"verified-local"` and
+    `reason:"claude-tool-call-success:calculate"` for the same runtime, server
+    name, entry fingerprint, and config fingerprint.
 
 ## Scenario: codex-verified-upgrade
 

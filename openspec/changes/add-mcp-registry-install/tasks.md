@@ -253,13 +253,21 @@
   materialization. Tests assert unresolved needs-setup stays excluded from
   Claude SDK runs, ready-to-verify enters Claude SDK input, and returned state
   does not expose secret values.
-- [ ] 4.3 Observe real Claude runs and upgrade to `Verified on Claude` only after the
+- [x] 4.3 Observe real Claude runs and upgrade to `Verified on Claude` only after the
   Phase-0 probe proves Locus can observe the required MCP signals and a tool call
   succeeds.
 - 2026-06-22 implementation support landed for Claude runtime observation and
   SDK HTTP/SSE MCP materialization, but this task remains unchecked until a
   fresh real Claude GUI/runtime run records the matching local `verified-local`
   state file.
+- 2026-06-22 real Claude GUI/runtime proof passed on `main` for
+  `calculator-mcp-server`: the run observed
+  `mcp__calculator-mcp-server__calculate`, executed it with `{"expression":"2 + 2"}`,
+  received result `4`, and wrote
+  `/private/tmp/locus-mcp-registry-smoke/mcp-registry-verification-state.json`
+  with `status:"verified-local"` and
+  `reason:"claude-tool-call-success:calculate"` for the same registry
+  entry/config fingerprints.
 - [ ] 4.4 Observe real Locus-managed Codex app-server runs and upgrade to
   `Verified on Codex` only after Codex field-materialization and observability proof
   gates pass and a tool call succeeds.
