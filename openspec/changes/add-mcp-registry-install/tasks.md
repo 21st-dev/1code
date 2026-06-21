@@ -52,6 +52,10 @@
   `toolNamesByServer` and persists the redacted `mcp` runtime-status payload.
   This is not checked because a real app-server MCP tool-call success signal is
   still required.
+- 2026-06-22 re-audit confirms this remains blocked: `mcpServerStatus/list`
+  provides readiness/tool-name evidence, while `item/tool/call` is handled as a
+  pre-execution approval request and is not post-execution MCP tool-output
+  evidence.
 - [x] 1.3 Define verified-state behavior from the probe results. If a runtime lacks a
   required signal, automatic `Verified` upgrades from passive run observation are
   disabled or narrowed for that runtime.
