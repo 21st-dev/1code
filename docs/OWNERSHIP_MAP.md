@@ -14,6 +14,21 @@ or UI helper.
 - Rule: runtime-specific files may expose facades, but must not define a second
   capability ID list or a second manifest truth table.
 
+## Runtime Capability Projection
+
+- Canonical owner: `src/main/lib/runtime-capability-projection/`
+- Consumers: capability-specific registry owners, runtime home/session
+  preparation adapters, Settings runtime availability surfaces
+- Rule: projected capability materialization, projection result types,
+  per-runtime availability state, projection fingerprints, and non-secret
+  diagnostics belong to this owner or to adapters registered by this owner.
+  Runtime-specific routes, renderer code, and capability registries must not
+  derive a second projection truth table from install state, runtime names, or
+  filesystem guesses. Runtime capability class support stays in
+  `src/shared/agent-runtime-capabilities.ts`; MCP config read/write and verified
+  usability stay with Runtime MCP Config and MCP Registry owners; plugin
+  runtime-native activation identity stays with Runtime Plugins.
+
 ## Runtime Chat UI Event State
 
 - Canonical owner: `src/renderer/features/agents/lib/runtime-event-state.ts`

@@ -46,8 +46,13 @@
     `src/main/lib/codex/app-server-adapter.ts`. It stages reviewed plugin
     cache entries plus auth/config into isolated `CODEX_HOME`; it does not stage
     registry-managed skills into isolated `CODEX_HOME/skills`.
-- [ ] 1.4 Update `docs/OWNERSHIP_MAP.md` to name the Runtime Capability
+- [x] 1.4 Update `docs/OWNERSHIP_MAP.md` to name the Runtime Capability
   Projection owner before implementation changes projection logic.
+- 2026-06-22 completed: `docs/OWNERSHIP_MAP.md` now names
+  `src/main/lib/runtime-capability-projection/` as the canonical owner for
+  projection materialization, result types, per-runtime availability,
+  fingerprints, and non-secret diagnostics. This is an ownership preflight only;
+  projection implementation remains gated by 1.1.
 
 ## 2. Projection Service
 
