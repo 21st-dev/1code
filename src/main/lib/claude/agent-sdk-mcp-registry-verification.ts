@@ -15,9 +15,60 @@ type ClaudeMcpRegistryToolCall = {
 type UpsertMcpRegistryVerificationRecord =
   typeof upsertMcpRegistryVerificationRecord
 
+const ERROR_STATUS_VALUES = new Set(["error", "errored", "failed", "failure"])
+
 export type ClaudeMcpRegistryVerificationObserver = {
   observeChunk: (chunk: UIMessageChunk) => void
   flush: () => Promise<void>
+}
+
+function hasOwn(record: Record<string, unknown>, key: string): boolean {
+  return Object.hasOwn(record, key)
+}
+
+function isMeaningfulErrorValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === false) return false
+  if (typeof value === "string") return value.trim().length > 0
+  if (Array.isArray(value)) return value.length > 0
+  return true
+}
+
+function isErrorStatus(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    ERROR_STATUS_VALUES.has(value.trim().toLowerCase())
+  )
+}
+
+function isTextualErrorOutput(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    /^\s*(error|failed|failure)\s*:/i.test(value)
+  )
+}
+
+function hasToolOutputErrorMarker(
+  output: unknown,
+  seen: WeakSet<object> = new WeakSet(),
+  depth = 0,
+): boolean {
+  if (isTextualErrorOutput(output)) return true
+  if (output === null || typeof output !== "object") return false
+  if (seen.has(output)) return false
+  seen.add(output)
+
+  const record = output as Record<string, unknown>
+  if (record.isError === true) return true
+  if (hasOwn(record, "error") && isMeaningfulErrorValue(record.error)) {
+    return true
+  }
+  if (record.ok === false || record.success === false) return true
+  if (isErrorStatus(record.status) || isErrorStatus(record.state)) return true
+  if (depth >= 4) return false
+
+  return Object.values(record).some((value) =>
+    hasToolOutputErrorMarker(value, seen, depth + 1),
+  )
 }
 
 function verificationTargetId(target: McpRegistryVerificationKeyInput): string {
@@ -95,7 +146,9 @@ export function createClaudeMcpRegistryVerificationObserver(input: {
       if (chunk.type === "tool-output-available") {
         const call = pendingToolCalls.get(chunk.toolCallId)
         pendingToolCalls.delete(chunk.toolCallId)
-        if (call) scheduleVerifiedLocalWrite(call)
+        if (call && !hasToolOutputErrorMarker(chunk.output)) {
+          scheduleVerifiedLocalWrite(call)
+        }
         return
       }
 

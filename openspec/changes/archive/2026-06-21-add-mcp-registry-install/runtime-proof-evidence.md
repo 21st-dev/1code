@@ -7,6 +7,11 @@ This file tracks the real-runtime evidence that is still required before
 OAuth tokens, authorization headers, cookies, API keys, or unredacted config
 files here.
 
+The raw Claude session JSONL referenced below lives under temporary local
+runtime directories and is not committed to the repository. This repository
+stores the redacted factual extraction plus an evidence gate; reproducing the
+runtime proof requires rerunning the runbook in a GUI/runtime-capable session.
+
 ## Scenario: claude-agent-sdk-mcp-observability
 
 Status: passed
@@ -20,6 +25,9 @@ Evidence required:
 - Claude tool inventory evidence containing `mcp__<server>__<tool>`.
 - User-initiated prompt that caused the harmless MCP tool to run.
 - Matching `tool-output-available` evidence for that MCP tool.
+- Confirmation that the observed tool output is a non-error result rather than
+  a runtime or domain-level error payload returned through the normal output
+  channel.
 
 Current status:
 - Code-level pre-probe is recorded in `observability-probe-notes.md`.
@@ -101,6 +109,10 @@ Current status:
     Locus-managed Claude stream observes a matching
     `tool-input-available` for `mcp__<server>__<tool>` followed by
     `tool-output-available` for the same `toolCallId`.
+  - The tool output must not carry explicit error markers such as `isError`,
+    non-empty `error`, `ok:false`, `success:false`, or failed/error status
+    values; domain-level error payloads returned as normal output do not upgrade
+    local verification state.
   - The observed server must be present in the runtime-injected registry
     verification target map for the same runtime, server name, entry
     fingerprint, and config fingerprint.

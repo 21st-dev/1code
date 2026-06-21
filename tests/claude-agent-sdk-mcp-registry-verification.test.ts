@@ -120,6 +120,49 @@ describe("Claude MCP registry verification observer", () => {
     expect(upsert).not.toHaveBeenCalled()
   })
 
+  test("does not verify domain-level error results returned as normal tool output", async () => {
+    const upsert = mock(async (input: VerificationUpsertInput) => ({
+      id: "record",
+      machineScope: "local" as const,
+      updatedAt: "2026-06-20T00:00:00.000Z",
+      ...input,
+    }))
+    const observer = createClaudeMcpRegistryVerificationObserver({
+      targets: createTargets(),
+      upsert,
+      warn: () => {},
+    })
+
+    const errorOutputs: unknown[] = [
+      { error: "bad expression" },
+      { result: { error: { message: "bad expression" } } },
+      { isError: true, content: [{ type: "text", text: "bad expression" }] },
+      { ok: false, result: "bad expression" },
+      { success: false, result: "bad expression" },
+      { status: "failed", result: "bad expression" },
+      "Error: bad expression",
+    ]
+
+    for (const [index, output] of errorOutputs.entries()) {
+      const toolCallId = `domain-error-${index}`
+      observer.observeChunk({
+        type: "tool-input-available",
+        toolCallId,
+        toolName: "mcp__calculator-mcp-server__calculate",
+        input: {},
+      })
+      observer.observeChunk({
+        type: "tool-output-available",
+        toolCallId,
+        output,
+      })
+    }
+
+    await observer.flush()
+
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
   test("deduplicates repeated successful outputs for the same local fingerprint", async () => {
     const upsert = mock(async (input: VerificationUpsertInput) => ({
       id: "record",

@@ -150,6 +150,8 @@ local runtime evidence for the exact runtime and config fingerprint.
 - **WHEN** a Claude run discovers a registry-installed MCP server, connects to it,
   lists its tools, and successfully calls at least one tool
 - **AND** the Phase-0 observability probe showed Locus can record those signals
+- **AND** the observed tool result does not carry a runtime or domain-level error
+  marker
 - **THEN** the app records `Verified on Claude` for the local machine, server,
   runtime, entry fingerprint, and config fingerprint
 
