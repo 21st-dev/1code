@@ -22,10 +22,30 @@
   upgrade are now recorded; the remaining unchecked tasks are Codex app-server
   tool-call observability and `Verified on Codex`, which stay deferred/blocked
   instead of being faked.
-- [ ] 1.2 Confirm this change is implemented as Phase 1 Codex registry skill
+- [x] 1.2 Confirm this change is implemented as Phase 1 Codex registry skill
   projection first, not a bundled rewrite of Skills, MCP, and Plugins.
-- [ ] 1.3 Confirm the current Skills registry and Codex app-server isolated home
+- 2026-06-22 confirmed from `design.md` and specs: Phase 1 is only Codex
+  registry skill projection. MCP keeps Runtime MCP Config plus MCP Registry
+  verified proof ownership, and Plugins keep runtime-native activation identity;
+  neither kind gets placeholder projection adapters in this change.
+- [x] 1.3 Confirm the current Skills registry and Codex app-server isolated home
   code paths before implementation.
+- 2026-06-22 current code-path audit:
+  - Skills registry install/list state lives in
+    `src/main/lib/skills/registry.ts` and is exposed through
+    `src/main/lib/trpc/routers/skills.ts`.
+  - Registry skill install currently writes directly to runtime global skill
+    dirs (`~/.claude/skills` or `~/.codex/skills`) and stores registry state
+    under the selected runtime home.
+  - Skills Settings queries Claude and Codex registry state separately in
+    `src/renderer/components/dialogs/settings-tabs/agents-skills-tab.tsx`, but
+    the UI status is still install-state/path based rather than app-server
+    isolated availability.
+  - Codex app-server isolated home preparation currently lives in
+    `src/main/lib/codex/app-server-plugin-home.ts` and is called by
+    `src/main/lib/codex/app-server-adapter.ts`. It stages reviewed plugin
+    cache entries plus auth/config into isolated `CODEX_HOME`; it does not stage
+    registry-managed skills into isolated `CODEX_HOME/skills`.
 - [ ] 1.4 Update `docs/OWNERSHIP_MAP.md` to name the Runtime Capability
   Projection owner before implementation changes projection logic.
 
