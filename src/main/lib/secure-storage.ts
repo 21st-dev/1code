@@ -4,7 +4,7 @@ import { homedir } from "node:os"
 import * as electron from "electron"
 
 const FALLBACK_PREFIX = "locus:v1:base64:"
-const SECURE_STORAGE_UNAVAILABLE_MESSAGE =
+export const SECURE_STORAGE_UNAVAILABLE_MESSAGE =
   "System secure storage is unavailable. Please enable the OS keychain/credential store and try again."
 
 type ElectronSafeStorage = {

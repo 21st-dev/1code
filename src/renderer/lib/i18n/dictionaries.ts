@@ -113,12 +113,16 @@ export const en = {
   "onboarding.claude.waitingForLocalLogin":
     "Waiting for Claude Code sign-in in your browser...",
   "onboarding.claude.signInWithClaudeCode": "Sign in with Claude Code",
+  "onboarding.claude.signInAgainWithClaudeCode":
+    "Sign in again with Claude Code",
   "onboarding.claude.refreshableCredentials":
     "Refreshable local credentials are available on this machine.",
   "onboarding.claude.nonRefreshableCredentials":
     "Local credentials are available, but no refresh token was found.",
   "onboarding.claude.failedToImportLocalCredentials":
     "Failed to import local Claude Code credentials",
+  "onboarding.claude.localCredentialsInvalid":
+    "The local Claude Code credentials on this machine are expired or revoked. Sign in again with Claude Code instead of importing local credentials.",
   "onboarding.claude.pasteCode": "Paste your authentication code here...",
   "onboarding.claude.submitCode": "Submit code",
   "onboarding.claude.submittingCode":
@@ -132,6 +136,8 @@ export const en = {
   "onboarding.claude.localLoginImported":
     "Local Claude Code credentials imported.",
   "onboarding.claude.localLoginFailed": "Claude Code login failed:",
+  "onboarding.claude.secureStorageUnavailable":
+    "Claude Code credentials were not saved because system secure storage is unavailable. Enable the OS keychain/credential store, then try again.",
   "onboarding.claude.openedAuthTab":
     "A new tab has opened for authentication.",
   "onboarding.claude.didntOpen": "Didn't open? Click here",
@@ -3518,12 +3524,16 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.claude.waitingForLocalLogin":
     "正在等待浏览器里的 Claude Code 登录完成...",
   "onboarding.claude.signInWithClaudeCode": "使用 Claude Code 登录",
+  "onboarding.claude.signInAgainWithClaudeCode":
+    "重新网页登录 Claude Code",
   "onboarding.claude.refreshableCredentials":
     "这台设备上发现可刷新的本地凭证。",
   "onboarding.claude.nonRefreshableCredentials":
     "这台设备上发现本地凭证，但没有刷新令牌。",
   "onboarding.claude.failedToImportLocalCredentials":
     "导入本地 Claude Code 凭证失败",
+  "onboarding.claude.localCredentialsInvalid":
+    "这台设备上的 Claude Code 本机凭据已失效或被撤销。请不要导入本机凭据，改为重新网页登录 Claude Code。",
   "onboarding.claude.pasteCode": "在这里粘贴授权码...",
   "onboarding.claude.submitCode": "提交授权码",
   "onboarding.claude.submittingCode":
@@ -3537,6 +3547,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.claude.localLoginImported":
     "本地 Claude Code 凭证已导入。",
   "onboarding.claude.localLoginFailed": "Claude Code 登录失败：",
+  "onboarding.claude.secureStorageUnavailable":
+    "系统钥匙串不可用，Claude Code 凭据没有保存。请先启用或修复系统钥匙串/凭据存储，然后重试。",
   "onboarding.claude.openedAuthTab": "已打开新的浏览器标签用于授权。",
   "onboarding.claude.didntOpen": "没有打开？点击这里",
   "onboarding.claude.customModelSettingsLink":

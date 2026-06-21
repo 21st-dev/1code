@@ -2,7 +2,7 @@
 
 import { useSetAtom } from "jotai"
 import { AlertTriangle, CheckCircle2, ChevronLeft } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { LanguageSwitcher } from "../../components/language-switcher"
 import { ClaudeCodeIcon, IconSpinner } from "../../components/ui/icons"
@@ -51,6 +51,7 @@ export function AnthropicOnboardingPage() {
 
   const importSystemTokenMutation =
     trpc.claudeCode.importSystemToken.useMutation()
+  const trpcUtils = trpc.useUtils()
   const existingTokenQuery = trpc.claudeCode.getSystemToken.useQuery()
   const runtimeStatusQuery = trpc.claudeCode.getRuntimeStatus.useQuery()
   const existingCredential = existingTokenQuery.data
@@ -66,8 +67,24 @@ export function AnthropicOnboardingPage() {
   const existingCredentialDescription = existingCredential?.hasRefreshToken
     ? t("onboarding.claude.refreshableCredentials")
     : t("onboarding.claude.nonRefreshableCredentials")
+  const formatClaudeCodeAuthError = (message: string | null | undefined) => {
+    if (!message) return ""
+    if (
+      /secure storage is unavailable|OS keychain\/credential store/i.test(
+        message,
+      )
+    ) {
+      return t("onboarding.claude.secureStorageUnavailable")
+    }
+    if (/invalid_grant|expired or revoked/i.test(message)) {
+      return t("onboarding.claude.localCredentialsInvalid")
+    }
+    return message
+  }
   const localLoginError =
-    localLoginState === "error" ? localLoginErrorMessage : null
+    localLoginState === "error"
+      ? formatClaudeCodeAuthError(localLoginErrorMessage)
+      : null
   const hasError = flowState.step === "error" || Boolean(localLoginError)
   const localizedLocalLoginOutput = localLoginOutput
     .trim()
@@ -91,7 +108,7 @@ export function AnthropicOnboardingPage() {
       }
       const failedPrefix = "Claude Code login failed:"
       if (trimmed.startsWith(failedPrefix)) {
-        return `${t("onboarding.claude.localLoginFailed")} ${trimmed.slice(failedPrefix.length).trim()}`
+        return `${t("onboarding.claude.localLoginFailed")} ${formatClaudeCodeAuthError(trimmed.slice(failedPrefix.length).trim())}`
       }
       return trimmed
     })
@@ -101,11 +118,11 @@ export function AnthropicOnboardingPage() {
     setOnboardingProviderMode(null)
   }
 
-  const handleConnectClick = async () => {
+  const handleConnectClick = useCallback(async () => {
     if (isLocalLoginRunning || runtimeUnavailable) return
     setFlowState({ step: "idle" })
     await startLocalLogin()
-  }
+  }, [isLocalLoginRunning, runtimeUnavailable, startLocalLogin])
 
   const handleUseExistingToken = async () => {
     if (!hasExistingToken || isUsingExistingToken || !runtimeReady) return
@@ -114,7 +131,13 @@ export function AnthropicOnboardingPage() {
     setExistingTokenError(null)
 
     try {
-      await importSystemTokenMutation.mutateAsync()
+      const result = await importSystemTokenMutation.mutateAsync()
+      trpcUtils.claudeCode.getIntegration.setData(undefined, result.metadata)
+      await Promise.allSettled([
+        trpcUtils.anthropicAccounts.list.invalidate(),
+        trpcUtils.anthropicAccounts.getActive.invalidate(),
+        trpcUtils.claudeCode.getIntegration.invalidate(),
+      ])
       setHelperApisSetupPromptPending(true)
       setAnthropicOnboardingCompleted(true)
     } catch (err) {
@@ -160,6 +183,7 @@ export function AnthropicOnboardingPage() {
     checkedExistingToken,
     checkedRuntime,
     flowState.step,
+    handleConnectClick,
     runtimeUnavailable,
     shouldOfferExistingToken,
   ])
@@ -174,6 +198,7 @@ export function AnthropicOnboardingPage() {
       <LanguageSwitcher compact className="fixed top-12 right-4" />
 
       <button
+        type="button"
         onClick={handleBack}
         className="fixed top-12 left-4 flex items-center justify-center h-8 w-8 rounded-full hover:bg-foreground/5 transition-colors"
       >
@@ -246,12 +271,13 @@ export function AnthropicOnboardingPage() {
               {existingTokenError && (
                 <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
                   <p className="text-sm text-destructive">
-                    {existingTokenError}
+                    {formatClaudeCodeAuthError(existingTokenError)}
                   </p>
                 </div>
               )}
               <div className="flex w-full gap-2">
                 <button
+                  type="button"
                   onClick={handleRejectExistingToken}
                   disabled={isUsingExistingToken || !runtimeReady}
                   className="h-8 px-3 flex-1 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
@@ -259,6 +285,7 @@ export function AnthropicOnboardingPage() {
                   {t("onboarding.claude.authWithAnthropic")}
                 </button>
                 <button
+                  type="button"
                   onClick={handleUseExistingToken}
                   disabled={isUsingExistingToken || !runtimeReady}
                   className="h-8 px-3 flex-1 bg-primary text-primary-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] dark:shadow-[0_0_0_0.5px_rgb(23,23,23),inset_0_0_0_1px_rgba(255,255,255,0.14)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
@@ -346,6 +373,7 @@ export function AnthropicOnboardingPage() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={handleConnectClick}
                 className="w-full h-8 px-3 bg-muted text-foreground rounded-lg text-sm font-medium transition-[background-color,transform] duration-150 hover:bg-muted/80 active:scale-[0.97] flex items-center justify-center"
               >

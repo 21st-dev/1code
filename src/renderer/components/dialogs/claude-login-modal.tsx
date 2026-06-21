@@ -79,6 +79,24 @@ export function ClaudeLoginModal({
   const trpcUtils = trpc.useUtils()
   const hasLocalClaudeCredential = Boolean(systemTokenQuery.data?.hasCredentials)
 
+  const formatClaudeCodeAuthError = useCallback(
+    (message: string | null | undefined) => {
+      if (!message) return ""
+      if (
+        /secure storage is unavailable|OS keychain\/credential store/i.test(
+          message,
+        )
+      ) {
+        return t("onboarding.claude.secureStorageUnavailable")
+      }
+      if (/invalid_grant|expired or revoked/i.test(message)) {
+        return t("onboarding.claude.localCredentialsInvalid")
+      }
+      return message
+    },
+    [t],
+  )
+
   const triggerAuthRetry = useCallback(() => {
     const pending = appStore.get(pendingAuthRetryMessageAtom)
     if (pending && pending.provider === "claude-code") {
@@ -133,27 +151,26 @@ export function ClaudeLoginModal({
     } catch (err) {
       setFlowState({
         step: "error",
-        message:
+        message: formatClaudeCodeAuthError(
           err instanceof Error
             ? err.message
             : t("onboarding.claude.failedToImportLocalCredentials"),
+        ),
       })
     }
-  }, [handleAuthSuccess, importSystemTokenMutation, t])
+  }, [
+    formatClaudeCodeAuthError,
+    handleAuthSuccess,
+    importSystemTokenMutation,
+    t,
+  ])
 
-  const handleConnectClick = useCallback(async () => {
-    if (hasLocalClaudeCredential) {
-      await handleImportLocalCredentials()
-      return
-    }
-
+  const handleStartFreshLogin = useCallback(async () => {
     setFlowState({ step: "idle" })
     await startLocalLogin()
-  }, [
-    handleImportLocalCredentials,
-    hasLocalClaudeCredential,
-    startLocalLogin,
-  ])
+  }, [startLocalLogin])
+
+  const handleConnectClick = handleStartFreshLogin
 
   useEffect(() => {
     if (open) {
@@ -264,17 +281,31 @@ export function ClaudeLoginModal({
             </div>
 
             {!hasError && hasLocalClaudeCredential && (
-              <Button
-                onClick={() => void handleImportLocalCredentials()}
-                className="w-full"
-                disabled={importSystemTokenMutation.isPending || isSubmitting}
-              >
-                {importSystemTokenMutation.isPending || isSubmitting ? (
-                  <IconSpinner className="h-4 w-4" />
-                ) : (
-                  t("onboarding.claude.importLocalCredentials")
-                )}
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  onClick={() => void handleStartFreshLogin()}
+                  className="w-full"
+                  disabled={isLocalLoginRunning || isSubmitting}
+                >
+                  {isLocalLoginRunning || isSubmitting ? (
+                    <IconSpinner className="h-4 w-4" />
+                  ) : (
+                    t("onboarding.claude.signInAgainWithClaudeCode")
+                  )}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => void handleImportLocalCredentials()}
+                  className="w-full"
+                  disabled={importSystemTokenMutation.isPending || isSubmitting}
+                >
+                  {importSystemTokenMutation.isPending || isSubmitting ? (
+                    <IconSpinner className="h-4 w-4" />
+                  ) : (
+                    t("onboarding.claude.importLocalCredentials")
+                  )}
+                </Button>
+              </div>
             )}
 
             {!hasError && !hasLocalClaudeCredential && (
@@ -333,23 +364,32 @@ export function ClaudeLoginModal({
               <div className="space-y-4">
                 <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                   <p className="text-sm text-destructive">
-                    {localLoginError ||
-                      (flowState.step === "error" ? flowState.message : "")}
+                    {formatClaudeCodeAuthError(
+                      localLoginError ||
+                        (flowState.step === "error" ? flowState.message : ""),
+                    )}
                   </p>
                 </div>
                 <Button
-                  variant="secondary"
-                  onClick={
-                    hasLocalClaudeCredential
-                      ? () => void handleImportLocalCredentials()
-                      : () => void startLocalLogin()
-                  }
+                  onClick={() => void handleStartFreshLogin()}
                   className="w-full"
                 >
                   {hasLocalClaudeCredential
-                    ? t("onboarding.claude.importLocalCredentials")
+                    ? t("onboarding.claude.signInAgainWithClaudeCode")
                     : t("onboarding.claude.signInWithClaudeCode")}
                 </Button>
+                {hasLocalClaudeCredential && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => void handleImportLocalCredentials()}
+                    className="w-full"
+                    disabled={
+                      importSystemTokenMutation.isPending || isSubmitting
+                    }
+                  >
+                    {t("onboarding.claude.importLocalCredentials")}
+                  </Button>
+                )}
               </div>
             )}
 

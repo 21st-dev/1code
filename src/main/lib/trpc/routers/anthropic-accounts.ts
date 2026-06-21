@@ -2,10 +2,14 @@ import { eq, sql } from "drizzle-orm"
 import { z } from "zod"
 import { getAuthManager } from "../../../index"
 import {
+  createClaudeCodeCredentialEnvelope,
   decryptClaudeCodeCredential,
+  ensureLegacyClaudeCodeCredentialMigrated,
   getClaudeCodeCredentialMetadata,
+  reconcileClaudeCodeCredentialStorage,
+  removeClaudeCodeAccount,
 } from "../../claude-credentials"
-import { anthropicAccounts, anthropicSettings, claudeCodeCredentials, getDatabase } from "../../db"
+import { anthropicAccounts, anthropicSettings, getDatabase } from "../../db"
 import { createId } from "../../db/utils"
 import { encryptStringForStorage } from "../../secure-storage"
 import { publicProcedure, router } from "../index"
@@ -17,7 +21,11 @@ const LOCAL_CLAUDE_CODE_DISPLAY_NAME = "Local Claude Code"
  * Encrypt token using Electron's safeStorage
  */
 function encryptToken(token: string): string {
-  return encryptStringForStorage(token)
+  return encryptStringForStorage(
+    JSON.stringify(
+      createClaudeCodeCredentialEnvelope({ accessToken: token }, "hosted_oauth"),
+    ),
+  )
 }
 
 function accountTimestamp(account: {
@@ -27,9 +35,9 @@ function accountTimestamp(account: {
   return account.lastUsedAt?.getTime() ?? account.connectedAt?.getTime() ?? 0
 }
 
-function compactDuplicateLocalClaudeCodeAccounts(): void {
-  const db = getDatabase()
-
+function compactDuplicateLocalClaudeCodeAccounts(
+  db = getDatabase(),
+): void {
   const accounts = db.select().from(anthropicAccounts).all()
   const duplicates = accounts.filter(
     (account) =>
@@ -74,6 +82,33 @@ function compactDuplicateLocalClaudeCodeAccounts(): void {
   }
 }
 
+function toAccountResponse(acc: {
+  id: string
+  email: string | null
+  displayName: string | null
+  oauthToken: string
+  connectedAt: Date | null
+  lastUsedAt?: Date | null
+}) {
+  const stored = decryptClaudeCodeCredential(acc.oauthToken)
+
+  return {
+    id: acc.id,
+    email: acc.email,
+    displayName: acc.displayName ?? acc.email ?? "Anthropic Account",
+    connectedAt: acc.connectedAt?.toISOString() ?? null,
+    lastUsedAt: acc.lastUsedAt?.toISOString() ?? null,
+    credential: {
+      source: stored?.envelope.source ?? null,
+      storageFormat: stored?.storageFormat ?? null,
+      refreshable: Boolean(stored?.envelope.refreshToken),
+      expiresAt: stored?.envelope.expiresAt
+        ? new Date(stored.envelope.expiresAt).toISOString()
+        : null,
+    },
+  }
+}
+
 /**
  * Multi-account Anthropic management router
  */
@@ -84,78 +119,23 @@ export const anthropicAccountsRouter = router({
   list: publicProcedure.query(() => {
     const db = getDatabase()
 
-    try {
-      compactDuplicateLocalClaudeCodeAccounts()
-      const accounts = db
-        .select({
-          id: anthropicAccounts.id,
-          email: anthropicAccounts.email,
-          displayName: anthropicAccounts.displayName,
-          oauthToken: anthropicAccounts.oauthToken,
-          connectedAt: anthropicAccounts.connectedAt,
-          lastUsedAt: anthropicAccounts.lastUsedAt,
-        })
-        .from(anthropicAccounts)
-        .orderBy(anthropicAccounts.connectedAt)
-        .all()
+    ensureLegacyClaudeCodeCredentialMigrated(db)
+    compactDuplicateLocalClaudeCodeAccounts(db)
+    reconcileClaudeCodeCredentialStorage(db)
 
-      // If we have accounts in new table, return them
-      if (accounts.length > 0) {
-        return accounts.map((acc) => {
-          const stored = decryptClaudeCodeCredential(acc.oauthToken)
-
-          return {
-            id: acc.id,
-            email: acc.email,
-            displayName: acc.displayName,
-            connectedAt: acc.connectedAt?.toISOString() ?? null,
-            lastUsedAt: acc.lastUsedAt?.toISOString() ?? null,
-            credential: {
-              source: stored?.envelope.source ?? null,
-              storageFormat: stored?.storageFormat ?? null,
-              refreshable: Boolean(stored?.envelope.refreshToken),
-              expiresAt: stored?.envelope.expiresAt
-                ? new Date(stored.envelope.expiresAt).toISOString()
-                : null,
-            },
-          }
-        })
-      }
-    } catch {
-      // Table doesn't exist yet, fall through to legacy
-    }
-
-    // Fallback: check legacy table and return as single account
-    try {
-      const legacyCred = db
-        .select()
-        .from(claudeCodeCredentials)
-        .where(eq(claudeCodeCredentials.id, "default"))
-        .get()
-
-      if (legacyCred?.oauthToken) {
-        const stored = decryptClaudeCodeCredential(legacyCred.oauthToken)
-        return [{
-          id: "legacy-default",
-          email: null,
-          displayName: "Anthropic Account",
-          connectedAt: legacyCred.connectedAt?.toISOString() ?? null,
-          lastUsedAt: null,
-          credential: {
-            source: stored?.envelope.source ?? null,
-            storageFormat: stored?.storageFormat ?? null,
-            refreshable: Boolean(stored?.envelope.refreshToken),
-            expiresAt: stored?.envelope.expiresAt
-              ? new Date(stored.envelope.expiresAt).toISOString()
-              : null,
-          },
-        }]
-      }
-    } catch {
-      // Legacy table also doesn't exist
-    }
-
-    return []
+    return db
+      .select({
+        id: anthropicAccounts.id,
+        email: anthropicAccounts.email,
+        displayName: anthropicAccounts.displayName,
+        oauthToken: anthropicAccounts.oauthToken,
+        connectedAt: anthropicAccounts.connectedAt,
+        lastUsedAt: anthropicAccounts.lastUsedAt,
+      })
+      .from(anthropicAccounts)
+      .orderBy(anthropicAccounts.connectedAt)
+      .all()
+      .map(toAccountResponse)
   }),
 
   /**
@@ -164,79 +144,25 @@ export const anthropicAccountsRouter = router({
   getActive: publicProcedure.query(() => {
     const db = getDatabase()
 
-    try {
-      compactDuplicateLocalClaudeCodeAccounts()
-      const settings = db
-        .select()
-        .from(anthropicSettings)
-        .where(eq(anthropicSettings.id, "singleton"))
-        .get()
+    ensureLegacyClaudeCodeCredentialMigrated(db)
+    compactDuplicateLocalClaudeCodeAccounts(db)
+    const { activeAccountId } = reconcileClaudeCodeCredentialStorage(db)
+    if (!activeAccountId) return null
 
-      if (settings?.activeAccountId) {
-        const account = db
-          .select({
-            id: anthropicAccounts.id,
-            email: anthropicAccounts.email,
-            displayName: anthropicAccounts.displayName,
-            connectedAt: anthropicAccounts.connectedAt,
-            oauthToken: anthropicAccounts.oauthToken,
-          })
-          .from(anthropicAccounts)
-          .where(eq(anthropicAccounts.id, settings.activeAccountId))
-          .get()
+    const account = db
+      .select({
+        id: anthropicAccounts.id,
+        email: anthropicAccounts.email,
+        displayName: anthropicAccounts.displayName,
+        connectedAt: anthropicAccounts.connectedAt,
+        lastUsedAt: anthropicAccounts.lastUsedAt,
+        oauthToken: anthropicAccounts.oauthToken,
+      })
+      .from(anthropicAccounts)
+      .where(eq(anthropicAccounts.id, activeAccountId))
+      .get()
 
-        if (account) {
-          const stored = decryptClaudeCodeCredential(account.oauthToken)
-          return {
-            id: account.id,
-            email: account.email,
-            displayName: account.displayName,
-            connectedAt: account.connectedAt?.toISOString() ?? null,
-            credential: {
-              source: stored?.envelope.source ?? null,
-              storageFormat: stored?.storageFormat ?? null,
-              refreshable: Boolean(stored?.envelope.refreshToken),
-              expiresAt: stored?.envelope.expiresAt
-                ? new Date(stored.envelope.expiresAt).toISOString()
-                : null,
-            },
-          }
-        }
-      }
-    } catch {
-      // Tables don't exist yet, fall through to legacy
-    }
-
-    // Fallback: if legacy credential exists, treat it as active
-    try {
-      const legacyCred = db
-        .select()
-        .from(claudeCodeCredentials)
-        .where(eq(claudeCodeCredentials.id, "default"))
-        .get()
-
-      if (legacyCred?.oauthToken) {
-        const stored = decryptClaudeCodeCredential(legacyCred.oauthToken)
-        return {
-          id: "legacy-default",
-          email: null,
-          displayName: "Anthropic Account",
-          connectedAt: legacyCred.connectedAt?.toISOString() ?? null,
-          credential: {
-            source: stored?.envelope.source ?? null,
-            storageFormat: stored?.storageFormat ?? null,
-            refreshable: Boolean(stored?.envelope.refreshToken),
-            expiresAt: stored?.envelope.expiresAt
-              ? new Date(stored.envelope.expiresAt).toISOString()
-              : null,
-          },
-        }
-      }
-    } catch {
-      // Legacy table also doesn't exist
-    }
-
-    return null
+    return account ? toAccountResponse(account) : null
   }),
 
   /**
@@ -291,18 +217,7 @@ export const anthropicAccountsRouter = router({
         .where(eq(anthropicAccounts.id, input.accountId))
         .run()
 
-      // Sync legacy table so all code paths use the correct token
-      db.delete(claudeCodeCredentials)
-        .where(eq(claudeCodeCredentials.id, "default"))
-        .run()
-
-      db.insert(claudeCodeCredentials)
-        .values({
-          id: "default",
-          oauthToken: account.oauthToken,
-          connectedAt: new Date(),
-        })
-        .run()
+      reconcileClaudeCodeCredentialStorage(db)
 
       // Clear cached SDK state to ensure fresh token is used
       clearClaudeCaches()
@@ -365,6 +280,9 @@ export const anthropicAccountsRouter = router({
           .run()
       }
 
+      reconcileClaudeCodeCredentialStorage(db)
+      clearClaudeCaches()
+
       console.log(`[AnthropicAccounts] Added new account: ${newId}`)
       return { id: newId, success: true }
     }),
@@ -402,46 +320,8 @@ export const anthropicAccountsRouter = router({
   remove: publicProcedure
     .input(z.object({ accountId: z.string() }))
     .mutation(({ input }) => {
-      const db = getDatabase()
-
-      // Check if this is the active account
-      const settings = db
-        .select()
-        .from(anthropicSettings)
-        .where(eq(anthropicSettings.id, "singleton"))
-        .get()
-
-      // Delete the account
-      db.delete(anthropicAccounts)
-        .where(eq(anthropicAccounts.id, input.accountId))
-        .run()
-
-      // If deleted account was active, set another account as active
-      if (settings?.activeAccountId === input.accountId) {
-        const firstRemaining = db
-          .select()
-          .from(anthropicAccounts)
-          .limit(1)
-          .get()
-
-        if (firstRemaining) {
-          db.update(anthropicSettings)
-            .set({
-              activeAccountId: firstRemaining.id,
-              updatedAt: new Date(),
-            })
-            .where(eq(anthropicSettings.id, "singleton"))
-            .run()
-        } else {
-          db.update(anthropicSettings)
-            .set({
-              activeAccountId: null,
-              updatedAt: new Date(),
-            })
-            .where(eq(anthropicSettings.id, "singleton"))
-            .run()
-        }
-      }
+      removeClaudeCodeAccount(input.accountId)
+      clearClaudeCaches()
 
       console.log(`[AnthropicAccounts] Removed account: ${input.accountId}`)
       return { success: true }
@@ -452,7 +332,9 @@ export const anthropicAccountsRouter = router({
    */
   hasAccounts: publicProcedure.query(() => {
     const db = getDatabase()
-    compactDuplicateLocalClaudeCodeAccounts()
+    ensureLegacyClaudeCodeCredentialMigrated(db)
+    compactDuplicateLocalClaudeCodeAccounts(db)
+    reconcileClaudeCodeCredentialStorage(db)
     const countResult = db
       .select({ count: sql<number>`count(*)` })
       .from(anthropicAccounts)
@@ -461,63 +343,12 @@ export const anthropicAccountsRouter = router({
     return { hasAccounts: (countResult?.count ?? 0) > 0 }
   }),
 
-  /**
-   * Migrate legacy account from claude_code_credentials to anthropic_accounts
-   * Called automatically if legacy account exists but no multi-accounts
-   */
   migrateLegacy: publicProcedure.mutation(() => {
-    const db = getDatabase()
-
-    // Check if we already have accounts
-    const existingAccounts = db
-      .select({ count: sql<number>`count(*)` })
-      .from(anthropicAccounts)
-      .get()
-
-    if ((existingAccounts?.count ?? 0) > 0) {
-      return { migrated: false, reason: "accounts_exist" }
+    const result = ensureLegacyClaudeCodeCredentialMigrated()
+    return {
+      migrated: result.migrated,
+      accountId: result.activeAccountId,
+      reason: result.reason,
     }
-
-    // Check for legacy credential
-    const legacyCred = db
-      .select()
-      .from(claudeCodeCredentials)
-      .where(eq(claudeCodeCredentials.id, "default"))
-      .get()
-
-    if (!legacyCred?.oauthToken) {
-      return { migrated: false, reason: "no_legacy" }
-    }
-
-    const newId = createId()
-
-    // Insert into new table
-    db.insert(anthropicAccounts)
-      .values({
-        id: newId,
-        oauthToken: legacyCred.oauthToken,
-        displayName: "Anthropic Account",
-        connectedAt: legacyCred.connectedAt,
-        desktopUserId: legacyCred.userId,
-      })
-      .run()
-
-    // Set as active
-    db.insert(anthropicSettings)
-      .values({
-        id: "singleton",
-        activeAccountId: newId,
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: anthropicSettings.id,
-        set: {
-          activeAccountId: newId,
-          updatedAt: new Date(),
-        },
-      })
-      .run()
-
-    return { migrated: true, accountId: newId }
   }),
 })

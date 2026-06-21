@@ -1,31 +1,30 @@
-import { eq } from "drizzle-orm"
 import { createHash, randomBytes, randomUUID } from "node:crypto"
 import { z } from "zod"
+import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
 import {
   getBundledClaudeBinaryPath,
   getClaudeShellEnvironment,
 } from "../../claude"
 import {
-  CLAUDE_CODE_OAUTH_CLIENT_ID,
-  CLAUDE_CODE_TOKEN_URL,
-  getExistingClaudeCredentials,
-} from "../../claude-token"
-import {
   type ClaudeCodeCredentialMetadata,
+  disconnectActiveClaudeCodeAccount,
   getClaudeCodeCredentialMetadata,
   importLocalClaudeCodeCredential,
   storeClaudeCodeOAuthCredential,
   storeClaudeCodeOAuthToken,
 } from "../../claude-credentials"
 import {
-  anthropicAccounts,
-  anthropicSettings,
-  claudeCodeCredentials,
-  getDatabase,
-} from "../../db"
+  CLAUDE_CODE_OAUTH_CLIENT_ID,
+  CLAUDE_CODE_TOKEN_URL,
+  getExistingClaudeCredentials,
+} from "../../claude-token"
 import { getRuntimeExecutableStatus } from "../../runtime-executable"
+import {
+  isSecureStorageAvailable,
+  SECURE_STORAGE_UNAVAILABLE_MESSAGE,
+} from "../../secure-storage"
 import { publicProcedure, router } from "../index"
-import { getRegisteredAgentRuntimeManifest } from "../../agent-runtime/runtime-registry"
+import { clearClaudeCaches } from "./claude"
 
 type ClaudeCodeLocalLoginSessionState =
   | "running"
@@ -72,10 +71,7 @@ function redactClaudeLoginOutput(output: string): string {
       /("(?:access|refresh|id)_?token"\s*:\s*")[^"]+(")/gi,
       "$1[redacted]$2",
     )
-    .replace(
-      /\b((?:access|refresh|id)_?token)\s*=\s*[^\s]+/gi,
-      "$1=[redacted]",
-    )
+    .replace(/\b((?:access|refresh|id)_?token)\s*=\s*[^\s]+/gi, "$1=[redacted]")
 }
 
 function appendLocalLoginOutput(
@@ -102,10 +98,7 @@ function toLocalLoginSessionResponse(session: ClaudeCodeLocalLoginSession) {
 
 function getActiveLocalLoginSession(): ClaudeCodeLocalLoginSession | null {
   for (const session of localLoginSessions.values()) {
-    if (
-      session.state === "running" ||
-      session.state === "importing"
-    ) {
+    if (session.state === "running" || session.state === "importing") {
       return session
     }
   }
@@ -229,7 +222,8 @@ export const claudeCodeRouter = router({
         getBundledClaudeBinaryPath(),
         hint,
       ),
-      capabilities: getRegisteredAgentRuntimeManifest("claude-code").capabilities,
+      capabilities:
+        getRegisteredAgentRuntimeManifest("claude-code").capabilities,
     }
   }),
 
@@ -240,10 +234,16 @@ export const claudeCodeRouter = router({
    */
   hasExistingCliConfig: publicProcedure.query(() => {
     const shellEnv = getClaudeShellEnvironment()
-    const hasConfig = !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_AUTH_TOKEN || shellEnv.ANTHROPIC_BASE_URL)
+    const hasConfig = !!(
+      shellEnv.ANTHROPIC_API_KEY ||
+      shellEnv.ANTHROPIC_AUTH_TOKEN ||
+      shellEnv.ANTHROPIC_BASE_URL
+    )
     return {
       hasConfig,
-      hasApiKey: !!(shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_AUTH_TOKEN),
+      hasApiKey: !!(
+        shellEnv.ANTHROPIC_API_KEY || shellEnv.ANTHROPIC_AUTH_TOKEN
+      ),
       baseUrl: shellEnv.ANTHROPIC_BASE_URL || null,
     }
   }),
@@ -262,6 +262,13 @@ export const claudeCodeRouter = router({
    * stores the exchanged token in the app's local encrypted credential store.
    */
   startLocalLogin: publicProcedure.mutation(() => {
+    if (!isSecureStorageAvailable()) {
+      console.warn(
+        "[ClaudeCodeLogin] Secure storage unavailable; refusing to start local Claude Code login.",
+      )
+      throw new Error(SECURE_STORAGE_UNAVAILABLE_MESSAGE)
+    }
+
     const existingSession = getActiveLocalLoginSession()
     if (existingSession) {
       return toLocalLoginSessionResponse(existingSession)
@@ -275,7 +282,9 @@ export const claudeCodeRouter = router({
       state: expectedState,
     })
 
-    console.log("[ClaudeCodeLogin] Starting direct local Claude Code OAuth flow")
+    console.log(
+      "[ClaudeCodeLogin] Starting direct local Claude Code OAuth flow",
+    )
 
     const session: ClaudeCodeLocalLoginSession = {
       id: sessionId,
@@ -319,7 +328,7 @@ export const claudeCodeRouter = router({
     )
     .mutation(async ({ input }) => {
       const session = localLoginSessions.get(input.sessionId)
-      if (!session || session.state !== "running") {
+      if (session?.state !== "running") {
         throw new Error("Claude Code local login session is not running")
       }
 
@@ -332,19 +341,23 @@ export const claudeCodeRouter = router({
         )
       }
 
-      console.log("[ClaudeCodeLogin] Exchanging Claude Code auth code", {
-        sessionId: session.id,
-        codeLength: input.code.trim().length,
-      })
-
-      session.state = "importing"
-      session.error = null
-      appendLocalLoginOutput(
-        session,
-        "\nAuthentication code submitted; exchanging token locally...\n",
-      )
-
       try {
+        if (!isSecureStorageAvailable()) {
+          throw new Error(SECURE_STORAGE_UNAVAILABLE_MESSAGE)
+        }
+
+        console.log("[ClaudeCodeLogin] Exchanging Claude Code auth code", {
+          sessionId: session.id,
+          codeLength: input.code.trim().length,
+        })
+
+        session.state = "importing"
+        session.error = null
+        appendLocalLoginOutput(
+          session,
+          "\nAuthentication code submitted; exchanging token locally...\n",
+        )
+
         const credential = await exchangeClaudeCodeAuthCode({
           authorizationCode,
           state,
@@ -408,7 +421,7 @@ export const claudeCodeRouter = router({
     .input(
       z.object({
         token: z.string().min(1),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const oauthToken = input.token.trim()
@@ -440,8 +453,12 @@ export const claudeCodeRouter = router({
   /**
    * Import Claude token from system credentials
    */
-  importSystemToken: publicProcedure.mutation(() => {
-    return importLocalClaudeCodeCredential()
+  importSystemToken: publicProcedure.mutation(async () => {
+    try {
+      return await importLocalClaudeCodeCredential()
+    } finally {
+      clearClaudeCaches()
+    }
   }),
 
   /**
@@ -460,50 +477,10 @@ export const claudeCodeRouter = router({
    * Disconnect - delete active account from multi-account system
    */
   disconnect: publicProcedure.mutation(() => {
-    const db = getDatabase()
-
-    // Get active account
-    const settings = db
-      .select()
-      .from(anthropicSettings)
-      .where(eq(anthropicSettings.id, "singleton"))
-      .get()
-
-    if (settings?.activeAccountId) {
-      // Remove active account
-      db.delete(anthropicAccounts)
-        .where(eq(anthropicAccounts.id, settings.activeAccountId))
-        .run()
-
-      // Try to set another account as active
-      const firstRemaining = db.select().from(anthropicAccounts).limit(1).get()
-
-      if (firstRemaining) {
-        db.update(anthropicSettings)
-          .set({
-            activeAccountId: firstRemaining.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(anthropicSettings.id, "singleton"))
-          .run()
-      } else {
-        db.update(anthropicSettings)
-          .set({
-            activeAccountId: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(anthropicSettings.id, "singleton"))
-          .run()
-      }
-    }
-
-    // Also clear legacy table
-    db.delete(claudeCodeCredentials)
-      .where(eq(claudeCodeCredentials.id, "default"))
-      .run()
+    disconnectActiveClaudeCodeAccount()
+    clearClaudeCaches()
 
     console.log("[ClaudeCode] Disconnected")
     return { success: true }
   }),
-
 })
