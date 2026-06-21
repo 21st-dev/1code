@@ -257,9 +257,7 @@
   Phase-0 probe proves Locus can observe the required MCP signals and a tool call
   succeeds.
 - 2026-06-22 implementation support landed for Claude runtime observation and
-  SDK HTTP/SSE MCP materialization, but this task remains unchecked until a
-  fresh real Claude GUI/runtime run records the matching local `verified-local`
-  state file.
+  SDK HTTP/SSE MCP materialization.
 - 2026-06-22 real Claude GUI/runtime proof passed on `main` for
   `calculator-mcp-server`: the run observed
   `mcp__calculator-mcp-server__calculate`, executed it with `{"expression":"2 + 2"}`,
@@ -340,9 +338,9 @@
 - 2026-06-21 Claude-only runtime proof passed for official-registry
   `io.github.cyanheads/calculator-mcp-server` target
   `remote:streamable_http:0`: Settings check showed one tool and the real Claude
-  run executed `mcp__calculator-mcp-server__calculate` with result `4`. This does
-  not complete `Verified on Claude`; task 4.3 stays unchecked because no
-  `verified-local` record was observed.
+  run executed `mcp__calculator-mcp-server__calculate` with result `4`.
+- 2026-06-22 follow-up Claude GUI/runtime proof on `main` wrote the matching
+  local `verified-local` record for task 4.3.
 - [x] 5.7 Manual proof for Codex app-server only if proof gates pass; otherwise record
   Codex deferred/unavailable reason and verify the UI does not offer fake Codex
   verified support.

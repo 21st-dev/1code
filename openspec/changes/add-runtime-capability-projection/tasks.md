@@ -17,6 +17,11 @@
 - 2026-06-20 not satisfied: `add-mcp-registry-install` is still active at 39/45
   with real Claude/Codex runtime proof and verified-state tasks intentionally
   unchecked, so Runtime Capability Projection implementation must not start yet.
+- 2026-06-22 still not satisfied: `add-mcp-registry-install` is active at 43/45.
+  Claude registry install, check, real tool-call proof, and `Verified on Claude`
+  upgrade are now recorded; the remaining unchecked tasks are Codex app-server
+  tool-call observability and `Verified on Codex`, which stay deferred/blocked
+  instead of being faked.
 - [ ] 1.2 Confirm this change is implemented as Phase 1 Codex registry skill
   projection first, not a bundled rewrite of Skills, MCP, and Plugins.
 - [ ] 1.3 Confirm the current Skills registry and Codex app-server isolated home

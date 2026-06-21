@@ -117,12 +117,9 @@ Current status:
 - 2026-06-21 successful Claude MCP tool-call proof exists for
   `calculator-mcp-server`, but no
   `/private/tmp/locus-mcp-registry-smoke/mcp-registry-verification-state.json`
-  file was present after the run and no `verified-local` record was observed.
-  This scenario remains blocked.
+  file was present after that run and no `verified-local` record was observed.
 - 2026-06-22 code support for this upgrade path landed, including the Claude
-  stream observer and SDK HTTP/SSE materialization fix. This scenario remains
-  blocked until a fresh real Claude GUI/runtime run using the updated code
-  writes and records the matching `verified-local` state file.
+  stream observer and SDK HTTP/SSE materialization fix.
 - 2026-06-22 real Claude GUI/runtime proof passed using the updated `main`
   branch:
   - app userData:
