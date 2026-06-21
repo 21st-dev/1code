@@ -16,7 +16,12 @@ The system SHALL provide a registry catalog for reusable global skills that is i
 - **THEN** registry skill listing and bundled install still work
 
 ### Requirement: Explicit Skill Installation
-The system SHALL require explicit user action before installing or updating registry-managed skills, and SHALL allow the user to choose Claude Code, Codex, or both as install targets when a registry skill supports multiple runtimes.
+
+The system SHALL require explicit user action before installing or updating
+registry-managed skills, and SHALL allow the user to choose Claude Code, Codex,
+or both as runtime targets when a registry skill supports multiple runtimes. The
+Locus registry-managed install record SHALL be the canonical install truth;
+runtime skill directories SHALL be projection targets for runtime availability.
 
 #### Scenario: Update check finds newer skill
 - **WHEN** a registry update check finds a newer skill version
@@ -25,18 +30,20 @@ The system SHALL require explicit user action before installing or updating regi
 
 #### Scenario: User installs bundled skill for Claude Code
 - **WHEN** the user chooses Install for Claude for a bundled registry skill
-- **THEN** the app installs the skill into the Claude global skills directory
-- **AND** records Claude runtime installed state including registry id, version, and content hash
+- **THEN** the app records a Locus-managed skill install with registry id, version, content hash, and Claude runtime eligibility
+- **AND** the Claude runtime remains eligible to materialize the skill into Claude's expected skill discovery location
+- **AND** the UI reports Claude availability separately from Locus install state
 
 #### Scenario: User installs bundled skill for Codex
 - **WHEN** the user chooses Install for Codex for a bundled registry skill
-- **THEN** the app installs the skill into the Codex global skills directory
-- **AND** records Codex runtime installed state including registry id, version, and content hash
+- **THEN** the app records a Locus-managed skill install with registry id, version, content hash, and Codex runtime eligibility
+- **AND** managed Codex app-server runs project the skill into the isolated `CODEX_HOME/skills` used for that run
+- **AND** the UI reports Codex availability separately from Locus install state
 
 #### Scenario: User installs bundled skill for both runtimes
 - **WHEN** the user chooses Install for Both for a bundled registry skill
-- **THEN** the app installs the skill into both Claude and Codex global skills directories
-- **AND** each runtime records independent installed state and backup metadata
+- **THEN** the app records one Locus-managed skill package record with independent runtime projection state for Claude and Codex
+- **AND** each runtime records independent projection metadata and backup or rollback metadata where applicable
 
 ### Requirement: Verified Skill Packages
 The system SHALL verify registry skill package integrity before installation.
@@ -64,13 +71,16 @@ The system SHALL protect user-owned and locally modified skills from silent over
 - **AND** does not overwrite it during registry update
 
 ### Requirement: Source Labels
-The system SHALL distinguish skill sources and runtime install targets in the Skills UI.
+
+The system SHALL distinguish skill sources, Locus install state, and runtime
+availability in the Skills UI.
 
 #### Scenario: User views Skills settings
 - **WHEN** the user opens the Skills settings tab
 - **THEN** each skill shows whether it comes from User, Project, Plugin, or Registry
-- **AND** registry-managed skills show install/update status when available
-- **AND** registry-managed skills show Claude and Codex runtime state separately
+- **AND** registry-managed skills show Locus install/update/modified status when available
+- **AND** registry-managed skills show Claude and Codex availability separately
+- **AND** unavailable runtime states include a non-secret reason and remediation hint
 
 ### Requirement: External Skill Collections
 The system SHALL allow the bundled skill registry to list external skill collections that are browse-only and not treated as verified installable skill packages.
@@ -80,3 +90,19 @@ The system SHALL allow the bundled skill registry to list external skill collect
 - **THEN** the app may show external collections alongside installable registry skills
 - **AND** each external collection shows its source link and install guidance
 - **AND** the app does not show install, update, restore, or rollback actions for that collection
+
+### Requirement: Codex Isolated Skill Projection
+
+Registry-managed Codex skills SHALL be projected into managed Codex isolated
+homes without exposing unmanaged global Codex skills by default.
+
+#### Scenario: Managed Codex run prepares isolated CODEX_HOME
+- **WHEN** a managed Codex app-server run prepares its isolated `CODEX_HOME`
+- **AND** a registry-managed skill is installed and eligible for Codex
+- **THEN** the skill is staged or symlinked into the isolated `CODEX_HOME/skills`
+- **AND** the projection record can report the skill as available for that run
+
+#### Scenario: Global Codex skill is unmanaged
+- **WHEN** a skill exists in the user's global Codex skills directory without Locus-managed registry metadata
+- **THEN** managed Codex isolated homes do not receive that skill by default
+- **AND** the UI does not report it as a registry-managed available skill
