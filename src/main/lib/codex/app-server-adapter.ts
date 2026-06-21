@@ -101,7 +101,9 @@ export type CreateCodexAppServerAdapterInput = {
 
 export class CodexAppServerAdapterDisabledError extends Error {
   constructor() {
-    super("Codex app-server adapter is behind an explicit gate and is not enabled.")
+    super(
+      "Codex app-server adapter is behind an explicit gate and is not enabled.",
+    )
     this.name = "CodexAppServerAdapterDisabledError"
   }
 }
@@ -290,12 +292,20 @@ function defaultServerRequestResponse(
     case "item/tool/requestUserInput":
       return buildCodexAppServerUserInputResponse(
         request.params as CodexAppServerToolRequestUserInputParams,
-        { approved: false, message: "Codex app-server adapter has no user-input bridge installed." },
+        {
+          approved: false,
+          message:
+            "Codex app-server adapter has no user-input bridge installed.",
+        },
       )
     case "mcpServer/elicitation/request":
       return buildCodexAppServerMcpElicitationResponse(
         request.params as CodexAppServerMcpElicitationRequestParams,
-        { approved: false, message: "Codex app-server adapter has no MCP elicitation bridge installed." },
+        {
+          approved: false,
+          message:
+            "Codex app-server adapter has no MCP elicitation bridge installed.",
+        },
       )
     case "account/chatgptAuthTokens/refresh":
     case "attestation/generate":
@@ -375,6 +385,12 @@ export function createCodexAppServerAdapter({
               pluginConfigOverrides: resolvedPluginConfig.config,
               stagedEntries: [],
               blockedEntries: [],
+              skillProjection: {
+                registered: false,
+                kind: "skill",
+                runtimeId: "codex",
+                records: [],
+              },
             } satisfies CodexAppServerPluginHomeResult)
           : prepareCodexAppServerIsolatedPluginHome({
               chatId: request.context.chatId,
@@ -394,7 +410,10 @@ export function createCodexAppServerAdapter({
         "pre-start",
       )
       const transport =
-        createTransport?.({ request, providerBinding: appServerProviderBinding }) ??
+        createTransport?.({
+          request,
+          providerBinding: appServerProviderBinding,
+        }) ??
         createCodexAppServerStdioTransport({
           cwd: request.context.cwd,
           env: appServerProviderBinding.runtimeEnv,
@@ -440,7 +459,8 @@ export function createCodexAppServerAdapter({
 
       const emitChunk = (chunk: Record<string, unknown>) => {
         if (chunk.type === "session-init") {
-          const threadId = typeof chunk.threadId === "string" ? chunk.threadId : null
+          const threadId =
+            typeof chunk.threadId === "string" ? chunk.threadId : null
           if (threadId && emittedSessionInitThreadIds.has(threadId)) {
             return
           }
@@ -524,7 +544,9 @@ export function createCodexAppServerAdapter({
           } satisfies CodexAppServerServerRequest,
           gate: { approvalHookInstalled: true },
           dispatch: async () => {
-            if (serverRequest.method === "item/commandExecution/requestApproval") {
+            if (
+              serverRequest.method === "item/commandExecution/requestApproval"
+            ) {
               response = await approvalBridge.handleCommandExecution({
                 requestId: serverRequest.id,
                 params:
@@ -576,12 +598,11 @@ export function createCodexAppServerAdapter({
               serverRequest.method === "item/tool/requestUserInput" &&
               userInteractionBridge
             ) {
-              response =
-                await userInteractionBridge.handleUserInputRequest({
-                  requestId: String(serverRequest.id),
-                  params:
-                    serverRequest.params as CodexAppServerToolRequestUserInputParams,
-                })
+              response = await userInteractionBridge.handleUserInputRequest({
+                requestId: String(serverRequest.id),
+                params:
+                  serverRequest.params as CodexAppServerToolRequestUserInputParams,
+              })
               return response
             }
             if (
@@ -606,7 +627,9 @@ export function createCodexAppServerAdapter({
       const abortHandler = () => {
         const interrupt = runtimeMapper.buildInterruptRequest()
         if (interrupt) {
-          void transport.request(interrupt.method, interrupt.params).catch(() => {})
+          void transport
+            .request(interrupt.method, interrupt.params)
+            .catch(() => {})
         }
         finishRun?.({
           status: "canceled",
@@ -618,7 +641,9 @@ export function createCodexAppServerAdapter({
       let runResult: DesktopRunResult = {
         status: "failed",
         sessionId: null,
-        error: { message: "Codex app-server did not produce a terminal result." },
+        error: {
+          message: "Codex app-server did not produce a terminal result.",
+        },
       }
 
       try {
@@ -704,8 +729,7 @@ export function createCodexAppServerAdapter({
             emitChunk(chunk)
           }
         }
-        const threadId =
-          responseThreadId ?? runtimeMapper.getThreadId()
+        const threadId = responseThreadId ?? runtimeMapper.getThreadId()
         if (!threadId) {
           throw new Error("Codex app-server did not return a thread id.")
         }

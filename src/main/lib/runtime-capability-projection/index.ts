@@ -1,4 +1,9 @@
 export {
+  CODEX_SKILL_PROJECTION_RUNTIME_ID,
+  type CodexSkillProjectionDependencies,
+  createCodexSkillProjectionAdapter,
+} from "./codex-skill"
+export {
   createRuntimeCapabilityProjectionService,
   RuntimeCapabilityProjectionService,
 } from "./service"

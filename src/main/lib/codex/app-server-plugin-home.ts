@@ -3,6 +3,19 @@ import * as os from "node:os"
 import path from "node:path"
 import type { DesktopRunMcpSessionServer } from "../agent-runtime/desktop-run-request"
 import { getElectronUserDataPath } from "../electron-app"
+import {
+  CODEX_SKILL_PROJECTION_RUNTIME_ID,
+  createCodexSkillProjectionAdapter,
+  createRuntimeCapabilityProjectionService,
+  type RuntimeCapabilityProjectionResult,
+  SKILL_PROJECTION_KIND,
+  type SkillProjectionCandidate,
+  type SkillProjectionKind,
+} from "../runtime-capability-projection"
+import {
+  listManagedSkillInstallRecords,
+  type ManagedSkillInstallRecord,
+} from "../skills/registry"
 import type {
   CodexAppServerResolvedPluginConfigEntry,
   CodexAppServerResolvedPluginConfigOverrides,
@@ -48,6 +61,7 @@ export interface CodexAppServerPluginHomeResult {
   pluginConfigOverrides: Record<string, boolean>
   stagedEntries: CodexAppServerPluginHomeStagedEntry[]
   blockedEntries: CodexAppServerPluginHomeBlockedEntry[]
+  skillProjection: RuntimeCapabilityProjectionResult<SkillProjectionKind>
 }
 
 export type CodexAppServerPluginHomeDependencies = {
@@ -55,6 +69,7 @@ export type CodexAppServerPluginHomeDependencies = {
   homeDir: () => string
   platform: NodeJS.Platform
   userDataDir: () => string
+  listManagedSkillInstallRecords: typeof listManagedSkillInstallRecords
   logger: Pick<Console, "warn">
 }
 
@@ -65,6 +80,7 @@ const defaultDependencies: CodexAppServerPluginHomeDependencies = {
   homeDir: os.homedir,
   platform: process.platform,
   userDataDir: getElectronUserDataPath,
+  listManagedSkillInstallRecords,
   logger: console,
 }
 
@@ -177,6 +193,26 @@ export async function prepareCodexAppServerIsolatedPluginHome(input: {
     }
   }
 
+  const skillProjectionService = createRuntimeCapabilityProjectionService([
+    createCodexSkillProjectionAdapter({
+      fs: dependencies.fs,
+      platform: dependencies.platform,
+    }),
+  ])
+  const managedSkillRecords =
+    await dependencies.listManagedSkillInstallRecords()
+  const skillProjection = await skillProjectionService.project({
+    kind: SKILL_PROJECTION_KIND,
+    runtimeId: CODEX_SKILL_PROJECTION_RUNTIME_ID,
+    payload: {
+      runtimeId: CODEX_SKILL_PROJECTION_RUNTIME_ID,
+      targetHome: codexHome,
+      targetSkillsDir: path.join(codexHome, "skills"),
+      skills:
+        managedSkillRecordsToCodexProjectionCandidates(managedSkillRecords),
+    },
+  })
+
   await dependencies.fs.writeFile(
     path.join(codexHome, "config.toml"),
     buildCodexAppServerConfigToml({
@@ -198,6 +234,7 @@ export async function prepareCodexAppServerIsolatedPluginHome(input: {
     pluginConfigOverrides: config,
     stagedEntries,
     blockedEntries,
+    skillProjection,
   }
 }
 
@@ -214,7 +251,10 @@ export function buildCodexAppServerConfigToml(input: {
   pluginConfig: Record<string, boolean>
   mcpServers: DesktopRunMcpSessionServer[]
 }): string {
-  const lines = ["# Managed by Locus. This file is rebuilt before each run.", ""]
+  const lines = [
+    "# Managed by Locus. This file is rebuilt before each run.",
+    "",
+  ]
   const mcpServers = [...input.mcpServers].sort((a, b) =>
     a.name.localeCompare(b.name),
   )
@@ -230,9 +270,7 @@ export function buildCodexAppServerConfigToml(input: {
       )
       lines.push("")
       if (server.env.length > 0) {
-        lines.push(
-          `[mcp_servers."${escapeTomlBasicString(server.name)}".env]`,
-        )
+        lines.push(`[mcp_servers."${escapeTomlBasicString(server.name)}".env]`)
         for (const entry of [...server.env].sort((a, b) =>
           a.name.localeCompare(b.name),
         )) {
@@ -297,12 +335,38 @@ function toBlockedEntry(
   }
 }
 
+function managedSkillRecordsToCodexProjectionCandidates(
+  records: ManagedSkillInstallRecord[],
+): SkillProjectionCandidate[] {
+  return records.flatMap((record) => {
+    const runtimeRecord = record.runtimes.codex
+    if (!runtimeRecord) return []
+
+    return [
+      {
+        skillId: record.id,
+        registryId: record.registryId,
+        version: record.version,
+        contentHash: record.contentHash,
+        sourcePath: runtimeRecord.installPath,
+        installPath: runtimeRecord.installPath,
+        eligibleRuntimes: record.eligibleRuntimes.map((runtime) =>
+          runtime === "codex" ? "codex" : "claude-code",
+        ),
+        installStatus: "installed",
+      },
+    ]
+  })
+}
+
 async function copyCodexAuthFiles(input: {
   sourceCodexHome: string
   targetCodexHome: string
   dependencies: CodexAppServerPluginHomeDependencies
 }): Promise<void> {
-  if (path.resolve(input.sourceCodexHome) === path.resolve(input.targetCodexHome)) {
+  if (
+    path.resolve(input.sourceCodexHome) === path.resolve(input.targetCodexHome)
+  ) {
     return
   }
 

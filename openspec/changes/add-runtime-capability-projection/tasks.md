@@ -89,10 +89,17 @@
   managed state and only falls back to legacy runtime-local state for
   compatibility; focused tests prove Codex installed status survives after the
   old `~/.codex/skill-registry-state.json` file is removed.
-- [ ] 3.2 Implement Codex registry skill projection into managed isolated
+- [x] 3.2 Implement Codex registry skill projection into managed isolated
   `CODEX_HOME/skills`.
-- [ ] 3.3 Exclude unmanaged global Codex skills from isolated homes unless they are
+- 2026-06-22 completed: Codex app-server isolated home preparation now reads
+  Locus managed skill records, maps Codex runtime installs into projection
+  candidates, and stages them through the Runtime Capability Projection service
+  into the run's isolated `CODEX_HOME/skills`.
+- [x] 3.3 Exclude unmanaged global Codex skills from isolated homes unless they are
   explicitly adopted by a later approved change.
+- 2026-06-22 completed: Codex skill projection clears the isolated
+  `CODEX_HOME/skills` target and repopulates it only from managed skill records;
+  it does not copy or scan unmanaged global Codex skill directories.
 - [ ] 3.4 Preserve local modified/update/rollback behavior.
 - [ ] 3.5 Keep Claude skill discovery behavior unchanged in Phase 1 except for
   install/availability wording and shared owner alignment.
@@ -131,11 +138,18 @@
 
 - [ ] 6.1 Add unit tests for projection selection and exclusion of unmanaged global
   Codex skills.
-- [ ] 6.2 Add tests for Codex isolated home skill staging.
+- [x] 6.2 Add tests for Codex isolated home skill staging.
+- 2026-06-22 completed: `tests/codex-app-server-plugin-home.test.ts` covers a
+  managed Codex registry skill being symlinked into isolated
+  `CODEX_HOME/skills` and a stale isolated skill being removed.
 - [ ] 6.3 Add tests for availability state serialization and renderer-safe
   diagnostics.
 - [ ] 6.4 Run focused Skills registry tests.
-- [ ] 6.5 Run focused Codex app-server home preparation tests.
+- [x] 6.5 Run focused Codex app-server home preparation tests.
+- 2026-06-22 completed for this slice:
+  `bun test tests/codex-app-server-plugin-home.test.ts
+  tests/runtime-capability-projection.test.ts
+  tests/skill-registry-managed-state.test.ts`.
 - [ ] 6.6 Run real or equivalent smoke proving a registry-managed Codex skill
   appears in the isolated managed run home.
 - [ ] 6.7 Run `bun run check`.

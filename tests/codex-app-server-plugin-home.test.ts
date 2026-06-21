@@ -11,18 +11,20 @@ import {
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import type { CodexAppServerResolvedPluginConfigEntry } from "../src/main/lib/codex/app-server-plugin-config"
 import {
   buildCodexAppServerPluginConfigToml,
   prepareCodexAppServerIsolatedPluginHome,
   resolveCodexAppServerIsolatedPluginHome,
 } from "../src/main/lib/codex/app-server-plugin-home"
-import type { CodexAppServerResolvedPluginConfigEntry } from "../src/main/lib/codex/app-server-plugin-config"
 
 const tempRoots: string[] = []
 
 afterEach(async () => {
   await Promise.all(
-    tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+    tempRoots
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true })),
   )
 })
 
@@ -96,12 +98,15 @@ describe("Codex app-server isolated plugin home", () => {
       "figma",
       "7118aaa3",
     )
+    const skillSource = join(root, "managed-skills", "find-skills")
     await mkdir(join(pluginSource, ".codex-plugin"), { recursive: true })
+    await mkdir(skillSource, { recursive: true })
     await writeFile(
       join(pluginSource, ".codex-plugin", "plugin.json"),
       "{}",
       "utf-8",
     )
+    await writeFile(join(skillSource, "SKILL.md"), "# find-skills\n", "utf-8")
     await mkdir(sourceCodexHome, { recursive: true })
     await writeFile(
       join(sourceCodexHome, "auth.json"),
@@ -135,7 +140,9 @@ describe("Codex app-server isolated plugin home", () => {
       "stale",
       "old",
     )
+    const staleSkill = join(isolated.codexHome, "skills", "stale-skill")
     await mkdir(stalePlugin, { recursive: true })
+    await mkdir(staleSkill, { recursive: true })
 
     const result = await prepareCodexAppServerIsolatedPluginHome({
       chatId: "chat-1",
@@ -184,6 +191,27 @@ describe("Codex app-server isolated plugin home", () => {
       ],
       dependencies: {
         userDataDir: () => userDataDir,
+        listManagedSkillInstallRecords: async () => [
+          {
+            id: "find-skills",
+            registryId: "locus-core-skills",
+            version: "1.0.0",
+            contentHash: "a".repeat(64),
+            sourceType: "bundled",
+            source: "skills/find-skills",
+            eligibleRuntimes: ["claude", "codex"],
+            installedAt: "2026-06-22T00:00:00.000Z",
+            updatedAt: "2026-06-22T00:00:00.000Z",
+            runtimes: {
+              codex: {
+                runtime: "codex",
+                installPath: skillSource,
+                installedAt: "2026-06-22T00:00:00.000Z",
+                lastCheckedAt: "2026-06-22T00:00:00.000Z",
+              },
+            },
+          },
+        ],
         logger: { warn: () => {} },
       },
     })
@@ -209,11 +237,37 @@ describe("Codex app-server isolated plugin home", () => {
         stagedPath,
       },
     ])
-    expect(await lstat(stagedPath).then((entry) => entry.isSymbolicLink())).toBe(
-      true,
-    )
+    expect(
+      await lstat(stagedPath).then((entry) => entry.isSymbolicLink()),
+    ).toBe(true)
     expect(await readlink(stagedPath)).toBe(pluginSource)
     expect(await exists(stalePlugin)).toBe(false)
+    const stagedSkill = join(result.codexHome, "skills", "find-skills")
+    expect(
+      await lstat(stagedSkill).then((entry) => entry.isSymbolicLink()),
+    ).toBe(true)
+    expect(await readlink(stagedSkill)).toBe(skillSource)
+    expect(await exists(staleSkill)).toBe(false)
+    expect(result.skillProjection).toEqual({
+      registered: true,
+      kind: "skill",
+      runtimeId: "codex",
+      records: [
+        {
+          kind: "skill",
+          capabilityId: "find-skills",
+          runtimeId: "codex",
+          state: "available",
+          source: {
+            type: "registry",
+            id: "locus-core-skills",
+            version: "1.0.0",
+          },
+          projectionFingerprint: "a".repeat(64),
+          diagnostics: [],
+        },
+      ],
+    })
     expect(await readFile(join(result.codexHome, "auth.json"), "utf-8")).toBe(
       '{"account":"test"}\n',
     )
