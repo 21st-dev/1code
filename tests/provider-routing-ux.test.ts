@@ -47,8 +47,8 @@ describe("provider routing UX source guards", () => {
     join(process.cwd(), "src/main/lib/trpc/routers/codex.ts"),
     "utf8",
   )
-  const acpCompatAdapterSource = readFileSync(
-    join(process.cwd(), "src/main/lib/codex/acp-temporary-compat-adapter.ts"),
+  const codexAppServerAdapterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/codex/app-server-adapter.ts"),
     "utf8",
   )
 
@@ -141,8 +141,8 @@ describe("provider routing UX source guards", () => {
     expect(acpChatTransportSource).toContain(
       "providerProfileId && metadataModel",
     )
-    expect(codexRouterSource).toContain("metadataModelId: metadataModel")
-    expect(acpCompatAdapterSource).toContain("metadataModelId ?? modelId")
+    expect(codexRouterSource).toContain("model: metadataModel")
+    expect(codexAppServerAdapterSource).toContain("providerBinding.model")
     expect(newChatFormSource).toContain("normalizeClaudeModelSourceForRun")
     expect(ipcChatTransportSource).toContain("normalizeClaudeModelSourceForRun")
   })

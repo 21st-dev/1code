@@ -2,7 +2,7 @@
 
 状态日期：2026-06-13
 
-状态基线：当前 `codex/codex-app-server-migration` 工作区。注意：本文记录当前实现和验证事实，不代表已完成归档或已退役 ACP fallback。
+状态基线：当前 Codex app-server desktop/chat 工作区。注意：本文记录当前实现和验证事实，不代表已完成归档。
 
 本文取代 2026-06-07 口径。旧口径里 “runtime control layer 还差真实 desktop smoke” 已经过时；现在的剩余主线是 Codex official/app-server adapter 迁移。
 
@@ -10,16 +10,16 @@
 
 Locus 的跨 runtime 控制层已经完成并归档。Codex official/app-server adapter 迁移已经完成 P0 proof、P1 real transport、P2 truth/diagnostics/smoke 的主体，并额外交付了 roadmap 当初没有预见的 Locus-controlled edit executor 和 provider-profile gateway namespace-tool translation。
 
-当前剩余主线已经从“造 app-server adapter”切换为 P3 上线：app-server 已成为默认 Codex desktop/chat 路径，ACP temporary-compat 只保留为显式回滚伞。下一步是 dogfood 周期、回滚演练和 ACP 删除条件，而不是继续保留双主路径。
+当前剩余主线已经从“造 app-server adapter”切换为 P3 上线：app-server 是唯一 Codex desktop/chat 路径。下一步是 dogfood 周期和 app-server 行为收敛，而不是继续保留双主路径。
 
 ## 1. 当前事实
 
 | 领域 | 当前状态 | 证据 | 接下来 |
 |---|---|---|---|
 | Runtime control layer | 已完成并归档 | `openspec/changes/archive/2026-06-11-add-runtime-control-layer/` | 不再作为主线缺口重复追踪 |
-| Desktop smoke | 已通过 Claude plan/guard、Codex ACP plan/guard；app-server transport、provider-profile、MCP readiness、cancel、fallback diagnostics、controlled edit 已有真实 smoke/dogfood evidence | `openspec/changes/archive/2026-06-11-add-runtime-control-layer/smoke-evidence.md`, `openspec/changes/refactor-codex-official-runtime-adapter/desktop-smoke-evidence.md`, `openspec/changes/add-locus-controlled-edit-executor-for-codex-app-server/adoption-probe-evidence.md` | 默认启用后继续 dogfood，并保留显式 ACP 回滚 |
+| Desktop smoke | 已通过 Claude plan/guard、Codex app-server plan/guard；app-server transport、provider-profile、MCP readiness、cancel、diagnostics、controlled edit 已有真实 smoke/dogfood evidence | `openspec/changes/archive/2026-06-11-add-runtime-control-layer/smoke-evidence.md`, `openspec/changes/refactor-codex-official-runtime-adapter/desktop-smoke-evidence.md`, `openspec/changes/add-locus-controlled-edit-executor-for-codex-app-server/adoption-probe-evidence.md` | 继续 dogfood app-server 路径 |
 | Claude desktop/chat | 目标路径是 `@anthropic-ai/claude-agent-sdk` | `src/main/lib/claude/agent-sdk-*` | 只做必要边界维护，不迁移到别的主路径 |
-| Codex desktop/chat | app-server 默认启用；ACP temporary-compat 仍存在，但只通过 `LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT=1` 或 legacy `LOCUS_CODEX_APP_SERVER_ADAPTER=0` 显式回滚 | `src/main/lib/codex/desktop-adapter-selection.ts`, `src/main/lib/codex/acp-temporary-compat-adapter.ts`, `src/main/lib/codex/app-server-adapter.ts` | dogfood 后再把 ACP 删除作为独立 slice |
+| Codex desktop/chat | app-server 是唯一 desktop/chat adapter | `src/main/lib/codex/desktop-adapter-selection.ts`, `src/main/lib/codex/app-server-adapter.ts` | 继续 dogfood app-server 行为 |
 | Codex app-server | Real transport、provider binding、MCP readiness、AskUserQuestion、attachments、usage、cancel、redaction、controlled edit 都已实现并验证 | `openspec/changes/refactor-codex-official-runtime-adapter/`, `openspec/changes/add-locus-controlled-edit-executor-for-codex-app-server/` | 进入 dogfood/default gate |
 | Capability truth | runtime-level manifest 已存在；renderer 现在通过 `agentRuntime.listManifests` manifest store 消费，不再只靠 shared static helper | `src/shared/agent-runtime-capabilities.ts`, `src/shared/codex-runtime-capabilities.ts`, `src/renderer/features/agents/lib/runtime-manifest-store.ts` | unknown auth/app-server context 仍保持 degraded |
 | Scope expansion | 已改为 runtime-neutral response route | `trpc.agentRuntime.respondScopeExpansion`, `src/main/lib/agent-runtime/scope-expansion.ts` | Codex 仍需以 dogfood 验完整 retry loop |
@@ -34,7 +34,7 @@ Locus 的跨 runtime 控制层已经完成并归档。Codex official/app-server 
 - `DesktopRunPreflight`：在 provider、MCP、attachment、adapter startup 前验证 project/chat/subChat/cwd/provider/MCP/local-only。
 - `PermissionPolicy`：统一 plan、agent、guarded desktop run 语义。
 - `DesktopRunRequest`：把 verified context、provider binding、MCP readiness、attachments、trace、cancellation、session metadata 交给 adapter。
-- `DesktopRuntimeAdapterFactory`：显式区分 `claude-agent-sdk`、`codex-acp-temporary-compat`、未来 `codex-app-server`。
+- `DesktopRuntimeAdapterFactory`：显式区分 `claude-agent-sdk`、`codex-app-server`。
 - `RunEvent` / stream mapper / redaction：把 runtime stream chunk 映射为持久化、redacted、Workbench 可读的 semantic events。
 - Workbench timeline：显示 semantic categories，并保留 raw payload debug fallback。
 
@@ -44,8 +44,8 @@ Locus 的跨 runtime 控制层已经完成并归档。Codex official/app-server 
 |---|---|---|---|
 | `claude-plan` | Claude Agent SDK desktop adapter | plan | passed |
 | `claude-guard` | Claude Agent SDK desktop adapter | guarded agent | passed |
-| `codex-temporary-compat-plan` | Codex ACP temporary-compat desktop adapter | plan | passed |
-| `codex-temporary-compat-guard` | Codex ACP temporary-compat desktop adapter | guarded agent | passed |
+| `codex-app-server-plan` | Codex app-server desktop adapter | plan | passed |
+| `codex-app-server-guard` | Codex app-server desktop adapter | guarded agent | passed |
 
 ## 3. 当前主线：Codex official/app-server adapter
 
@@ -53,11 +53,10 @@ Locus 的跨 runtime 控制层已经完成并归档。Codex official/app-server 
 
 `openspec/changes/refactor-codex-official-runtime-adapter/`
 
-当前任务状态：`refactor-codex-official-runtime-adapter` 和 `add-locus-controlled-edit-executor-for-codex-app-server` 都已完成实现和验证，仍未归档。已完成的是 proposal、approval、SDK/app-server/ACP matrix、P0 safety proof、runtime-control layer 消费确认、real app-server transport、permission/interaction/attachment/stream/session/long-text/scope proof、provider-profile gateway namespace-tool translation、controlled edit executor、desktop smoke 和 secret-at-rest shell snapshot scrub。
+当前任务状态：`refactor-codex-official-runtime-adapter` 和 `add-locus-controlled-edit-executor-for-codex-app-server` 都已完成实现和验证，仍未归档。已完成的是 proposal、approval、app-server matrix、P0 safety proof、runtime-control layer 消费确认、real app-server transport、permission/interaction/attachment/stream/session/long-text/scope proof、provider-profile gateway namespace-tool translation、controlled edit executor、desktop smoke 和 secret-at-rest shell snapshot scrub。
 
 不要把下面这些当作已完成：
 
-- ACP temporary-compat fallback 删除
 - structured `apply_patch` app-server tool support
 - broad rollback/fork parity
 - Local Job API rich desktop trace v2
@@ -153,7 +152,7 @@ Locus 的跨 runtime 控制层已经完成并归档。Codex official/app-server 
 
 以下判断仍然成立：
 
-- ACP temporary-compat fallback 仍未退役。
+- Codex app-server dogfood 仍需持续补证。
 - structured `apply_patch` app-server tool support 仍 deferred。
 - Local Job API rich trace 口径还未决定。
 - `add-locus-controlled-edit-executor-for-codex-app-server` 和 `refactor-codex-official-runtime-adapter` 仍需归档/入库后才算 lifecycle 收尾。

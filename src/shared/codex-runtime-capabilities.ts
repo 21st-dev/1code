@@ -11,9 +11,7 @@ import {
 export type CodexRuntimeCapabilityStatus = AgentRuntimeCapabilityStatus
 export type CodexRuntimeCapabilityId = AgentRuntimeCapabilityId
 export type CodexRuntimeCapability = AgentRuntimeCapability
-export type CodexRuntimeCapabilityAdapterSource =
-  | "codex-acp-temporary-compat"
-  | "codex-app-server"
+export type CodexRuntimeCapabilityAdapterSource = "codex-app-server"
 export type CodexRuntimeCapabilityProviderAuthMode =
   | "app-managed"
   | "provider-profile"
@@ -78,86 +76,6 @@ const CODEX_APP_SERVER_HARD_TOOL_GUARD_PROVEN: CodexAdapterCapabilityOverride =
       ],
     },
   }
-
-const CODEX_ACP_CAPABILITY_OVERRIDES: Partial<
-  Record<CodexRuntimeCapabilityId, CodexAdapterCapabilityOverride>
-> = {
-  hardToolGuard: {
-    status: "supported",
-    scope: "runtime-neutral",
-    reason:
-      "The explicit ACP temporary-compat rollback path installs an ACP permission handler before Codex prompts and maps permission requests to guarded-run decisions.",
-    hint: "ACP rollback guarded runs fail closed if the ACP permission handler cannot be attached.",
-    support: {
-      kind: "runtime-code",
-      references: [
-        "src/main/lib/codex/acp-permission.ts",
-        "src/main/lib/trpc/routers/codex.ts",
-      ],
-    },
-  },
-  planMode: {
-    status: "supported",
-    scope: "runtime-neutral",
-    reason:
-      "The explicit ACP temporary-compat rollback path maps Codex plan runs to ACP read-only mode and denies edit, move, delete, and execute permission requests before execution.",
-    hint: "Plan-mode writes and shell commands are rejected through ACP permission handling on the rollback path.",
-    support: {
-      kind: "runtime-code",
-      references: [
-        "src/main/lib/codex/acp-permission.ts",
-        "src/main/lib/trpc/routers/codex.ts",
-      ],
-    },
-  },
-  scopeExpansion: {
-    status: "supported",
-    scope: "runtime-neutral",
-    reason:
-      "The explicit ACP temporary-compat rollback path denies out-of-scope guarded operations before permission approval and emits scope-expansion events through the shared guard layer.",
-    hint: "Approve the requested scope expansion, then retry the guarded run.",
-    support: {
-      kind: "locus-shared-layer",
-      references: [
-        "src/main/lib/agent-guard",
-        "src/main/lib/codex/acp-permission.ts",
-      ],
-    },
-  },
-  askUserQuestion: {
-    status: "supported",
-    scope: "runtime-neutral",
-    reason:
-      "The explicit ACP temporary-compat rollback path registers the Codex ACP host-side AskUserQuestion tool and bridges pending, answer, timeout, and denial events through the shared desktop question UI contract.",
-    hint: "Codex question requests remain a blocking host tool call until the user answers, skips, or the request times out.",
-    support: {
-      kind: "runtime-code",
-      references: [
-        "src/main/lib/codex/ask-user-question.ts",
-        "src/main/lib/trpc/routers/codex.ts",
-      ],
-    },
-  },
-  usageMetadata: {
-    status: "supported",
-    scope: "runtime-specific",
-    reason:
-      "The explicit ACP temporary-compat rollback path polls session token_count events and emits normalized token and context metadata when available without inventing missing values.",
-    hint: "Missing Codex usage fields are omitted rather than reported as zero.",
-    support: {
-      kind: "runtime-code",
-      references: ["src/main/lib/trpc/routers/codex.ts"],
-    },
-  },
-  runtimePlugins: {
-    status: "unsupported",
-    scope: "unavailable",
-    reason:
-      "The explicit ACP temporary-compat rollback path does not expose a Locus-controlled runtime-native plugin filter.",
-    hint: "Do not inherit app-server plugin execution support when Codex is running through ACP temporary compatibility.",
-    support: null,
-  },
-}
 
 const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
   Record<CodexRuntimeCapabilityId, CodexAdapterCapabilityOverride>
@@ -335,15 +253,6 @@ export function getCodexRuntimeCapabilitiesForAdapter(
   adapterContext: CodexRuntimeCapabilityAdapterContext,
 ): CodexRuntimeCapability[] {
   const context = normalizeAdapterContext(adapterContext)
-  if (context.adapterSource === "codex-acp-temporary-compat") {
-    return getCodexRuntimeCapabilities().map((capability) => ({
-      ...capability,
-      ...CODEX_ACP_CAPABILITY_OVERRIDES[capability.id],
-      id: capability.id,
-      label: capability.label,
-    }))
-  }
-
   const overrides = getAppServerCapabilityOverrides(context)
   return getCodexRuntimeCapabilities().map((capability) => ({
     ...capability,

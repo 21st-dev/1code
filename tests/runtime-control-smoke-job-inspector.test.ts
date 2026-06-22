@@ -45,14 +45,14 @@ function createPermissionPolicySnapshot(input: {
   const enforcement =
     mode === "plan"
       ? isCodex
-        ? "codex-acp-plan-handler"
+        ? "codex-app-server-plan-approval-gate"
         : "native-plan-read-only"
       : guarded
         ? isCodex
-          ? "codex-acp-guarded-handler"
+          ? "codex-app-server-guarded-approval-gate"
           : "locus-guarded-tool-policy"
         : isCodex
-          ? "codex-acp-agent-auto"
+          ? "codex-app-server-agent-approval-gate"
           : "locus-agent-full-access"
 
   return {
@@ -76,9 +76,10 @@ function createPermissionPolicySnapshot(input: {
     runtimeMapping: isCodex
       ? {
           runtime: "codex",
-          adapterSource: "acp-temporary-compat",
-          acpMode: mode === "plan" ? "read-only" : "auto",
-          requiresPermissionHandler: mode === "plan" || guarded,
+          adapterSource: "codex-app-server",
+          appServerApprovalPolicy: guarded ? "untrusted" : "on-request",
+          requiresApprovalGate: true,
+          approvalGateFailure: "fail-closed",
         }
       : {
           runtime: "claude-code",
@@ -158,7 +159,7 @@ function createAdapterStartedEvent(input: {
       attempt: Object.prototype.hasOwnProperty.call(input, "attempt")
         ? input.attempt
         : 1,
-      temporaryFallback: input.adapterSource === "codex-acp-temporary-compat",
+      temporaryFallback: false,
       fallbackReason: null,
     },
   })
@@ -221,7 +222,7 @@ describe("runtime control smoke job inspector", () => {
         createAdapterStartedEvent({
           sequence: 1,
           runtimeId: "codex",
-          adapterSource: "codex-acp-temporary-compat",
+          adapterSource: "codex-app-server",
         }),
         createEvent({ sequence: 2, type: "completed", runtimeId: "codex" }),
       ],
@@ -230,7 +231,7 @@ describe("runtime control smoke job inspector", () => {
     const result = inspectRuntimeControlSmokeJob({
       db,
       jobId: "job-1",
-      scenarioId: "codex-temporary-compat-guard",
+      scenarioId: "codex-app-server-guard",
     })
 
     expect(result.ok).toBe(false)
@@ -289,7 +290,7 @@ describe("runtime control smoke job inspector", () => {
       events: [
         createAdapterStartedEvent({
           sequence: 1,
-          adapterSource: "codex-acp-temporary-compat",
+          adapterSource: "codex-app-server",
         }),
         createEvent({ sequence: 2, type: "completed" }),
       ],
@@ -303,7 +304,7 @@ describe("runtime control smoke job inspector", () => {
 
     expect(result.ok).toBe(false)
     expect(result.failures.join("\n")).toContain(
-      "expected adapter source claude-agent-sdk, got codex-acp-temporary-compat",
+      "expected adapter source claude-agent-sdk, got codex-app-server",
     )
   })
 

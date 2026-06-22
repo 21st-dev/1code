@@ -9,8 +9,8 @@ product-code changes.
 Build a repo-grounded map of Codex capabilities in Locus:
 
 - what Locus already supports as visible, controlled, tested behavior
-- what Codex CLI, app-server, or the current ACP temporary-compat path may
-  support natively but Locus only passes through
+- what Codex CLI or app-server may support natively but Locus only passes
+  through
 - what is partially supported
 - what is unsupported because the selected Codex surface does not expose a safe
   primitive to Locus
@@ -58,8 +58,7 @@ Use these metadata fields:
    - `openspec/changes/add-agent-runtime-capability-model/`
    - `openspec/changes/add-headless-agent-jobs/`
    - `openspec/changes/add-command-guide/`
-3. Verify current Codex CLI/app-server behavior and treat ACP evidence as
-   temporary-compat evidence before claiming native support.
+3. Verify current Codex CLI/app-server behavior before claiming native support.
 4. Fill the matrix in this document with file references and test evidence.
 5. Split follow-up work into small OpenSpec changes.
 
@@ -70,9 +69,7 @@ controls, and tests this." The current local baseline checked for this plan is:
 
 Status note: this document predates
 `refactor-codex-official-runtime-adapter`. The current desktop/chat target is
-`codex app-server`; ACP evidence below is historical temporary-compat evidence,
-not the long-term OpenAI desktop/chat target. `codex exec` remains the
-headless/batch fallback path.
+`codex app-server`. `codex exec` remains the headless/batch fallback path.
 
 - shell executable: `/opt/homebrew/bin/codex`
 - Locus bundled dev executable: `resources/bin/darwin-arm64/codex`
@@ -215,8 +212,7 @@ add-headless-agent-jobs
 
 - Do not create one large "complete Codex parity with Claude Code" proposal.
 - Do not claim official Codex desktop features unless the same behavior is
-  exposed through `codex app-server` or a Locus-owned safe layer; ACP evidence
-  is temporary-compat evidence only.
+  exposed through `codex app-server` or a Locus-owned safe layer.
 - Do not confuse session-level `codex fork` with per-message rollback/fork.
 - Do not fake per-message rollback/fork with prompt rewriting, history slicing,
   or unsupported session metadata.

@@ -402,12 +402,6 @@ async function main() {
     mode: "agent",
     workspaceKind: "folderless",
   })
-  const codexAcpPolicy = resolveDesktopPermissionPolicy({
-    runtimeId: "codex",
-    mode: "agent",
-    workspaceKind: "folderless",
-    codexAdapterSource: "acp-temporary-compat",
-  })
   const codexAppServerPolicy = resolveDesktopPermissionPolicy({
     runtimeId: "codex",
     mode: "agent",
@@ -441,41 +435,41 @@ async function main() {
     assistantToolDecisions.claudeRead.decision === "deny" &&
     assistantToolDecisions.claudeBash.decision === "deny" &&
     assistantToolDecisions.claudeMcp.decision === "deny"
-  const acpDecisions = {
+  const codexPermissionDecisions = {
     shell: decideCodexAcpToolPermission({
       tool: {
-        toolUseId: "acp-shell",
+        toolUseId: "codex-shell",
         toolName: "Bash",
         kind: "execute",
         toolInput: { command: "printf denied > quick-chat-smoke.txt" },
       },
       mode: "agent",
       controlLevel: "assistant",
-      observedToolPolicy: codexAcpPolicy.observedToolPolicy,
+      observedToolPolicy: codexAppServerPolicy.observedToolPolicy,
       contract: null,
     }),
     file: decideCodexAcpToolPermission({
       tool: {
-        toolUseId: "acp-file",
+        toolUseId: "codex-file",
         toolName: "Edit",
         kind: "edit",
         toolInput: { path: "quick-chat-smoke.txt" },
       },
       mode: "agent",
       controlLevel: "assistant",
-      observedToolPolicy: codexAcpPolicy.observedToolPolicy,
+      observedToolPolicy: codexAppServerPolicy.observedToolPolicy,
       contract: null,
     }),
     mcp: decideCodexAcpToolPermission({
       tool: {
-        toolUseId: "acp-mcp",
+        toolUseId: "codex-mcp",
         toolName: "mcp__repo__status",
         kind: "read",
         toolInput: {},
       },
       mode: "agent",
       controlLevel: "assistant",
-      observedToolPolicy: codexAcpPolicy.observedToolPolicy,
+      observedToolPolicy: codexAppServerPolicy.observedToolPolicy,
       contract: null,
     }),
   }
@@ -526,15 +520,14 @@ async function main() {
   }
   const assistantPolicyPassed =
     claudeAssistantPolicy.controlLevel === "assistant" &&
-    codexAcpPolicy.controlLevel === "assistant" &&
     codexAppServerPolicy.controlLevel === "assistant" &&
     assistantToolDecisions.webFetch.decision === "allow" &&
     assistantToolDecisions.claudeRead.decision === "deny" &&
     assistantToolDecisions.claudeBash.decision === "deny" &&
     assistantToolDecisions.claudeMcp.decision === "deny" &&
-    acpDecisions.shell.decision === "deny" &&
-    acpDecisions.file.decision === "deny" &&
-    acpDecisions.mcp.decision === "deny" &&
+    codexPermissionDecisions.shell.decision === "deny" &&
+    codexPermissionDecisions.file.decision === "deny" &&
+    codexPermissionDecisions.mcp.decision === "deny" &&
     appServerDenials.command.decision === "decline" &&
     appServerDenials.file.decision === "decline" &&
     appServerDenials.permissions.allowedByPolicy === false
@@ -703,10 +696,9 @@ async function main() {
       claudeQuickChatId: claudeQuickChat.id,
       claudePreflightKind: claudePreflight.kind,
       claudeEnforcement: claudeAssistantPolicy.enforcement,
-      codexAcpEnforcement: codexAcpPolicy.enforcement,
       codexAppServerEnforcement: codexAppServerPolicy.enforcement,
       assistantToolDecisions,
-      acpDecisions,
+      codexPermissionDecisions,
       appServerDenials,
     },
     attachProject: {

@@ -147,10 +147,7 @@ describe("provider diagnostics", () => {
       )
     })
 
-    const previousAcpFallback =
-      process.env.LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT
     try {
-      delete process.env.LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT
       const runtimeProfile = {
         id: "profile_success",
         name: "Diagnostics Provider",
@@ -201,24 +198,7 @@ describe("provider diagnostics", () => {
       })
       expect(JSON.stringify(status)).not.toContain("provider-token-123")
       expect(JSON.stringify(status)).not.toContain("https://locus.local/diagnostics")
-
-      process.env.LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT = "1"
-      const fallbackStatus =
-        await gatewayModule.runProviderProfileDiagnostics(runtimeProfile)
-      expect(
-        fallbackStatus.checks?.find((check) => check.id === "codex_app_server"),
-      ).toMatchObject({
-        status: "skipped",
-        category: "codex_app_server_unavailable",
-        message: expect.stringContaining("ACP temporary-compat fallback"),
-      })
     } finally {
-      if (previousAcpFallback === undefined) {
-        delete process.env.LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT
-      } else {
-        process.env.LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT =
-          previousAcpFallback
-      }
       await provider.close()
     }
   })

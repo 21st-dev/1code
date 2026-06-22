@@ -6,7 +6,7 @@ import type {
   RequestPermissionResponse,
 } from "@agentclientprotocol/sdk"
 import {
-  getCodexPermissionMapping,
+  getCodexAppServerPermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
 import type { AgentGuardEvent } from "../src/shared/agent-scope-contracts"
@@ -112,13 +112,13 @@ describe("Codex ACP permission enforcement", () => {
     })
   })
 
-  test("assistant ACP policy allows web fetch and denies file or unknown tools", async () => {
+  test("assistant policy allows web fetch and denies file or unknown tools", async () => {
     const policy = resolveDesktopPermissionPolicy({
       runtimeId: "codex",
       mode: "agent",
       workspaceKind: "folderless",
     })
-    const permission = getCodexPermissionMapping(policy)
+    const permission = getCodexAppServerPermissionMapping(policy)
     const handler = createCodexAcpPermissionHandler({
       mode: "agent",
       controlLevel: permission.controlLevel,
@@ -229,7 +229,7 @@ describe("Codex ACP permission enforcement", () => {
       runtimeId: "codex",
       mode: "agent",
     })
-    const permission = getCodexPermissionMapping(policy)
+    const permission = getCodexAppServerPermissionMapping(policy)
     const observed: any[] = []
     const handler = createCodexAcpPermissionHandler({
       mode: "agent",
@@ -287,7 +287,7 @@ describe("Codex ACP permission enforcement", () => {
       runtimeId: "codex",
       mode: "agent",
     })
-    const permission = getCodexPermissionMapping(policy)
+    const permission = getCodexAppServerPermissionMapping(policy)
     const tool = normalizeCodexDynamicPermissionTool({
       toolCallId: "dynamic-1",
       toolName: "acp.acp_provider_agent_dynamic_tool",

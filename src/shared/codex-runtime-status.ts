@@ -1,7 +1,5 @@
 export type CodexRuntimeComponentId =
   | "login-cli"
-  | "acp-runtime"
-  | "acp-spawn"
   | "adapter-source"
   | "login"
   | "provider-profile"
@@ -50,23 +48,8 @@ export type RuntimeExecutableLike = {
   hint: string
 }
 
-export type CodexAcpSpawnProbeLike = {
-  ok: boolean
-  exitCode: number | null
-  signal: string | null
-  error: string | null
-  stdoutPreview: string
-  stderrPreview: string
-  durationMs: number
-}
-
-export type CodexAcpRuntimeLike = RuntimeExecutableLike & {
-  spawnProbe: CodexAcpSpawnProbeLike
-}
-
 type BuildCodexRuntimeAvailabilityInput = {
   loginCli: RuntimeExecutableLike
-  acp: CodexAcpRuntimeLike
 }
 
 type RuntimeComponentInput = {
@@ -144,39 +127,7 @@ export function buildCodexRuntimeAvailability(
     path: input.loginCli.path,
   })
 
-  const acpRuntime = createCodexRuntimeComponent({
-    id: "acp-runtime",
-    label: "Codex ACP runtime",
-    status: executableComponentStatus(input.acp),
-    ok: input.acp.ok,
-    error: input.acp.error,
-    hint: input.acp.hint,
-    path: input.acp.path,
-  })
-
-  const acpSpawnBlockedByRuntime = !input.acp.ok
-  const acpSpawn = createCodexRuntimeComponent({
-    id: "acp-spawn",
-    label: "Codex ACP spawn probe",
-    status: acpSpawnBlockedByRuntime
-      ? "blocked"
-      : input.acp.spawnProbe.ok
-        ? "ready"
-        : "failed",
-    ok: input.acp.ok && input.acp.spawnProbe.ok,
-    blocking: true,
-    error: acpSpawnBlockedByRuntime
-      ? input.acp.error
-      : input.acp.spawnProbe.error,
-    hint: input.acp.hint,
-    path: input.acp.path,
-  })
-
-  return buildCodexRuntimeAvailabilityFromComponents([
-    loginCli,
-    acpRuntime,
-    acpSpawn,
-  ])
+  return buildCodexRuntimeAvailabilityFromComponents([loginCli])
 }
 
 export function createCodexRuntimeBlocker(

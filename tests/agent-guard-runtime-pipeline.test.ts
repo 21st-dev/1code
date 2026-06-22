@@ -166,27 +166,22 @@ describe("agent guard runtime pipeline", () => {
     expect(claude).not.toContain("const activeSessions")
   })
 
-  test("Codex guarded and plan-mode runs install ACP permission enforcement", () => {
+  test("Codex guarded and plan-mode runs install app-server approval enforcement", () => {
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
-    const codexAcpTemporaryCompatAdapter = readFileSync(
-      "src/main/lib/codex/acp-temporary-compat-adapter.ts",
+    const codexAppServerAdapter = readFileSync(
+      "src/main/lib/codex/app-server-adapter.ts",
       "utf8",
     )
     const codexChatInputSchema = readFileSync(
       "src/main/lib/codex/chat-input-schema.ts",
       "utf8",
     )
-    const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
-    const codexAcpRuntime = readFileSync(
-      "src/main/lib/codex/acp-runtime.ts",
+    const codexAppServerApproval = readFileSync(
+      "src/main/lib/codex/app-server-approval.ts",
       "utf8",
     )
-    const codexAcpTextStream = readFileSync(
-      "src/main/lib/codex/acp-text-stream.ts",
-      "utf8",
-    )
-    const codexPersistence = readFileSync(
-      "src/main/lib/codex/acp-message-persistence.ts",
+    const codexAppServerControlledEdit = readFileSync(
+      "src/main/lib/codex/app-server-controlled-edit.ts",
       "utf8",
     )
     const codexErrors = readFileSync(
@@ -211,26 +206,22 @@ describe("agent guard runtime pipeline", () => {
     expect(codexChatInputSchema).toContain(
       "scopeContract: agentScopeContractInputSchema.optional()",
     )
-    expect(codexAcpTemporaryCompatAdapter).toContain("getCodexRunRequiredCapability")
-    expect(codexAcpTemporaryCompatAdapter).toContain("createCodexAcpRuntimeModel")
-    expect(codexAcpRuntime).toContain("installCodexAcpPermissionHandler")
-    expect(codexAcpRuntime).toContain("createCodexAcpPermissionHandler")
-    expect(codexAcpRuntime).toContain("createCodexAskUserQuestionTools")
-    expect(codexAcpRuntime).toContain(
-      "installCodexAskUserQuestionAcpResultNormalizer",
+    expect(codex).toContain('codexAdapterSource: "codex-app-server"')
+    expect(codexAppServerAdapter).toContain(
+      "getCodexAppServerPermissionMapping",
+    )
+    expect(codexAppServerAdapter).toContain(
+      "createCodexAppServerApprovalBridge",
     )
     expect(codex).toContain("respondToolApproval")
-    expect(codexAcpTemporaryCompatAdapter).toContain(
-      "buildCodexRuntimeCapabilityErrorChunk",
+    expect(codexAppServerAdapter).toContain("guardedContract")
+    expect(codexAppServerApproval).toContain(
+      "decideCodexAcpToolPermission",
     )
-    expect(codexAcpTemporaryCompatAdapter).toContain("prepareCodexAcpPrompt")
-    expect(codexPrompt).toContain("buildGuardedRunPromptBlock(guardedContract)")
-    expect(codexAcpTextStream).toContain('enforcementMode: "hard"')
+    expect(codexAppServerControlledEdit).toContain(
+      "codexControlledEditDeveloperInstructions",
+    )
     expect(codex).not.toContain('enforcementMode: "contract-and-audit"')
-    expect(codexAcpTemporaryCompatAdapter).toContain(
-      "persistCodexAcpResponseMessage",
-    )
-    expect(codexPersistence).toContain("buildGuardedRunAudit")
     expect(runtimeEventState).toContain('chunk.type === "ask-user-question"')
     expect(runtimeEventState).toContain('chunk.type === "ask-user-question-timeout"')
     expect(runtimeEventState).toContain('chunk.type === "ask-user-question-result"')
@@ -267,8 +258,9 @@ describe("agent guard runtime pipeline", () => {
     expect(codexRuntimeStatus).toContain('id: "login"')
     expect(codexRuntimeStatus).toContain('id: "adapter-source"')
     expect(codexRuntimeStatus).toContain(
-      "CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA",
+      "CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA",
     )
+    expect(codexRuntimeStatus).not.toContain("TEMPORARY_COMPAT")
     expect(codexRuntimeStatus).toContain("adapter: adapterMetadata")
     expect(codex).toContain("runtimeStatus.blockers[0]")
     expect(codexRuntimeStatus).toContain('id: "provider-profile"')

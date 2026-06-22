@@ -33,7 +33,6 @@ export type ObservedToolPolicy = {
   catastrophicActions: ObservedCatastrophicAction[]
   degradation:
     | "not-applicable"
-    | "stream-only-when-hook-unavailable"
     | "fail-closed-when-hook-unavailable"
 }
 
@@ -46,19 +45,7 @@ export type ClaudePermissionMapping = {
   bypassReason: string | null
 }
 
-export type CodexPermissionAdapterSource =
-  | "acp-temporary-compat"
-  | "codex-app-server"
-
-export type CodexAcpPermissionMapping = {
-  runtime: "codex"
-  adapterSource: "acp-temporary-compat"
-  acpMode: "read-only" | "auto"
-  controlLevel: ResolvedDesktopRuntimeControlLevel
-  observedToolPolicy: ObservedToolPolicy
-  requiresPermissionHandler: boolean
-  permissionHandlerFailure: "fail-closed" | "degrade-to-stream-only"
-}
+export type CodexPermissionAdapterSource = "codex-app-server"
 
 export type CodexAppServerPermissionMapping = {
   runtime: "codex"
@@ -76,9 +63,7 @@ export type CodexAppServerPermissionMapping = {
   permissionHandlerFailure: "fail-closed"
 }
 
-export type CodexPermissionMapping =
-  | CodexAcpPermissionMapping
-  | CodexAppServerPermissionMapping
+export type CodexPermissionMapping = CodexAppServerPermissionMapping
 
 export type DesktopPermissionPolicy = {
   runtimeId: DesktopPermissionRuntime
@@ -95,10 +80,6 @@ export type DesktopPermissionPolicy = {
     | "native-plan-read-only"
     | "locus-agent-observed"
     | "locus-guarded-tool-policy"
-    | "codex-acp-assistant-handler"
-    | "codex-acp-plan-handler"
-    | "codex-acp-guarded-handler"
-    | "codex-acp-agent-observed"
     | "codex-app-server-assistant-approval-gate"
     | "codex-app-server-plan-approval-gate"
     | "codex-app-server-guarded-approval-gate"
@@ -427,26 +408,6 @@ export function resolveNonDesktopPermissionPolicy({
   }
 }
 
-function createCodexAcpPermissionMapping({
-  controlLevel,
-  observedToolPolicy,
-  permissionHandlerFailure,
-}: {
-  controlLevel: ResolvedDesktopRuntimeControlLevel
-  observedToolPolicy: ObservedToolPolicy
-  permissionHandlerFailure: CodexAcpPermissionMapping["permissionHandlerFailure"]
-}): CodexAcpPermissionMapping {
-  return {
-    runtime: "codex",
-    adapterSource: "acp-temporary-compat",
-    acpMode: "read-only",
-    controlLevel,
-    observedToolPolicy,
-    requiresPermissionHandler: true,
-    permissionHandlerFailure,
-  }
-}
-
 function createCodexAppServerPermissionMapping({
   controlLevel,
   observedToolPolicy,
@@ -474,37 +435,11 @@ function createCodexAppServerPermissionMapping({
   }
 }
 
-function createCodexPermissionMapping({
-  adapterSource,
-  controlLevel,
-  observedToolPolicy,
-  acpPermissionHandlerFailure,
-}: {
-  adapterSource: CodexPermissionAdapterSource
-  controlLevel: ResolvedDesktopRuntimeControlLevel
-  observedToolPolicy: ObservedToolPolicy
-  acpPermissionHandlerFailure: CodexAcpPermissionMapping["permissionHandlerFailure"]
-}): CodexPermissionMapping {
-  if (adapterSource === "codex-app-server") {
-    return createCodexAppServerPermissionMapping({
-      controlLevel,
-      observedToolPolicy,
-    })
-  }
-
-  return createCodexAcpPermissionMapping({
-    controlLevel,
-    observedToolPolicy,
-    permissionHandlerFailure: acpPermissionHandlerFailure,
-  })
-}
-
 export function resolveDesktopPermissionPolicy({
   runtimeId,
   mode,
   workspaceKind = "project",
   hasScopeContract = false,
-  codexAdapterSource = "acp-temporary-compat",
 }: ResolveDesktopPermissionPolicyInput): DesktopPermissionPolicy {
   if (workspaceKind === "folderless") {
     return {
@@ -520,9 +455,7 @@ export function resolveDesktopPermissionPolicy({
       enforcement:
         runtimeId === "claude-code"
           ? "locus-assistant-tool-policy"
-          : codexAdapterSource === "codex-app-server"
-            ? "codex-app-server-assistant-approval-gate"
-            : "codex-acp-assistant-handler",
+          : "codex-app-server-assistant-approval-gate",
       runtimeMapping:
         runtimeId === "claude-code"
           ? {
@@ -533,14 +466,12 @@ export function resolveDesktopPermissionPolicy({
               sdkDisallowedTools: getClaudeAssistantSdkDisallowedTools(),
               bypassReason: null,
             }
-          : createCodexPermissionMapping({
-              adapterSource: codexAdapterSource,
+          : createCodexAppServerPermissionMapping({
               controlLevel: "assistant",
               observedToolPolicy: DISABLED_OBSERVATION,
-              acpPermissionHandlerFailure: "fail-closed",
             }),
       diagnostics: [
-        runtimeId === "codex" && codexAdapterSource === "codex-app-server"
+        runtimeId === "codex"
           ? "Assistant quick chat allows only web search/fetch tools; Codex app-server must fail closed for file, shell, MCP, runtime, and unknown approval requests."
           : "Assistant quick chat allows only web search/fetch tools and Locus-owned persistence; file, shell, terminal, MCP, runtime mutation, and unknown tools fail closed.",
       ],
@@ -561,9 +492,7 @@ export function resolveDesktopPermissionPolicy({
       enforcement:
         runtimeId === "claude-code"
           ? "native-plan-read-only"
-          : codexAdapterSource === "codex-app-server"
-            ? "codex-app-server-plan-approval-gate"
-            : "codex-acp-plan-handler",
+          : "codex-app-server-plan-approval-gate",
       runtimeMapping:
         runtimeId === "claude-code"
           ? {
@@ -573,14 +502,12 @@ export function resolveDesktopPermissionPolicy({
               requiresToolPolicy: true,
               bypassReason: null,
             }
-          : createCodexPermissionMapping({
-              adapterSource: codexAdapterSource,
+          : createCodexAppServerPermissionMapping({
               controlLevel: "plan",
               observedToolPolicy: DISABLED_OBSERVATION,
-              acpPermissionHandlerFailure: "fail-closed",
             }),
       diagnostics: [
-        runtimeId === "codex" && codexAdapterSource === "codex-app-server"
+        runtimeId === "codex"
           ? "Plan mode denies project/workspace side effects; Codex app-server must install its approval gate before provider or tool work starts."
           : "Plan mode denies project/workspace side effects; Locus may still persist local app state.",
       ],
@@ -601,9 +528,7 @@ export function resolveDesktopPermissionPolicy({
       enforcement:
         runtimeId === "claude-code"
           ? "locus-guarded-tool-policy"
-          : codexAdapterSource === "codex-app-server"
-            ? "codex-app-server-guarded-approval-gate"
-            : "codex-acp-guarded-handler",
+          : "codex-app-server-guarded-approval-gate",
       runtimeMapping:
         runtimeId === "claude-code"
           ? {
@@ -614,14 +539,12 @@ export function resolveDesktopPermissionPolicy({
               bypassReason:
                 "Claude agent mode currently uses SDK permission bypass only with Locus guarded tool policy installed before runtime startup.",
             }
-          : createCodexPermissionMapping({
-              adapterSource: codexAdapterSource,
+          : createCodexAppServerPermissionMapping({
               controlLevel: "guarded",
               observedToolPolicy: DISABLED_OBSERVATION,
-              acpPermissionHandlerFailure: "fail-closed",
             }),
       diagnostics: [
-        runtimeId === "codex" && codexAdapterSource === "codex-app-server"
+        runtimeId === "codex"
           ? "Guarded agent mode requires Codex app-server approval gate enforcement before side effects."
           : "Guarded agent mode requires pre-execution tool policy enforcement before side effects.",
       ],
@@ -636,25 +559,20 @@ export function resolveDesktopPermissionPolicy({
     planWorkspaceSideEffects: "not-applicable",
     allowedLocusPersistence: true,
     blockedSideEffects: [],
-    requiresPreExecutionEnforcement:
-      runtimeId === "codex" && codexAdapterSource === "codex-app-server",
+    requiresPreExecutionEnforcement: runtimeId === "codex",
     observedToolPolicy: {
       enabled: true,
       blocksCatastrophicActions: true,
       catastrophicActions: OBSERVED_CATASTROPHIC_ACTIONS,
       degradation:
         runtimeId === "codex"
-          ? codexAdapterSource === "codex-app-server"
-            ? "fail-closed-when-hook-unavailable"
-            : "stream-only-when-hook-unavailable"
+          ? "fail-closed-when-hook-unavailable"
           : "not-applicable",
     },
     enforcement:
       runtimeId === "claude-code"
         ? "locus-agent-observed"
-        : codexAdapterSource === "codex-app-server"
-          ? "codex-app-server-agent-approval-gate"
-          : "codex-acp-agent-observed",
+        : "codex-app-server-agent-approval-gate",
     runtimeMapping:
       runtimeId === "claude-code"
         ? {
@@ -665,22 +583,17 @@ export function resolveDesktopPermissionPolicy({
             bypassReason:
               "Claude observed agent mode uses SDK permission bypass with Locus observation and catastrophic-action policy installed before runtime startup.",
           }
-        : createCodexPermissionMapping({
-            adapterSource: codexAdapterSource,
+        : createCodexAppServerPermissionMapping({
             controlLevel: "observe",
             observedToolPolicy: {
               enabled: true,
               blocksCatastrophicActions: true,
               catastrophicActions: OBSERVED_CATASTROPHIC_ACTIONS,
-              degradation:
-                codexAdapterSource === "codex-app-server"
-                  ? "fail-closed-when-hook-unavailable"
-                  : "stream-only-when-hook-unavailable",
+              degradation: "fail-closed-when-hook-unavailable",
             },
-            acpPermissionHandlerFailure: "degrade-to-stream-only",
           }),
     diagnostics: [
-      runtimeId === "codex" && codexAdapterSource === "codex-app-server"
+      runtimeId === "codex"
         ? "Observed agent mode permits ordinary runtime actions, but Codex app-server must install its approval gate before side-effecting server requests."
         : "Observed agent mode permits ordinary runtime actions, records tool decisions, and blocks catastrophic actions when runtime hooks are available.",
     ],
@@ -692,20 +605,6 @@ export function getClaudePermissionMapping(
 ): ClaudePermissionMapping {
   if (policy.runtimeMapping.runtime !== "claude-code") {
     throw new Error(`Permission policy is not for Claude: ${policy.runtimeId}`)
-  }
-  return policy.runtimeMapping
-}
-
-export function getCodexPermissionMapping(
-  policy: DesktopPermissionPolicy,
-): CodexAcpPermissionMapping {
-  if (policy.runtimeMapping.runtime !== "codex") {
-    throw new Error(`Permission policy is not for Codex: ${policy.runtimeId}`)
-  }
-  if (policy.runtimeMapping.adapterSource !== "acp-temporary-compat") {
-    throw new Error(
-      `Permission policy is not for Codex ACP temporary-compat: ${policy.runtimeMapping.adapterSource}`,
-    )
   }
   return policy.runtimeMapping
 }

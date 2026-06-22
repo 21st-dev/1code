@@ -164,40 +164,6 @@ describe("Codex runtime capabilities", () => {
     )
   })
 
-  test("keeps ACP temporary-compat rollback capability truth adapter-specific", () => {
-    const acpCapabilities = getCodexRuntimeCapabilitiesForAdapter(
-      "codex-acp-temporary-compat",
-    )
-    expect(
-      acpCapabilities.find((capability) => capability.id === "hardToolGuard"),
-    ).toMatchObject({
-      status: "supported",
-      reason: expect.stringContaining("ACP temporary-compat rollback path"),
-      support: {
-        references: expect.arrayContaining([
-          "src/main/lib/codex/acp-permission.ts",
-        ]),
-      },
-    })
-    expect(getCodexRuntimeCapability("hardToolGuard").reason).toContain(
-      "app-server",
-    )
-    expect(
-      getCodexRuntimeCapabilitiesForAdapter("codex-app-server").find(
-        (capability) => capability.id === "mcpAuth",
-      ),
-    ).toMatchObject({
-      status: "degraded",
-    })
-    expect(
-      acpCapabilities.find((capability) => capability.id === "runtimePlugins"),
-    ).toMatchObject({
-      status: "unsupported",
-      scope: "unavailable",
-      reason: expect.stringContaining("does not expose"),
-    })
-  })
-
   test("reports app-server guarded edits supported only for proven app-server auth paths", () => {
     expect(
       getCodexRuntimeCapabilitiesForAdapter({

@@ -27,9 +27,10 @@ export function CodexOnboardingPage() {
   const runtimeStatus = runtimeStatusQuery.data
   const runtimeUnavailable =
     runtimeStatusQuery.isFetched && runtimeStatus?.ok !== true
-  const failedRuntime = runtimeStatus?.loginCli.ok
-    ? runtimeStatus.acp
-    : runtimeStatus?.loginCli
+  const failedRuntime =
+    runtimeStatus?.components.find(
+      (component) => component.id === runtimeStatus.blockers[0]?.component,
+    ) ?? runtimeStatus?.loginCli
 
   const {
     state,

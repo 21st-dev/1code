@@ -194,10 +194,12 @@ export function useCodexLoginFlow() {
     try {
       const runtimeStatus = await trpcClient.codex.getRuntimeStatus.query()
       if (!runtimeStatus.ok) {
-        const failedRuntime = runtimeStatus.loginCli.ok
-          ? runtimeStatus.acp
-          : runtimeStatus.loginCli
-        const message = `${t("onboarding.runtime.codexMissing")} ${failedRuntime.hint}`
+        const failedRuntime =
+          runtimeStatus.components.find(
+            (component) =>
+              component.id === runtimeStatus.blockers[0]?.component,
+          ) ?? runtimeStatus.loginCli
+        const message = `${t("onboarding.runtime.codexMissing")} ${failedRuntime.hint ?? ""}`
         setState("error")
         setError(message)
         notifyError(message)

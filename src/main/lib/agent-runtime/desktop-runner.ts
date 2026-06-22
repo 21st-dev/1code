@@ -8,7 +8,6 @@ import { createRunEvent } from "./runtime-events"
 
 export type DesktopRuntimeAdapterSource =
   | "claude-agent-sdk"
-  | "codex-acp-temporary-compat"
   | "codex-app-server"
 
 export type DesktopRuntimeAdapterMetadata = {

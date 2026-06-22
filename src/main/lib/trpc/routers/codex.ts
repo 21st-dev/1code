@@ -9,9 +9,7 @@ import {
 } from "../../../../shared/codex-runtime-status"
 import { normalizeCodexStreamChunk } from "../../../../shared/codex-tool-normalizer"
 import {
-  captureGuardedGitStatus,
   formatScopeValidationError,
-  type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
   validateAgentScopeContract,
 } from "../../agent-guard"
@@ -23,16 +21,9 @@ import {
 } from "../../agent-runtime/preflight"
 import {
   appendRunEventsToAgentJob,
-  createDesktopStreamEventMapper,
-  redactRendererDiagnosticChunk,
   redactRendererRuntimeChunk,
 } from "../../agent-runtime/stream-event-mapper"
 import { prepareChatImageAttachmentsForDesktopRun } from "../../chat-attachments"
-import {
-  cleanupAllCodexAcpProviders,
-  cleanupCodexAcpProvider,
-} from "../../codex/acp-adapter"
-import { createCodexAcpTemporaryCompatAdapter } from "../../codex/acp-temporary-compat-adapter"
 import {
   getCodexApiKeyStatus,
   readCodexApiKey,
@@ -63,7 +54,6 @@ import {
 import { codexChatInputSchema } from "../../codex/chat-input-schema"
 import { resolveBundledCodexCliPath } from "../../codex/cli-path"
 import { runCodexCli } from "../../codex/cli-runner"
-import { resolveCodexDesktopAdapterSelection } from "../../codex/desktop-adapter-selection"
 import { createCodexDesktopRunRequest } from "../../codex/desktop-run-request"
 import {
   extractCodexError as extractCodexErrorWithProviderRedaction,
@@ -226,7 +216,6 @@ export const codexRouter = router({
         throw new CodexApiKeyValidationError(validation)
       }
       const status = saveStoredCodexApiKey(input.apiKey)
-      cleanupAllCodexAcpProviders()
       if (!validation.ok) {
         return {
           ...status,
@@ -241,7 +230,6 @@ export const codexRouter = router({
 
   removeCodexApiKey: publicProcedure.mutation(() => {
     const status = removeStoredCodexApiKey()
-    cleanupAllCodexAcpProviders()
     return status
   }),
 
@@ -449,8 +437,6 @@ export const codexRouter = router({
         if (existingStream) {
           existingStream.cancelRequested = true
           existingStream.controller.abort()
-          // Ensure old run cannot continue emitting after supersede.
-          cleanupCodexAcpProvider(input.subChatId)
         }
 
         const abortController = new AbortController()
@@ -466,28 +452,17 @@ export const codexRouter = router({
         let desktopJobReachedNaturalFinish = false
         let desktopJobAdapterFailed = false
         let desktopJobDb: ReturnType<typeof getDatabase> | null = null
-        let desktopStreamEventMapper: ReturnType<
-          typeof createDesktopStreamEventMapper
-        > | null = null
-        let useCodexAppServerAdapter = false
         const appServerPersistenceChunks: Record<string, unknown>[] = []
 
         const emitRendererChunk = (chunk: Record<string, unknown>) => {
           if (!isActive) return
           try {
-            const rendererChunk = useCodexAppServerAdapter
-              ? redactRendererRuntimeChunk({
-                  runtimeId: "codex",
-                  runId: input.runId,
-                  jobId: desktopJobId,
-                  chunk,
-                })
-              : redactRendererDiagnosticChunk({
-                  runtimeId: "codex",
-                  runId: input.runId,
-                  jobId: desktopJobId,
-                  chunk,
-                })
+            const rendererChunk = redactRendererRuntimeChunk({
+              runtimeId: "codex",
+              runId: input.runId,
+              jobId: desktopJobId,
+              chunk,
+            })
             emit.next(rendererChunk)
           } catch {
             isActive = false
@@ -495,14 +470,12 @@ export const codexRouter = router({
         }
 
         const appServerFinishGate = createCodexAppServerFinishGate({
-          enabled: () => useCodexAppServerAdapter,
+          enabled: () => true,
           emit: emitRendererChunk,
         })
 
         const safeEmit = (chunk: Record<string, unknown>) => {
-          if (useCodexAppServerAdapter) {
-            appServerPersistenceChunks.push(chunk)
-          }
+          appServerPersistenceChunks.push(chunk)
           if (
             chunk?.type === "error" ||
             chunk?.type === "auth-error" ||
@@ -510,22 +483,6 @@ export const codexRouter = router({
             (chunk?.type === "runtime-status" && chunk?.ok === false)
           ) {
             desktopJobSawError = true
-          }
-          if (
-            !useCodexAppServerAdapter &&
-            desktopJobDb &&
-            desktopStreamEventMapper &&
-            chunk?.type !== "finish"
-          ) {
-            try {
-              const events = desktopStreamEventMapper.map(chunk)
-              appendRunEventsToAgentJob(desktopJobDb, events)
-            } catch (eventError) {
-              console.warn(
-                "[codex] Failed to persist desktop run events:",
-                eventError,
-              )
-            }
           }
           appServerFinishGate.emit(chunk)
         }
@@ -541,8 +498,6 @@ export const codexRouter = router({
         }
 
         let guardedContract: ValidatedAgentScopeContract | null = null
-        let guardedPreRunStatus: GuardedGitStatusSnapshot | null = null
-        const guardedRunStartedAt = new Date().toISOString()
 
         ;(async () => {
           try {
@@ -571,7 +526,6 @@ export const codexRouter = router({
                   ...validated,
                   runId: validated.runId ?? input.runId,
                 }
-                guardedPreRunStatus = await captureGuardedGitStatus(runtimeCwd)
               } catch (guardError) {
                 safeEmit({
                   type: "error",
@@ -582,33 +536,13 @@ export const codexRouter = router({
                 return
               }
             }
-            const codexAdapterSelection = resolveCodexDesktopAdapterSelection(
-              process.env,
-            )
-            useCodexAppServerAdapter = codexAdapterSelection.useAppServer
             const permissionPolicy = resolveDesktopPermissionPolicy({
               runtimeId: "codex",
               mode: input.mode,
               workspaceKind: verifiedRunContext.kind,
               hasScopeContract: Boolean(guardedContract),
-              codexAdapterSource: useCodexAppServerAdapter
-                ? "codex-app-server"
-                : "acp-temporary-compat",
+              codexAdapterSource: "codex-app-server",
             })
-            if (!useCodexAppServerAdapter) {
-              safeEmit({
-                type: "runtime-status",
-                runtime: "codex",
-                ok: true,
-                message: codexAdapterSelection.reason,
-                hint: `Unset ${codexAdapterSelection.fallbackEnvVar} and remove ${codexAdapterSelection.legacyAppServerEnvVar}=0 to return to the default app-server adapter.`,
-                adapter: {
-                  source: "codex-acp-temporary-compat",
-                  temporaryFallback: true,
-                  appServerDefault: true,
-                },
-              })
-            }
 
             const emitPreflightBlocker = (
               blocker: DesktopRunPreflightBlocker,
@@ -666,7 +600,7 @@ export const codexRouter = router({
               const blocker =
                 runtimeStatus.blockers[0] ??
                 createCodexRuntimeBlocker({
-                  id: "acp-runtime",
+                  id: "login-cli",
                   label: "Codex runtime",
                   status: "failed",
                   ok: false,
@@ -862,7 +796,7 @@ export const codexRouter = router({
               hasAppManagedApiKey: Boolean(appManagedCodexApiKey),
             })
             const appServerSelectedModelId =
-              useCodexAppServerAdapter && !codexProviderProfile
+              !codexProviderProfile
                 ? normalizeCodexAppServerModelId(selectedModelId)
                 : selectedModelId
             const metadataModel =
@@ -923,10 +857,6 @@ export const codexRouter = router({
                 })
                 .where(eq(subChats.id, input.subChatId))
                 .run()
-            }
-
-            if (input.forceNewSession) {
-              cleanupCodexAcpProvider(input.subChatId)
             }
 
             let mcpSnapshot: CodexMcpSnapshot = createEmptyCodexMcpSnapshot({
@@ -1013,11 +943,6 @@ export const codexRouter = router({
               },
             })
             desktopJobId = desktopJob.job.id
-            desktopStreamEventMapper = createDesktopStreamEventMapper({
-              runtimeId: "codex",
-              runId: input.runId,
-              jobId: desktopJobId,
-            })
 
             const desktopRunRequest = createCodexDesktopRunRequest({
               runId: input.runId,
@@ -1052,89 +977,55 @@ export const codexRouter = router({
               },
             })
 
-            const appServerPluginConfig = useCodexAppServerAdapter
-              ? await resolveCodexAppServerPluginConfigOverrides({
-                  projectId: desktopRunRequest.context.projectId,
-                  chatId: desktopRunRequest.context.chatId,
-                  subChatId: desktopRunRequest.context.subChatId,
-                })
-              : undefined
+            const appServerPluginConfig =
+              await resolveCodexAppServerPluginConfigOverrides({
+                projectId: desktopRunRequest.context.projectId,
+                chatId: desktopRunRequest.context.chatId,
+                subChatId: desktopRunRequest.context.subChatId,
+              })
 
-            const codexAdapter = useCodexAppServerAdapter
-              ? createCodexAppServerAdapter({
-                  enabled: true,
-                  experimentalApi:
-                    process.env.LOCUS_CODEX_APP_SERVER_EXPERIMENTAL_API ===
-                      "1" ||
-                    process.env
-                      .LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR === "1",
-                  // Smoke-only diagnostic hook for the 6.8 apply_patch
-                  // enablement probe. Product app-server runs leave this
-                  // unset unless a developer explicitly opts into the env gate.
-                  configOverrides:
-                    process.env
-                      .LOCUS_CODEX_APP_SERVER_APPLY_PATCH_EXPERIMENT === "1"
-                      ? {
-                          "features.apply_patch_freeform": true,
-                          "features.apply_patch_streaming_events": true,
-                          include_apply_patch_tool: true,
-                          "tools.apply_patch.enabled": true,
-                          "tools.apply_patch.approval_mode": "prompt",
-                          "model_providers.locus_profile.apply_patch_tool_type":
-                            "freeform",
-                          "model_providers.locus_profile.experimental_supported_tools":
-                            ["apply_patch"],
-                        }
-                      : undefined,
-                  providerGatewayToken: codexProviderProfile?.token ?? null,
-                  appManagedApiKey: codexProviderProfile
-                    ? null
-                    : appManagedCodexApiKey,
-                  pluginConfig: appServerPluginConfig,
-                  controlledEditEnabled:
-                    process.env
-                      .LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR === "1",
-                  resolvedImages,
-                  guardedContract,
-                  emit: safeEmit,
-                  registerPendingQuestion: (toolUseId, pending) => {
-                    pendingCodexToolApprovals.set(toolUseId, pending)
-                  },
-                  unregisterPendingQuestion: (toolUseId) => {
-                    pendingCodexToolApprovals.delete(toolUseId)
-                  },
-                })
-              : createCodexAcpTemporaryCompatAdapter({
-                  mcpServers: mcpSnapshot.mcpServersForSession,
-                  mcpFingerprint: mcpSnapshot.fingerprint,
-                  appManagedApiKey: codexProviderProfile
-                    ? null
-                    : appManagedCodexApiKey,
-                  providerProfile: codexProviderProfile,
-                  modelId: selectedModelId,
-                  metadataModelId: metadataModel,
-                  images: resolvedImages,
-                  longTextAttachments: input.longTextAttachments,
-                  messagesForStream,
-                  guardedRun:
-                    guardedContract && guardedPreRunStatus
-                      ? {
-                          contract: guardedContract,
-                          preRunStatus: guardedPreRunStatus,
-                          startedAt: guardedRunStartedAt,
-                          events: [],
-                        }
-                      : null,
-                  emit: safeEmit,
-                  persistMessages: persistSubChatMessages,
-                  registerPendingQuestion: (toolUseId, pending) => {
-                    pendingCodexToolApprovals.set(toolUseId, pending)
-                  },
-                  unregisterPendingQuestion: (toolUseId) => {
-                    pendingCodexToolApprovals.delete(toolUseId)
-                  },
-                  generateMessageId: () => crypto.randomUUID(),
-                })
+            const codexAdapter = createCodexAppServerAdapter({
+              enabled: true,
+              experimentalApi:
+                process.env.LOCUS_CODEX_APP_SERVER_EXPERIMENTAL_API === "1" ||
+                process.env.LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR ===
+                  "1",
+              // Smoke-only diagnostic hook for the 6.8 apply_patch
+              // enablement probe. Product app-server runs leave this
+              // unset unless a developer explicitly opts into the env gate.
+              configOverrides:
+                process.env.LOCUS_CODEX_APP_SERVER_APPLY_PATCH_EXPERIMENT ===
+                "1"
+                  ? {
+                      "features.apply_patch_freeform": true,
+                      "features.apply_patch_streaming_events": true,
+                      include_apply_patch_tool: true,
+                      "tools.apply_patch.enabled": true,
+                      "tools.apply_patch.approval_mode": "prompt",
+                      "model_providers.locus_profile.apply_patch_tool_type":
+                        "freeform",
+                      "model_providers.locus_profile.experimental_supported_tools":
+                        ["apply_patch"],
+                    }
+                  : undefined,
+              providerGatewayToken: codexProviderProfile?.token ?? null,
+              appManagedApiKey: codexProviderProfile
+                ? null
+                : appManagedCodexApiKey,
+              pluginConfig: appServerPluginConfig,
+              controlledEditEnabled:
+                process.env.LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR ===
+                "1",
+              resolvedImages,
+              guardedContract,
+              emit: safeEmit,
+              registerPendingQuestion: (toolUseId, pending) => {
+                pendingCodexToolApprovals.set(toolUseId, pending)
+              },
+              unregisterPendingQuestion: (toolUseId) => {
+                pendingCodexToolApprovals.delete(toolUseId)
+              },
+            })
 
             await appServerFinishGate.runWithDeferredFinish(
               () => codexAdapter.run(desktopRunRequest),
@@ -1164,10 +1055,7 @@ export const codexRouter = router({
                 }
                 desktopJobReachedNaturalFinish =
                   adapterResult.status === "succeeded" && !desktopJobSawError
-                if (
-                  useCodexAppServerAdapter &&
-                  desktopJobReachedNaturalFinish
-                ) {
+                if (desktopJobReachedNaturalFinish) {
                   const appServerAssistantMessage =
                     buildCodexAppServerAssistantMessage({
                       chunks: appServerPersistenceChunks,
@@ -1187,7 +1075,7 @@ export const codexRouter = router({
           } catch (error) {
             const normalized = extractCodexError(error)
 
-            console.error("[codex-acp] chat stream error", {
+            console.error("[codex] chat stream error", {
               subChatId: input.subChatId.slice(-8),
               ...getCodexErrorDiagnostics(error),
               message: normalized.message,
@@ -1219,11 +1107,6 @@ export const codexRouter = router({
             }
             const activeStream = activeStreams.get(input.subChatId)
             if (activeStream?.runId === input.runId) {
-              const shouldCleanupProvider =
-                abortController.signal.aborted || activeStream.cancelRequested
-              if (shouldCleanupProvider) {
-                cleanupCodexAcpProvider(input.subChatId)
-              }
               clearPendingCodexApprovals("Session cancelled.", input.subChatId)
               activeStreams.delete(input.subChatId)
             }
@@ -1302,8 +1185,6 @@ export const codexRouter = router({
   cleanup: publicProcedure
     .input(z.object({ subChatId: z.string() }))
     .mutation(({ input }) => {
-      cleanupCodexAcpProvider(input.subChatId)
-
       const activeStream = activeStreams.get(input.subChatId)
       if (activeStream) {
         activeStream.controller.abort()

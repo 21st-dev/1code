@@ -150,17 +150,16 @@ describe("long text send pipeline", () => {
   test("Claude, Codex, and auth retry paths are wired to resolved long text metadata", () => {
     const claude = readFileSync("src/main/lib/trpc/routers/claude.ts", "utf8")
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
-    const codexAcpTemporaryCompatAdapter = readFileSync(
-      "src/main/lib/codex/acp-temporary-compat-adapter.ts",
-      "utf8",
-    )
     const claudePrompt = readFileSync(
       "src/main/lib/claude/agent-sdk-prompt.ts",
       "utf8",
     )
-    const codexPrompt = readFileSync("src/main/lib/codex/prompt.ts", "utf8")
-    const codexAcpTextStream = readFileSync(
-      "src/main/lib/codex/acp-text-stream.ts",
+    const codexAppServerAdapter = readFileSync(
+      "src/main/lib/codex/app-server-adapter.ts",
+      "utf8",
+    )
+    const codexAppServerAttachments = readFileSync(
+      "src/main/lib/codex/app-server-attachments.ts",
       "utf8",
     )
     const ipc = readFileSync(
@@ -180,13 +179,14 @@ describe("long text send pipeline", () => {
     expect(claude).toContain("input.longTextAttachments")
     expect(claudePrompt).toContain("prependLongTextAttachmentPromptBlocks")
     expect(claudePrompt).toContain("Long text attachment unavailable")
-    expect(codexAcpTemporaryCompatAdapter).toContain("prepareCodexAcpPrompt")
-    expect(codexPrompt).toContain("prependLongTextAttachmentPromptBlocks")
     expect(codex).toContain("input.longTextAttachments")
-    expect(codexAcpTemporaryCompatAdapter).toContain(
-      "createCodexAcpUiMessageStream",
+    expect(codexAppServerAdapter).toContain("request.attachments")
+    expect(codexAppServerAdapter).toContain(
+      "prepareCodexAppServerPromptWithLongText",
     )
-    expect(codexAcpTextStream).toContain("streamText({")
+    expect(codexAppServerAttachments).toContain(
+      "prependLongTextAttachmentPromptBlocks",
+    )
     expect(ipc).toContain("extractLongTextAttachments(lastUser)")
     expect(ipc).toContain("{ longTextAttachments }")
     expect(acp).toContain("extractLongTextAttachments(lastUser)")

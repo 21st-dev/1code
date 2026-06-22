@@ -1,12 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT_ENV } from "../src/main/lib/codex/desktop-adapter-selection"
 import { buildCodexAdapterRuntimeStatusMetadata } from "../src/main/lib/codex/runtime-status"
 import {
   buildCodexCapabilityErrorChunk,
   buildCodexRuntimeAvailability,
   buildCodexRuntimeAvailabilityFromComponents,
   buildCodexRuntimeStatusChunk,
-  type CodexAcpRuntimeLike,
   createCodexRuntimeBlocker,
   createCodexRuntimeComponent,
   type RuntimeExecutableLike,
@@ -33,24 +31,8 @@ const missingExecutable = (
   hint,
 })
 
-const acpRuntime = (
-  executable: RuntimeExecutableLike,
-  spawnOk = true,
-): CodexAcpRuntimeLike => ({
-  ...executable,
-  spawnProbe: {
-    ok: spawnOk,
-    exitCode: spawnOk ? 0 : 1,
-    signal: null,
-    error: spawnOk ? null : "codex-acp --help exited with code 1.",
-    stdoutPreview: "",
-    stderrPreview: "",
-    durationMs: 12,
-  },
-})
-
 describe("Codex runtime status", () => {
-  test("reports renderer-safe adapter source, target, version, and ACP exit status", () => {
+  test("reports renderer-safe app-server adapter source and bundled version", () => {
     const adapters = buildCodexAdapterRuntimeStatusMetadata({ env: {} })
 
     expect(adapters.bundledCodexVersion).toBe("0.139.0")
@@ -59,70 +41,48 @@ describe("Codex runtime status", () => {
       source: "codex-app-server",
       temporaryFallback: false,
     })
-    expect(adapters.target).toMatchObject({
-      runtimeId: "codex",
-      source: "codex-app-server",
-      temporaryFallback: false,
-    })
-    expect(adapters.acpTemporaryCompat).toMatchObject({
-      source: "codex-acp-temporary-compat",
-    })
-    expect(adapters.acpTemporaryCompat.fallbackReason).toContain(
-      "ACP remains a labeled temporary-compat rollback path",
-    )
-    expect(adapters.acpTemporaryCompat.defaultDisableCondition).toContain(
-      "app-server passes schema/client pinning",
-    )
-    expect(adapters.acpTemporaryCompat.removalCondition).toContain(
-      "Remove ACP route/dependency paths",
-    )
     expect(adapters.selection).toMatchObject({
       source: "codex-app-server",
       useAppServer: true,
-      reason: expect.stringContaining("selected by default"),
+      reason: expect.stringContaining("only desktop chat adapter"),
     })
     expect(JSON.stringify(adapters)).not.toMatch(/token|api[_-]?key|secret/i)
   })
 
-  test("reports ACP temporary-compat only when the rollback env is set", () => {
+  test("ignores adapter-selection env when building runtime metadata", () => {
     const adapters = buildCodexAdapterRuntimeStatusMetadata({
-      env: { [LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT_ENV]: "1" },
+      env: { ANY_ROLLBACK_ADAPTER_ENV: "1" },
     })
 
     expect(adapters.current).toMatchObject({
       runtimeId: "codex",
-      source: "codex-acp-temporary-compat",
-      temporaryFallback: true,
+      source: "codex-app-server",
+      temporaryFallback: false,
     })
     expect(adapters.selection).toMatchObject({
-      source: "codex-acp-temporary-compat",
-      useAppServer: false,
-      reason: expect.stringContaining("ACP temporary-compat fallback"),
+      source: "codex-app-server",
+      useAppServer: true,
     })
   })
 
-  test("reports ready only when CLI, ACP runtime, and ACP spawn probe all pass", () => {
+  test("reports ready when the bundled CLI is available", () => {
     const availability = buildCodexRuntimeAvailability({
       loginCli: readyExecutable("/bin/codex"),
-      acp: acpRuntime(readyExecutable("/bin/codex-acp")),
     })
 
     expect(availability.ok).toBe(true)
     expect(availability.blockers).toEqual([])
     expect(availability.components.map((component) => component.id)).toEqual([
       "login-cli",
-      "acp-runtime",
-      "acp-spawn",
     ])
     expect(availability.components.every((component) => component.ok)).toBe(
       true,
     )
   })
 
-  test("separates missing CLI from ACP runtime status", () => {
+  test("reports missing CLI as the runtime blocker", () => {
     const availability = buildCodexRuntimeAvailability({
       loginCli: missingExecutable("/missing/codex", "download Codex CLI"),
-      acp: acpRuntime(readyExecutable("/bin/codex-acp")),
     })
 
     expect(availability.ok).toBe(false)
@@ -132,28 +92,6 @@ describe("Codex runtime status", () => {
       status: "missing",
       hint: "download Codex CLI",
     })
-    expect(
-      availability.components.find(
-        (component) => component.id === "acp-runtime",
-      ),
-    ).toMatchObject({ ok: true, status: "ready" })
-  })
-
-  test("separates ACP spawn probe failure from executable discovery", () => {
-    const availability = buildCodexRuntimeAvailability({
-      loginCli: readyExecutable("/bin/codex"),
-      acp: acpRuntime(readyExecutable("/bin/codex-acp"), false),
-    })
-
-    expect(availability.ok).toBe(false)
-    expect(availability.blockers).toEqual([
-      {
-        component: "acp-spawn",
-        status: "failed",
-        message: "codex-acp --help exited with code 1.",
-        hint: "ready hint",
-      },
-    ])
   })
 
   test("builds non-secret runtime and capability error chunks", () => {
@@ -184,7 +122,6 @@ describe("Codex runtime status", () => {
   test("keeps non-blocking login and policy states from failing runtime readiness", () => {
     const baseAvailability = buildCodexRuntimeAvailability({
       loginCli: readyExecutable("/bin/codex"),
-      acp: acpRuntime(readyExecutable("/bin/codex-acp")),
     })
     const availability = buildCodexRuntimeAvailabilityFromComponents([
       ...baseAvailability.components,

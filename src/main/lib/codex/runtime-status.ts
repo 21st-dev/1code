@@ -4,16 +4,11 @@ import {
   type CodexRuntimeComponentStatus,
   type RuntimeExecutableLike,
 } from "../../../shared/codex-runtime-status"
-import {
-  CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA,
-  CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA,
-} from "../agent-runtime/desktop-adapter-metadata"
+import { CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA } from "../agent-runtime/desktop-adapter-metadata"
 import type { DesktopRuntimeAdapterMetadata } from "../agent-runtime/desktop-runner"
 import { getRegisteredAgentRuntimeManifest } from "../agent-runtime/runtime-registry"
 import { isLocalOnlyMode } from "../local-only"
 import { getRuntimeExecutableStatus } from "../runtime-executable"
-import { resolveCodexAcpBinaryPath } from "./acp-path"
-import { probeCodexAcpSpawn } from "./acp-spawn-probe"
 import { BUNDLED_CODEX_CLI_VERSION, getBundledCodexCliPath } from "./cli-path"
 import {
   resolveCodexDesktopAdapterSelection,
@@ -27,14 +22,7 @@ import { getElectronApp, type ElectronAppLike } from "../electron-app"
 export type CodexAdapterRuntimeStatusMetadata = {
   bundledCodexVersion: string
   current: DesktopRuntimeAdapterMetadata
-  target: DesktopRuntimeAdapterMetadata
   selection: CodexDesktopAdapterSelection
-  acpTemporaryCompat: {
-    source: DesktopRuntimeAdapterMetadata["source"]
-    fallbackReason: string | null
-    defaultDisableCondition: string | null
-    removalCondition: string | null
-  }
 }
 
 type EnvLike = Record<string, string | undefined>
@@ -52,26 +40,10 @@ export function buildCodexAdapterRuntimeStatusMetadata(
   input: { env?: EnvLike } = {},
 ): CodexAdapterRuntimeStatusMetadata {
   const selection = resolveCodexDesktopAdapterSelection(input.env)
-  const current = selection.useAppServer
-    ? CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA
-    : CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA
   return {
     bundledCodexVersion: BUNDLED_CODEX_CLI_VERSION,
-    current,
-    target: CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA,
+    current: CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA,
     selection,
-    acpTemporaryCompat: {
-      source: CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.source,
-      fallbackReason:
-        CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.fallbackReason ??
-        null,
-      defaultDisableCondition:
-        CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.defaultDisableCondition ??
-        null,
-      removalCondition:
-        CODEX_ACP_TEMPORARY_COMPAT_DESKTOP_ADAPTER_METADATA.removalCondition ??
-        null,
-    },
   }
 }
 
@@ -86,45 +58,13 @@ export async function getCodexRuntimeStatus(
   const cliHint = appContext.isPackaged
     ? "Reinstall the app so the bundled Codex command is restored."
     : "Run `bun run codex:download` from the repo, then restart the dev app."
-  const acpHint = appContext.isPackaged
-    ? "Reinstall the app so the bundled Codex ACP runtime is restored."
-    : "Run `bun install` from the repo, then restart the dev app."
-
-  let acpPath: string | null = null
-  let acpResolveError: string | null = null
-  try {
-    acpPath = resolveCodexAcpBinaryPath()
-  } catch (error) {
-    acpResolveError =
-      error instanceof Error
-        ? error.message
-        : "Codex ACP runtime path could not be resolved."
-  }
 
   const loginCli = getRuntimeExecutableStatus(
     getBundledCodexCliPath(appContext),
     cliHint,
   )
-  const acp = getRuntimeExecutableStatus(acpPath, acpHint)
-  const spawnProbe = acp.ok
-    ? await probeCodexAcpSpawn(acp.path)
-    : {
-        ok: false,
-        exitCode: null,
-        signal: null,
-        error: acp.error,
-        stdoutPreview: "",
-        stderrPreview: "",
-        durationMs: 0,
-      }
-  const acpWithProbe = { ...acp, spawnProbe }
-  const resolvedAcp = acpResolveError
-    ? { ...acpWithProbe, error: acpResolveError }
-    : acpWithProbe
   const adapterStatus = buildCodexAdapterRuntimeStatusMetadata({ env })
   const adapterMetadata = adapterStatus.current
-  const acpBlocking = !adapterStatus.selection.useAppServer
-  const acpSpawnBlockedByRuntime = !resolvedAcp.ok
   const runtimeAvailability = buildCodexRuntimeAvailabilityFromComponents([
     createCodexRuntimeComponent({
       id: "login-cli",
@@ -134,36 +74,6 @@ export async function getCodexRuntimeStatus(
       error: loginCli.error,
       hint: loginCli.hint,
       path: loginCli.path,
-    }),
-    createCodexRuntimeComponent({
-      id: "acp-runtime",
-      label: "Codex ACP runtime",
-      status: executableStatus(resolvedAcp),
-      ok: resolvedAcp.ok,
-      blocking: acpBlocking,
-      error: resolvedAcp.error,
-      hint: acpBlocking
-        ? resolvedAcp.hint
-        : `Only required when ${adapterStatus.selection.fallbackEnvVar}=1 selects the ACP temporary-compat fallback. ${resolvedAcp.hint}`,
-      path: resolvedAcp.path,
-    }),
-    createCodexRuntimeComponent({
-      id: "acp-spawn",
-      label: "Codex ACP spawn probe",
-      status: acpSpawnBlockedByRuntime
-        ? "blocked"
-        : resolvedAcp.spawnProbe.ok
-          ? "ready"
-          : "failed",
-      ok: resolvedAcp.ok && resolvedAcp.spawnProbe.ok,
-      blocking: acpBlocking,
-      error: acpSpawnBlockedByRuntime
-        ? resolvedAcp.error
-        : resolvedAcp.spawnProbe.error,
-      hint: acpBlocking
-        ? resolvedAcp.hint
-        : `Only required when ${adapterStatus.selection.fallbackEnvVar}=1 selects the ACP temporary-compat fallback. ${resolvedAcp.hint}`,
-      path: resolvedAcp.path,
     }),
   ])
   const extraComponents = [
@@ -176,13 +86,7 @@ export async function getCodexRuntimeStatus(
       error: null,
       hint: [
         `${adapterMetadata.source}: ${adapterStatus.selection.reason}`,
-        adapterStatus.selection.acpFallbackAvailable
-          ? `ACP fallback remains available with ${adapterStatus.selection.fallbackEnvVar}=1.`
-          : "ACP fallback is unavailable.",
-        `Target adapter: ${adapterStatus.target.source}.`,
         `Bundled Codex version: ${adapterStatus.bundledCodexVersion}.`,
-        `Default-disable condition: ${adapterMetadata.defaultDisableCondition}`,
-        `Removal condition: ${adapterMetadata.removalCondition}`,
       ].join(" "),
     }),
     createCodexRuntimeComponent({
@@ -273,7 +177,6 @@ export async function getCodexRuntimeStatus(
     requiresGlobalCli: false,
     ok: availability.ok,
     loginCli,
-    acp: resolvedAcp,
     adapter: adapterMetadata,
     adapters: adapterStatus,
     components: availability.components,

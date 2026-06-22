@@ -481,15 +481,15 @@ const CODEX_RUNTIME_MANIFEST = manifest({
   runtimeId: "codex",
   label: "Codex",
   description:
-    "Codex runtime support through Locus's app-server desktop adapter by default, headless/batch Codex CLI path, shared local safety layers, and an explicit ACP temporary-compat rollback path.",
+    "Codex runtime support through Locus's app-server desktop adapter, the headless/batch Codex CLI path, and shared local safety layers.",
   capabilities: [
     capability({
       id: "hardToolGuard",
       status: "supported",
       scope: "runtime-neutral",
       reason:
-        "Locus routes Codex app-server tool and controlled-edit requests through shared guarded-run decisions before mutating operations; the ACP temporary-compat path remains an explicit rollback only.",
-      hint: "Guarded Codex runs fail closed if app-server approval handling or the explicit ACP rollback handler cannot be attached.",
+        "Locus routes Codex app-server tool and controlled-edit requests through shared guarded-run decisions before mutating operations.",
+      hint: "Guarded Codex runs fail closed if app-server approval handling cannot be attached.",
       support: {
         kind: "runtime-code",
         references: [
@@ -519,7 +519,7 @@ const CODEX_RUNTIME_MANIFEST = manifest({
       status: "supported",
       scope: "runtime-neutral",
       reason:
-        "Codex folderless quick chats derive assistant controls from desktop preflight and deny non-web ACP and app-server approval requests through fail-closed handlers.",
+        "Codex folderless quick chats derive assistant controls from desktop preflight and deny non-web app-server approval requests through fail-closed handlers.",
       hint: "Quick chat permits web search/fetch tools only; attach a project before using file, shell, MCP, or runtime tools.",
       support: {
         kind: "runtime-code",

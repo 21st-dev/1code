@@ -81,7 +81,7 @@ describe("desktop agent jobs", () => {
         runtimeId: "codex",
         mode: "plan",
         guarded: false,
-        enforcement: "codex-acp-plan-handler",
+        enforcement: "codex-app-server-plan-approval-gate",
         planWorkspaceSideEffects: "deny",
         blockedSideEffects: [
           "workspace-file-write",
@@ -93,12 +93,13 @@ describe("desktop agent jobs", () => {
         requiresPreExecutionEnforcement: true,
         runtimeMapping: {
           runtime: "codex",
-          adapterSource: "acp-temporary-compat",
-          acpMode: "read-only",
-          requiresPermissionHandler: true,
+          adapterSource: "codex-app-server",
+          appServerApprovalPolicy: "on-request",
+          requiresApprovalGate: true,
+          approvalGateFailure: "fail-closed",
         },
         diagnostics: [
-          "Plan mode denies project/workspace side effects; Locus may still persist local app state.",
+          "Plan mode denies project/workspace side effects; Codex app-server must install its approval gate before provider or tool work starts.",
         ],
       },
     })

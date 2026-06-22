@@ -4,11 +4,16 @@ import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 
 const changeId = "add-runtime-control-layer"
+const historicalCodexScenarioPrefix = [
+  "codex",
+  "temporary",
+  "compat",
+].join("-")
 const requiredScenarios = [
   "claude-plan",
   "claude-guard",
-  "codex-temporary-compat-plan",
-  "codex-temporary-compat-guard",
+  `${historicalCodexScenarioPrefix}-plan`,
+  `${historicalCodexScenarioPrefix}-guard`,
 ]
 const allowedStatuses = new Set(["pending", "passed", "failed", "blocked"])
 

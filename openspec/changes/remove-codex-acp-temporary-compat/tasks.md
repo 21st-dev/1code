@@ -13,39 +13,39 @@
 
 ## 2. Delete ACP-only runtime modules
 
-- [ ] 2.1 Delete `src/main/lib/codex/acp-temporary-compat-adapter.ts`.
-- [ ] 2.2 Delete `src/main/lib/codex/acp-adapter.ts` (provider lifecycle).
-- [ ] 2.3 Delete `src/main/lib/codex/acp-runtime.ts`.
-- [ ] 2.4 Delete `src/main/lib/codex/acp-text-stream.ts`.
-- [ ] 2.5 Delete `src/main/lib/codex/acp-ui-stream.ts`.
-- [ ] 2.6 Delete `src/main/lib/codex/acp-message-persistence.ts`.
-- [ ] 2.7 Delete `src/main/lib/codex/acp-path.ts`.
-- [ ] 2.8 Delete dedicated tests: `tests/codex-acp-adapter.test.ts`,
+- [x] 2.1 Delete `src/main/lib/codex/acp-temporary-compat-adapter.ts`.
+- [x] 2.2 Delete `src/main/lib/codex/acp-adapter.ts` (provider lifecycle).
+- [x] 2.3 Delete `src/main/lib/codex/acp-runtime.ts`.
+- [x] 2.4 Delete `src/main/lib/codex/acp-text-stream.ts`.
+- [x] 2.5 Delete `src/main/lib/codex/acp-ui-stream.ts`.
+- [x] 2.6 Delete `src/main/lib/codex/acp-message-persistence.ts`.
+- [x] 2.7 Delete `src/main/lib/codex/acp-path.ts`.
+- [x] 2.8 Delete dedicated tests: `tests/codex-acp-adapter.test.ts`,
   `codex-acp-runtime.test.ts`, `codex-acp-text-stream.test.ts`,
   `codex-acp-message-persistence.test.ts`, `codex-acp-path.test.ts`.
-- [ ] 2.9 Do **not** delete `tests/codex-acp-permission.test.ts` or
+- [x] 2.9 Do **not** delete `tests/codex-acp-permission.test.ts` or
   `tests/codex-acp-spawn-probe.test.ts` — they cover retained shared code.
 
 ## 3. Rewire adapter selection and the router
 
-- [ ] 3.1 Simplify `desktop-adapter-selection.ts` to always resolve
+- [x] 3.1 Simplify `desktop-adapter-selection.ts` to always resolve
   `codex-app-server`; remove `LOCUS_CODEX_USE_ACP_TEMPORARY_COMPAT` and legacy
   `LOCUS_CODEX_APP_SERVER_ADAPTER` env handling and the `acpFallbackAvailable`
   surface. Update `tests/codex-desktop-adapter-selection.test.ts`.
-- [ ] 3.2 Remove `codex-acp-temporary-compat` from the `CodexDesktopAdapterSource`
+- [x] 3.2 Remove `codex-acp-temporary-compat` from the `CodexDesktopAdapterSource`
   union in `adapter-types.ts` and the `DesktopRuntimeAdapterSource` union in
   `agent-runtime/desktop-runner.ts`.
-- [ ] 3.3 In `trpc/routers/codex.ts`, delete the
+- [x] 3.3 In `trpc/routers/codex.ts`, delete the
   `createCodexAcpTemporaryCompatAdapter` branch (keep only the app-server path)
   and remove the now-dead `cleanupCodexAcpProvider` /
   `cleanupAllCodexAcpProviders` imports and call sites.
-- [ ] 3.4 In `agent-runtime/permission-policy.ts`, remove the
+- [x] 3.4 In `agent-runtime/permission-policy.ts`, remove the
   `CodexAcpPermissionMapping` / `acpMode` type branch and the
   `acp-temporary-compat` `codexAdapterSource` path; keep the app-server mapping.
   Update `tests/agent-runtime-permission-policy.test.ts`.
-- [ ] 3.5 Remove `CODEX_ACP_TEMPORARY_COMPAT_*` metadata + removal-condition
+- [x] 3.5 Remove `CODEX_ACP_TEMPORARY_COMPAT_*` metadata + removal-condition
   constants from `agent-runtime/desktop-adapter-metadata.ts`.
-- [ ] 3.6 Update non-dedicated architecture/string tests that assert the removed
+- [x] 3.6 Update non-dedicated architecture/string tests that assert the removed
   ACP temporary path, including `tests/codex-prompt.test.ts`,
   `tests/long-text-send-pipeline.test.ts`,
   `tests/provider-credential-storage.test.ts`,
@@ -54,57 +54,62 @@
 
 ## 4. Capability manifest and runtime status (preserve the existing truth matrix)
 
-- [ ] 4.1 Remove `CODEX_ACP_CAPABILITY_OVERRIDES` and the
+- [x] 4.1 Remove `CODEX_ACP_CAPABILITY_OVERRIDES` and the
   `adapterSource === "codex-acp-temporary-compat"` branch from
   `src/shared/codex-runtime-capabilities.ts`.
-- [ ] 4.2 Rewrite reason/hint strings in `codex-runtime-capabilities.ts` and
+- [x] 4.2 Rewrite reason/hint strings in `codex-runtime-capabilities.ts` and
   `src/shared/agent-runtime-capabilities.ts` so they no longer cite ACP-specific
   primitives. Keep evidence pins to the retained `acp-permission.ts`.
-- [ ] 4.3 ACCEPTANCE: assert the app-server manifest keeps its current state
+- [x] 4.3 ACCEPTANCE: assert the app-server manifest keeps its current state
   matrix: `hardToolGuard` remains `degraded` for unknown provider-auth context
   and `supported` for proven `runtime-managed`, `app-managed`, and
   `provider-profile` contexts; `scopeExpansion`, `mcpAuth`, and
   `mcpConfiguration` remain `degraded`; `rollback` remains `unsupported`.
   Removing ACP must not upgrade or downgrade these states. Update
   `tests/codex-runtime-capabilities.test.ts`.
-- [ ] 4.4 Remove the ACP binary/spawn-probe reporting block from
+- [x] 4.4 Remove the ACP binary/spawn-probe reporting block from
   `src/main/lib/codex/runtime-status.ts` (the `resolveCodexAcpBinaryPath` /
   `probeCodexAcpSpawn` section). Update `tests/codex-runtime-status.test.ts`.
-- [ ] 4.5 Update `src/shared/codex-runtime-status.ts` so the public component
+- [x] 4.5 Update `src/shared/codex-runtime-status.ts` so the public component
   IDs/builders no longer expose stale `acp-runtime` / `acp-spawn` components or
   require ACP runtime input. Keep retained ANSI-stripping helpers in
   `acp-spawn-probe.ts` available to login/CLI paths.
 
 ## 5. Specs and ownership documentation
 
-- [ ] 5.1 Apply the spec deltas in this change (`codex-runtime-parity`,
+- [x] 5.1 Apply the spec deltas in this change (`codex-runtime-parity`,
   `agent-runtime-capabilities`, `provider-runtime-bindings`, `agent-runtime-core`,
   `architecture-ownership`).
-- [ ] 5.2 Update `docs/OWNERSHIP_MAP.md` "Codex Desktop Chat Runtime": set the
+- [x] 5.2 Update `docs/OWNERSHIP_MAP.md` "Codex Desktop Chat Runtime": set the
   canonical owner to the app-server adapter
   (`src/main/lib/codex/app-server-adapter.ts`, selection via
   `desktop-adapter-selection.ts`), remove the "Current ACP provider/session
   owner: acp-adapter.ts" line, and delete the dangling pointer to the
   non-existent `refactor-codex-official-runtime-adapter` change.
-- [ ] 5.3 ACCEPTANCE: confirm `architecture-ownership`'s "Persisted messages are
+- [x] 5.3 ACCEPTANCE: confirm `architecture-ownership`'s "Persisted messages are
   hydrated" scenario (which mandates ACP tool-shape normalization remain tested)
   is **unchanged** and that `acp-tool-normalizer.ts` + its tests still exist.
 
 ## 6. Dependencies and packaging
 
-- [ ] 6.1 Remove `@zed-industries/codex-acp` and `@zed-industries/codex-acp-*`
+- [x] 6.1 Remove `@zed-industries/codex-acp` and `@zed-industries/codex-acp-*`
   from `package.json` and the electron-builder `asarUnpack`/`files` entries.
-- [ ] 6.2 CONDITIONAL (only if 1.3 passed): remove `@mcpc-tech/acp-ai-provider`
+- [x] 6.2 CONDITIONAL (only if 1.3 passed): remove `@mcpc-tech/acp-ai-provider`
   and its remaining `acpTools` usage.
-- [ ] 6.3 Confirm `codex:download` / release scripts and bundling no longer
+- Skipped: 1.3 found `@mcpc-tech/acp-ai-provider` is still required by
+  `ask-user-question.ts`.
+- [x] 6.3 Confirm `codex:download` / release scripts and bundling no longer
   reference the ACP binary.
 
 ## 7. Verification
 
+- Local note: this shell currently has no `bun` or `openspec`, and
+  `node_modules` does not expose a resolvable `typescript` package for the
+  architecture guard. `git diff --check` and the 7.3 grep check passed.
 - [ ] 7.1 `bun run ts:check` is clean (no dangling ACP imports/types).
 - [ ] 7.2 `bun run test` passes; deleted ACP tests are gone and retained
   shared-code tests still pass.
-- [ ] 7.3 `rg -n "codex-acp-temporary-compat|USE_ACP_TEMPORARY_COMPAT|createCodexAcpTemporaryCompatAdapter"`
+- [x] 7.3 `rg -n "codex-acp-temporary-compat|USE_ACP_TEMPORARY_COMPAT|createCodexAcpTemporaryCompatAdapter"`
   returns no hits outside this change folder and archived changes.
 - [ ] 7.4 Desktop smoke: a Codex chat (app-server path) starts, streams, handles
   approvals, and renders tool calls; an **existing** Codex sub-chat with prior

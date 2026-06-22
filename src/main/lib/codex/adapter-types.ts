@@ -6,7 +6,7 @@ import type {
 
 export type CodexDesktopAdapterSource = Extract<
   DesktopRuntimeAdapterSource,
-  "codex-acp-temporary-compat" | "codex-app-server"
+  "codex-app-server"
 >
 
 export type CodexDesktopAdapterMetadata = DesktopRuntimeAdapterMetadata & {

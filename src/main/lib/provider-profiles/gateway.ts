@@ -28,9 +28,6 @@ import {
   saveProviderProfile,
   type ProviderProfileRuntimeConfig,
 } from "./storage"
-import {
-  resolveCodexDesktopAdapterSelection,
-} from "../codex/desktop-adapter-selection"
 
 type GatewayEndpointKind = "anthropic" | "responses"
 
@@ -586,8 +583,6 @@ function failureCheckId(category: ProviderDiagnosticCategory): ProviderDiagnosti
       return "vision"
     case "runtime_unavailable":
       return "runtime"
-    case "codex_app_server_unavailable":
-      return "codex_app_server"
     case "gateway_failed":
     default:
       return "gateway"
@@ -1583,21 +1578,12 @@ export async function runProviderProfileDiagnostics(
     )
 
     if (profile.targetRuntimes.includes("codex")) {
-      const codexAdapterSelection =
-        resolveCodexDesktopAdapterSelection(process.env)
       checks.push(
-        codexAdapterSelection.useAppServer
-          ? providerDiagnosticCheck(
-              "codex_app_server",
-              "ok",
-              "Codex app-server adapter is selected for this process; readiness is validated by app-server runtime smoke evidence.",
-            )
-          : providerDiagnosticCheck(
-              "codex_app_server",
-              "skipped",
-              `Codex app-server readiness check skipped because ${codexAdapterSelection.reason}`,
-              "codex_app_server_unavailable",
-            ),
+        providerDiagnosticCheck(
+          "codex_app_server",
+          "ok",
+          "Codex app-server adapter is selected for this process; readiness is validated by app-server runtime smoke evidence.",
+        ),
       )
     } else {
       checks.push(

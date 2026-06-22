@@ -74,12 +74,12 @@ export function getCodexAuthMethodId(params?: {
 
   const apiKey = params?.appManagedApiKey?.trim()
 
-  // codex-acp advertises auth methods:
+  // Codex app-server advertises auth methods:
   // - chatgpt
   // - codex-api-key
   // - openai-api-key
   // Official ChatGPT and app-managed API key paths are explicit so stale
-  // provider profile state cannot affect the next ACP session.
+  // provider profile state cannot affect the next app-server session.
   return apiKey ? "codex-api-key" : "chatgpt"
 }
 

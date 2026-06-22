@@ -50,7 +50,7 @@ describe("desktop runtime permission policy", () => {
     )
   })
 
-  test("maps Codex plan and guarded runs to ACP temporary permission handler", () => {
+  test("maps Codex plan and guarded runs to app-server fail-closed approval gate by default", () => {
     const planPolicy = resolveDesktopPermissionPolicy({
       runtimeId: "codex",
       mode: "plan",
@@ -61,22 +61,22 @@ describe("desktop runtime permission policy", () => {
       hasScopeContract: true,
     })
 
-    expect(planPolicy.enforcement).toBe("codex-acp-plan-handler")
+    expect(planPolicy.enforcement).toBe("codex-app-server-plan-approval-gate")
     expect(planPolicy.controlLevel).toBe("plan")
-    expect(planPolicy.runtimeMapping).toMatchObject({
+    expect(getCodexAppServerPermissionMapping(planPolicy)).toMatchObject({
       runtime: "codex",
-      adapterSource: "acp-temporary-compat",
-      acpMode: "read-only",
-      requiresPermissionHandler: true,
+      adapterSource: "codex-app-server",
+      requiresApprovalGate: true,
       permissionHandlerFailure: "fail-closed",
     })
-    expect(guardedPolicy.enforcement).toBe("codex-acp-guarded-handler")
+    expect(guardedPolicy.enforcement).toBe(
+      "codex-app-server-guarded-approval-gate",
+    )
     expect(guardedPolicy.controlLevel).toBe("guarded")
-    expect(guardedPolicy.runtimeMapping).toMatchObject({
+    expect(getCodexAppServerPermissionMapping(guardedPolicy)).toMatchObject({
       runtime: "codex",
-      adapterSource: "acp-temporary-compat",
-      acpMode: "read-only",
-      requiresPermissionHandler: true,
+      adapterSource: "codex-app-server",
+      requiresApprovalGate: true,
       permissionHandlerFailure: "fail-closed",
     })
   })
@@ -277,17 +277,20 @@ describe("desktop runtime permission policy", () => {
     })
 
     expect(codexPolicy.controlLevel).toBe("observe")
-    expect(codexPolicy.enforcement).toBe("codex-acp-agent-observed")
+    expect(codexPolicy.enforcement).toBe(
+      "codex-app-server-agent-approval-gate",
+    )
+    expect(codexPolicy.requiresPreExecutionEnforcement).toBe(true)
     expect(codexPolicy.observedToolPolicy).toMatchObject({
       enabled: true,
       blocksCatastrophicActions: true,
-      degradation: "stream-only-when-hook-unavailable",
+      degradation: "fail-closed-when-hook-unavailable",
     })
-    expect(codexPolicy.runtimeMapping).toMatchObject({
+    expect(getCodexAppServerPermissionMapping(codexPolicy)).toMatchObject({
       runtime: "codex",
-      acpMode: "read-only",
-      requiresPermissionHandler: true,
-      permissionHandlerFailure: "degrade-to-stream-only",
+      adapterSource: "codex-app-server",
+      requiresApprovalGate: true,
+      permissionHandlerFailure: "fail-closed",
     })
   })
 
@@ -339,16 +342,8 @@ describe("desktop runtime permission policy", () => {
       "src/main/lib/claude/agent-sdk-runtime-query.ts",
       "utf8",
     )
-    const codexAcpTemporaryCompatAdapter = readFileSync(
-      "src/main/lib/codex/acp-temporary-compat-adapter.ts",
-      "utf8",
-    )
     const codexAppServerAdapter = readFileSync(
       "src/main/lib/codex/app-server-adapter.ts",
-      "utf8",
-    )
-    const codexAcpRuntime = readFileSync(
-      "src/main/lib/codex/acp-runtime.ts",
       "utf8",
     )
 
@@ -378,19 +373,12 @@ describe("desktop runtime permission policy", () => {
 
     expect(codex).toContain("resolveDesktopPermissionPolicy")
     expect(codex).toContain("workspaceKind: verifiedRunContext.kind")
-    expect(codexAcpTemporaryCompatAdapter).toContain(
-      "getCodexPermissionMapping",
+    expect(codex).toContain('codexAdapterSource: "codex-app-server"')
+    expect(codex).toContain("createCodexAppServerAdapter")
+    expect(codex).not.toContain(
+      ["createCodex", "TemporaryCompatAdapter"].join("Acp"),
     )
-    expect(codexAcpTemporaryCompatAdapter).toContain(
-      "const permission = getCodexPermissionMapping(request.permissionPolicy)",
-    )
-    expect(codexAcpTemporaryCompatAdapter).toContain("permission,")
-    expect(codexAcpTemporaryCompatAdapter).toContain(
-      "decideCodexAcpToolPermission",
-    )
-    expect(codexAcpRuntime).toContain("permission.acpMode")
-    expect(codexAcpRuntime).toContain("permission.requiresPermissionHandler")
-    expect(codexAcpRuntime).toContain("permission.permissionHandlerFailure")
+    expect(codex).not.toContain(["getCodex", "PermissionMapping"].join(""))
     expect(codexAppServerAdapter).toContain(
       "getCodexAppServerPermissionMapping",
     )

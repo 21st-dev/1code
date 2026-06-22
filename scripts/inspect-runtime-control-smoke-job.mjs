@@ -20,19 +20,19 @@ const SCENARIOS = {
     guarded: true,
     requiresGuardEvent: true,
   },
-  "codex-temporary-compat-plan": {
+  "codex-app-server-plan": {
     runtime: "codex",
     mode: "plan",
-    adapterSource: "codex-acp-temporary-compat",
-    permissionEnforcement: "codex-acp-plan-handler",
+    adapterSource: "codex-app-server",
+    permissionEnforcement: "codex-app-server-plan-approval-gate",
     guarded: false,
     requiresGuardEvent: false,
   },
-  "codex-temporary-compat-guard": {
+  "codex-app-server-guard": {
     runtime: "codex",
     mode: "agent",
-    adapterSource: "codex-acp-temporary-compat",
-    permissionEnforcement: "codex-acp-guarded-handler",
+    adapterSource: "codex-app-server",
+    permissionEnforcement: "codex-app-server-guarded-approval-gate",
     guarded: true,
     requiresGuardEvent: true,
   },

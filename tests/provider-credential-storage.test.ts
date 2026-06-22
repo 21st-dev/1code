@@ -150,12 +150,8 @@ describe("provider credential storage hardening", () => {
       join(process.cwd(), "src/main/lib/codex/provider-runtime-binding.ts"),
       "utf-8",
     )
-    const codexAcpAdapterSource = readFileSync(
-      join(process.cwd(), "src/main/lib/codex/acp-adapter.ts"),
-      "utf-8",
-    )
-    const codexTemporaryCompatAdapterSource = readFileSync(
-      join(process.cwd(), "src/main/lib/codex/acp-temporary-compat-adapter.ts"),
+    const codexAppServerAdapterSource = readFileSync(
+      join(process.cwd(), "src/main/lib/codex/app-server-adapter.ts"),
       "utf-8",
     )
 
@@ -165,12 +161,17 @@ describe("provider credential storage hardening", () => {
     expect(transportSource).not.toContain("apiKey:")
     expect(codexRouterSource).not.toContain("authConfig")
     expect(codexRouterSource).toContain("codexAuthMethod")
-    expect(codexRouterSource).toContain("createCodexAcpTemporaryCompatAdapter")
-    expect(codexRouterSource).not.toContain("getOrCreateCodexAcpProvider")
-    expect(codexTemporaryCompatAdapterSource).toContain(
-      "getOrCreateCodexAcpProvider",
+    expect(codexRouterSource).toContain("createCodexAppServerAdapter")
+    const removedTemporaryFactory = [
+      "createCodex",
+      "TemporaryCompatAdapter",
+    ].join("Acp")
+    expect(codexRouterSource).not.toContain(
+      removedTemporaryFactory,
     )
-    expect(codexAcpAdapterSource).toContain("buildCodexProviderEnv")
+    expect(codexRouterSource).not.toContain("getOrCreateCodexAcpProvider")
+    expect(codexAppServerAdapterSource).toContain("providerGatewayToken")
+    expect(codexAppServerAdapterSource).toContain("appManagedApiKey")
     expect(codexProviderBindingSource).toContain('"CODEX_API_KEY"')
     expect(codexProviderBindingSource).toContain('"OPENAI_API_KEY"')
     expect(codexProviderBindingSource).toContain(
