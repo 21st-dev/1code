@@ -1,14 +1,35 @@
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Lock,
+  PackageSearch,
+  Plus,
+  RotateCcw,
+  Save,
+  Trash2,
+} from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, CheckCircle2, Download, ExternalLink, PackageSearch, Plus, RotateCcw, Save, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { settingsAgentsSidebarWidthAtom } from "../../../features/agents/atoms"
-import { trpc } from "../../../lib/trpc"
 import { useI18n } from "../../../lib/i18n"
+import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
-import { CustomAgentIconFilled } from "../../ui/icons"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../../ui/alert-dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog"
+import { Badge } from "../../ui/badge"
 import { Button } from "../../ui/button"
+import { CustomAgentIconFilled } from "../../ui/icons"
 import { Input } from "../../ui/input"
 import { Label } from "../../ui/label"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
@@ -47,7 +68,80 @@ type RegistryAppAgent = {
   status: "not-installed" | "installed"
 }
 
+type AgentBuilderRuntimeSupport = {
+  runtimeId: "claude" | "codex"
+  runtimeLabel: string
+  status: "prompt-only" | "native-discovered" | "read-only" | "unsupported"
+  projectionMode:
+    | "prompt-context"
+    | "native-discovered"
+    | "plugin-provided"
+    | "unsupported"
+  reason: string
+}
+
+type AgentBuilderEntry = {
+  id: string
+  name: string
+  description: string
+  prompt: string
+  tools: string[]
+  disallowedTools: string[]
+  source: "locus" | "claude-native" | "plugin-provided" | "codex-native"
+  owner: string
+  mutability: "editable" | "read-only"
+  invocationMode:
+    | "prompt-context"
+    | "native-discovered"
+    | "plugin-provided"
+    | "unsupported"
+  path: string | null
+  pluginName: string | null
+  diagnostics: string[]
+  runtimeSupport: AgentBuilderRuntimeSupport[]
+  locusAgent: AppAgent | null
+}
+
 type AgentViewMode = "local" | "registry"
+
+function agentSourceLabelKey(source: AgentBuilderEntry["source"]) {
+  switch (source) {
+    case "locus":
+      return "settings.appAgents.sourceLocus" as const
+    case "claude-native":
+      return "settings.appAgents.sourceClaudeNative" as const
+    case "plugin-provided":
+      return "settings.appAgents.sourcePluginProvided" as const
+    case "codex-native":
+      return "settings.appAgents.sourceCodexNative" as const
+  }
+}
+
+function runtimeStatusLabelKey(status: AgentBuilderRuntimeSupport["status"]) {
+  switch (status) {
+    case "prompt-only":
+      return "settings.appAgents.runtimeStatusPromptOnly" as const
+    case "native-discovered":
+      return "settings.appAgents.runtimeStatusNativeDiscovered" as const
+    case "read-only":
+      return "settings.appAgents.runtimeStatusReadOnly" as const
+    case "unsupported":
+      return "settings.appAgents.runtimeStatusUnsupported" as const
+  }
+}
+
+function invocationModeLabelKey(mode: AgentBuilderEntry["invocationMode"]) {
+  switch (mode) {
+    case "prompt-context":
+      return "settings.appAgents.invocationPromptContext" as const
+    case "native-discovered":
+      return "settings.appAgents.invocationNativeDiscovered" as const
+    case "plugin-provided":
+      return "settings.appAgents.invocationPluginProvided" as const
+    case "unsupported":
+      return "settings.appAgents.invocationUnsupported" as const
+  }
+}
 
 function slugifyAgentName(name: string) {
   return name
@@ -62,7 +156,9 @@ function arraysEqual(a: string[] = [], b: string[] = []) {
   return a.every((item, index) => item === b[index])
 }
 
-function getToolMode(agent?: Pick<AppAgent, "tools" | "disallowedTools">): ToolMode {
+function getToolMode(
+  agent?: Pick<AppAgent, "tools" | "disallowedTools">,
+): ToolMode {
   if (agent?.tools?.length) return "allowlist"
   if (agent?.disallowedTools?.length) return "denylist"
   return "all"
@@ -100,8 +196,12 @@ function AppAgentEditor({
   const [name, setName] = useState(agent?.name ?? "")
   const [description, setDescription] = useState(agent?.description ?? "")
   const [prompt, setPrompt] = useState(agent?.prompt ?? "")
-  const [toolMode, setToolMode] = useState<ToolMode>(getToolMode(agent ?? undefined))
-  const [selectedTools, setSelectedTools] = useState<string[]>(getSelectedTools(agent ?? undefined))
+  const [toolMode, setToolMode] = useState<ToolMode>(
+    getToolMode(agent ?? undefined),
+  )
+  const [selectedTools, setSelectedTools] = useState<string[]>(
+    getSelectedTools(agent ?? undefined),
+  )
 
   useEffect(() => {
     setName(agent?.name ?? "")
@@ -109,7 +209,7 @@ function AppAgentEditor({
     setPrompt(agent?.prompt ?? "")
     setToolMode(getToolMode(agent ?? undefined))
     setSelectedTools(getSelectedTools(agent ?? undefined))
-  }, [agent?.id, agent?.name, agent?.description, agent?.prompt, agent?.tools, agent?.disallowedTools])
+  }, [agent])
 
   useEffect(() => {
     if (isCreating) {
@@ -135,7 +235,10 @@ function AppAgentEditor({
       !arraysEqual(toolPayload.disallowedTools, agent.disallowedTools)
     : false
   const hasChanges = isCreating
-    ? name.trim().length > 0 || description.trim().length > 0 || prompt.trim().length > 0 || selectedTools.length > 0
+    ? name.trim().length > 0 ||
+      description.trim().length > 0 ||
+      prompt.trim().length > 0 ||
+      selectedTools.length > 0
     : hasPersistedChanges
   const canSave =
     normalizedName.length > 0 &&
@@ -207,7 +310,11 @@ function AppAgentEditor({
                 <RotateCcw className="h-3.5 w-3.5" />
               </Button>
             )}
-            <Button size="sm" onClick={handleSave} disabled={!canSave || isSaving}>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={!canSave || isSaving}
+            >
               <Save className="mr-1.5 h-3.5 w-3.5" />
               {isSaving ? t("common.saving") : t("common.save")}
             </Button>
@@ -216,7 +323,8 @@ function AppAgentEditor({
 
         <div className="space-y-1.5">
           <Label>
-            {t("settings.appAgents.name")} <span className="text-destructive">*</span>
+            {t("settings.appAgents.name")}{" "}
+            <span className="text-destructive">*</span>
           </Label>
           <Input
             value={name}
@@ -230,7 +338,8 @@ function AppAgentEditor({
 
         <div className="space-y-1.5">
           <Label>
-            {t("settings.appAgents.description")} <span className="text-destructive">*</span>
+            {t("settings.appAgents.description")}{" "}
+            <span className="text-destructive">*</span>
           </Label>
           <Input
             value={description}
@@ -274,7 +383,8 @@ function AppAgentEditor({
 
         <div className="space-y-1.5">
           <Label>
-            {t("settings.appAgents.prompt")} <span className="text-destructive">*</span>
+            {t("settings.appAgents.prompt")}{" "}
+            <span className="text-destructive">*</span>
           </Label>
           <Textarea
             value={prompt}
@@ -314,7 +424,11 @@ function RegistryAgentDetail({
   isImporting: boolean
 }) {
   const { t } = useI18n()
-  const { data: agent, isLoading, error } = trpc.appAgents.registryGet.useQuery(
+  const {
+    data: agent,
+    isLoading,
+    error,
+  } = trpc.appAgents.registryGet.useQuery(
     { id: agentId ?? "" },
     {
       enabled: !!agentId,
@@ -423,7 +537,8 @@ function RegistryAgentDetail({
             )}
             {agent.disallowedTools.length > 0 && (
               <div className="text-xs text-muted-foreground">
-                {t("settings.appAgents.disallowedTools")}: {agent.disallowedTools.join(", ")}
+                {t("settings.appAgents.disallowedTools")}:{" "}
+                {agent.disallowedTools.join(", ")}
               </div>
             )}
           </div>
@@ -440,18 +555,151 @@ function RegistryAgentDetail({
   )
 }
 
+function AgentBuilderReadOnlyDetail({ entry }: { entry: AgentBuilderEntry }) {
+  const { t } = useI18n()
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-2xl space-y-5 p-6">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-sm font-semibold text-foreground">
+                {entry.name}
+              </h3>
+              <Badge variant="outline" className="text-[10px]">
+                {t(agentSourceLabelKey(entry.source))}
+              </Badge>
+              <Badge variant="secondary" className="text-[10px]">
+                {t("settings.appAgents.readOnly")}
+              </Badge>
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {t("settings.appAgents.readOnlyHint")}
+            </p>
+          </div>
+          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>{t("settings.appAgents.owner")}</Label>
+            <p className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground">
+              {entry.owner}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("settings.appAgents.invocationMode")}</Label>
+            <p className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground">
+              {t(invocationModeLabelKey(entry.invocationMode))}
+            </p>
+          </div>
+        </div>
+
+        {entry.path && (
+          <div className="space-y-1.5">
+            <Label>{t("settings.appAgents.location")}</Label>
+            <p className="overflow-auto rounded-lg border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-foreground">
+              {entry.path}
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label>{t("settings.appAgents.runtimeSupport")}</Label>
+          <div className="space-y-2">
+            {entry.runtimeSupport.map((runtime) => (
+              <div
+                key={runtime.runtimeId}
+                className="rounded-lg border border-border bg-muted/30 px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">
+                    {runtime.runtimeLabel}
+                  </span>
+                  <Badge variant="outline" className="text-[10px]">
+                    {t(runtimeStatusLabelKey(runtime.status))}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {runtime.reason}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {entry.diagnostics.length > 0 && (
+          <div className="space-y-2">
+            <Label>{t("settings.appAgents.diagnostics")}</Label>
+            <div className="space-y-1.5">
+              {entry.diagnostics.map((diagnostic) => (
+                <p
+                  key={diagnostic}
+                  className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+                >
+                  {diagnostic}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <Label>{t("settings.appAgents.description")}</Label>
+          <p className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground">
+            {entry.description || (
+              <span className="text-muted-foreground">
+                {t("settings.appAgents.noDescription")}
+              </span>
+            )}
+          </p>
+        </div>
+
+        {(entry.tools.length > 0 || entry.disallowedTools.length > 0) && (
+          <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+            <p className="text-xs font-medium text-foreground">
+              {t("settings.appAgents.tools")}
+            </p>
+            {entry.tools.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                {t("settings.appAgents.allowedTools")}: {entry.tools.join(", ")}
+              </div>
+            )}
+            {entry.disallowedTools.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                {t("settings.appAgents.disallowedTools")}:{" "}
+                {entry.disallowedTools.join(", ")}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <Label>{t("settings.appAgents.prompt")}</Label>
+          <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-background px-4 py-3 font-mono text-xs leading-relaxed text-foreground">
+            {entry.prompt || t("settings.appAgents.noPrompt")}
+          </pre>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function AgentsAppAgentsTab() {
   const { t } = useI18n()
   const utils = trpc.useUtils()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
-  const [selectedRegistryAgentId, setSelectedRegistryAgentId] = useState<string | null>(null)
+  const [selectedRegistryAgentId, setSelectedRegistryAgentId] = useState<
+    string | null
+  >(null)
   const [isCreating, setIsCreating] = useState(false)
   const [deletingAgent, setDeletingAgent] = useState<AppAgent | null>(null)
   const [viewMode, setViewMode] = useState<AgentViewMode>("local")
 
-  const { data: agents = [], isLoading } = trpc.appAgents.list.useQuery()
+  const { data: agentRows = [], isLoading } = trpc.agentBuilder.list.useQuery()
   const { data: registryAgents = [], isLoading: isLoadingRegistry } =
     trpc.appAgents.registryList.useQuery(undefined, {
       enabled: viewMode === "registry",
@@ -464,7 +712,8 @@ export function AgentsAppAgentsTab() {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey)
+        return
       const tag = (event.target as HTMLElement)?.tagName
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
       event.preventDefault()
@@ -474,34 +723,39 @@ export function AgentsAppAgentsTab() {
     return () => document.removeEventListener("keydown", handler)
   }, [])
 
-  const filteredAgents = useMemo(() => {
+  const filteredAgentRows = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
-    if (!query) return agents
-    return agents.filter((agent) =>
-      agent.name.toLowerCase().includes(query) ||
-      agent.description.toLowerCase().includes(query),
+    if (!query) return agentRows
+    return agentRows.filter(
+      (agent) =>
+        agent.name.toLowerCase().includes(query) ||
+        agent.description.toLowerCase().includes(query) ||
+        agent.owner.toLowerCase().includes(query),
     )
-  }, [agents, searchQuery])
+  }, [agentRows, searchQuery])
 
   const filteredRegistryAgents = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     if (!query) return registryAgents
-    return registryAgents.filter((agent) =>
-      agent.name.toLowerCase().includes(query) ||
-      agent.sourceName.toLowerCase().includes(query) ||
-      agent.category.toLowerCase().includes(query),
+    return registryAgents.filter(
+      (agent) =>
+        agent.name.toLowerCase().includes(query) ||
+        agent.sourceName.toLowerCase().includes(query) ||
+        agent.category.toLowerCase().includes(query),
     )
   }, [registryAgents, searchQuery])
 
   const filteredIds = useMemo(
-    () => viewMode === "registry"
-      ? filteredRegistryAgents.map((agent) => agent.id)
-      : filteredAgents.map((agent) => agent.id),
-    [filteredAgents, filteredRegistryAgents, viewMode],
+    () =>
+      viewMode === "registry"
+        ? filteredRegistryAgents.map((agent) => agent.id)
+        : filteredAgentRows.map((agent) => agent.id),
+    [filteredAgentRows, filteredRegistryAgents, viewMode],
   )
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
     items: filteredIds,
-    selectedItem: viewMode === "registry" ? selectedRegistryAgentId : selectedAgentId,
+    selectedItem:
+      viewMode === "registry" ? selectedRegistryAgentId : selectedAgentId,
     onSelect: (id) => {
       setIsCreating(false)
       if (viewMode === "registry") {
@@ -512,67 +766,88 @@ export function AgentsAppAgentsTab() {
     },
   })
 
-  const selectedAgent =
-    agents.find((agent) => agent.id === selectedAgentId) ?? null
+  const selectedEntry =
+    agentRows.find((agent) => agent.id === selectedAgentId) ?? null
+  const selectedAgent = selectedEntry?.locusAgent ?? null
 
   useEffect(() => {
-    if (isCreating || selectedAgentId || isLoading || agents.length === 0) return
-    setSelectedAgentId(agents[0]!.id)
-  }, [agents, isCreating, isLoading, selectedAgentId])
+    if (isCreating || selectedAgentId || isLoading || agentRows.length === 0)
+      return
+    const firstAgent = agentRows[0]
+    if (firstAgent) setSelectedAgentId(firstAgent.id)
+  }, [agentRows, isCreating, isLoading, selectedAgentId])
 
   useEffect(() => {
     if (viewMode !== "registry") return
-    if (selectedRegistryAgentId || isLoadingRegistry || registryAgents.length === 0) return
-    setSelectedRegistryAgentId(registryAgents[0]!.id)
+    if (
+      selectedRegistryAgentId ||
+      isLoadingRegistry ||
+      registryAgents.length === 0
+    )
+      return
+    const firstRegistryAgent = registryAgents[0]
+    if (firstRegistryAgent) setSelectedRegistryAgentId(firstRegistryAgent.id)
   }, [isLoadingRegistry, registryAgents, selectedRegistryAgentId, viewMode])
 
   useEffect(() => {
     if (!selectedAgentId) return
-    if (agents.some((agent) => agent.id === selectedAgentId)) return
-    setSelectedAgentId(agents[0]?.id ?? null)
-  }, [agents, selectedAgentId])
+    if (agentRows.some((agent) => agent.id === selectedAgentId)) return
+    setSelectedAgentId(agentRows[0]?.id ?? null)
+  }, [agentRows, selectedAgentId])
 
   const invalidateAgents = useCallback(async () => {
-    await utils.appAgents.list.invalidate()
+    await utils.agentBuilder.list.invalidate()
     await utils.appAgents.registryList.invalidate()
-  }, [utils.appAgents.list, utils.appAgents.registryList])
+  }, [utils.agentBuilder.list, utils.appAgents.registryList])
 
-  const handleCreate = useCallback(async (data: AppAgentFormData) => {
-    try {
-      const created = await createMutation.mutateAsync(data)
-      toast.success(t("settings.appAgents.toast.created"), {
-        description: created.name,
-      })
-      setIsCreating(false)
-      setSelectedAgentId(created.id)
-      await invalidateAgents()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.appAgents.toast.failedToCreate")
-      toast.error(t("settings.appAgents.toast.failedToCreate"), {
-        description: message,
-      })
-    }
-  }, [createMutation, invalidateAgents, t])
+  const handleCreate = useCallback(
+    async (data: AppAgentFormData) => {
+      try {
+        const created = await createMutation.mutateAsync(data)
+        toast.success(t("settings.appAgents.toast.created"), {
+          description: created.name,
+        })
+        setIsCreating(false)
+        setSelectedAgentId(`locus:${created.id}`)
+        await invalidateAgents()
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.appAgents.toast.failedToCreate")
+        toast.error(t("settings.appAgents.toast.failedToCreate"), {
+          description: message,
+        })
+      }
+    },
+    [createMutation, invalidateAgents, t],
+  )
 
-  const handleUpdate = useCallback(async (data: AppAgentFormData) => {
-    if (!selectedAgent) return
-    try {
-      const updated = await updateMutation.mutateAsync({
-        id: selectedAgent.id,
-        ...data,
-      })
-      toast.success(t("settings.appAgents.toast.saved"), {
-        description: updated.name,
-      })
-      setSelectedAgentId(updated.id)
-      await invalidateAgents()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.appAgents.toast.failedToSave")
-      toast.error(t("settings.appAgents.toast.failedToSave"), {
-        description: message,
-      })
-    }
-  }, [invalidateAgents, selectedAgent, t, updateMutation])
+  const handleUpdate = useCallback(
+    async (data: AppAgentFormData) => {
+      if (!selectedAgent) return
+      try {
+        const updated = await updateMutation.mutateAsync({
+          id: selectedAgent.id,
+          ...data,
+        })
+        toast.success(t("settings.appAgents.toast.saved"), {
+          description: updated.name,
+        })
+        setSelectedAgentId(`locus:${updated.id}`)
+        await invalidateAgents()
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.appAgents.toast.failedToSave")
+        toast.error(t("settings.appAgents.toast.failedToSave"), {
+          description: message,
+        })
+      }
+    },
+    [invalidateAgents, selectedAgent, t, updateMutation],
+  )
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deletingAgent) return
@@ -585,35 +860,46 @@ export function AgentsAppAgentsTab() {
       setSelectedAgentId(null)
       await invalidateAgents()
     } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.appAgents.toast.failedToDelete")
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("settings.appAgents.toast.failedToDelete")
       toast.error(t("settings.appAgents.toast.failedToDelete"), {
         description: message,
       })
     }
   }, [deleteMutation, deletingAgent, invalidateAgents, t])
 
-  const handleRegistryImport = useCallback(async (agent: RegistryAppAgent) => {
-    try {
-      const imported = await registryImportMutation.mutateAsync({ id: agent.id })
-      toast.success(
-        agent.status === "installed"
-          ? t("settings.appAgents.toast.updatedFromRegistry")
-          : t("settings.appAgents.toast.imported"),
-        { description: imported.name },
-      )
-      setSelectedAgentId(imported.id)
-      setSelectedRegistryAgentId(null)
-      setViewMode("local")
-      setIsCreating(false)
-      setSearchQuery("")
-      await invalidateAgents()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : t("settings.appAgents.toast.failedToImport")
-      toast.error(t("settings.appAgents.toast.failedToImport"), {
-        description: message,
-      })
-    }
-  }, [invalidateAgents, registryImportMutation, t])
+  const handleRegistryImport = useCallback(
+    async (agent: RegistryAppAgent) => {
+      try {
+        const imported = await registryImportMutation.mutateAsync({
+          id: agent.id,
+        })
+        toast.success(
+          agent.status === "installed"
+            ? t("settings.appAgents.toast.updatedFromRegistry")
+            : t("settings.appAgents.toast.imported"),
+          { description: imported.name },
+        )
+        setSelectedAgentId(`locus:${imported.id}`)
+        setSelectedRegistryAgentId(null)
+        setViewMode("local")
+        setIsCreating(false)
+        setSearchQuery("")
+        await invalidateAgents()
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.appAgents.toast.failedToImport")
+        toast.error(t("settings.appAgents.toast.failedToImport"), {
+          description: message,
+        })
+      }
+    },
+    [invalidateAgents, registryImportMutation, t],
+  )
 
   return (
     <>
@@ -630,7 +916,10 @@ export function AgentsAppAgentsTab() {
           exitWidth={260}
           disableClickToClose={true}
         >
-          <div className="flex h-full flex-col overflow-hidden border-r bg-background" style={{ borderRightWidth: "0.5px" }}>
+          <div
+            className="flex h-full flex-col overflow-hidden border-r bg-background"
+            style={{ borderRightWidth: "0.5px" }}
+          >
             <div className="flex shrink-0 flex-col gap-1.5 px-2 pt-2">
               {viewMode === "registry" && (
                 <button
@@ -644,7 +933,9 @@ export function AgentsAppAgentsTab() {
                   className="flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
-                  <span className="truncate">{t("settings.appAgents.backToInstalled")}</span>
+                  <span className="truncate">
+                    {t("settings.appAgents.backToInstalled")}
+                  </span>
                 </button>
               )}
 
@@ -664,7 +955,9 @@ export function AgentsAppAgentsTab() {
                 <button
                   type="button"
                   onClick={() => {
-                    setViewMode((current) => current === "registry" ? "local" : "registry")
+                    setViewMode((current) =>
+                      current === "registry" ? "local" : "registry",
+                    )
                     setIsCreating(false)
                     setSearchQuery("")
                   }}
@@ -697,6 +990,7 @@ export function AgentsAppAgentsTab() {
               </div>
             </div>
 
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: keyboard navigation is delegated to useListKeyboardNav for the agent row container. */}
             <div
               ref={listRef}
               onKeyDown={listKeyDown}
@@ -706,7 +1000,9 @@ export function AgentsAppAgentsTab() {
               {viewMode === "registry" ? (
                 isLoadingRegistry ? (
                   <div className="flex h-full items-center justify-center">
-                    <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("common.loading")}
+                    </p>
                   </div>
                 ) : filteredRegistryAgents.length === 0 ? (
                   <div className="flex items-center justify-center py-8">
@@ -754,9 +1050,11 @@ export function AgentsAppAgentsTab() {
                 )
               ) : isLoading ? (
                 <div className="flex h-full items-center justify-center">
-                  <p className="text-xs text-muted-foreground">{t("common.loading")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("common.loading")}
+                  </p>
                 </div>
-              ) : agents.length === 0 ? (
+              ) : agentRows.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center px-4 text-center">
                   <CustomAgentIconFilled className="mb-3 h-8 w-8 text-border" />
                   <p className="mb-3 text-sm text-muted-foreground">
@@ -774,7 +1072,7 @@ export function AgentsAppAgentsTab() {
                     {t("settings.appAgents.createAgent")}
                   </Button>
                 </div>
-              ) : filteredAgents.length === 0 ? (
+              ) : filteredAgentRows.length === 0 ? (
                 <div className="flex items-center justify-center py-8">
                   <p className="text-xs text-muted-foreground">
                     {t("settings.appAgents.noResults")}
@@ -782,7 +1080,7 @@ export function AgentsAppAgentsTab() {
                 </div>
               ) : (
                 <div className="space-y-0.5">
-                  {filteredAgents.map((agent) => {
+                  {filteredAgentRows.map((agent) => {
                     const isSelected = selectedAgentId === agent.id
                     return (
                       <button
@@ -804,12 +1102,19 @@ export function AgentsAppAgentsTab() {
                           <span className="flex-1 truncate text-sm">
                             {agent.name}
                           </span>
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 text-[10px]"
+                          >
+                            {t(agentSourceLabelKey(agent.source))}
+                          </Badge>
+                          {agent.mutability === "read-only" && (
+                            <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          )}
                         </div>
-                        {agent.description && (
-                          <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                            {agent.description}
-                          </div>
-                        )}
+                        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          {agent.description || agent.owner}
+                        </div>
                       </button>
                     )
                   })}
@@ -826,25 +1131,39 @@ export function AgentsAppAgentsTab() {
               onImport={handleRegistryImport}
               isImporting={registryImportMutation.isPending}
             />
-          ) : (
+          ) : isCreating || selectedEntry?.source === "locus" ? (
             <AppAgentEditor
               agent={selectedAgent}
               isCreating={isCreating}
               isSaving={createMutation.isPending || updateMutation.isPending}
               onCancelCreate={() => {
                 setIsCreating(false)
-                setSelectedAgentId(agents[0]?.id ?? null)
+                setSelectedAgentId(agentRows[0]?.id ?? null)
               }}
               onSave={isCreating ? handleCreate : handleUpdate}
               onDelete={() => {
                 if (selectedAgent) setDeletingAgent(selectedAgent)
               }}
             />
+          ) : selectedEntry ? (
+            <AgentBuilderReadOnlyDetail entry={selectedEntry} />
+          ) : (
+            <AppAgentEditor
+              agent={null}
+              isCreating={false}
+              isSaving={false}
+              onCancelCreate={() => {}}
+              onSave={handleUpdate}
+              onDelete={() => {}}
+            />
           )}
         </div>
       </div>
 
-      <AlertDialog open={!!deletingAgent} onOpenChange={(open) => !open && setDeletingAgent(null)}>
+      <AlertDialog
+        open={!!deletingAgent}
+        onOpenChange={(open) => !open && setDeletingAgent(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
