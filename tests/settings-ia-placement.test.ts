@@ -123,7 +123,7 @@ describe("Settings IA placement", () => {
       "trpc.commands.update.useMutation",
       "trpc.commands.delete.useMutation",
       'setActiveView("commands")',
-      "settings.skills.viewCommands",
+      "viewCommands",
     ])
   })
 
