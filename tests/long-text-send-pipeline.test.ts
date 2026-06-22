@@ -182,7 +182,7 @@ describe("long text send pipeline", () => {
     expect(codex).toContain("input.longTextAttachments")
     expect(codexAppServerAdapter).toContain("request.attachments")
     expect(codexAppServerAdapter).toContain(
-      "prepareCodexAppServerPromptWithLongText",
+      "prepareCodexAppServerRuntimePrompt",
     )
     expect(codexAppServerAttachments).toContain(
       "prependLongTextAttachmentPromptBlocks",

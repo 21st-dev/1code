@@ -376,6 +376,41 @@ describe("Codex app-server adapter", () => {
     expect(events.map((event: any) => event.type)).toContain("completed")
   })
 
+  test("sends prepared Locus Agent prompt context to turn/start", async () => {
+    const transport = new FakeCodexAppServerTransport()
+
+    const result = await createCodexAppServerAdapter({
+      enabled: true,
+      createTransport: () => transport,
+      prepareRuntimePrompt: async ({ prompt }) => ({
+        prompt: `prepared:${prompt}`,
+        appAgentMentions: ["reviewer"],
+        resolvedAppAgents: [],
+        missingAppAgents: [],
+      }),
+    }).run(
+      createRequest(appServerPolicy(), {
+        prompt: "@[agent:reviewer] hello",
+      }),
+    )
+
+    const turnStart = transport.requests.find(
+      (request) => request.method === "turn/start",
+    )
+    const input = (
+      turnStart?.params as
+        | { input: Array<{ type: string; text: string; text_elements: [] }> }
+        | undefined
+    )?.input
+
+    expect(result.status).toBe("succeeded")
+    expect(input?.[0]).toMatchObject({
+      type: "text",
+      text: "prepared:@[agent:reviewer] hello",
+      text_elements: [],
+    })
+  })
+
   test("resumes an existing app-server thread through thread/resume", async () => {
     const transport = new FakeCodexAppServerTransport()
     const chunks: Record<string, unknown>[] = []

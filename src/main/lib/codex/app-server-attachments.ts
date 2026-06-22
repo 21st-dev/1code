@@ -1,9 +1,13 @@
 import {
-  isSupportedChatImageMediaType,
   type ChatImageMediaType,
+  isSupportedChatImageMediaType,
   type ResolvedChatImageAttachment,
 } from "../../../shared/chat-attachments"
 import type { DesktopRunAttachmentRef } from "../agent-runtime/desktop-run-request"
+import {
+  type AppAgentPromptResult,
+  preparePromptWithAppAgents,
+} from "../app-agents/prompt"
 import {
   prependLongTextAttachmentPromptBlocks,
   type ResolveLongTextAttachmentInput,
@@ -40,7 +44,9 @@ export function assertCodexAppServerAttachmentRefsSupported(
   resolvedImages: ResolvedChatImageAttachment[],
   options: { allowPreparedLongTextRefs?: boolean } = {},
 ): void {
-  const imageRefs = attachments.filter((attachment) => attachment.kind === "image")
+  const imageRefs = attachments.filter(
+    (attachment) => attachment.kind === "image",
+  )
   const unsupported = attachments.find(
     (attachment) =>
       attachment.kind !== "image" &&
@@ -109,4 +115,28 @@ export async function prepareCodexAppServerPromptWithLongText(input: {
   const prependLongTextPromptBlocks =
     input.prependLongTextPromptBlocks ?? prependLongTextAttachmentPromptBlocks
   return prependLongTextPromptBlocks(input.prompt, input.longTextAttachments)
+}
+
+export async function prepareCodexAppServerRuntimePrompt(input: {
+  prompt: string
+  longTextAttachments?: ResolveLongTextAttachmentInput[]
+  prepareAppAgentPrompt?: (
+    prompt: string,
+    appAgentNames?: string[],
+  ) => Promise<AppAgentPromptResult>
+  prependLongTextPromptBlocks?: typeof prependLongTextAttachmentPromptBlocks
+}): Promise<AppAgentPromptResult> {
+  const prepareAppAgentPrompt =
+    input.prepareAppAgentPrompt ?? preparePromptWithAppAgents
+  const appAgentPrompt = await prepareAppAgentPrompt(input.prompt)
+  const prompt = await prepareCodexAppServerPromptWithLongText({
+    prompt: appAgentPrompt.prompt,
+    longTextAttachments: input.longTextAttachments,
+    prependLongTextPromptBlocks: input.prependLongTextPromptBlocks,
+  })
+
+  return {
+    ...appAgentPrompt,
+    prompt,
+  }
 }
