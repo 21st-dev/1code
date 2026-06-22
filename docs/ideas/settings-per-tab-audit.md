@@ -333,3 +333,223 @@ hash-based drift detection (`installedHash`/`contentHash` → `modified`).
    *[must-verify; confirmed gap in code]*
 3. **Overwrite confirms → app `AlertDialog` (§C)?** *[recommend yes]*
 4. **Commands ownership vs Command Guide (§D)?** *[IA call — Phase 3]*
+
+---
+
+## Command Guide (`agents-command-guide-tab.tsx`, 1,063 lines)
+
+A **reference / diagnostics** surface, not a manager — and the other half of the
+Skills §D split. Backend: `commands.{runtimeGuide, officialIndex,
+refreshOfficialIndex, list, getContent, create, update, delete}`, but this tab
+wires only the **read** paths (`runtimeGuide`, `officialIndex`,
+`refreshOfficialIndex`, `list`, `plugins.list`). Render map: runtime command guide
+(Claude Code / Codex bundled-binary presence + capability + "reinstall to restore"
+hints) · official command snapshot (slash/flag/CLI reference + cross-runtime
+comparison + refresh) · installed-command list (user/project/plugin, read-only,
+source badges).
+
+**Positives (not findings).** Read-only → **no destructive actions, no confirmation
+smells** (clean where Models §E and Skills §C were not). The runtime guide is a
+genuinely useful binary-health diagnostic. Plugin commands are gated by
+`discoverAllowedClaudePluginRuntimeComponents` (consistent with the plugin work).
+The only mutation is `refreshOfficialIndex` (a harmless cache refresh).
+
+### 🟡 A. Commands are split across two tabs — confusing ownership (headline; the §D pair)
+
+- **Evidence:** command **CRUD** (`commands.create/update/delete`) lives in the
+  **Skills** tab (`agents-skills-tab.tsx:1200-1202`, `activeView === "commands"`),
+  while **Command Guide** is read-only reference. The installed-command **list**
+  (`commands.list`) renders in **both** tabs.
+- **Why it's "混乱":** the tab named after commands ("Command Guide") cannot manage
+  them; to create/edit/delete a command you must go to a tab named **Skills**. The
+  command list is duplicated. This is the same finding as Skills §D, seen from the
+  Command Guide side.
+- **Action (IA CALL, Phase-3-adjacent):** consolidate ownership. Options: (a) move
+  command CRUD into Command Guide so the command-named tab owns commands
+  end-to-end; (b) keep Command Guide reference-only but cross-link "manage commands
+  in Skills"; (c) merge Skills + Commands + guide into one surface. Decide who owns
+  commands.
+
+### 🟢 B. Official command index is reference-only — by design, not a dead-end
+
+- **Evidence:** there is **no `install`** procedure in the commands router; the
+  official index is browse/compare only. But its entries are `slash` / `flag` /
+  `cli` kinds — **flags and CLI commands are built into the runtime binary and are
+  not installable by nature**, so "no install" is correct for them.
+- **Action (confirm only):** confirm the official index is intended as a
+  **reference** (it is not the Skills/MCP "store" pattern, and shouldn't pretend to
+  be). If any official **slash** command is ever meant to be adoptable into
+  `~/.claude/commands`, that one path would be the only candidate for a future
+  "adopt" action — otherwise leave it reference. *Not a defect.*
+
+### 🟡 C. "Guide" name undersells the tab
+
+- **Evidence:** the tab is three things — runtime-binary health, official reference,
+  and the installed-command list — but is named "Command Guide."
+- **Action:** fold into the §A IA decision; rename to match whatever ownership lands
+  (e.g. "Commands").
+
+### Decisions to ratify (Command Guide)
+1. **Command ownership / two-tab split (§A)** — consolidate CRUD + reference into one
+   command-owning surface, or keep split with a clear cross-link? *[IA call — Phase
+   3; pairs with Skills §D]*
+2. **Official index intent (§B)** — confirm reference-only (recommended), or is an
+   "adopt official slash command" action wanted? *[confirm; not a defect]*
+3. **Rename "Command Guide" (§C)** — fold into the §A outcome. *[low priority]*
+
+---
+
+## Projects (`agents-project-worktree-tab.tsx`, 949 lines)
+
+Combines project management + worktree config. Backend `projectsRouter`:
+list/get/create/rename/delete, uploadIcon/removeIcon, refreshGitInfo,
+cloneFromGitHub, locateAndAddProject, pickCloneDestination, getLaunchDirectory.
+This tab wires get/rename/delete/uploadIcon/removeIcon/list/openFolder,
+worktreeConfig.get/save, chats.create, external.openInFinder.
+
+**Positives (not findings).** Delete uses the app `AlertDialog` (not native
+`confirm`). The procedures not wired here (`cloneFromGitHub`, `locateAndAddProject`,
+`refreshGitInfo`, `pickCloneDestination`) are **used in onboarding /
+project-selector**, so they are not dead.
+
+### 🔴 A. "Remove Project" under-discloses — it destroys all chats + history (headline)
+
+- **Evidence:** the dialog reassures *"This will remove "{name}" from your project
+  list. Your files will not be deleted."* (`removeProjectConfirm`). But the schema has
+  `chats.projectId ... onDelete: "cascade"` and `subChats.chatId ... onDelete:
+  "cascade"` (`db/schema/index.ts:37,73`). So Remove **permanently deletes every
+  chat and sub-chat (all conversation history) under that project**.
+- **Why it matters:** the copy reassures about *code files* while silently omitting
+  that **all chat history is destroyed**. A user reads "just delisting, files safe"
+  and loses every conversation under the project.
+- **Action (must-fix copy):** the dialog must disclose the history deletion — e.g.
+  "This permanently deletes N chats and their history. Your code files are not
+  touched." Ideally show the chat count. Reassuring about files while hiding history
+  is the wrong disclosure.
+
+### 🟡 B. Project delete leaks worktrees and skips process cleanup (cascade bypass)
+
+- **Evidence:** `projects.delete` is a raw `db.delete(projects)` (`projects.ts:127`),
+  so the FK cascade deletes chat rows **directly in SQLite**. The normal
+  `chats.delete` handler (`chats-crud.ts:441`) is the path that calls
+  `removeWorktree(project.path, chat.worktreePath)` (`:457`) and kills chat processes
+  (`:465`). The cascade **never calls that handler**, so git worktrees are left on
+  disk and any running agent/terminal processes for those chats are not killed.
+- **Action:** before deleting the project, enumerate its chats and run the same
+  cleanup (`removeWorktree` + process kill) the chat-delete path performs — or move
+  worktree/process cleanup somewhere the SQL cascade cannot bypass. Otherwise every
+  project removal leaks worktrees (and possibly live processes).
+
+### Decisions to ratify (Projects)
+1. **Disclose history deletion in the Remove dialog (§A)** — fix the copy (and ideally
+   show the chat count)? *[must-fix; user-facing destructive under-disclosure]*
+2. **Clean worktrees + processes on project delete (§B)** — enumerate chats and run
+   chat-delete cleanup before the cascade? *[bug — resource leak]*
+
+---
+
+## Custom Agents / App Agents (`agents-app-agents-tab.tsx` 872 lines + `agent-dialog.tsx`)
+
+**First clarification: there is no "Custom Agents" Settings tab.** The remaining
+Settings tab is **App Agents** (`应用智能体`, `agents-app-agents-tab.tsx`). "Custom
+Agents" (`settings.customAgents.*`, `agent-dialog.tsx`, `trpc.agents.*`) is managed
+from the **sidebar** (`agents-subchats-sidebar.tsx`), not Settings. So the per-tab
+order label "Custom Agents" was a misnomer; the audit covers both since they overlap.
+
+### 🔴 A. Two near-duplicate agent systems (headline; the canonical-vocabulary "Agent" case)
+
+- **Evidence:** two different storage backings and two CRUD surfaces for what reads
+  as one "agent" concept (CORRECTION: an earlier draft of this note called both "DB
+  tables" — that is wrong; only App Agents is a DB table):
+  - **App Agents** — `app_agents` **DB table**; Settings tab; `appAgents` router with
+    list/get/create/update/delete **+ a registry** (`registryList/registryGet/
+    registryImport`); consumed by **prompt injection**
+    (`claude/agent-sdk-prompt.ts` `prepareAppAgentPrompt`, by name). Schema:
+    `name/description/prompt/tools`.
+  - **Custom Agents** — backed by **Claude `.claude/agents` files** (`agents.ts:68`
+    "User agents: ~/.claude/agents/"), not a DB table; sidebar; `agents` router with
+    list/**listEnabled**/get/create/update/delete (no registry); `agent-dialog`
+    schema `name/description/prompt/tools` **+ `model`**. These are Claude
+    **native file agents**, a runtime-owned format.
+- **Why it's "混乱":** same fields, two storage homes, two names. A user cannot
+  tell which to use or how they differ. This is the concrete instance of the
+  ratified-vocabulary **"Agent"** reconciliation.
+- **What I could NOT confirm:** the *runtime* distinction. App Agents are clearly
+  prompt-injected. Custom Agents (`listEnabled`, per-agent `model`, near
+  `transform.ts` subagent handling) look like a different mechanism (possibly SDK
+  subagents and/or @-mention personas), but I could not cleanly trace it — **the
+  product owner should state the intended distinction.** It is also possible one is
+  legacy (the vocab note treats "App Agents" as canonical → "Custom Agents" may be
+  the older path needing 留新删旧, like the provider-profile migration).
+- **Action (product/vocab CALL):** decide — (a) they are genuinely different →
+  rename to convey it (e.g. "App Agents" = prompt agents vs an explicit "Subagents"),
+  co-locate, and document when to use which; or (b) consolidate into one agent
+  concept (and if one table is legacy, migrate-then-delete). This is THE "Agent"
+  decision in the vocabulary roadmap.
+
+### 🟡 B. `settings.customAgents.*` i18n is used outside Settings
+
+- **Evidence:** the sidebar custom-agent editor uses the `settings.customAgents.*`
+  namespace though it is not a Settings surface. Misleading namespace; pairs with §A.
+- **Action:** fold into the §A naming/ownership decision.
+
+### 🟢 C. App Agents registry is the third store, lighter bar (note, not a defect)
+
+- **Evidence:** `registryImport` makes App Agents the **third** registry/store after
+  Skills and MCP. For an agent (prompt + tools, no launched process) import = usable,
+  so the lighter "no runtime-verify" bar is correct (like Skills).
+- **Note:** three stores (Skills / MCP / App Agents) now exist with three different
+  acceptance models. A future consistency pass could align their status vocabularies;
+  not urgent.
+
+**Positives (not findings).** App Agents delete uses the app `AlertDialog`
+(`handleConfirmDelete`); name-collision and invalid-name are guarded in the router.
+
+### Ratified direction (Custom/App Agents)
+1. **Product vocabulary:** converge on **Agent Builder** with **Locus Agents /
+   Agents** as canonical app-managed records. Keep `app_agents` as storage naming
+   until a scoped migration changes it.
+2. **Runtime-native records:** treat Claude `.claude/agents` and future Codex native
+   agents as runtime-owned listings, not product-peer "Custom Agents" or a second
+   SQLite agent table.
+3. **`settings.customAgents` namespace (§B):** fold into the future Agent Builder
+   cleanup instead of preserving it as product vocabulary.
+
+> **DELIVERED** by `add-agent-builder-runtime-projection` (phases 1–4): both labels
+> retired → one Agent Builder surface; dead custom-agent UI removed; read model
+> aggregates Locus / Claude-native / plugin sources with provenance; retired-term
+> guard added. Phases 5+ (import/projection/materialization) proof-gated, deferred.
+
+---
+
+## Preferences / Appearance / Keyboard (placement tabs — light pass)
+
+Deferred until Phase-3 IA landed. **Phase 3 (`refactor-settings-ia`) is archived and
+the Beta tab is already removed**, so these are unblocked. They are a **lighter
+class** than the capability tabs (general app config; no store/runtime/projection
+surfaces), and Cut 1 already swept dead settings atoms — so the remaining audit is
+thin.
+
+- **Preferences (511) — clean.** `claudeSettings.{get,set}IncludeCoAuthoredBy` +
+  notification/mode/editor/history atoms all wired; **no destructive actions**.
+- **Appearance (739) — clean.** Theme atoms wired; **code-theme is NOT orphaned**
+  (`vscodeCodeTheme*Atom` consumed by `lib/hooks/use-code-theme.ts`, resolving the
+  reconciliation-ledger concern). `kanbanViewEnabledAtom` here is the **toggle**.
+- **Keyboard (723).** 🟡 **A — "Reset all to defaults" has no confirmation.**
+  `handleResetAll` (button :692) wipes **all** custom hotkeys on one click; the tab
+  has no `AlertDialog`/`confirm`. → add a confirm (Models §E / Skills §C pattern).
+  *Positive:* the kanban shortcut is correctly hidden when the feature is off
+  (Keyboard **reads** `kanbanViewEnabledAtom`; not a duplicate of Appearance's toggle).
+
+### Decisions to ratify (placement tabs)
+1. **Keyboard "Reset all" confirmation** — add an `AlertDialog` before wiping all
+   custom hotkeys? *[recommend yes; minor]*
+
+---
+
+## Per-tab audit — COMPLETE
+
+Models · Plugins · MCP · Skills · Commands · Projects · Agent Builder ·
+Preferences/Appearance/Keyboard. Beta removed. Remaining work is the ratified
+follow-ups (and Projects §A/§B via `refactor-project-removal-lifecycle`), not more
+auditing.

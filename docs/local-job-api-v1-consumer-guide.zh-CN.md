@@ -42,6 +42,7 @@ Local Job API v1 允许下游 consumer：
 - 取消 queued 或 running 的 API job
 - 重试 failed、canceled、interrupted 的 API job
 - 收集 Locus run-owned metadata artifacts
+- 注册、查看、非破坏性地注销本地 project workspace
 
 它不提供：
 
@@ -51,6 +52,7 @@ Local Job API v1 允许下游 consumer：
 - 由 consumer 传 provider credentials
 - 访问 Locus SQLite 内部结构
 - 完整 OS sandbox
+- 通过 CLI 或 Local Job API 命令删除 project history
 
 ## 安装和定位 CLI
 
@@ -90,6 +92,9 @@ locus api runs events <job-id> [--after <sequence>] [--follow] --jsonl
 locus api runs result <job-id> --json
 locus api runs cancel <job-id> --json
 locus api runs retry <job-id> --json
+locus api projects register --cwd <path> [--name <name>] --json
+locus api projects status --cwd <path> --json
+locus api projects unregister --cwd <path> [--force] --json
 ```
 
 规则：
@@ -100,6 +105,9 @@ locus api runs retry <job-id> --json
 - `--request -` 表示从 stdin 读取 create request。
 - `--after <sequence>` 返回 sequence 大于该值的 events。
 - `create` 和 `retry` 是同步执行：命令会在 run 进入 terminal status 后返回。
+- `projects unregister` 是非破坏性操作：它只把 project 从 active registration
+  移除，不删除 chats、sub-chats、worktrees、job history 或 repository files。
+  永久删除 project history 只在桌面 UI 里提供。
 
 ## 最小接入流程
 
@@ -110,6 +118,33 @@ locus api runs retry <job-id> --json
 5. 用 `locus api runs create` 创建 run。
 6. 用 job ID 读取 `status`、`events` 和 `result`。
 7. 下游应用只在自己的用户审核通过后，才提升或复制最终业务 artifacts。
+
+## Project Registration Commands
+
+consumer 可以在创建 runs 前注册 project path：
+
+```bash
+locus api projects register --cwd "$PROJECT_DIR" --json
+locus api projects status --cwd "$PROJECT_DIR" --json
+locus api projects unregister --cwd "$PROJECT_DIR" --json
+```
+
+registration 按 canonical project path 幂等。在 project lifecycle 改动里，重新
+register 一个已移除 project 会恢复原 project registration，并保留原 chat history
+和同一个 project 的关联。
+
+`unregister` 的意思是“从 active Projects list 移除”。为了自动化安全，它是软移除：
+
+- 不删除 chats 或 sub-chats
+- 不删除 Locus worktrees
+- 不删除 job history
+- 不删除 repository files
+- `--force` 只绕过 active-list removal 的 active-job 拒绝；它仍然不会删除
+  project history
+
+v1 没有 `locus api projects delete-history` 命令。永久删除 project history 只能在
+桌面 UI 里做，并且必须先把 project 从 active Projects list 移除，再由用户确认受影响
+的 chat/worktree 数量。
 
 ## Runtime Capabilities
 
@@ -562,6 +597,7 @@ v1 稳定：
 - event envelope 字段
 - run metadata artifact 文件名
 - secret rejection boundary
+- `projects unregister` 的非破坏性语义
 
 v1 不稳定：
 

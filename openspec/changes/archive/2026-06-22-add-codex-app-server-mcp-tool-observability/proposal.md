@@ -1,5 +1,24 @@
 # Change: Add Codex app-server MCP tool observability
 
+## Status
+
+**Deferred — Phase 1 complete, Phases 2–5 blocked. (As of 2026-06-22.)**
+
+Phase 1 ran a real Codex app-server probe and found server readiness and tool
+inventory are observable, but no post-execution MCP tool-result signal exists in
+bundled Codex `0.139.0` (see `phase1-probe-evidence.md`). Without that signal,
+`Verified on Codex` would overstate runtime usability, so the verification
+observer (Phases 2–5) is not implemented.
+
+Re-open only when Codex app-server exposes a stable post-execution MCP tool-result
+notification/response tied to a stable call id and full server/tool name.
+
+Archived with `--skip-specs`: the proof-gate / verification spec deltas describe
+unbuilt behavior and are intentionally NOT applied to the canonical spec. The
+landed `mcp-registry-install` spec already records Codex registry support as
+deferred. Codex registry install UX (without verification) is handled separately by
+`open-codex-mcp-registry-install`.
+
 ## Why
 `add-mcp-registry-install` intentionally left Codex registry verification
 deferred because Locus can currently observe Codex app-server MCP readiness,

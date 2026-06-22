@@ -45,6 +45,7 @@ Local Job API v1 lets a consumer:
 - cancel a queued or running API job
 - retry a failed, canceled, or interrupted API job
 - collect run-owned metadata artifacts
+- register, inspect, and non-destructively unregister local project workspaces
 
 It does not provide:
 
@@ -54,6 +55,7 @@ It does not provide:
 - provider credential passing from the consumer
 - access to Locus SQLite internals
 - a complete OS sandbox
+- project history deletion from CLI or Local Job API commands
 
 ## Install and Locate the CLI
 
@@ -95,6 +97,9 @@ locus api runs events <job-id> [--after <sequence>] [--follow] --jsonl
 locus api runs result <job-id> --json
 locus api runs cancel <job-id> --json
 locus api runs retry <job-id> --json
+locus api projects register --cwd <path> [--name <name>] --json
+locus api projects status --cwd <path> --json
+locus api projects unregister --cwd <path> [--force] --json
 ```
 
 Rules:
@@ -106,6 +111,9 @@ Rules:
 - `--after <sequence>` returns events with `sequence` greater than that value.
 - `create` and `retry` run synchronously and return after the run reaches a
   terminal status.
+- `projects unregister` is non-destructive: it removes the project from active
+  registration but does not delete chats, sub-chats, worktrees, job history, or
+  repository files. Permanent project-history deletion is desktop UI only.
 
 ## Minimal Consumer Flow
 
@@ -118,6 +126,35 @@ Rules:
 6. Read `status`, `events`, and `result` by job ID.
 7. Let the downstream app promote or copy final business artifacts only after
    its own user review.
+
+## Project Registration Commands
+
+Consumers can register a project path before creating runs:
+
+```bash
+locus api projects register --cwd "$PROJECT_DIR" --json
+locus api projects status --cwd "$PROJECT_DIR" --json
+locus api projects unregister --cwd "$PROJECT_DIR" --json
+```
+
+Registration is idempotent by canonical project path. In the project lifecycle
+change, re-registering a removed project restores the existing project
+registration and keeps retained chat history linked to the same project.
+
+`unregister` means "remove from the active Projects list." It is a soft removal
+for automation safety:
+
+- it does not delete chats or sub-chats
+- it does not delete Locus worktrees
+- it does not delete job history
+- it does not delete repository files
+- `--force` only bypasses the active-job refusal for active-list removal; it
+  still does not delete project history
+
+There is no `locus api projects delete-history` command in v1. Permanent project
+history deletion is available only in the desktop UI, after the project has first
+been removed from the active Projects list and the user confirms the affected
+chat/worktree counts.
 
 ## Runtime Capabilities
 
@@ -579,6 +616,7 @@ Stable in v1:
 - documented event envelope fields
 - run metadata artifact file names
 - secret rejection boundary
+- non-destructive `projects unregister` semantics
 
 Not stable in v1:
 
