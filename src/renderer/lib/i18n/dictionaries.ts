@@ -953,14 +953,21 @@ export const en = {
   "settings.projects.addPlatformOverrides":
     "Add platform-specific commands",
   "settings.projects.dangerZone": "Danger Zone",
-  "settings.projects.removeProject": "Remove Project",
+  "settings.projects.removeProject": "Delete Project History",
   "settings.projects.removeDescription":
-    "Remove from your list. Files on disk will not be deleted.",
-  "settings.projects.removeProjectTitle": "Remove Project?",
-  "settings.projects.removeProjectConfirm":
-    'This will remove "{name}" from your project list. Your files will not be deleted.',
-  "settings.projects.removing": "Removing...",
+    "Permanently deletes this project's chats from Locus. Code files on disk will not be deleted.",
+  "settings.projects.removeProjectTitle": "Delete project history?",
+  "settings.projects.removeProjectConfirmWithCounts":
+    'This permanently deletes "{name}" from Locus, including {chatCount} chats and {subChatCount} history tabs. Locus will clean {worktreeCount} worktrees. Your code files are not deleted. This cannot be undone.',
+  "settings.projects.removeProjectConfirmLoading":
+    "Checking chats and worktrees before deletion...",
+  "settings.projects.removeProjectConfirmUnavailable":
+    "Deletion preview is unavailable. Close this dialog and try again.",
+  "settings.projects.removeProjectBlockedByJobs":
+    "Cannot delete while {count} queued or running jobs still reference this project.",
+  "settings.projects.removing": "Deleting...",
   "settings.projects.searchPlaceholder": "Search projects...",
+  "settings.projects.projectListLabel": "Project list",
   "settings.projects.addProjectFolder": "Open a Project",
   "settings.projects.noProjects": "No projects",
   "settings.projects.addFirstProject": "Open your first Project",
@@ -4309,14 +4316,21 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.projects.addPlatformOverrides":
     "添加平台专用命令",
   "settings.projects.dangerZone": "危险区",
-  "settings.projects.removeProject": "移除项目",
+  "settings.projects.removeProject": "删除项目历史",
   "settings.projects.removeDescription":
-    "从列表中移除。磁盘上的文件不会被删除。",
-  "settings.projects.removeProjectTitle": "移除项目？",
-  "settings.projects.removeProjectConfirm":
-    "这会把 \"{name}\" 从项目列表中移除。你的文件不会被删除。",
-  "settings.projects.removing": "移除中...",
+    "永久删除这个项目在 Locus 里的聊天记录。磁盘上的代码文件不会被删除。",
+  "settings.projects.removeProjectTitle": "删除项目历史？",
+  "settings.projects.removeProjectConfirmWithCounts":
+    "这会从 Locus 永久删除 \"{name}\"，包括 {chatCount} 个聊天和 {subChatCount} 个历史标签，并清理 {worktreeCount} 个工作树。你的代码文件不会被删除。此操作无法撤销。",
+  "settings.projects.removeProjectConfirmLoading":
+    "正在检查删除前会影响的聊天和工作树...",
+  "settings.projects.removeProjectConfirmUnavailable":
+    "无法获取删除预览。请关闭此弹窗后重试。",
+  "settings.projects.removeProjectBlockedByJobs":
+    "仍有 {count} 个排队或运行中的任务引用此项目，暂时不能删除。",
+  "settings.projects.removing": "删除中...",
   "settings.projects.searchPlaceholder": "搜索项目...",
+  "settings.projects.projectListLabel": "项目列表",
   "settings.projects.addProjectFolder": "打开项目",
   "settings.projects.noProjects": "没有项目",
   "settings.projects.addFirstProject": "打开第一个项目",

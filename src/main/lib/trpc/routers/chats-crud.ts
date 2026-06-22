@@ -11,6 +11,7 @@ import {
   trackWorkspaceDeleted,
 } from "../../analytics"
 import { attachProjectToChat } from "../../chat-project-attach"
+import { cleanupChatWorkspaceForDelete } from "../../chats/workspace-cleanup"
 import { chats, getDatabase, projects, subChats } from "../../db"
 import { removeWorktree } from "../../git"
 import { gitCache } from "../../git/cache"
@@ -445,38 +446,22 @@ export const chatCrudProcedures = {
 
       // Get chat before deletion
       const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
-
-      // Cleanup worktree if it was created (has branch = was a real worktree, not just project path)
-      if (chat?.worktreePath && chat?.branch && chat.projectId) {
-        const project = db
-          .select()
-          .from(projects)
-          .where(eq(projects.id, chat.projectId))
-          .get()
-        if (project) {
-          const result = await removeWorktree(project.path, chat.worktreePath)
-          if (!result.success) {
-            console.warn(`[Worktree] Cleanup failed: ${result.error}`)
-          }
-        }
-      }
-
-      // Kill terminal processes for worktree-mode workspaces.
-      // Local-mode terminals are shared and should not be killed on delete.
-      if (chat?.branch) {
-        terminalManager.killByWorkspaceId(input.id).catch((error) => {
-          console.error(`[chats.delete] Error killing processes:`, error)
-        })
+      const project = chat?.projectId
+        ? db
+            .select()
+            .from(projects)
+            .where(eq(projects.id, chat.projectId))
+            .get()
+        : null
+      const cleanup = await cleanupChatWorkspaceForDelete(chat, project)
+      if (!cleanup.success) {
+        console.warn(
+          `[chats.delete] Workspace cleanup had ${cleanup.errors.length} error(s): ${cleanup.errors.join("; ")}`,
+        )
       }
 
       // Track workspace deleted
       trackWorkspaceDeleted(input.id)
-
-      // Invalidate git cache for this worktree
-      if (chat?.worktreePath) {
-        gitCache.invalidateStatus(chat.worktreePath)
-        gitCache.invalidateParsedDiff(chat.worktreePath)
-      }
 
       return db.delete(chats).where(eq(chats.id, input.id)).returning().get()
     }),

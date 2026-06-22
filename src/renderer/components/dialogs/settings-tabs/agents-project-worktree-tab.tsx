@@ -1,22 +1,29 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type ChangeEvent } from "react"
-import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtomValue, useSetAtom } from "jotai"
-import { trpc } from "../../../lib/trpc"
-import { useI18n } from "../../../lib/i18n"
-import { Button, buttonVariants } from "../../ui/button"
-import { Input } from "../../ui/input"
-import { Textarea } from "../../ui/textarea"
-import { Info, Plus, Trash2, FolderOpen } from "lucide-react"
-import { AIPenIcon, ExternalLinkIcon, FolderFilledIcon, ImageIcon } from "../../ui/icons"
-import { invalidateProjectIcon, useProjectIcon } from "../../../lib/hooks/use-project-icon"
-import { ProjectIcon } from "../../ui/project-icon"
-import finderIcon from "../../../assets/app-icons/finder.png"
+import { FolderOpen, Info, Plus, Trash2 } from "lucide-react"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "../../ui/select"
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import { toast } from "sonner"
+import finderIcon from "../../../assets/app-icons/finder.png"
+import { settingsProjectsSidebarWidthAtom } from "../../../features/agents/atoms"
+import { COMMAND_PROMPTS } from "../../../features/agents/commands"
+import {
+  agentsSettingsDialogOpenAtom,
+  selectedAgentChatIdAtom,
+  selectedProjectAtom,
+} from "../../../lib/atoms"
+import {
+  invalidateProjectIcon,
+  useProjectIcon,
+} from "../../../lib/hooks/use-project-icon"
+import { useI18n } from "../../../lib/i18n"
+import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,17 +35,25 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../../ui/alert-dialog"
-import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip"
-import { toast } from "sonner"
-import { COMMAND_PROMPTS } from "../../../features/agents/commands"
+import { Button, buttonVariants } from "../../ui/button"
 import {
-  agentsSettingsDialogOpenAtom,
-  selectedAgentChatIdAtom,
-  selectedProjectAtom,
-} from "../../../lib/atoms"
-import { cn } from "../../../lib/utils"
+  AIPenIcon,
+  ExternalLinkIcon,
+  FolderFilledIcon,
+  ImageIcon,
+} from "../../ui/icons"
+import { Input } from "../../ui/input"
+import { ProjectIcon } from "../../ui/project-icon"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
-import { settingsProjectsSidebarWidthAtom } from "../../../features/agents/atoms"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "../../ui/select"
+import { Textarea } from "../../ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip"
+import { useListKeyboardNav } from "./use-list-keyboard-nav"
 
 function CommandTextarea({
   value,
@@ -90,17 +105,19 @@ function CommandTextarea({
 // --- Detail Panel ---
 function ProjectDetail({ projectId }: { projectId: string }) {
   const { t } = useI18n()
+  const trpcUtils = trpc.useUtils()
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+
   // Get config for selected project
   const { data: configData, refetch: refetchConfig } =
-    trpc.worktreeConfig.get.useQuery(
-      { projectId },
-      { enabled: !!projectId },
-    )
+    trpc.worktreeConfig.get.useQuery({ projectId }, { enabled: !!projectId })
 
   // Save mutation (auto-save, no toast on success — only on error)
   const saveMutation = trpc.worktreeConfig.save.useMutation({
     onError: (err) => {
-      toast.error(t("settings.projects.toast.failedToSave", { message: err.message }))
+      toast.error(
+        t("settings.projects.toast.failedToSave", { message: err.message }),
+      )
     },
   })
 
@@ -120,6 +137,11 @@ function ProjectDetail({ projectId }: { projectId: string }) {
     { id: projectId },
     { enabled: !!projectId },
   )
+  const { data: deletionPreview, isFetching: isDeletionPreviewLoading } =
+    trpc.projects.deletionPreview.useQuery(
+      { id: projectId },
+      { enabled: !!projectId && showDeleteDialog },
+    )
 
   // Cached project icon
   const { src: iconSrc } = useProjectIcon(project)
@@ -131,13 +153,22 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       toast.success(t("settings.projects.toast.renamed"))
     },
     onError: (err) => {
-      toast.error(t("settings.projects.toast.failedToRename", { message: err.message }))
+      toast.error(
+        t("settings.projects.toast.failedToRename", { message: err.message }),
+      )
     },
   })
 
   // Delete project mutation
   const deleteMutation = trpc.projects.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      setShowDeleteDialog(false)
+      await Promise.all([
+        trpcUtils.projects.list.invalidate(),
+        trpcUtils.projects.get.invalidate({ id: projectId }),
+        trpcUtils.chats.list.invalidate(),
+        trpcUtils.chats.listArchived.invalidate(),
+      ])
       toast.success(t("settings.projects.toast.removed"))
       setSelectedProject((current) => {
         if (current?.id === projectId) {
@@ -147,7 +178,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       })
     },
     onError: (err) => {
-      toast.error(t("settings.projects.toast.failedToDelete", { message: err.message }))
+      toast.error(
+        t("settings.projects.toast.failedToDelete", { message: err.message }),
+      )
     },
   })
 
@@ -160,7 +193,11 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       toast.success(t("settings.projects.toast.iconUpdated"))
     },
     onError: (err) => {
-      toast.error(t("settings.projects.toast.failedToUploadIcon", { message: err.message }))
+      toast.error(
+        t("settings.projects.toast.failedToUploadIcon", {
+          message: err.message,
+        }),
+      )
     },
   })
 
@@ -172,7 +209,8 @@ function ProjectDetail({ projectId }: { projectId: string }) {
     },
   })
 
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const activeJobCount = deletionPreview?.activeJobs.length ?? 0
+  const isDeleteBlocked = activeJobCount > 0
 
   // Project name editing
   const [projectName, setProjectName] = useState("")
@@ -196,7 +234,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   }, [projectName, projectId, renameMutation])
 
   // Local state
-  const [saveTarget, setSaveTarget] = useState<"locus" | "cursor" | "1code">("locus")
+  const [saveTarget, setSaveTarget] = useState<"locus" | "cursor" | "1code">(
+    "locus",
+  )
   const [commands, setCommands] = useState<string[]>([""])
   const [unixCommands, setUnixCommands] = useState<string[]>([])
   const [windowsCommands, setWindowsCommands] = useState<string[]>([])
@@ -223,7 +263,8 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
       if (configData.config) {
         const isComment = (s: string) => s.trimStart().startsWith("#")
-        const filterComments = (arr: string[]) => arr.filter((s) => !isComment(s))
+        const filterComments = (arr: string[]) =>
+          arr.filter((s) => !isComment(s))
 
         const generic = configData.config["setup-worktree"]
         const genericArr = Array.isArray(generic)
@@ -236,8 +277,16 @@ function ProjectDetail({ projectId }: { projectId: string }) {
         const unix = configData.config["setup-worktree-unix"]
         const win = configData.config["setup-worktree-windows"]
 
-        newUnix = Array.isArray(unix) ? filterComments(unix) : unix && !isComment(unix) ? [unix] : []
-        newWin = Array.isArray(win) ? filterComments(win) : win && !isComment(win) ? [win] : []
+        newUnix = Array.isArray(unix)
+          ? filterComments(unix)
+          : unix && !isComment(unix)
+            ? [unix]
+            : []
+        newWin = Array.isArray(win)
+          ? filterComments(win)
+          : win && !isComment(win)
+            ? [win]
+            : []
 
         if (unix || win) {
           setShowPlatformSpecific(true)
@@ -262,7 +311,12 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   const doSave = useCallback(() => {
     if (!projectId || !configReadyRef.current) return
 
-    const currentState = JSON.stringify({ commands, unixCommands, windowsCommands, saveTarget })
+    const currentState = JSON.stringify({
+      commands,
+      unixCommands,
+      windowsCommands,
+      saveTarget,
+    })
     if (currentState === savedConfigRef.current) return
 
     const config: Record<string, string[]> = {}
@@ -276,9 +330,21 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
     saveMutation.mutate({ projectId, config, target: saveTarget })
     savedConfigRef.current = currentState
-  }, [projectId, commands, unixCommands, windowsCommands, saveTarget, saveMutation])
+  }, [
+    projectId,
+    commands,
+    unixCommands,
+    windowsCommands,
+    saveTarget,
+    saveMutation,
+  ])
 
-  const updateCommand = (index: number, value: string, list: string[], setter: (v: string[]) => void) => {
+  const updateCommand = (
+    index: number,
+    value: string,
+    list: string[],
+    setter: (v: string[]) => void,
+  ) => {
     const newList = [...list]
     newList[index] = value
     setter(newList)
@@ -286,7 +352,12 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
   const pendingSaveRef = useRef(false)
 
-  const removeCommand = (index: number, list: string[], setter: (v: string[]) => void, allowEmpty = false) => {
+  const removeCommand = (
+    index: number,
+    list: string[],
+    setter: (v: string[]) => void,
+    allowEmpty = false,
+  ) => {
     if (!allowEmpty && list.length <= 1) return
     setter(list.filter((_, i) => i !== index))
     pendingSaveRef.current = true
@@ -332,7 +403,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       ? t("settings.projects.saveStatusUnsaved")
       : saveMutation.isError
         ? t("settings.projects.saveStatusFailed")
-        : t("settings.projects.saveStatusSavedTo", { target: selectedConfigLabel })
+        : t("settings.projects.saveStatusSavedTo", {
+            target: selectedConfigLabel,
+          })
 
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
 
@@ -392,7 +465,6 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto p-6 space-y-6">
-
         {/* ── General ── */}
         <div>
           <h4 className="text-sm font-medium text-foreground mb-2">
@@ -469,7 +541,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                 <span className="text-sm font-medium text-foreground">
                   {t("settings.projects.path")}
                 </span>
-                <p className="text-sm text-muted-foreground truncate">{project?.path || "—"}</p>
+                <p className="text-sm text-muted-foreground truncate">
+                  {project?.path || "—"}
+                </p>
               </div>
               <Button
                 variant="outline"
@@ -603,7 +677,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="locus">
-                    <span>{t("settings.projects.configFileAppDefaultLabel")}</span>
+                    <span>
+                      {t("settings.projects.configFileAppDefaultLabel")}
+                    </span>
                     <span
                       data-desc
                       className="font-mono text-xs text-muted-foreground"
@@ -613,7 +689,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   </SelectItem>
                   {cursorExists && (
                     <SelectItem value="cursor">
-                      <span>{t("settings.projects.configFileCursorLabel")}</span>
+                      <span>
+                        {t("settings.projects.configFileCursorLabel")}
+                      </span>
                       <span
                         data-desc
                         className="font-mono text-xs text-muted-foreground"
@@ -624,7 +702,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   )}
                   {(legacyOnecodeExists || saveTarget === "1code") && (
                     <SelectItem value="1code">
-                      <span>{t("settings.projects.configFileLegacyOnecodeLabel")}</span>
+                      <span>
+                        {t("settings.projects.configFileLegacyOnecodeLabel")}
+                      </span>
                       <span
                         data-desc
                         className="font-mono text-xs text-muted-foreground"
@@ -655,25 +735,36 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                     title={t("settings.projects.clickToCopy")}
                   >
                     $ROOT_WORKTREE_PATH
-                  </button>
-                  {" "}{t("settings.projects.forMainRepo")}
+                  </button>{" "}
+                  {t("settings.projects.forMainRepo")}
                 </p>
               </div>
-              {renderCommandList(commands, setCommands, "bun install && cp $ROOT_WORKTREE_PATH/.env .env")}
+              {renderCommandList(
+                commands,
+                setCommands,
+                "bun install && cp $ROOT_WORKTREE_PATH/.env .env",
+              )}
             </div>
 
             {/* Platform overrides — macOS/Linux */}
             {(unixCommands.length > 0 || showPlatformSpecific) && (
               <div className="p-4 border-t border-border space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">macOS / Linux</span>
+                  <span className="text-sm font-medium text-foreground">
+                    macOS / Linux
+                  </span>
                   {unixCommands.length === 0 && (
                     <span className="text-sm text-muted-foreground">
                       {t("settings.projects.fallsBack")}
                     </span>
                   )}
                 </div>
-                {renderCommandList(unixCommands, setUnixCommands, "brew install deps", true)}
+                {renderCommandList(
+                  unixCommands,
+                  setUnixCommands,
+                  "brew install deps",
+                  true,
+                )}
               </div>
             )}
 
@@ -681,30 +772,39 @@ function ProjectDetail({ projectId }: { projectId: string }) {
             {(windowsCommands.length > 0 || showPlatformSpecific) && (
               <div className="p-4 border-t border-border space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">Windows</span>
+                  <span className="text-sm font-medium text-foreground">
+                    Windows
+                  </span>
                   {windowsCommands.length === 0 && (
                     <span className="text-sm text-muted-foreground">
                       {t("settings.projects.fallsBack")}
                     </span>
                   )}
                 </div>
-                {renderCommandList(windowsCommands, setWindowsCommands, "npm ci", true)}
+                {renderCommandList(
+                  windowsCommands,
+                  setWindowsCommands,
+                  "npm ci",
+                  true,
+                )}
               </div>
             )}
 
             {/* Add platform overrides link */}
-            {!showPlatformSpecific && unixCommands.length === 0 && windowsCommands.length === 0 && (
-              <div className="p-4 border-t border-border">
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  onClick={() => setShowPlatformSpecific(true)}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {t("settings.projects.addPlatformOverrides")}
-                </button>
-              </div>
-            )}
+            {!showPlatformSpecific &&
+              unixCommands.length === 0 &&
+              windowsCommands.length === 0 && (
+                <div className="p-4 border-t border-border">
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setShowPlatformSpecific(true)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {t("settings.projects.addPlatformOverrides")}
+                  </button>
+                </div>
+              )}
           </div>
         </div>
 
@@ -714,50 +814,80 @@ function ProjectDetail({ projectId }: { projectId: string }) {
             {t("settings.projects.dangerZone")}
           </h4>
           <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex-1">
-              <span className="text-sm font-medium text-foreground">
-                {t("settings.projects.removeProject")}
-              </span>
-              <p className="text-sm text-muted-foreground">
-                {t("settings.projects.removeDescription")}
-              </p>
-            </div>
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 hover:text-destructive hover:border-destructive/30 hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {t("common.remove")}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    {t("settings.projects.removeProjectTitle")}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {t("settings.projects.removeProjectConfirm", {
-                      name: project?.name || "",
-                    })}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => deleteMutation.mutate({ id: projectId })}
-                    disabled={deleteMutation.isPending}
-                    className={buttonVariants({ variant: "destructive" })}
+            <div className="flex items-center justify-between p-4">
+              <div className="flex-1">
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.removeProject")}
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.projects.removeDescription")}
+                </p>
+              </div>
+              <AlertDialog
+                open={showDeleteDialog}
+                onOpenChange={setShowDeleteDialog}
+              >
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 hover:text-destructive hover:border-destructive/30 hover:bg-destructive/10"
                   >
-                    {deleteMutation.isPending ? t("settings.projects.removing") : t("common.remove")}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t("common.remove")}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t("settings.projects.removeProjectTitle")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-2">
+                      <span className="block">
+                        {deletionPreview
+                          ? t(
+                              "settings.projects.removeProjectConfirmWithCounts",
+                              {
+                                name: project?.name || "",
+                                chatCount: deletionPreview.chatCount,
+                                subChatCount: deletionPreview.subChatCount,
+                                worktreeCount: deletionPreview.worktreeCount,
+                              },
+                            )
+                          : isDeletionPreviewLoading
+                            ? t("settings.projects.removeProjectConfirmLoading")
+                            : t(
+                                "settings.projects.removeProjectConfirmUnavailable",
+                              )}
+                      </span>
+                      {isDeleteBlocked && (
+                        <span className="block text-destructive">
+                          {t("settings.projects.removeProjectBlockedByJobs", {
+                            count: activeJobCount,
+                          })}
+                        </span>
+                      )}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteMutation.mutate({ id: projectId })}
+                      disabled={
+                        deleteMutation.isPending ||
+                        !deletionPreview ||
+                        isDeleteBlocked
+                      }
+                      className={buttonVariants({ variant: "destructive" })}
+                    >
+                      {deleteMutation.isPending
+                        ? t("settings.projects.removing")
+                        : t("common.delete")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         </div>
       </div>
@@ -769,7 +899,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 export function AgentsProjectsTab() {
   const { t } = useI18n()
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null,
+  )
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -812,7 +944,7 @@ export function AgentsProjectsTab() {
 
   const allProjectIds = useMemo(
     () => filteredProjects.map((p) => p.id),
-    [filteredProjects]
+    [filteredProjects],
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
@@ -850,7 +982,10 @@ export function AgentsProjectsTab() {
         exitWidth={240}
         disableClickToClose={true}
       >
-        <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
+        <div
+          className="flex flex-col h-full bg-background border-r overflow-hidden"
+          style={{ borderRightWidth: "0.5px" }}
+        >
           {/* Search + Add */}
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
             <input
@@ -871,7 +1006,14 @@ export function AgentsProjectsTab() {
           </div>
 
           {/* Project list */}
-          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
+          <div
+            ref={listRef}
+            onKeyDown={listKeyDown}
+            tabIndex={-1}
+            role="listbox"
+            aria-label={t("settings.projects.projectListLabel")}
+            className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none"
+          >
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <FolderFilledIcon className="h-5 w-5 text-muted-foreground animate-pulse" />

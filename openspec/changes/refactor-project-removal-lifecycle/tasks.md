@@ -1,9 +1,9 @@
 ## 1. Immediate safety baseline
-- [ ] 1.1 Replace the current Settings project delete copy with truthful count-based destructive copy until the lifecycle split lands.
-- [ ] 1.2 Add project deletion preview plumbing for chat/sub-chat/worktree counts.
-- [ ] 1.3 Extract shared chat/workspace cleanup logic from `chats.delete` so project-history deletion can reuse it.
-- [ ] 1.4 Make current hard project deletion run worktree/process cleanup before DB deletion and fail closed on cleanup failure.
-- [ ] 1.5 Invalidate projects/chats queries after any project lifecycle mutation.
+- [x] 1.1 Replace the current Settings project delete copy with truthful count-based destructive copy until the lifecycle split lands.
+- [x] 1.2 Add project deletion preview plumbing for chat/sub-chat/worktree counts.
+- [x] 1.3 Extract shared chat/workspace cleanup logic from `chats.delete` so project-history deletion can reuse it.
+- [x] 1.4 Make current hard project deletion run worktree/process cleanup before DB deletion and fail closed on cleanup failure.
+- [x] 1.5 Invalidate projects/chats queries after any project lifecycle mutation.
 
 ## 2. Project lifecycle owner and data model
 - [ ] 2.1 Add a nullable removed-state column to `projects` (for example `removedAt`) and migration coverage.

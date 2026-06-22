@@ -1,18 +1,22 @@
-import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import { getDatabase, projects } from "../../db"
-import { eq, desc } from "drizzle-orm"
-import { dialog, BrowserWindow, app } from "electron"
-import { basename, join } from "path"
 import { exec } from "node:child_process"
-import { promisify } from "node:util"
 import { existsSync } from "node:fs"
-import { mkdir, copyFile, unlink } from "node:fs/promises"
+import { copyFile, mkdir, unlink } from "node:fs/promises"
 import { extname } from "node:path"
-import { getGitRemoteInfo } from "../../git"
+import { promisify } from "node:util"
+import { desc, eq } from "drizzle-orm"
+import { app, BrowserWindow, dialog } from "electron"
+import { basename, join } from "path"
+import { z } from "zod"
 import { trackProjectOpened } from "../../analytics"
 import { getLaunchDirectory } from "../../cli"
+import { getDatabase, projects } from "../../db"
+import { getGitRemoteInfo } from "../../git"
+import {
+  deleteProjectWithCleanup,
+  getProjectDeletionPreview,
+} from "../../projects/deletion"
 import { registerProjectForPath } from "../../projects/registry"
+import { publicProcedure, router } from "../index"
 
 const execAsync = promisify(exec)
 
@@ -41,6 +45,16 @@ export const projectsRouter = router({
     .query(({ input }) => {
       const db = getDatabase()
       return db.select().from(projects).where(eq(projects.id, input.id)).get()
+    }),
+
+  /**
+   * Preview a destructive project delete.
+   */
+  deletionPreview: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(({ input }) => {
+      const db = getDatabase()
+      return getProjectDeletionPreview(db, input.id)
     }),
 
   /**
@@ -126,13 +140,12 @@ export const projectsRouter = router({
    */
   delete: publicProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(({ input }) => {
+    .mutation(async ({ input }) => {
       const db = getDatabase()
-      return db
-        .delete(projects)
-        .where(eq(projects.id, input.id))
-        .returning()
-        .get()
+      return deleteProjectWithCleanup({
+        db,
+        projectId: input.id,
+      })
     }),
 
   /**
@@ -264,7 +277,7 @@ export const projectsRouter = router({
       z.object({
         expectedOwner: z.string(),
         expectedRepo: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const window = ctx.getWindow?.() ?? BrowserWindow.getFocusedWindow()
@@ -376,7 +389,10 @@ export const projectsRouter = router({
         title: "Select Project Icon",
         buttonLabel: "Set Icon",
         filters: [
-          { name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "webp", "ico"] },
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "svg", "webp", "ico"],
+          },
         ],
       })
 
@@ -406,10 +422,16 @@ export const projectsRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
-      const project = db.select().from(projects).where(eq(projects.id, input.id)).get()
+      const project = db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, input.id))
+        .get()
 
       if (project?.iconPath && existsSync(project.iconPath)) {
-        try { await unlink(project.iconPath) } catch {}
+        try {
+          await unlink(project.iconPath)
+        } catch {}
       }
 
       return db
