@@ -130,6 +130,34 @@ describe("desktop runtime preflight", () => {
     ).toThrow("does not belong to chat")
   })
 
+  test("rejects removed project history before provider work starts", () => {
+    const db = createAgentJobTestDb()
+    seedChat(db)
+    db.update(projects)
+      .set({ removedAt: new Date("2026-06-22T00:00:00Z") })
+      .run()
+
+    expect(() =>
+      verifyDesktopRunPreflight(db, {
+        chatId: "chat-1",
+        subChatId: "sub-chat-1",
+        cwd: "/tmp/project-worktree",
+      }),
+    ).toThrow(DesktopRunPreflightError)
+    try {
+      verifyDesktopRunPreflight(db, {
+        chatId: "chat-1",
+        subChatId: "sub-chat-1",
+        cwd: "/tmp/project-worktree",
+      })
+    } catch (error) {
+      expect((error as DesktopRunPreflightError).blocker).toMatchObject({
+        id: "project",
+        status: "blocked",
+      })
+    }
+  })
+
   test("rejects provider, MCP, attachment, and local-only blockers", () => {
     const db = createAgentJobTestDb()
     seedChat(db)

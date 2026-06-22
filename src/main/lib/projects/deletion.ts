@@ -34,6 +34,7 @@ export type ProjectDeletionResult = ProjectDeletionPreview & {
 export class ProjectDeletionError extends Error {
   readonly code:
     | "project_not_found"
+    | "project_not_removed"
     | "project_has_active_jobs"
     | "cleanup_failed"
   readonly preview: ProjectDeletionPreview | null
@@ -119,10 +120,21 @@ export function getProjectDeletionPreview(
 export async function deleteProjectWithCleanup(input: {
   db: ProjectRegistryDatabase
   projectId: string
+  requireRemoved?: boolean
   cleanupDeps?: WorkspaceCleanupDeps
 }): Promise<ProjectDeletionResult | null> {
   const preview = getProjectDeletionPreview(input.db, input.projectId)
   if (!preview) return null
+
+  if (input.requireRemoved && !preview.project.removedAt) {
+    throw new ProjectDeletionError(
+      "Project history can only be deleted after the project is removed from the active list.",
+      {
+        code: "project_not_removed",
+        preview,
+      },
+    )
+  }
 
   if (preview.activeJobs.length > 0) {
     throw new ProjectDeletionError(

@@ -55,7 +55,9 @@ function seedCurrentProject(
 }
 
 function seedLocalPackageProject(db: ReturnType<typeof createAgentJobTestDb>) {
-  const projectRoot = realpathSync(mkdtempSync(join(tmpdir(), "locus-api-project-")))
+  const projectRoot = realpathSync(
+    mkdtempSync(join(tmpdir(), "locus-api-project-")),
+  )
   const packageDir = join(projectRoot, "local-package")
   mkdirSync(packageDir)
   seedCurrentProject(db, projectRoot)
@@ -195,9 +197,9 @@ describe("headless CLI dispatcher", () => {
       stderr: writer().stream,
     })
     const events = parseJsonLines(eventsStdout.value())
-    expect(events.every((event) => event.apiVersion === "locus.local-job.v1")).toBe(
-      true,
-    )
+    expect(
+      events.every((event) => event.apiVersion === "locus.local-job.v1"),
+    ).toBe(true)
     expect(events.map((event) => event.type)).toContain("artifact_created")
     expect(events.map((event) => event.type)).toContain("completed")
 
@@ -221,12 +223,12 @@ describe("headless CLI dispatcher", () => {
       jobId,
       status: "succeeded",
     })
-    const manifest = JSON.parse(readFileSync(join(runDir, "artifacts.json"), "utf-8"))
-    expect(manifest.artifacts.map((artifact: { role: string }) => artifact.role)).toEqual([
-      "request",
-      "events",
-      "result",
-    ])
+    const manifest = JSON.parse(
+      readFileSync(join(runDir, "artifacts.json"), "utf-8"),
+    )
+    expect(
+      manifest.artifacts.map((artifact: { role: string }) => artifact.role),
+    ).toEqual(["request", "events", "result"])
   })
 
   test("accepts Local Job API artifact paths whose existing prefix resolves through a path alias", async () => {
@@ -282,14 +284,7 @@ describe("headless CLI dispatcher", () => {
     const stdout = writer()
     const code = await runHeadlessCliCommand({
       db,
-      argv: [
-        "Locus",
-        HEADLESS_CLI_MARKER,
-        "api",
-        "runtimes",
-        "list",
-        "--json",
-      ],
+      argv: ["Locus", HEADLESS_CLI_MARKER, "api", "runtimes", "list", "--json"],
       stdout: stdout.stream,
       stderr: writer().stream,
     })
@@ -297,9 +292,11 @@ describe("headless CLI dispatcher", () => {
     expect(code).toBe(0)
     const parsed = JSON.parse(stdout.value())
     expect(parsed.apiVersion).toBe("locus.local-job.v1")
-    expect(parsed.runtimes.map((runtime: { runtimeId: string }) => runtime.runtimeId)).toContain(
-      "codex",
-    )
+    expect(
+      parsed.runtimes.map(
+        (runtime: { runtimeId: string }) => runtime.runtimeId,
+      ),
+    ).toContain("codex")
   })
 
   test("registers, checks, and unregisters Local Job API projects", async () => {
@@ -337,10 +334,13 @@ describe("headless CLI dispatcher", () => {
       apiVersion: "locus.local-job.v1",
       registered: true,
       created: true,
+      restored: false,
       cwd: projectRoot,
       project: {
         name: "API Project",
         path: projectRoot,
+        lifecycleState: "active",
+        removedAt: null,
       },
     })
 
@@ -364,9 +364,11 @@ describe("headless CLI dispatcher", () => {
     expect(JSON.parse(secondRegisterStdout.value())).toMatchObject({
       registered: true,
       created: false,
+      restored: false,
       project: {
         id: registered.project.id,
         name: "API Project",
+        lifecycleState: "active",
       },
     })
     expect(db.select().from(projects).all()).toHaveLength(1)
@@ -393,6 +395,7 @@ describe("headless CLI dispatcher", () => {
       cwd: realpathSync(packageDir),
       project: {
         id: registered.project.id,
+        lifecycleState: "active",
       },
     })
 
@@ -445,9 +448,40 @@ describe("headless CLI dispatcher", () => {
       removed: true,
       project: {
         id: registered.project.id,
+        lifecycleState: "removed",
+        removedAt: expect.any(String),
       },
     })
-    expect(db.select().from(projects).all()).toHaveLength(0)
+    expect(db.select().from(projects).all()).toHaveLength(1)
+
+    const restoredStdout = writer()
+    const restoredCode = await runHeadlessCliCommand({
+      db,
+      argv: [
+        "Locus",
+        HEADLESS_CLI_MARKER,
+        "api",
+        "projects",
+        "register",
+        "--cwd",
+        projectRoot,
+        "--json",
+      ],
+      stdout: restoredStdout.stream,
+      stderr: writer().stream,
+    })
+    expect(restoredCode).toBe(0)
+    expect(JSON.parse(restoredStdout.value())).toMatchObject({
+      registered: true,
+      created: false,
+      restored: true,
+      project: {
+        id: registered.project.id,
+        lifecycleState: "active",
+        removedAt: null,
+      },
+    })
+    expect(db.select().from(projects).all()).toHaveLength(1)
   })
 
   test("refuses Local Job API project unregister with active jobs unless forced", async () => {
@@ -505,6 +539,8 @@ describe("headless CLI dispatcher", () => {
       removed: false,
       project: {
         id: project.id,
+        lifecycleState: "active",
+        removedAt: null,
       },
       activeJobs: [
         {
@@ -547,7 +583,7 @@ describe("headless CLI dispatcher", () => {
         },
       ],
     })
-    expect(db.select().from(projects).all()).toHaveLength(0)
+    expect(db.select().from(projects).all()).toHaveLength(1)
   })
 
   test("runs Local Job API job after headless project onboarding", async () => {
@@ -637,9 +673,9 @@ describe("headless CLI dispatcher", () => {
         status: "succeeded",
       },
     })
-    expect(existsSync(join(artifactBaseDir, created.job.id, "result.json"))).toBe(
-      true,
-    )
+    expect(
+      existsSync(join(artifactBaseDir, created.job.id, "result.json")),
+    ).toBe(true)
 
     const unregisterStdout = writer()
     const unregisterCode = await runHeadlessCliCommand({
@@ -662,6 +698,8 @@ describe("headless CLI dispatcher", () => {
       removed: true,
       project: {
         id: project.id,
+        lifecycleState: "removed",
+        removedAt: expect.any(String),
       },
       activeJobs: [],
     })
@@ -755,7 +793,10 @@ describe("headless CLI dispatcher", () => {
   test("rejects unsafe Local Job API artifact directories before job creation", async () => {
     const db = createAgentJobTestDb()
     seedCurrentProject(db)
-    const artifactBaseDir = join(mkdtempSync(join(tmpdir(), "locus-api-runs-")), "final")
+    const artifactBaseDir = join(
+      mkdtempSync(join(tmpdir(), "locus-api-runs-")),
+      "final",
+    )
     mkdirSync(artifactBaseDir)
     const stdout = writer()
     const stderr = writer()
@@ -1509,7 +1550,9 @@ describe("headless CLI dispatcher", () => {
         method: "shutdown",
         params: {},
       },
-    ].map(JSON.stringify).join("\n")
+    ]
+      .map(JSON.stringify)
+      .join("\n")
 
     const code = await runHeadlessCliCommand({
       db,
@@ -1524,7 +1567,9 @@ describe("headless CLI dispatcher", () => {
     expect(stderr.value()).toBe("")
     const lines = parseJsonLines(stdout.value())
     expect(lines.every((line) => line.jsonrpc === "2.0")).toBe(true)
-    expect(lines.find((line) => line.id === 1)?.result.capabilities).toMatchObject({
+    expect(
+      lines.find((line) => line.id === 1)?.result.capabilities,
+    ).toMatchObject({
       jobRun: true,
       jobCancel: true,
       eventStream: true,
@@ -1537,7 +1582,9 @@ describe("headless CLI dispatcher", () => {
       status: "queued",
     })
     expect(
-      lines.filter((line) => line.method === "job/event").map((line) => line.params.event.type),
+      lines
+        .filter((line) => line.method === "job/event")
+        .map((line) => line.params.event.type),
     ).toContain("completed")
     const jobs = listAgentJobs(db, { source: "protocol" })
     expect(jobs).toHaveLength(1)
@@ -1568,7 +1615,9 @@ describe("headless CLI dispatcher", () => {
         method: "shutdown",
         params: {},
       },
-    ].map(JSON.stringify).join("\n")
+    ]
+      .map(JSON.stringify)
+      .join("\n")
 
     const result = await Promise.race([
       runHeadlessCliCommand({
@@ -1639,7 +1688,9 @@ describe("headless CLI dispatcher", () => {
         method: "shutdown",
         params: {},
       },
-    ].map(JSON.stringify).join("\n")
+    ]
+      .map(JSON.stringify)
+      .join("\n")
 
     const code = await runHeadlessCliCommand({
       db,
@@ -1687,7 +1738,9 @@ describe("headless CLI dispatcher", () => {
         method: "shutdown",
         params: {},
       },
-    ].map(JSON.stringify).join("\n")
+    ]
+      .map(JSON.stringify)
+      .join("\n")
 
     const code = await runHeadlessCliCommand({
       db,

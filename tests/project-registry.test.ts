@@ -19,7 +19,9 @@ import {
 import { LOCAL_JOB_API_PROJECT_NOT_REGISTERED } from "../src/shared/local-job-api"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
-function withTempDir<T>(callback: (root: string) => T | Promise<T>): Promise<T> {
+function withTempDir<T>(
+  callback: (root: string) => T | Promise<T>,
+): Promise<T> {
   const root = mkdtempSync(join(tmpdir(), "locus-project-registry-"))
   return Promise.resolve(callback(root)).finally(() => {
     rmSync(root, { recursive: true, force: true })
@@ -198,7 +200,47 @@ describe("project registry", () => {
           id: registered.project.id,
         },
       })
-      expect(db.select().from(projects).all()).toHaveLength(0)
+      const allProjects = db.select().from(projects).all()
+      expect(allProjects).toHaveLength(1)
+      expect(allProjects[0]?.removedAt).toBeInstanceOf(Date)
+    })
+  })
+
+  test("register restores a removed project instead of creating a duplicate", async () => {
+    await withTempDir(async (root) => {
+      const db = createAgentJobTestDb()
+      const projectPath = join(root, "project")
+      mkdirSync(projectPath)
+      const registered = await registerProjectForPath({
+        db,
+        path: projectPath,
+      })
+
+      const removed = unregisterProjectForPath({
+        db,
+        path: projectPath,
+      })
+      expect(removed.removed).toBe(true)
+      expect(
+        getProjectRegistrationForCwd({
+          db,
+          cwd: projectPath,
+        }).registered,
+      ).toBe(false)
+
+      const restored = await registerProjectForPath({
+        db,
+        path: projectPath,
+      })
+      expect(restored).toMatchObject({
+        created: false,
+        restored: true,
+        project: {
+          id: registered.project.id,
+        },
+      })
+      expect(restored.project.removedAt).toBeNull()
+      expect(db.select().from(projects).all()).toHaveLength(1)
     })
   })
 
@@ -216,9 +258,7 @@ describe("project registry", () => {
         db,
         path: projectPathViaAlias,
       })
-      expect(registered.project.path).toBe(
-        realpathSync(projectPathViaAlias),
-      )
+      expect(registered.project.path).toBe(realpathSync(projectPathViaAlias))
 
       rmSync(projectPathViaAlias, { recursive: true, force: true })
       const removed = unregisterProjectForPath({
@@ -233,7 +273,9 @@ describe("project registry", () => {
           id: registered.project.id,
         },
       })
-      expect(db.select().from(projects).all()).toHaveLength(0)
+      const allProjects = db.select().from(projects).all()
+      expect(allProjects).toHaveLength(1)
+      expect(allProjects[0]?.removedAt).toBeInstanceOf(Date)
     })
   })
 })

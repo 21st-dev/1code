@@ -3,7 +3,7 @@ import { existsSync } from "node:fs"
 import { copyFile, mkdir, unlink } from "node:fs/promises"
 import { extname } from "node:path"
 import { promisify } from "node:util"
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm"
 import { app, BrowserWindow, dialog } from "electron"
 import { basename, join } from "path"
 import { z } from "zod"
@@ -15,7 +15,11 @@ import {
   deleteProjectWithCleanup,
   getProjectDeletionPreview,
 } from "../../projects/deletion"
-import { registerProjectForPath } from "../../projects/registry"
+import {
+  registerProjectForPath,
+  removeProjectFromActiveListById,
+  restoreProjectById,
+} from "../../projects/registry"
 import { publicProcedure, router } from "../index"
 
 const execAsync = promisify(exec)
@@ -34,7 +38,25 @@ export const projectsRouter = router({
    */
   list: publicProcedure.query(() => {
     const db = getDatabase()
-    return db.select().from(projects).orderBy(desc(projects.updatedAt)).all()
+    return db
+      .select()
+      .from(projects)
+      .where(isNull(projects.removedAt))
+      .orderBy(desc(projects.updatedAt))
+      .all()
+  }),
+
+  /**
+   * List removed projects for history/recovery surfaces.
+   */
+  listRemoved: publicProcedure.query(() => {
+    const db = getDatabase()
+    return db
+      .select()
+      .from(projects)
+      .where(isNotNull(projects.removedAt))
+      .orderBy(desc(projects.removedAt))
+      .all()
   }),
 
   /**
@@ -44,7 +66,11 @@ export const projectsRouter = router({
     .input(z.object({ id: z.string() }))
     .query(({ input }) => {
       const db = getDatabase()
-      return db.select().from(projects).where(eq(projects.id, input.id)).get()
+      return db
+        .select()
+        .from(projects)
+        .where(and(eq(projects.id, input.id), isNull(projects.removedAt)))
+        .get()
     }),
 
   /**
@@ -136,15 +162,48 @@ export const projectsRouter = router({
     }),
 
   /**
-   * Delete a project and all its chats
+   * Remove a project from the active list while preserving history.
    */
   delete: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      const result = removeProjectFromActiveListById({
+        db,
+        id: input.id,
+      })
+      if (!result.removed) {
+        if (result.reason === "active_jobs") {
+          throw new Error(
+            `Project has ${result.activeJobs.length} active job(s). Cancel or finish them before removing this project.`,
+          )
+        }
+        return null
+      }
+      return result.project
+    }),
+
+  /**
+   * Restore a removed project to the active list.
+   */
+  restore: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return restoreProjectById({ db, id: input.id })
+    }),
+
+  /**
+   * Permanently delete a removed project's local history.
+   */
+  deleteHistory: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
       return deleteProjectWithCleanup({
         db,
         projectId: input.id,
+        requireRemoved: true,
       })
     }),
 

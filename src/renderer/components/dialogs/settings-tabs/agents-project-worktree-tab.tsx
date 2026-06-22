@@ -165,6 +165,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       setShowDeleteDialog(false)
       await Promise.all([
         trpcUtils.projects.list.invalidate(),
+        trpcUtils.projects.listRemoved.invalidate(),
         trpcUtils.projects.get.invalidate({ id: projectId }),
         trpcUtils.chats.list.invalidate(),
         trpcUtils.chats.listArchived.invalidate(),
@@ -882,7 +883,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                     >
                       {deleteMutation.isPending
                         ? t("settings.projects.removing")
-                        : t("common.delete")}
+                        : t("common.remove")}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -957,7 +958,15 @@ export function AgentsProjectsTab() {
   useEffect(() => {
     if (selectedProjectId || isLoading) return
     if (projects && projects.length > 0) {
-      setSelectedProjectId(projects[0]!.id)
+      setSelectedProjectId(projects[0]?.id ?? null)
+    }
+  }, [projects, selectedProjectId, isLoading])
+
+  // Clear stale selection after a project is removed from the active list.
+  useEffect(() => {
+    if (!selectedProjectId || isLoading || !projects) return
+    if (!projects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0]?.id ?? null)
     }
   }, [projects, selectedProjectId, isLoading])
 

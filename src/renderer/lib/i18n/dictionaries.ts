@@ -953,19 +953,19 @@ export const en = {
   "settings.projects.addPlatformOverrides":
     "Add platform-specific commands",
   "settings.projects.dangerZone": "Danger Zone",
-  "settings.projects.removeProject": "Delete Project History",
+  "settings.projects.removeProject": "Remove from Projects list",
   "settings.projects.removeDescription":
-    "Permanently deletes this project's chats from Locus. Code files on disk will not be deleted.",
-  "settings.projects.removeProjectTitle": "Delete project history?",
+    "Hide this project from active Projects. Chats, worktrees, and code files are kept.",
+  "settings.projects.removeProjectTitle": "Remove from Projects list?",
   "settings.projects.removeProjectConfirmWithCounts":
-    'This permanently deletes "{name}" from Locus, including {chatCount} chats and {subChatCount} history tabs. Locus will clean {worktreeCount} worktrees. Your code files are not deleted. This cannot be undone.',
+    'This hides "{name}" from active Projects. {chatCount} chats, {subChatCount} history tabs, and {worktreeCount} worktrees are kept. Your code files are not deleted. Re-open this folder later to restore it.',
   "settings.projects.removeProjectConfirmLoading":
-    "Checking chats and worktrees before deletion...",
+    "Checking chats and worktrees before removal...",
   "settings.projects.removeProjectConfirmUnavailable":
-    "Deletion preview is unavailable. Close this dialog and try again.",
+    "Removal preview is unavailable. Close this dialog and try again.",
   "settings.projects.removeProjectBlockedByJobs":
-    "Cannot delete while {count} queued or running jobs still reference this project.",
-  "settings.projects.removing": "Deleting...",
+    "Cannot remove while {count} queued or running jobs still reference this project.",
+  "settings.projects.removing": "Removing...",
   "settings.projects.searchPlaceholder": "Search projects...",
   "settings.projects.projectListLabel": "Project list",
   "settings.projects.addProjectFolder": "Open a Project",
@@ -4316,19 +4316,19 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.projects.addPlatformOverrides":
     "添加平台专用命令",
   "settings.projects.dangerZone": "危险区",
-  "settings.projects.removeProject": "删除项目历史",
+  "settings.projects.removeProject": "从项目列表移除",
   "settings.projects.removeDescription":
-    "永久删除这个项目在 Locus 里的聊天记录。磁盘上的代码文件不会被删除。",
-  "settings.projects.removeProjectTitle": "删除项目历史？",
+    "从活动项目中隐藏此项目。聊天、工作树和代码文件都会保留。",
+  "settings.projects.removeProjectTitle": "从项目列表移除？",
   "settings.projects.removeProjectConfirmWithCounts":
-    "这会从 Locus 永久删除 \"{name}\"，包括 {chatCount} 个聊天和 {subChatCount} 个历史标签，并清理 {worktreeCount} 个工作树。你的代码文件不会被删除。此操作无法撤销。",
+    "这会把 \"{name}\" 从活动项目列表中隐藏。{chatCount} 个聊天、{subChatCount} 个历史标签和 {worktreeCount} 个工作树都会保留。你的代码文件不会被删除。以后重新打开这个文件夹即可恢复。",
   "settings.projects.removeProjectConfirmLoading":
-    "正在检查删除前会影响的聊天和工作树...",
+    "正在检查移除前会影响的聊天和工作树...",
   "settings.projects.removeProjectConfirmUnavailable":
-    "无法获取删除预览。请关闭此弹窗后重试。",
+    "无法获取移除预览。请关闭此弹窗后重试。",
   "settings.projects.removeProjectBlockedByJobs":
-    "仍有 {count} 个排队或运行中的任务引用此项目，暂时不能删除。",
-  "settings.projects.removing": "删除中...",
+    "仍有 {count} 个排队或运行中的任务引用此项目，暂时不能移除。",
+  "settings.projects.removing": "移除中...",
   "settings.projects.searchPlaceholder": "搜索项目...",
   "settings.projects.projectListLabel": "项目列表",
   "settings.projects.addProjectFolder": "打开项目",

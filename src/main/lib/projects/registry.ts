@@ -1,15 +1,17 @@
 import { existsSync, realpathSync, statSync } from "node:fs"
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path"
-import { and, eq, inArray } from "drizzle-orm"
-import type { getDatabase } from "../db"
 import {
-  agentJobs,
-  projects,
-  type AgentJob,
-  type Project,
-} from "../db/schema"
-import { getGitRemoteInfo, type GitRemoteInfo } from "../git"
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path"
+import { and, eq, inArray } from "drizzle-orm"
 import { LOCAL_JOB_API_PROJECT_NOT_REGISTERED } from "../../../shared/local-job-api"
+import type { getDatabase } from "../db"
+import { type AgentJob, agentJobs, type Project, projects } from "../db/schema"
+import { type GitRemoteInfo, getGitRemoteInfo } from "../git"
 
 export type ProjectRegistryDatabase = ReturnType<typeof getDatabase>
 
@@ -50,6 +52,7 @@ export type ProjectRegistrationResult = {
   project: Project
   canonicalPath: string
   created: boolean
+  restored: boolean
 }
 
 export type ProjectCwdRegistration =
@@ -102,15 +105,21 @@ function canonicalExistingDirectory(path: string, label: string): string {
     })
   }
   if (!statSync(resolved).isDirectory()) {
-    throw new ProjectRegistrationError(`${label} must be a directory: ${path}`, {
-      code: "project_path_invalid",
-      cwd: resolved,
-    })
+    throw new ProjectRegistrationError(
+      `${label} must be a directory: ${path}`,
+      {
+        code: "project_path_invalid",
+        cwd: resolved,
+      },
+    )
   }
   return realpathSync(resolved)
 }
 
-function canonicalPathWithExistingAncestor(path: string, label: string): string {
+function canonicalPathWithExistingAncestor(
+  path: string,
+  label: string,
+): string {
   const resolved = resolve(path)
   if (existsSync(resolved)) return canonicalExistingDirectory(path, label)
 
@@ -141,8 +150,13 @@ function isPathInside(parentPath: string, childPath: string): boolean {
   return rel === "" || (!!rel && !rel.startsWith("..") && !isAbsolute(rel))
 }
 
-function getProject(db: ProjectRegistryDatabase, projectId: string): Project | null {
-  return db.select().from(projects).where(eq(projects.id, projectId)).get() ?? null
+function getProject(
+  db: ProjectRegistryDatabase,
+  projectId: string,
+): Project | null {
+  return (
+    db.select().from(projects).where(eq(projects.id, projectId)).get() ?? null
+  )
 }
 
 function getProjectByStoredPath(
@@ -200,30 +214,35 @@ function updateExistingProject(
     now: Date
   },
 ): Project {
+  const shouldRestore = project.removedAt != null
   if (
     project.path === input.canonicalPath &&
-    !input.refreshExistingGitInfo
+    !input.refreshExistingGitInfo &&
+    !shouldRestore
   ) {
     return project
   }
 
-  return db
-    .update(projects)
-    .set({
-      path: input.canonicalPath,
-      updatedAt: input.now,
-      ...(input.refreshExistingGitInfo && input.gitInfo
-        ? {
-            gitRemoteUrl: input.gitInfo.remoteUrl,
-            gitProvider: input.gitInfo.provider,
-            gitOwner: input.gitInfo.owner,
-            gitRepo: input.gitInfo.repo,
-          }
-        : {}),
-    })
-    .where(eq(projects.id, project.id))
-    .returning()
-    .get() ?? project
+  return (
+    db
+      .update(projects)
+      .set({
+        path: input.canonicalPath,
+        updatedAt: input.now,
+        removedAt: null,
+        ...(input.refreshExistingGitInfo && input.gitInfo
+          ? {
+              gitRemoteUrl: input.gitInfo.remoteUrl,
+              gitProvider: input.gitInfo.provider,
+              gitOwner: input.gitInfo.owner,
+              gitRepo: input.gitInfo.repo,
+            }
+          : {}),
+      })
+      .where(eq(projects.id, project.id))
+      .returning()
+      .get() ?? project
+  )
 }
 
 export async function registerProjectForPath(input: {
@@ -244,6 +263,7 @@ export async function registerProjectForPath(input: {
       input.refreshExistingGitInfo || input.gitInfo
         ? await resolveGitInfo(canonicalPath, input)
         : null
+    const wasRemoved = existing.removedAt != null
     return {
       project: updateExistingProject(input.db, existing, {
         canonicalPath,
@@ -253,6 +273,7 @@ export async function registerProjectForPath(input: {
       }),
       canonicalPath,
       created: false,
+      restored: wasRemoved,
     }
   }
 
@@ -273,7 +294,7 @@ export async function registerProjectForPath(input: {
     .returning()
     .get()
   if (!project) throw new Error(`Failed to register project: ${canonicalPath}`)
-  return { project, canonicalPath, created: true }
+  return { project, canonicalPath, created: true, restored: false }
 }
 
 export function getProjectRegistrationForCwd(input: {
@@ -281,6 +302,7 @@ export function getProjectRegistrationForCwd(input: {
   cwd: string
   projectId?: string | null
   label?: string
+  includeRemoved?: boolean
 }): ProjectCwdRegistration {
   const label = input.label ?? "Project cwd"
   const cwdReal = canonicalExistingDirectory(input.cwd, label)
@@ -288,11 +310,22 @@ export function getProjectRegistrationForCwd(input: {
   if (input.projectId) {
     const project = getProject(input.db, input.projectId)
     if (!project) {
-      throw new ProjectRegistrationError(`Unknown project: ${input.projectId}`, {
-        code: "unknown_project",
+      throw new ProjectRegistrationError(
+        `Unknown project: ${input.projectId}`,
+        {
+          code: "unknown_project",
+          cwd: cwdReal,
+          projectId: input.projectId,
+        },
+      )
+    }
+    if (project.removedAt && !input.includeRemoved) {
+      return {
+        registered: false,
         cwd: cwdReal,
-        projectId: input.projectId,
-      })
+        project: null,
+        projectPath: null,
+      }
     }
     const projectReal = canonicalExistingDirectory(
       project.path,
@@ -317,6 +350,7 @@ export function getProjectRegistrationForCwd(input: {
   }
 
   for (const project of input.db.select().from(projects).all()) {
+    if (project.removedAt && !input.includeRemoved) continue
     const projectReal = canonicalProjectPath(project)
     if (!projectReal) continue
     if (isPathInside(projectReal, cwdReal)) {
@@ -377,6 +411,88 @@ function activeJobsForProject(
     .all()
 }
 
+function removeProjectFromActiveList(input: {
+  db: ProjectRegistryDatabase
+  project: Project
+  canonicalPath: string
+  force?: boolean
+  now?: Date
+}): UnregisterProjectResult {
+  const activeJobs = activeJobsForProject(input.db, input.project.id)
+  if (activeJobs.length > 0 && !input.force) {
+    return {
+      removed: false,
+      canonicalPath: input.canonicalPath,
+      project: input.project,
+      activeJobs,
+      reason: "active_jobs",
+    }
+  }
+
+  const now = input.now ?? new Date()
+  const removed =
+    input.db
+      .update(projects)
+      .set({
+        removedAt: input.project.removedAt ?? now,
+        updatedAt: now,
+      })
+      .where(eq(projects.id, input.project.id))
+      .returning()
+      .get() ?? input.project
+
+  return {
+    removed: true,
+    canonicalPath: input.canonicalPath,
+    project: removed,
+    activeJobs,
+  }
+}
+
+export function removeProjectFromActiveListById(input: {
+  db: ProjectRegistryDatabase
+  id: string
+  force?: boolean
+  now?: Date
+}): UnregisterProjectResult {
+  const project = getProject(input.db, input.id)
+  if (!project) {
+    return {
+      removed: false,
+      canonicalPath: "",
+      project: null,
+      activeJobs: [],
+      reason: "not_found",
+    }
+  }
+  return removeProjectFromActiveList({
+    db: input.db,
+    project,
+    canonicalPath: project.path,
+    force: input.force,
+    now: input.now,
+  })
+}
+
+export function restoreProjectById(input: {
+  db: ProjectRegistryDatabase
+  id: string
+  now?: Date
+}): Project | null {
+  const now = input.now ?? new Date()
+  return (
+    input.db
+      .update(projects)
+      .set({
+        removedAt: null,
+        updatedAt: now,
+      })
+      .where(eq(projects.id, input.id))
+      .returning()
+      .get() ?? null
+  )
+}
+
 export function unregisterProjectForPath(input: {
   db: ProjectRegistryDatabase
   path: string
@@ -397,26 +513,10 @@ export function unregisterProjectForPath(input: {
     }
   }
 
-  const activeJobs = activeJobsForProject(input.db, project.id)
-  if (activeJobs.length > 0 && !input.force) {
-    return {
-      removed: false,
-      canonicalPath,
-      project,
-      activeJobs,
-      reason: "active_jobs",
-    }
-  }
-
-  const removed = input.db
-    .delete(projects)
-    .where(eq(projects.id, project.id))
-    .returning()
-    .get() ?? project
-  return {
-    removed: true,
+  return removeProjectFromActiveList({
+    db: input.db,
+    project,
     canonicalPath,
-    project: removed,
-    activeJobs,
-  }
+    force: input.force,
+  })
 }

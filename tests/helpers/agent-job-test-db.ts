@@ -14,6 +14,7 @@ export function createAgentJobTestDb() {
       path text DEFAULT '/tmp/project' NOT NULL,
       created_at integer,
       updated_at integer,
+      removed_at integer,
       git_remote_url text,
       git_provider text,
       git_owner text,

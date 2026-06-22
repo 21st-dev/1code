@@ -1,5 +1,5 @@
-import { index, sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { relations } from "drizzle-orm"
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { createId } from "../utils"
 
 // ============ PROJECTS ============
@@ -15,6 +15,7 @@ export const projects = sqliteTable("projects", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
+  removedAt: integer("removed_at", { mode: "timestamp" }),
   // Git remote info (extracted from local .git)
   gitRemoteUrl: text("git_remote_url"),
   gitProvider: text("git_provider"), // "github" | "gitlab" | "bitbucket" | null

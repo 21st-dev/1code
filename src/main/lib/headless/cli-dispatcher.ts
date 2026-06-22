@@ -1,20 +1,28 @@
-import type { Readable } from "stream"
 import { readFileSync } from "node:fs"
-import type { AgentJob, AgentJobEvent, Project } from "../db/schema"
-import { isTerminalAgentJobStatus, type AgentJobStatus } from "../../../shared/agent-jobs"
+import type { Readable } from "node:stream"
 import {
-  completeAgentJob,
-  appendAgentJobEvent,
-  createAgentJob,
-  getAgentJob,
-  getAgentJobPrompt,
-  listAgentJobEvents,
-  listAgentJobs,
-  requestCancelAgentJob,
-  retryAgentJob,
-  type AgentJobDatabase,
-} from "./job-store"
-import { recoverStaleAgentJobs } from "./job-recovery"
+  type AgentJobStatus,
+  isTerminalAgentJobStatus,
+} from "../../../shared/agent-jobs"
+import {
+  LOCAL_JOB_API_PROJECT_NOT_REGISTERED,
+  LOCAL_JOB_API_VERSION,
+} from "../../../shared/local-job-api"
+import type { AgentJob, AgentJobEvent, Project } from "../db/schema"
+import {
+  getProjectRegistrationForCwd,
+  isProjectRegistrationError,
+  type ProjectRegistrationError,
+  registerProjectForPath,
+  unregisterProjectForPath,
+} from "../projects/registry"
+import { runAcpStdioServer } from "./acp-stdio"
+import type { AgentTaskRunner } from "./agent-runtime-contract"
+import {
+  type HeadlessCliCommand,
+  type HeadlessOutputFormat,
+  parseHeadlessCliArgv,
+} from "./cli-args"
 import {
   formatEventsText,
   formatJobListText,
@@ -25,35 +33,25 @@ import {
   serializeAgentJobEvent,
   serializeAgentSchedule,
 } from "./cli-output"
-import {
-  parseHeadlessCliArgv,
-  type HeadlessCliCommand,
-  type HeadlessOutputFormat,
-} from "./cli-args"
-import type { AgentTaskRunner } from "./agent-runtime-contract"
+import { runLocalAgentDaemon } from "./daemon"
+import { recoverStaleAgentJobs } from "./job-recovery"
 import {
   HEADLESS_EXIT_CODES,
-  runPersistedAgentJob,
   type RunPersistedAgentJobResult,
+  runPersistedAgentJob,
 } from "./job-runner"
-import { runLocalAgentDaemon } from "./daemon"
-import { runAcpStdioServer } from "./acp-stdio"
 import {
-  getProjectRegistrationForCwd,
-  isProjectRegistrationError,
-  registerProjectForPath,
-  type ProjectRegistrationError,
-  unregisterProjectForPath,
-} from "../projects/registry"
-import {
-  createAgentSchedule,
-  deleteAgentSchedule,
-  findRegisteredProjectForCwd,
-  listAgentSchedules,
-  pauseAgentSchedule,
-  resumeAgentSchedule,
-  runAgentScheduleNow,
-} from "./schedules"
+  type AgentJobDatabase,
+  appendAgentJobEvent,
+  completeAgentJob,
+  createAgentJob,
+  getAgentJob,
+  getAgentJobPrompt,
+  listAgentJobEvents,
+  listAgentJobs,
+  requestCancelAgentJob,
+  retryAgentJob,
+} from "./job-store"
 import {
   createLocalJobApiJob,
   getLocalJobApiEvents,
@@ -67,9 +65,14 @@ import {
   writeLocalJobApiInitialArtifacts,
 } from "./local-job-api"
 import {
-  LOCAL_JOB_API_PROJECT_NOT_REGISTERED,
-  LOCAL_JOB_API_VERSION,
-} from "../../../shared/local-job-api"
+  createAgentSchedule,
+  deleteAgentSchedule,
+  findRegisteredProjectForCwd,
+  listAgentSchedules,
+  pauseAgentSchedule,
+  resumeAgentSchedule,
+  runAgentScheduleNow,
+} from "./schedules"
 
 type Writer = {
   write(chunk: string): unknown
@@ -119,9 +122,7 @@ async function readStdin(stream: Readable | undefined): Promise<string> {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
     byteLength += buffer.length
     if (byteLength > HEADLESS_STDIN_MAX_BYTES) {
-      throw new Error(
-        `stdin exceeds ${HEADLESS_STDIN_MAX_BYTES} byte limit`,
-      )
+      throw new Error(`stdin exceeds ${HEADLESS_STDIN_MAX_BYTES} byte limit`)
     }
     chunks.push(buffer)
   }
@@ -134,7 +135,9 @@ function readRequestFile(path: string): string {
   }
   const buffer = readFileSync(path)
   if (buffer.byteLength > HEADLESS_STDIN_MAX_BYTES) {
-    throw new Error(`request file exceeds ${HEADLESS_STDIN_MAX_BYTES} byte limit`)
+    throw new Error(
+      `request file exceeds ${HEADLESS_STDIN_MAX_BYTES} byte limit`,
+    )
   }
   return buffer.toString("utf-8")
 }
@@ -247,7 +250,12 @@ async function runCommand(
 
   let project: ReturnType<typeof findRegisteredProjectForCwd>
   try {
-    project = findRegisteredProjectForCwd(options.db, command.cwd, null, "Run cwd")
+    project = findRegisteredProjectForCwd(
+      options.db,
+      command.cwd,
+      null,
+      "Run cwd",
+    )
   } catch (error) {
     return commandError(
       options.stderr,
@@ -314,7 +322,8 @@ function showCommand(
   options: RunHeadlessCliCommandOptions,
 ): number {
   const job = getAgentJob(options.db, command.jobId)
-  if (!job) return commandError(options.stderr, `Unknown job: ${command.jobId}`, 3)
+  if (!job)
+    return commandError(options.stderr, `Unknown job: ${command.jobId}`, 3)
   outputJob(options.stdout, command.output, job)
   return 0
 }
@@ -324,7 +333,8 @@ async function logsCommand(
   options: RunHeadlessCliCommandOptions,
 ): Promise<number> {
   const job = getAgentJob(options.db, command.jobId)
-  if (!job) return commandError(options.stderr, `Unknown job: ${command.jobId}`, 3)
+  if (!job)
+    return commandError(options.stderr, `Unknown job: ${command.jobId}`, 3)
 
   let afterSequence = 0
   let currentJob: AgentJob | null = job
@@ -354,7 +364,8 @@ function cancelCommand(
   options: RunHeadlessCliCommandOptions,
 ): number {
   const job = getAgentJob(options.db, command.jobId)
-  if (!job) return commandError(options.stderr, `Unknown job: ${command.jobId}`, 3)
+  if (!job)
+    return commandError(options.stderr, `Unknown job: ${command.jobId}`, 3)
   let updated = requestCancelAgentJob(options.db, command.jobId, "cli")
   if (updated.status === "queued") {
     updated = completeAgentJob(options.db, {
@@ -374,7 +385,8 @@ function retryCommand(
   options: RunHeadlessCliCommandOptions,
 ): number {
   const job = getAgentJob(options.db, command.jobId)
-  if (!job) return commandError(options.stderr, `Unknown job: ${command.jobId}`, 3)
+  if (!job)
+    return commandError(options.stderr, `Unknown job: ${command.jobId}`, 3)
   if (job.source === "desktop") {
     return commandError(
       options.stderr,
@@ -477,7 +489,9 @@ function apiRuntimesListCommand(options: RunHeadlessCliCommandOptions): number {
   return HEADLESS_EXIT_CODES.success
 }
 
-function isoDate(value: Date | string | number | null | undefined): string | null {
+function isoDate(
+  value: Date | string | number | null | undefined,
+): string | null {
   if (!value) return null
   const date = value instanceof Date ? value : new Date(value)
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
@@ -488,8 +502,10 @@ function serializeLocalJobApiProject(project: Project) {
     id: project.id,
     name: project.name,
     path: project.path,
+    lifecycleState: project.removedAt ? "removed" : "active",
     createdAt: isoDate(project.createdAt),
     updatedAt: isoDate(project.updatedAt),
+    removedAt: isoDate(project.removedAt),
   }
 }
 
@@ -524,6 +540,7 @@ async function apiProjectsRegisterCommand(
       apiVersion: LOCAL_JOB_API_VERSION,
       registered: true,
       created: registration.created,
+      restored: registration.restored,
       cwd: registration.canonicalPath,
       project: serializeLocalJobApiProject(registration.project),
     })
@@ -546,6 +563,7 @@ function apiProjectsStatusCommand(
       db: options.db,
       cwd: command.cwd,
       label: "Project cwd",
+      includeRemoved: true,
     })
     if (registration.registered) {
       writeJson(options.stdout, {
@@ -670,7 +688,12 @@ function apiRunsStatusCommand(
   options: RunHeadlessCliCommandOptions,
 ): number {
   try {
-    writeJson(options.stdout, toLocalJobApiJobEnvelope(getLocalJobApiJobOrThrow(options.db, command.jobId)))
+    writeJson(
+      options.stdout,
+      toLocalJobApiJobEnvelope(
+        getLocalJobApiJobOrThrow(options.db, command.jobId),
+      ),
+    )
     return HEADLESS_EXIT_CODES.success
   } catch (error) {
     return commandError(
@@ -705,7 +728,11 @@ async function apiRunsEventsCommand(
   try {
     let afterSequence = command.afterSequence
     do {
-      const events = getLocalJobApiEvents(options.db, command.jobId, afterSequence)
+      const events = getLocalJobApiEvents(
+        options.db,
+        command.jobId,
+        afterSequence,
+      )
       for (const event of events) {
         afterSequence = event.sequence
         writeJson(options.stdout, event)
@@ -776,7 +803,8 @@ function scheduleErrorCode(message: string): number {
   if (/cwd|project path|registered project/i.test(message)) {
     return HEADLESS_EXIT_CODES.invalidCwd
   }
-  if (/Unsupported/.test(message)) return HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode
+  if (/Unsupported/.test(message))
+    return HEADLESS_EXIT_CODES.unsupportedRuntimeOrMode
   return HEADLESS_EXIT_CODES.invalidArguments
 }
 
@@ -836,7 +864,11 @@ function schedulesMutationCommand(
 ): number {
   try {
     if (command.kind === "schedules-run") {
-      const fired = runAgentScheduleNow(options.db, command.scheduleId, options.now)
+      const fired = runAgentScheduleNow(
+        options.db,
+        command.scheduleId,
+        options.now,
+      )
       if (shouldUseJson(command.output)) {
         writeJson(options.stdout, {
           schedule: serializeAgentSchedule(fired.schedule),
@@ -908,7 +940,9 @@ async function daemonRunCommand(
   }
 }
 
-async function acpCommand(options: RunHeadlessCliCommandOptions): Promise<number> {
+async function acpCommand(
+  options: RunHeadlessCliCommandOptions,
+): Promise<number> {
   return runAcpStdioServer({
     db: options.db,
     stdin: options.stdin,

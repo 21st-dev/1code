@@ -122,6 +122,41 @@ describe("project deletion", () => {
     expect(db.select().from(subChats).all()).toHaveLength(0)
   })
 
+  test("requires removed projects for project-history deletion when requested", async () => {
+    const db = createAgentJobTestDb()
+    seedProject(db)
+    seedChats(db)
+
+    await expect(
+      deleteProjectWithCleanup({
+        db,
+        projectId: "project-1",
+        requireRemoved: true,
+      }),
+    ).rejects.toMatchObject({
+      code: "project_not_removed",
+    })
+
+    db.update(projects)
+      .set({ removedAt: new Date("2026-06-22T00:00:00Z") })
+      .run()
+
+    await deleteProjectWithCleanup({
+      db,
+      projectId: "project-1",
+      requireRemoved: true,
+      cleanupDeps: {
+        removeWorktree: async () => ({ success: true }),
+        killByWorkspaceId: async () => ({ killed: 0, failed: 0 }),
+        invalidateStatus: () => {},
+        invalidateParsedDiff: () => {},
+      },
+    })
+
+    expect(db.select().from(projects).all()).toHaveLength(0)
+    expect(db.select().from(chats).all()).toHaveLength(0)
+  })
+
   test("does not delete database rows when cleanup fails", async () => {
     const db = createAgentJobTestDb()
     seedProject(db)

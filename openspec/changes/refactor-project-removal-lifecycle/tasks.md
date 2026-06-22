@@ -6,13 +6,13 @@
 - [x] 1.5 Invalidate projects/chats queries after any project lifecycle mutation.
 
 ## 2. Project lifecycle owner and data model
-- [ ] 2.1 Add a nullable removed-state column to `projects` (for example `removedAt`) and migration coverage.
-- [ ] 2.2 Add a shared project lifecycle service under `src/main/lib/projects/` for preview, remove-from-list, restore, and delete-history actions.
-- [ ] 2.3 Update project registration to restore removed projects for the same canonical path instead of inserting duplicates.
-- [ ] 2.4 Update active project list/get helpers to exclude removed projects by default and expose explicit removed-project queries.
-- [ ] 2.5 Update `projectsRouter` and Local Job API project unregister to use the lifecycle owner.
-- [ ] 2.6 Ensure Local Job API exposes only non-destructive project unregister/restore behavior in this change, with no `projects delete-history` command.
-- [ ] 2.7 Add architecture/behavior tests preventing user-facing routes from raw-deleting `projects` without the lifecycle owner.
+- [x] 2.1 Add a nullable removed-state column to `projects` (for example `removedAt`) and migration coverage.
+- [x] 2.2 Add a shared project lifecycle service under `src/main/lib/projects/` for preview, remove-from-list, restore, and delete-history actions.
+- [x] 2.3 Update project registration to restore removed projects for the same canonical path instead of inserting duplicates.
+- [x] 2.4 Update active project list/get helpers to exclude removed projects by default and expose explicit removed-project queries.
+- [x] 2.5 Update `projectsRouter` and Local Job API project unregister to use the lifecycle owner.
+- [x] 2.6 Ensure Local Job API exposes only non-destructive project unregister/restore behavior in this change, with no `projects delete-history` command.
+- [x] 2.7 Add architecture/behavior tests preventing user-facing routes from raw-deleting `projects` without the lifecycle owner.
 
 ## 3. Product UI split
 - [ ] 3.1 Change active Projects Settings danger zone to expose only the non-destructive "Remove from Projects list" action.
