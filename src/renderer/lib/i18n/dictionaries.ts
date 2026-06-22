@@ -1030,6 +1030,7 @@ export const en = {
 
   "settings.mcp.disabled": "Disabled",
   "settings.mcp.failed": "Failed",
+  "settings.mcp.installedUnverified": "Installed, not checked",
   "settings.mcp.needsAuth": "Needs auth",
   "settings.mcp.pendingApproval": "Pending approval",
   "settings.mcp.status": "Status",
@@ -1067,9 +1068,11 @@ export const en = {
     "Preview only. No runtime config is written and no external command is executed.",
   "settings.mcp.registryInstallPreview": "Install preview",
   "settings.mcp.registryInstallToClaude": "Install to Claude",
+  "settings.mcp.registryInstallToCodex": "Install to Codex",
+  "settings.mcp.registryRuntime": "Runtime",
   "settings.mcp.registryInstallConfirmTitle": "Install MCP server",
   "settings.mcp.registryInstallConfirmDescription":
-    'Install "{name}" into Claude MCP config. Locus writes configuration only and does not execute the server.',
+    'Install "{name}" into {runtime} MCP config. Locus writes configuration only and does not execute the server.',
   "settings.mcp.registryNoPreview": "No install preview is available.",
   "settings.mcp.registryVersion": "Version",
   "settings.mcp.registryTargets": "Targets",
@@ -1084,6 +1087,9 @@ export const en = {
   "settings.mcp.registryLocalDependencies": "Local dependencies",
   "settings.mcp.registryRequired": "(required)",
   "settings.mcp.registryDefaultAvailable": "(default)",
+  "settings.mcp.codexConnectedUnverified": "Tools visible",
+  "settings.mcp.codexConnectedUnverifiedDescription":
+    "Codex can connect to this registry server and list its tools. Locus cannot auto-verify Codex tool execution yet, so this is not Verified on Codex.",
   "settings.mcp.reconnect": "Reconnect",
   "settings.mcp.authenticate": "Authenticate",
   "settings.mcp.logout": "Logout",
@@ -1164,11 +1170,13 @@ export const en = {
   "settings.mcp.toast.loggedOut": '"{name}" is logged out, refreshing...',
   "settings.mcp.toast.logoutFailed": "Logout failed",
   "settings.mcp.toast.registryInstalled":
-    '"{name}" is installed to Claude, refreshing...',
+    '"{name}" is installed, refreshing...',
   "settings.mcp.toast.registryInstallFailed": "Registry install failed",
   "settings.mcp.toast.registryCheckPassed": "Registry check passed",
   "settings.mcp.toast.registryCheckFailed": "Registry check failed",
   "settings.mcp.toast.registryCheckToolCount": "{count} tools listed",
+  "settings.mcp.toast.registryCodexConnectedUnverified":
+    "Tools are visible. Codex cannot auto-verify tool execution yet.",
   "settings.mcp.toast.codexLogoutFailedDescription":
     "Codex CLI/keyring credential deletion failed. OAuth credentials may still exist; retry or use the manual cleanup guidance.",
   "settings.mcp.toast.enabled": '"{name}" is enabled, refreshing...',
@@ -4436,6 +4444,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
 
   "settings.mcp.disabled": "已禁用",
   "settings.mcp.failed": "失败",
+  "settings.mcp.installedUnverified": "已安装，未检查",
   "settings.mcp.needsAuth": "需要授权",
   "settings.mcp.pendingApproval": "等待批准",
   "settings.mcp.status": "状态",
@@ -4473,9 +4482,11 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "仅预览。不会写入运行时配置，也不会执行外部命令。",
   "settings.mcp.registryInstallPreview": "安装预览",
   "settings.mcp.registryInstallToClaude": "安装到 Claude",
+  "settings.mcp.registryInstallToCodex": "安装到 Codex",
+  "settings.mcp.registryRuntime": "运行时",
   "settings.mcp.registryInstallConfirmTitle": "安装 MCP 服务器",
   "settings.mcp.registryInstallConfirmDescription":
-    '将 "{name}" 安装到 Claude MCP 配置。Locus 只写入配置，不会执行这个服务器。',
+    '将 "{name}" 安装到 {runtime} MCP 配置。Locus 只写入配置，不会执行这个服务器。',
   "settings.mcp.registryNoPreview": "没有可用的安装预览。",
   "settings.mcp.registryVersion": "版本",
   "settings.mcp.registryTargets": "目标",
@@ -4490,6 +4501,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.registryLocalDependencies": "本地依赖",
   "settings.mcp.registryRequired": "（必填）",
   "settings.mcp.registryDefaultAvailable": "（默认值）",
+  "settings.mcp.codexConnectedUnverified": "工具可见",
+  "settings.mcp.codexConnectedUnverifiedDescription":
+    "Codex 可以连接到这个注册表服务器并列出工具。Locus 目前还不能自动验证 Codex 的工具执行结果，因此这不是 Codex 已验证。",
   "settings.mcp.reconnect": "重新连接",
   "settings.mcp.authenticate": "授权",
   "settings.mcp.logout": "退出登录",
@@ -4570,11 +4584,13 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.toast.loggedOut": '"{name}" 已退出登录，正在刷新...',
   "settings.mcp.toast.logoutFailed": "退出登录失败",
   "settings.mcp.toast.registryInstalled":
-    '"{name}" 已安装到 Claude，正在刷新...',
+    '"{name}" 已安装，正在刷新...',
   "settings.mcp.toast.registryInstallFailed": "注册表安装失败",
   "settings.mcp.toast.registryCheckPassed": "注册表检查通过",
   "settings.mcp.toast.registryCheckFailed": "注册表检查失败",
   "settings.mcp.toast.registryCheckToolCount": "已列出 {count} 个工具",
+  "settings.mcp.toast.registryCodexConnectedUnverified":
+    "工具已可见。Codex 目前还不能自动验证工具执行结果。",
   "settings.mcp.toast.codexLogoutFailedDescription":
     "Codex CLI/keyring 凭据删除失败。OAuth 凭据可能仍然存在；请重试或查看手动清理说明。",
   "settings.mcp.toast.enabled": '"{name}" 已启用，正在刷新...',

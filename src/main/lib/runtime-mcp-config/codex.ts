@@ -516,6 +516,23 @@ export async function resolveCodexMcpSnapshot(params: {
   }
 
   const entries = z.array(codexMcpListEntrySchema).parse(parsed)
+  const registryRecords =
+    lookupPath === "__global__"
+      ? await listMcpRegistryVerificationRecords().catch(() => [])
+      : []
+  const latestRegistryRecordByName = new Map<
+    string,
+    McpRegistryVerificationRecord
+  >()
+  for (const entry of entries) {
+    const record = mostRecentMcpRegistryRecord(
+      registryRecords.filter(
+        (candidate) =>
+          candidate.runtime === "codex" && candidate.serverName === entry.name,
+      ),
+    )
+    if (record) latestRegistryRecordByName.set(entry.name, record)
+  }
   const mcpServersForSession: CodexMcpServerForSession[] = []
   const mcpServersForSettings: CodexMcpServerForSettings[] = []
 
@@ -597,6 +614,17 @@ export async function resolveCodexMcpSnapshot(params: {
       if (shouldProbeTools && tools.length === 0) {
         status = "failed"
       }
+      const registryRecord = latestRegistryRecordByName.get(entry.name)
+      const safeConfig = sanitizeMcpConfigForRenderer(settingsConfig)
+      if (registryRecord) {
+        safeConfig._locusMcpRegistry = {
+          runtime: "codex",
+          status: registryRecord.status,
+          entryFingerprint: registryRecord.entryFingerprint,
+          configFingerprint: registryRecord.configFingerprint,
+          ...(registryRecord.reason ? { reason: registryRecord.reason } : {}),
+        }
+      }
 
       return {
         sessionServer,
@@ -605,7 +633,7 @@ export async function resolveCodexMcpSnapshot(params: {
           status,
           tools,
           needsAuth: authState.needsAuth,
-          config: sanitizeMcpConfigForRenderer(settingsConfig),
+          config: safeConfig,
         } satisfies CodexMcpServerForSettings,
       }
     }),

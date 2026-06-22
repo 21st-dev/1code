@@ -61,22 +61,23 @@ const CODEX_APP_SERVER_HARD_TOOL_GUARD_DEGRADED: CodexAdapterCapabilityOverride 
     support: null,
   }
 
-const CODEX_APP_SERVER_HARD_TOOL_GUARD_PROVEN: CodexAdapterCapabilityOverride = {
-  status: "supported",
-  scope: "runtime-neutral",
-  reason:
-    "Codex app-server guarded runs fail closed, use the shared permission policy, and now have direct/app-managed plus provider-profile gateway smoke evidence for Locus-controlled guarded edits through the explicit controlled-edit executor gate.",
-  hint: "App-server controlled edits remain behind LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR and require a known provider auth mode.",
-  support: {
-    kind: "runtime-code",
-    references: [
-      "src/main/lib/codex/app-server-controlled-edit.ts",
-      "src/main/lib/codex/app-server-approval.ts",
-      "tests/codex-app-server-adapter.test.ts",
-      "openspec/changes/add-locus-controlled-edit-executor-for-codex-app-server/adoption-probe-evidence.md",
-    ],
-  },
-}
+const CODEX_APP_SERVER_HARD_TOOL_GUARD_PROVEN: CodexAdapterCapabilityOverride =
+  {
+    status: "supported",
+    scope: "runtime-neutral",
+    reason:
+      "Codex app-server guarded runs fail closed, use the shared permission policy, and now have direct/app-managed plus provider-profile gateway smoke evidence for Locus-controlled guarded edits through the explicit controlled-edit executor gate.",
+    hint: "App-server controlled edits remain behind LOCUS_CODEX_APP_SERVER_CONTROLLED_EDIT_EXECUTOR and require a known provider auth mode.",
+    support: {
+      kind: "runtime-code",
+      references: [
+        "src/main/lib/codex/app-server-controlled-edit.ts",
+        "src/main/lib/codex/app-server-approval.ts",
+        "tests/codex-app-server-adapter.test.ts",
+        "openspec/changes/add-locus-controlled-edit-executor-for-codex-app-server/adoption-probe-evidence.md",
+      ],
+    },
+  }
 
 const CODEX_ACP_CAPABILITY_OVERRIDES: Partial<
   Record<CodexRuntimeCapabilityId, CodexAdapterCapabilityOverride>
@@ -218,8 +219,8 @@ const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
     status: "degraded",
     scope: "runtime-specific",
     reason:
-      "Codex app-server can consume a subset of existing Codex MCP config through the shared Runtime MCP Config service, but registry installation is not proven because Codex writes are still limited to global basic stdio/http CLI adds and cannot stage full registry fields or inactive setup.",
-    hint: "Do not offer Codex registry install or verified support until app-server config writes cover registry fields and inactive setup, and runtime proof gates pass.",
+      "Codex app-server can consume existing Codex MCP config and materializable registry installs through the shared Runtime MCP Config service, but registry proof is limited to readiness and tool inventory because post-execution MCP tool-result observability is not available.",
+    hint: "Offer Codex registry install only for targets the Runtime MCP Config service can materialize, and cap status below Verified on Codex until post-execution tool-result proof exists.",
     support: null,
   },
   providerProfiles: {
@@ -308,9 +309,7 @@ const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
   },
 }
 
-function normalizeAdapterContext(
-  input: CodexRuntimeCapabilityAdapterContext,
-): {
+function normalizeAdapterContext(input: CodexRuntimeCapabilityAdapterContext): {
   adapterSource: CodexRuntimeCapabilityAdapterSource
   providerAuthMode?: CodexRuntimeCapabilityProviderAuthMode | null
 } {
@@ -383,7 +382,9 @@ export function buildCodexRuntimeCapabilityErrorChunk(input: {
     type: "capability-error",
     runtime: "codex",
     capability: input.capability.id,
-    errorText: blocker.hint ? `${blocker.message} ${blocker.hint}` : blocker.message,
+    errorText: blocker.hint
+      ? `${blocker.message} ${blocker.hint}`
+      : blocker.message,
     blocker,
   }
 }

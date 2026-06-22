@@ -73,6 +73,7 @@ import {
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
 
 type McpProvider = "claude-code" | "codex"
+type RegistryInstallRuntime = "claude-code" | "codex"
 type McpViewMode = "configured" | "registry"
 type ProviderSection = {
   provider: McpProvider
@@ -124,6 +125,13 @@ export function McpStatusDot({
   switch (status) {
     case "connected":
       return <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+    case "connected-unverified":
+      return <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+    case "installed-unverified":
+      return (
+        <span className="w-2 h-2 rounded-full bg-muted-foreground/50 shrink-0" />
+      )
+    case "failed-check":
     case "failed":
       return <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
     case "needs-auth":
@@ -225,6 +233,21 @@ function isRegistryManagedServer(server: McpServer): boolean {
   return Boolean(metadata && typeof metadata === "object")
 }
 
+function getRegistryLocalStatus(server: McpServer): string | undefined {
+  const metadata = (server.config as Record<string, unknown>)._locusMcpRegistry
+  if (!metadata || typeof metadata !== "object") return undefined
+  const status = (metadata as Record<string, unknown>).status
+  return typeof status === "string" && status.trim() ? status : undefined
+}
+
+function getEffectiveMcpStatus(
+  provider: McpProvider,
+  server: McpServer,
+): string {
+  if (provider !== "codex") return server.status
+  return getRegistryLocalStatus(server) ?? server.status
+}
+
 function getScopeFromServer(item: ListedServer): ScopeType {
   return item.projectPath ? "project" : "global"
 }
@@ -310,18 +333,30 @@ function registryPreviewTargetLabel(
 function canInstallRegistryPreviewToClaude(
   preview: McpRegistryInstallPreview,
 ): boolean {
-  const claude = preview.runtimeInstallability.find(
-    (item) => item.runtime === "claude-code",
-  )
-  return Boolean(claude?.installableConfig)
+  return canInstallRegistryPreviewToRuntime(preview, "claude-code")
 }
 
-function getClaudeRegistrySetup(
-  preview: McpRegistryInstallPreview | null,
-): McpRegistrySetupClassification | undefined {
-  return preview?.setupClassifications.find(
-    (item) => item.runtime === "claude-code",
+function canInstallRegistryPreviewToCodex(
+  preview: McpRegistryInstallPreview,
+): boolean {
+  return canInstallRegistryPreviewToRuntime(preview, "codex")
+}
+
+function canInstallRegistryPreviewToRuntime(
+  preview: McpRegistryInstallPreview,
+  runtime: RegistryInstallRuntime,
+): boolean {
+  const installability = preview.runtimeInstallability.find(
+    (item) => item.runtime === runtime,
   )
+  return Boolean(installability?.installableConfig)
+}
+
+function getRegistrySetup(
+  preview: McpRegistryInstallPreview | null,
+  runtime: RegistryInstallRuntime,
+): McpRegistrySetupClassification | undefined {
+  return preview?.setupClassifications.find((item) => item.runtime === runtime)
 }
 
 function createEmptyRegistrySetupInputState(): RegistrySetupInputState {
@@ -370,6 +405,7 @@ function setupFieldsForSource(
 function registrySetupMissingInputs(
   preview: McpRegistryInstallPreview | null,
   state: RegistrySetupInputState,
+  runtime: RegistryInstallRuntime,
 ): string[] {
   if (!preview) return []
   const missing: string[] = []
@@ -381,9 +417,9 @@ function registrySetupMissingInputs(
     }
   }
 
-  const setup = getClaudeRegistrySetup(preview)
+  const setup = getRegistrySetup(preview, runtime)
   if (setup?.oauthMissing) missing.push("oauth")
-  if (setup?.runtimeAuthMissing) missing.push("runtime-auth:claude-code")
+  if (setup?.runtimeAuthMissing) missing.push(`runtime-auth:${runtime}`)
   for (const dependency of setup?.localDependencies ?? []) {
     if (
       dependency.missing &&
@@ -574,7 +610,8 @@ function McpServerDetail({
   const { t } = useI18n()
   const { tools, needsAuth } = server
   const hasTools = tools.length > 0
-  const isConnected = server.status === "connected"
+  const effectiveStatus = getEffectiveMcpStatus(provider, server)
+  const isConnected = effectiveStatus === "connected"
   const isDisabled = isServerDisabled(server)
   const connection = getConnectionInfo(server.config)
   const hideToolsCount = isCodexHttpServer(provider, server)
@@ -590,17 +627,23 @@ function McpServerDetail({
     ? t("settings.mcp.disabled")
     : isConnected
       ? t("common.connected")
-      : server.status === "failed"
+      : effectiveStatus === "failed"
         ? t("settings.mcp.failed")
-        : server.status === "needs-auth"
+        : effectiveStatus === "needs-auth"
           ? t("settings.mcp.needsAuth")
-          : server.status === "pending"
+          : effectiveStatus === "pending"
             ? t("common.connecting")
-            : server.status === "pending-approval"
+            : effectiveStatus === "pending-approval"
               ? t("settings.mcp.pendingApproval")
-              : server.status === "ready-to-verify"
+              : effectiveStatus === "ready-to-verify"
                 ? t("settings.mcp.readyToVerify")
-                : getStatusText(server.status)
+                : effectiveStatus === "connected-unverified"
+                  ? t("settings.mcp.codexConnectedUnverified")
+                  : effectiveStatus === "installed-unverified"
+                    ? t("settings.mcp.installedUnverified")
+                    : effectiveStatus === "failed-check"
+                      ? t("settings.mcp.failed")
+                      : getStatusText(effectiveStatus)
   const toolsSummary = hideToolsCount
     ? t("settings.mcp.tools")
     : hasTools
@@ -619,7 +662,7 @@ function McpServerDetail({
         {/* Header */}
         <div className="flex items-start gap-3">
           <div className="mt-1">
-            <McpStatusDot status={server.status} disabled={isDisabled} />
+            <McpStatusDot status={effectiveStatus} disabled={isDisabled} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
@@ -692,6 +735,17 @@ function McpServerDetail({
             </Button>
           )}
         </div>
+
+        {provider === "codex" && effectiveStatus === "connected-unverified" && (
+          <div className="rounded-md border border-blue-500/25 bg-blue-500/10 px-3.5 py-3">
+            <div className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t("settings.mcp.codexConnectedUnverifiedDescription")}
+              </p>
+            </div>
+          </div>
+        )}
 
         {codexLogoutFailure && (
           <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3.5 py-3">
@@ -1538,17 +1592,19 @@ function RegistrySetupInputGroup({
 
 function RegistryInstallSetupForm({
   preview,
+  runtime,
   state,
   onChange,
   missingInputs,
 }: {
   preview: McpRegistryInstallPreview
+  runtime: RegistryInstallRuntime
   state: RegistrySetupInputState
   onChange: (next: RegistrySetupInputState) => void
   missingInputs: string[]
 }) {
   const { t } = useI18n()
-  const setup = getClaudeRegistrySetup(preview)
+  const setup = getRegistrySetup(preview, runtime)
   const dependencies = setup?.localDependencies ?? []
   const hasSetup =
     preview.env.length > 0 ||
@@ -1633,11 +1689,15 @@ function McpRegistryPreviewCard({
   isInstalling,
 }: {
   preview: McpRegistryInstallPreview
-  onInstall?: (preview: McpRegistryInstallPreview) => void
+  onInstall?: (
+    preview: McpRegistryInstallPreview,
+    runtime: RegistryInstallRuntime,
+  ) => void
   isInstalling?: boolean
 }) {
   const { t } = useI18n()
-  const canInstall = canInstallRegistryPreviewToClaude(preview)
+  const canInstallClaude = canInstallRegistryPreviewToClaude(preview)
+  const canInstallCodex = canInstallRegistryPreviewToCodex(preview)
 
   return (
     <div className="rounded-md border border-border bg-background overflow-hidden">
@@ -1652,12 +1712,12 @@ function McpRegistryPreviewCard({
           <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
             {preview.targetId}
           </span>
-          {canInstall && onInstall && (
+          {canInstallClaude && onInstall && (
             <Button
               size="sm"
               className="h-6 px-2 text-[11px]"
               disabled={isInstalling}
-              onClick={() => onInstall(preview)}
+              onClick={() => onInstall(preview, "claude-code")}
             >
               {isInstalling ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -1665,6 +1725,22 @@ function McpRegistryPreviewCard({
                 <Plus className="mr-1 h-3 w-3" />
               )}
               {t("settings.mcp.registryInstallToClaude")}
+            </Button>
+          )}
+          {canInstallCodex && onInstall && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 px-2 text-[11px]"
+              disabled={isInstalling}
+              onClick={() => onInstall(preview, "codex")}
+            >
+              {isInstalling ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Plus className="mr-1 h-3 w-3" />
+              )}
+              {t("settings.mcp.registryInstallToCodex")}
             </Button>
           )}
         </div>
@@ -1802,7 +1878,10 @@ function McpRegistryDetailPanel({
   detail: McpRegistryDetailResult | undefined
   isLoading: boolean
   error: unknown
-  onInstallPreview?: (preview: McpRegistryInstallPreview) => void
+  onInstallPreview?: (
+    preview: McpRegistryInstallPreview,
+    runtime: RegistryInstallRuntime,
+  ) => void
   installingTargetId?: string | null
 }) {
   const { t } = useI18n()
@@ -1938,6 +2017,8 @@ export function AgentsMcpTab() {
     useState<CodexLogoutFailure | null>(null)
   const [registryInstallPreview, setRegistryInstallPreview] =
     useState<McpRegistryInstallPreview | null>(null)
+  const [registryInstallRuntime, setRegistryInstallRuntime] =
+    useState<RegistryInstallRuntime>("claude-code")
   const [registrySetupInput, setRegistrySetupInput] =
     useState<RegistrySetupInputState>(createEmptyRegistrySetupInputState)
   const [deletingServer, setDeletingServer] = useState<{
@@ -1972,13 +2053,17 @@ export function AgentsMcpTab() {
   const showImportPreview = showImportPreviewPanel || !!importPreview
   const missingRegistrySetupInputs = useMemo(
     () =>
-      registrySetupMissingInputs(registryInstallPreview, registrySetupInput),
-    [registryInstallPreview, registrySetupInput],
+      registrySetupMissingInputs(
+        registryInstallPreview,
+        registrySetupInput,
+        registryInstallRuntime,
+      ),
+    [registryInstallPreview, registrySetupInput, registryInstallRuntime],
   )
   const registryInstallBlockedByMissingSetup = Boolean(
     missingRegistrySetupInputs.length > 0 &&
-      getClaudeRegistrySetup(registryInstallPreview)?.missingSetupBehavior ===
-        "block-install",
+      getRegistrySetup(registryInstallPreview, registryInstallRuntime)
+        ?.missingSetupBehavior === "block-install",
   )
 
   const openImportPreview = useCallback((preview: McpImportPreview) => {
@@ -2005,7 +2090,11 @@ export function AgentsMcpTab() {
   }, [])
 
   const openRegistryInstallPreview = useCallback(
-    (preview: McpRegistryInstallPreview) => {
+    (
+      preview: McpRegistryInstallPreview,
+      runtime: RegistryInstallRuntime = "claude-code",
+    ) => {
+      setRegistryInstallRuntime(runtime)
       setRegistrySetupInput(createEmptyRegistrySetupInputState())
       setRegistryInstallPreview(preview)
     },
@@ -2067,12 +2156,15 @@ export function AgentsMcpTab() {
   const sortedGroupsByProvider = useMemo(() => {
     const statusOrder: Record<string, number> = {
       connected: 0,
-      pending: 1,
-      "needs-auth": 2,
-      failed: 3,
+      "connected-unverified": 1,
+      "ready-to-verify": 2,
+      pending: 3,
+      "needs-auth": 4,
+      failed: 5,
     }
 
     const sortGroups = (
+      provider: McpProvider,
       groups: Array<{
         groupName: string
         projectPath: string | null
@@ -2081,14 +2173,16 @@ export function AgentsMcpTab() {
     ) =>
       groups.map((g) => ({
         ...g,
-        mcpServers: [...g.mcpServers].sort(
-          (a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3),
-        ),
+        mcpServers: [...g.mcpServers].sort((a, b) => {
+          const statusA = getEffectiveMcpStatus(provider, a)
+          const statusB = getEffectiveMcpStatus(provider, b)
+          return (statusOrder[statusA] ?? 5) - (statusOrder[statusB] ?? 5)
+        }),
       }))
 
     return {
-      codex: sortGroups(codexMcpQuery.data?.groups || []),
-      claudeCode: sortGroups(claudeMcpQuery.data?.groups || []),
+      codex: sortGroups("codex", codexMcpQuery.data?.groups || []),
+      claudeCode: sortGroups("claude-code", claudeMcpQuery.data?.groups || []),
     }
   }, [codexMcpQuery.data?.groups, claudeMcpQuery.data?.groups])
 
@@ -2259,14 +2353,21 @@ export function AgentsMcpTab() {
 
   const handleConfirmRegistryInstall = useCallback(async () => {
     if (!registryInstallPreview) return
-    const scope = selectedProject?.path ? "project" : "global"
+    const scope =
+      registryInstallRuntime === "codex"
+        ? "global"
+        : selectedProject?.path
+          ? "project"
+          : "global"
     try {
       const result = await installRegistryMutation.mutateAsync({
         serverName: registryInstallPreview.entryId,
         targetId: registryInstallPreview.targetId,
-        runtime: "claude-code",
+        runtime: registryInstallRuntime,
         scope,
-        ...(selectedProject?.path ? { projectPath: selectedProject.path } : {}),
+        ...(registryInstallRuntime === "claude-code" && selectedProject?.path
+          ? { projectPath: selectedProject.path }
+          : {}),
         resolvedSetup: buildRegistryResolvedSetup(registrySetupInput),
       })
       setRegistryInstallPreview(null)
@@ -2275,7 +2376,7 @@ export function AgentsMcpTab() {
           name: result.serverName,
         }),
       )
-      await handleRefresh(true, "claude-code")
+      await handleRefresh(true, registryInstallRuntime)
     } catch (error) {
       toast.error(t("settings.mcp.toast.registryInstallFailed"), {
         description: getErrorMessage(error),
@@ -2283,6 +2384,7 @@ export function AgentsMcpTab() {
     }
   }, [
     registryInstallPreview,
+    registryInstallRuntime,
     registrySetupInput,
     selectedProject?.path,
     installRegistryMutation,
@@ -2301,16 +2403,19 @@ export function AgentsMcpTab() {
         })
         if (result.success) {
           toast.success(t("settings.mcp.toast.registryCheckPassed"), {
-            description: t("settings.mcp.toast.registryCheckToolCount", {
-              count: result.toolCount,
-            }),
+            description:
+              result.status === "connected-unverified"
+                ? t("settings.mcp.toast.registryCodexConnectedUnverified")
+                : t("settings.mcp.toast.registryCheckToolCount", {
+                    count: result.toolCount,
+                  }),
           })
         } else {
           toast.error(t("settings.mcp.toast.registryCheckFailed"), {
             description: result.reason ?? undefined,
           })
         }
-        await handleRefresh(true, "claude-code")
+        await handleRefresh(true, item.provider)
       } catch (error) {
         toast.error(t("settings.mcp.toast.registryCheckFailed"), {
           description: getErrorMessage(error),
@@ -2755,6 +2860,10 @@ export function AgentsMcpTab() {
                     {section.servers.map((item) => {
                       const key = item.key
                       const server = item.server
+                      const effectiveStatus = getEffectiveMcpStatus(
+                        item.provider,
+                        server,
+                      )
                       const isDisabled = isServerDisabled(server)
                       const hideToolsCount = isCodexHttpServer(
                         item.provider,
@@ -2794,7 +2903,7 @@ export function AgentsMcpTab() {
                                 </span>
                                 <div className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center">
                                   <McpStatusDot
-                                    status={server.status}
+                                    status={effectiveStatus}
                                     disabled={isDisabled}
                                   />
                                 </div>
@@ -2807,11 +2916,11 @@ export function AgentsMcpTab() {
                                     t,
                                   )}
                                 </span>
-                                {server.status !== "pending" && (
+                                {effectiveStatus !== "pending" && (
                                   <span className="flex-shrink-0">
                                     {isDisabled
                                       ? t("settings.mcp.disabled")
-                                      : server.status === "connected"
+                                      : effectiveStatus === "connected"
                                         ? hideToolsCount
                                           ? t("common.connected")
                                           : server.tools.length === 1
@@ -2819,9 +2928,24 @@ export function AgentsMcpTab() {
                                             : t("settings.mcp.toolCount", {
                                                 count: server.tools.length,
                                               })
-                                        : server.status === "ready-to-verify"
+                                        : effectiveStatus === "ready-to-verify"
                                           ? t("settings.mcp.readyToVerify")
-                                          : getStatusText(server.status)}
+                                          : effectiveStatus ===
+                                              "connected-unverified"
+                                            ? t(
+                                                "settings.mcp.codexConnectedUnverified",
+                                              )
+                                            : effectiveStatus ===
+                                                "installed-unverified"
+                                              ? t(
+                                                  "settings.mcp.installedUnverified",
+                                                )
+                                              : effectiveStatus ===
+                                                  "failed-check"
+                                                ? t("settings.mcp.failed")
+                                                : getStatusText(
+                                                    effectiveStatus,
+                                                  )}
                                   </span>
                                 )}
                               </div>
@@ -2907,7 +3031,6 @@ export function AgentsMcpTab() {
               void handleRefresh(false, selectedServer.provider)
             }}
             onCheck={
-              selectedServer.provider === "claude-code" &&
               isRegistryManagedServer(selectedServer.server) &&
               !isServerDisabled(selectedServer.server)
                 ? () => {
@@ -3006,19 +3129,29 @@ export function AgentsMcpTab() {
             <AlertDialogDescription>
               {t("settings.mcp.registryInstallConfirmDescription", {
                 name: registryInstallPreview?.serverName ?? "",
+                runtime:
+                  registryInstallRuntime === "codex" ? "Codex" : "Claude Code",
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {registryInstallPreview && (
             <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <div className="flex items-center justify-between gap-3">
+                <span>{t("settings.mcp.registryRuntime")}</span>
+                <span className="font-medium text-foreground">
+                  {registryInstallRuntime === "codex" ? "Codex" : "Claude Code"}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-3">
                 <span>{t("settings.mcp.scope")}</span>
                 <span className="font-medium text-foreground">
-                  {selectedProject?.path
-                    ? t("settings.mcp.scopeProjectNamed", {
-                        project: selectedProject.name ?? selectedProject.path,
-                      })
-                    : t("settings.mcp.scopeClaudeGlobal")}
+                  {registryInstallRuntime === "codex"
+                    ? t("settings.mcp.scopeCodexGlobal")
+                    : selectedProject?.path
+                      ? t("settings.mcp.scopeProjectNamed", {
+                          project: selectedProject.name ?? selectedProject.path,
+                        })
+                      : t("settings.mcp.scopeClaudeGlobal")}
                 </span>
               </div>
               <div className="mt-1 flex items-center justify-between gap-3">
@@ -3029,6 +3162,7 @@ export function AgentsMcpTab() {
               </div>
               <RegistryInstallSetupForm
                 preview={registryInstallPreview}
+                runtime={registryInstallRuntime}
                 state={registrySetupInput}
                 onChange={setRegistrySetupInput}
                 missingInputs={missingRegistrySetupInputs}
@@ -3052,7 +3186,9 @@ export function AgentsMcpTab() {
               {installRegistryMutation.isPending && (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               )}
-              {t("settings.mcp.registryInstallToClaude")}
+              {registryInstallRuntime === "codex"
+                ? t("settings.mcp.registryInstallToCodex")
+                : t("settings.mcp.registryInstallToClaude")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -95,7 +95,7 @@ describe("MCP registry management-time inert boundary", () => {
     )
   })
 
-  test("keeps Codex registry install and check deferred in the MCP tab UI", () => {
+  test("keeps Codex registry install/check honest in the MCP tab UI", () => {
     const installHandlerBlock = mcpTabSource.slice(
       mcpTabSource.indexOf("const handleConfirmRegistryInstall"),
       mcpTabSource.indexOf("const handleCheckRegistryServer"),
@@ -109,10 +109,9 @@ describe("MCP registry management-time inert boundary", () => {
       mcpTabSource.indexOf("</AlertDialogFooter>"),
     )
 
-    expect(installHandlerBlock).toContain('runtime: "claude-code"')
-    expect(installHandlerBlock).not.toContain('runtime: "codex"')
+    expect(installHandlerBlock).toContain("registryInstallRuntime")
     expect(installDialogBlock).toContain("settings.mcp.registryInstallToClaude")
-    expect(checkPropBlock).toContain('selectedServer.provider === "claude-code"')
+    expect(installDialogBlock).toContain("settings.mcp.registryInstallToCodex")
     expect(checkPropBlock).toContain("isRegistryManagedServer")
   })
 

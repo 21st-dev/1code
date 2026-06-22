@@ -100,7 +100,12 @@ export function createMcpRegistryRouter(
         const { checkCodexMcpRegistryServer } = await import(
           "../../runtime-mcp-config/codex"
         )
-        return checkCodexMcpRegistryServer(input)
+        return checkCodexMcpRegistryServer({
+          runtime: "codex",
+          serverName: input.serverName,
+          scope: input.scope,
+          ...(input.projectPath ? { projectPath: input.projectPath } : {}),
+        })
       }
       const { checkClaudeMcpRegistryServer } = await import(
         "../../runtime-mcp-config/claude"
