@@ -25,7 +25,7 @@ describe("OpenSpec proof evidence gates", () => {
     expect(packageJson.scripts["mcp-registry:proof:evidence"]).toBe(
       "node scripts/check-mcp-registry-proof-evidence.mjs",
     )
-    expect(packageJson.scripts.test).toBe("bun test tests")
+    expect(packageJson.scripts.test).toBe("bun test --isolate tests")
     expect(packageJson.scripts.check).toContain("bun run test")
   })
 

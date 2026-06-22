@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import {
   CODEX_MODELS,
-  LEGACY_CLAUDE_PROVIDER_PROFILE_ID,
   getCodexModelsForSource,
   isCodexApiKeySupportedModel,
   isCodexModelSupportedBySource,
   isFirstPartyCodexModelSource,
+  LEGACY_CLAUDE_PROVIDER_PROFILE_ID,
   normalizeClaudeModelSourceForRun,
   resolveCodexModelForSource,
 } from "../src/renderer/features/agents/lib/models"

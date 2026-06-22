@@ -1,18 +1,26 @@
-import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import { getDatabase, projects } from "../../db"
-import { eq, desc } from "drizzle-orm"
-import { dialog, BrowserWindow, app } from "electron"
-import { basename, join } from "path"
 import { exec } from "node:child_process"
-import { promisify } from "node:util"
 import { existsSync } from "node:fs"
-import { mkdir, copyFile, unlink } from "node:fs/promises"
+import { copyFile, mkdir, unlink } from "node:fs/promises"
 import { extname } from "node:path"
-import { getGitRemoteInfo } from "../../git"
+import { promisify } from "node:util"
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm"
+import { app, BrowserWindow, dialog } from "electron"
+import { basename, join } from "path"
+import { z } from "zod"
 import { trackProjectOpened } from "../../analytics"
 import { getLaunchDirectory } from "../../cli"
-import { registerProjectForPath } from "../../projects/registry"
+import { getDatabase, projects } from "../../db"
+import { getGitRemoteInfo } from "../../git"
+import {
+  deleteProjectWithCleanup,
+  getProjectDeletionPreview,
+} from "../../projects/deletion"
+import {
+  registerProjectForPath,
+  removeProjectFromActiveListById,
+  restoreProjectById,
+} from "../../projects/registry"
+import { publicProcedure, router } from "../index"
 
 const execAsync = promisify(exec)
 
@@ -30,7 +38,25 @@ export const projectsRouter = router({
    */
   list: publicProcedure.query(() => {
     const db = getDatabase()
-    return db.select().from(projects).orderBy(desc(projects.updatedAt)).all()
+    return db
+      .select()
+      .from(projects)
+      .where(isNull(projects.removedAt))
+      .orderBy(desc(projects.updatedAt))
+      .all()
+  }),
+
+  /**
+   * List removed projects for history/recovery surfaces.
+   */
+  listRemoved: publicProcedure.query(() => {
+    const db = getDatabase()
+    return db
+      .select()
+      .from(projects)
+      .where(isNotNull(projects.removedAt))
+      .orderBy(desc(projects.removedAt))
+      .all()
   }),
 
   /**
@@ -40,7 +66,21 @@ export const projectsRouter = router({
     .input(z.object({ id: z.string() }))
     .query(({ input }) => {
       const db = getDatabase()
-      return db.select().from(projects).where(eq(projects.id, input.id)).get()
+      return db
+        .select()
+        .from(projects)
+        .where(and(eq(projects.id, input.id), isNull(projects.removedAt)))
+        .get()
+    }),
+
+  /**
+   * Preview a destructive project delete.
+   */
+  deletionPreview: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(({ input }) => {
+      const db = getDatabase()
+      return getProjectDeletionPreview(db, input.id)
     }),
 
   /**
@@ -122,17 +162,49 @@ export const projectsRouter = router({
     }),
 
   /**
-   * Delete a project and all its chats
+   * Remove a project from the active list while preserving history.
    */
   delete: publicProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ input }) => {
       const db = getDatabase()
-      return db
-        .delete(projects)
-        .where(eq(projects.id, input.id))
-        .returning()
-        .get()
+      const result = removeProjectFromActiveListById({
+        db,
+        id: input.id,
+      })
+      if (!result.removed) {
+        if (result.reason === "active_jobs") {
+          throw new Error(
+            `Project has ${result.activeJobs.length} active job(s). Cancel or finish them before removing this project.`,
+          )
+        }
+        return null
+      }
+      return result.project
+    }),
+
+  /**
+   * Restore a removed project to the active list.
+   */
+  restore: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ input }) => {
+      const db = getDatabase()
+      return restoreProjectById({ db, id: input.id })
+    }),
+
+  /**
+   * Permanently delete a removed project's local history.
+   */
+  deleteHistory: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      return deleteProjectWithCleanup({
+        db,
+        projectId: input.id,
+        requireRemoved: true,
+      })
     }),
 
   /**
@@ -264,7 +336,7 @@ export const projectsRouter = router({
       z.object({
         expectedOwner: z.string(),
         expectedRepo: z.string(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
       const window = ctx.getWindow?.() ?? BrowserWindow.getFocusedWindow()
@@ -376,7 +448,10 @@ export const projectsRouter = router({
         title: "Select Project Icon",
         buttonLabel: "Set Icon",
         filters: [
-          { name: "Images", extensions: ["png", "jpg", "jpeg", "svg", "webp", "ico"] },
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "svg", "webp", "ico"],
+          },
         ],
       })
 
@@ -406,10 +481,16 @@ export const projectsRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       const db = getDatabase()
-      const project = db.select().from(projects).where(eq(projects.id, input.id)).get()
+      const project = db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, input.id))
+        .get()
 
       if (project?.iconPath && existsSync(project.iconPath)) {
-        try { await unlink(project.iconPath) } catch {}
+        try {
+          await unlink(project.iconPath)
+        } catch {}
       }
 
       return db

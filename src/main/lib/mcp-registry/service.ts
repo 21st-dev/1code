@@ -3,6 +3,7 @@ import {
   type McpRegistryInstallInput,
   type McpRegistryInstallResult,
 } from "./install"
+import type { McpRegistryRuntimeSetupResolutions } from "./installability"
 import {
   type McpRegistryEntry,
   normalizeOfficialMcpRegistryEntry,
@@ -18,9 +19,6 @@ import {
   buildMcpRegistryInstallPreviews,
   type McpRegistryInstallPreview,
 } from "./preview"
-import type {
-  McpRegistryRuntimeSetupResolutions,
-} from "./installability"
 import type { McpRegistrySetupResolutionInput } from "./setup"
 
 export type McpRegistryService = {

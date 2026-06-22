@@ -1,22 +1,29 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type ChangeEvent } from "react"
-import { useListKeyboardNav } from "./use-list-keyboard-nav"
 import { useAtomValue, useSetAtom } from "jotai"
-import { trpc } from "../../../lib/trpc"
-import { useI18n } from "../../../lib/i18n"
-import { Button, buttonVariants } from "../../ui/button"
-import { Input } from "../../ui/input"
-import { Textarea } from "../../ui/textarea"
-import { Info, Plus, Trash2, FolderOpen } from "lucide-react"
-import { AIPenIcon, ExternalLinkIcon, FolderFilledIcon, ImageIcon } from "../../ui/icons"
-import { invalidateProjectIcon, useProjectIcon } from "../../../lib/hooks/use-project-icon"
-import { ProjectIcon } from "../../ui/project-icon"
-import finderIcon from "../../../assets/app-icons/finder.png"
+import { FolderOpen, Info, Plus, RotateCcw, Trash2 } from "lucide-react"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "../../ui/select"
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import { toast } from "sonner"
+import finderIcon from "../../../assets/app-icons/finder.png"
+import { settingsProjectsSidebarWidthAtom } from "../../../features/agents/atoms"
+import { COMMAND_PROMPTS } from "../../../features/agents/commands"
+import {
+  agentsSettingsDialogOpenAtom,
+  selectedAgentChatIdAtom,
+  selectedProjectAtom,
+} from "../../../lib/atoms"
+import {
+  invalidateProjectIcon,
+  useProjectIcon,
+} from "../../../lib/hooks/use-project-icon"
+import { useI18n } from "../../../lib/i18n"
+import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,17 +35,65 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../../ui/alert-dialog"
-import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip"
-import { toast } from "sonner"
-import { COMMAND_PROMPTS } from "../../../features/agents/commands"
+import { Button, buttonVariants } from "../../ui/button"
 import {
-  agentsSettingsDialogOpenAtom,
-  selectedAgentChatIdAtom,
-  selectedProjectAtom,
-} from "../../../lib/atoms"
-import { cn } from "../../../lib/utils"
+  AIPenIcon,
+  ExternalLinkIcon,
+  FolderFilledIcon,
+  ImageIcon,
+} from "../../ui/icons"
+import { Input } from "../../ui/input"
+import { ProjectIcon } from "../../ui/project-icon"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
-import { settingsProjectsSidebarWidthAtom } from "../../../features/agents/atoms"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "../../ui/select"
+import { Textarea } from "../../ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip"
+import { useListKeyboardNav } from "./use-list-keyboard-nav"
+
+type ProjectListProject = {
+  id: string
+  name: string
+  path: string
+  iconPath?: string | null
+  updatedAt?: string | Date | null
+  removedAt?: string | Date | null
+  gitOwner?: string | null
+  gitProvider?: string | null
+}
+
+type ProjectSelection =
+  | {
+      kind: "active" | "removed"
+      id: string
+    }
+  | null
+
+function projectSelectionKey(selection: ProjectSelection): string | null {
+  return selection ? `${selection.kind}:${selection.id}` : null
+}
+
+function parseProjectSelectionKey(key: string): ProjectSelection {
+  const [kind, id] = key.split(":")
+  if ((kind === "active" || kind === "removed") && id) {
+    return { kind, id }
+  }
+  return null
+}
+
+function formatProjectDate(value: string | Date | null | undefined): string {
+  if (!value) return "—"
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return "—"
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })
+}
 
 function CommandTextarea({
   value,
@@ -90,17 +145,19 @@ function CommandTextarea({
 // --- Detail Panel ---
 function ProjectDetail({ projectId }: { projectId: string }) {
   const { t } = useI18n()
+  const trpcUtils = trpc.useUtils()
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+
   // Get config for selected project
   const { data: configData, refetch: refetchConfig } =
-    trpc.worktreeConfig.get.useQuery(
-      { projectId },
-      { enabled: !!projectId },
-    )
+    trpc.worktreeConfig.get.useQuery({ projectId }, { enabled: !!projectId })
 
   // Save mutation (auto-save, no toast on success — only on error)
   const saveMutation = trpc.worktreeConfig.save.useMutation({
     onError: (err) => {
-      toast.error(t("settings.projects.toast.failedToSave", { message: err.message }))
+      toast.error(
+        t("settings.projects.toast.failedToSave", { message: err.message }),
+      )
     },
   })
 
@@ -120,6 +177,11 @@ function ProjectDetail({ projectId }: { projectId: string }) {
     { id: projectId },
     { enabled: !!projectId },
   )
+  const { data: deletionPreview, isFetching: isDeletionPreviewLoading } =
+    trpc.projects.deletionPreview.useQuery(
+      { id: projectId },
+      { enabled: !!projectId && showDeleteDialog },
+    )
 
   // Cached project icon
   const { src: iconSrc } = useProjectIcon(project)
@@ -131,13 +193,23 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       toast.success(t("settings.projects.toast.renamed"))
     },
     onError: (err) => {
-      toast.error(t("settings.projects.toast.failedToRename", { message: err.message }))
+      toast.error(
+        t("settings.projects.toast.failedToRename", { message: err.message }),
+      )
     },
   })
 
   // Delete project mutation
   const deleteMutation = trpc.projects.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      setShowDeleteDialog(false)
+      await Promise.all([
+        trpcUtils.projects.list.invalidate(),
+        trpcUtils.projects.listRemoved.invalidate(),
+        trpcUtils.projects.get.invalidate({ id: projectId }),
+        trpcUtils.chats.list.invalidate(),
+        trpcUtils.chats.listArchived.invalidate(),
+      ])
       toast.success(t("settings.projects.toast.removed"))
       setSelectedProject((current) => {
         if (current?.id === projectId) {
@@ -147,7 +219,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       })
     },
     onError: (err) => {
-      toast.error(t("settings.projects.toast.failedToDelete", { message: err.message }))
+      toast.error(
+        t("settings.projects.toast.failedToDelete", { message: err.message }),
+      )
     },
   })
 
@@ -160,7 +234,11 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       toast.success(t("settings.projects.toast.iconUpdated"))
     },
     onError: (err) => {
-      toast.error(t("settings.projects.toast.failedToUploadIcon", { message: err.message }))
+      toast.error(
+        t("settings.projects.toast.failedToUploadIcon", {
+          message: err.message,
+        }),
+      )
     },
   })
 
@@ -172,7 +250,8 @@ function ProjectDetail({ projectId }: { projectId: string }) {
     },
   })
 
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const activeJobCount = deletionPreview?.activeJobs.length ?? 0
+  const isDeleteBlocked = activeJobCount > 0
 
   // Project name editing
   const [projectName, setProjectName] = useState("")
@@ -196,7 +275,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   }, [projectName, projectId, renameMutation])
 
   // Local state
-  const [saveTarget, setSaveTarget] = useState<"locus" | "cursor" | "1code">("locus")
+  const [saveTarget, setSaveTarget] = useState<"locus" | "cursor" | "1code">(
+    "locus",
+  )
   const [commands, setCommands] = useState<string[]>([""])
   const [unixCommands, setUnixCommands] = useState<string[]>([])
   const [windowsCommands, setWindowsCommands] = useState<string[]>([])
@@ -223,7 +304,8 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
       if (configData.config) {
         const isComment = (s: string) => s.trimStart().startsWith("#")
-        const filterComments = (arr: string[]) => arr.filter((s) => !isComment(s))
+        const filterComments = (arr: string[]) =>
+          arr.filter((s) => !isComment(s))
 
         const generic = configData.config["setup-worktree"]
         const genericArr = Array.isArray(generic)
@@ -236,8 +318,16 @@ function ProjectDetail({ projectId }: { projectId: string }) {
         const unix = configData.config["setup-worktree-unix"]
         const win = configData.config["setup-worktree-windows"]
 
-        newUnix = Array.isArray(unix) ? filterComments(unix) : unix && !isComment(unix) ? [unix] : []
-        newWin = Array.isArray(win) ? filterComments(win) : win && !isComment(win) ? [win] : []
+        newUnix = Array.isArray(unix)
+          ? filterComments(unix)
+          : unix && !isComment(unix)
+            ? [unix]
+            : []
+        newWin = Array.isArray(win)
+          ? filterComments(win)
+          : win && !isComment(win)
+            ? [win]
+            : []
 
         if (unix || win) {
           setShowPlatformSpecific(true)
@@ -262,7 +352,12 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   const doSave = useCallback(() => {
     if (!projectId || !configReadyRef.current) return
 
-    const currentState = JSON.stringify({ commands, unixCommands, windowsCommands, saveTarget })
+    const currentState = JSON.stringify({
+      commands,
+      unixCommands,
+      windowsCommands,
+      saveTarget,
+    })
     if (currentState === savedConfigRef.current) return
 
     const config: Record<string, string[]> = {}
@@ -276,9 +371,21 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
     saveMutation.mutate({ projectId, config, target: saveTarget })
     savedConfigRef.current = currentState
-  }, [projectId, commands, unixCommands, windowsCommands, saveTarget, saveMutation])
+  }, [
+    projectId,
+    commands,
+    unixCommands,
+    windowsCommands,
+    saveTarget,
+    saveMutation,
+  ])
 
-  const updateCommand = (index: number, value: string, list: string[], setter: (v: string[]) => void) => {
+  const updateCommand = (
+    index: number,
+    value: string,
+    list: string[],
+    setter: (v: string[]) => void,
+  ) => {
     const newList = [...list]
     newList[index] = value
     setter(newList)
@@ -286,7 +393,12 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
   const pendingSaveRef = useRef(false)
 
-  const removeCommand = (index: number, list: string[], setter: (v: string[]) => void, allowEmpty = false) => {
+  const removeCommand = (
+    index: number,
+    list: string[],
+    setter: (v: string[]) => void,
+    allowEmpty = false,
+  ) => {
     if (!allowEmpty && list.length <= 1) return
     setter(list.filter((_, i) => i !== index))
     pendingSaveRef.current = true
@@ -332,7 +444,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       ? t("settings.projects.saveStatusUnsaved")
       : saveMutation.isError
         ? t("settings.projects.saveStatusFailed")
-        : t("settings.projects.saveStatusSavedTo", { target: selectedConfigLabel })
+        : t("settings.projects.saveStatusSavedTo", {
+            target: selectedConfigLabel,
+          })
 
   const openInFinderMutation = trpc.external.openInFinder.useMutation()
 
@@ -392,7 +506,6 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto p-6 space-y-6">
-
         {/* ── General ── */}
         <div>
           <h4 className="text-sm font-medium text-foreground mb-2">
@@ -469,7 +582,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                 <span className="text-sm font-medium text-foreground">
                   {t("settings.projects.path")}
                 </span>
-                <p className="text-sm text-muted-foreground truncate">{project?.path || "—"}</p>
+                <p className="text-sm text-muted-foreground truncate">
+                  {project?.path || "—"}
+                </p>
               </div>
               <Button
                 variant="outline"
@@ -603,7 +718,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="locus">
-                    <span>{t("settings.projects.configFileAppDefaultLabel")}</span>
+                    <span>
+                      {t("settings.projects.configFileAppDefaultLabel")}
+                    </span>
                     <span
                       data-desc
                       className="font-mono text-xs text-muted-foreground"
@@ -613,7 +730,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   </SelectItem>
                   {cursorExists && (
                     <SelectItem value="cursor">
-                      <span>{t("settings.projects.configFileCursorLabel")}</span>
+                      <span>
+                        {t("settings.projects.configFileCursorLabel")}
+                      </span>
                       <span
                         data-desc
                         className="font-mono text-xs text-muted-foreground"
@@ -624,7 +743,9 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   )}
                   {(legacyOnecodeExists || saveTarget === "1code") && (
                     <SelectItem value="1code">
-                      <span>{t("settings.projects.configFileLegacyOnecodeLabel")}</span>
+                      <span>
+                        {t("settings.projects.configFileLegacyOnecodeLabel")}
+                      </span>
                       <span
                         data-desc
                         className="font-mono text-xs text-muted-foreground"
@@ -655,25 +776,36 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                     title={t("settings.projects.clickToCopy")}
                   >
                     $ROOT_WORKTREE_PATH
-                  </button>
-                  {" "}{t("settings.projects.forMainRepo")}
+                  </button>{" "}
+                  {t("settings.projects.forMainRepo")}
                 </p>
               </div>
-              {renderCommandList(commands, setCommands, "bun install && cp $ROOT_WORKTREE_PATH/.env .env")}
+              {renderCommandList(
+                commands,
+                setCommands,
+                "bun install && cp $ROOT_WORKTREE_PATH/.env .env",
+              )}
             </div>
 
             {/* Platform overrides — macOS/Linux */}
             {(unixCommands.length > 0 || showPlatformSpecific) && (
               <div className="p-4 border-t border-border space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">macOS / Linux</span>
+                  <span className="text-sm font-medium text-foreground">
+                    macOS / Linux
+                  </span>
                   {unixCommands.length === 0 && (
                     <span className="text-sm text-muted-foreground">
                       {t("settings.projects.fallsBack")}
                     </span>
                   )}
                 </div>
-                {renderCommandList(unixCommands, setUnixCommands, "brew install deps", true)}
+                {renderCommandList(
+                  unixCommands,
+                  setUnixCommands,
+                  "brew install deps",
+                  true,
+                )}
               </div>
             )}
 
@@ -681,30 +813,39 @@ function ProjectDetail({ projectId }: { projectId: string }) {
             {(windowsCommands.length > 0 || showPlatformSpecific) && (
               <div className="p-4 border-t border-border space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">Windows</span>
+                  <span className="text-sm font-medium text-foreground">
+                    Windows
+                  </span>
                   {windowsCommands.length === 0 && (
                     <span className="text-sm text-muted-foreground">
                       {t("settings.projects.fallsBack")}
                     </span>
                   )}
                 </div>
-                {renderCommandList(windowsCommands, setWindowsCommands, "npm ci", true)}
+                {renderCommandList(
+                  windowsCommands,
+                  setWindowsCommands,
+                  "npm ci",
+                  true,
+                )}
               </div>
             )}
 
             {/* Add platform overrides link */}
-            {!showPlatformSpecific && unixCommands.length === 0 && windowsCommands.length === 0 && (
-              <div className="p-4 border-t border-border">
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  onClick={() => setShowPlatformSpecific(true)}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {t("settings.projects.addPlatformOverrides")}
-                </button>
-              </div>
-            )}
+            {!showPlatformSpecific &&
+              unixCommands.length === 0 &&
+              windowsCommands.length === 0 && (
+                <div className="p-4 border-t border-border">
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setShowPlatformSpecific(true)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {t("settings.projects.addPlatformOverrides")}
+                  </button>
+                </div>
+              )}
           </div>
         </div>
 
@@ -714,50 +855,333 @@ function ProjectDetail({ projectId }: { projectId: string }) {
             {t("settings.projects.dangerZone")}
           </h4>
           <div className="bg-background rounded-lg border border-border overflow-hidden">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex-1">
+            <div className="flex items-center justify-between p-4">
+              <div className="flex-1">
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.removeProject")}
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.projects.removeDescription")}
+                </p>
+              </div>
+              <AlertDialog
+                open={showDeleteDialog}
+                onOpenChange={setShowDeleteDialog}
+              >
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 hover:text-destructive hover:border-destructive/30 hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t("common.remove")}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t("settings.projects.removeProjectTitle")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-2">
+                      <span className="block">
+                        {deletionPreview
+                          ? t(
+                              "settings.projects.removeProjectConfirmWithCounts",
+                              {
+                                name: project?.name || "",
+                                chatCount: deletionPreview.chatCount,
+                                subChatCount: deletionPreview.subChatCount,
+                                worktreeCount: deletionPreview.worktreeCount,
+                              },
+                            )
+                          : isDeletionPreviewLoading
+                            ? t("settings.projects.removeProjectConfirmLoading")
+                            : t(
+                                "settings.projects.removeProjectConfirmUnavailable",
+                              )}
+                      </span>
+                      {isDeleteBlocked && (
+                        <span className="block text-destructive">
+                          {t("settings.projects.removeProjectBlockedByJobs", {
+                            count: activeJobCount,
+                          })}
+                        </span>
+                      )}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteMutation.mutate({ id: projectId })}
+                      disabled={
+                        deleteMutation.isPending ||
+                        !deletionPreview ||
+                        isDeleteBlocked
+                      }
+                      className={buttonVariants({ variant: "destructive" })}
+                    >
+                      {deleteMutation.isPending
+                        ? t("settings.projects.removing")
+                        : t("common.remove")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RemovedProjectDetail({
+  project,
+  onRestored,
+  onDeleted,
+}: {
+  project: ProjectListProject
+  onRestored: (projectId: string) => void
+  onDeleted: () => void
+}) {
+  const { t } = useI18n()
+  const trpcUtils = trpc.useUtils()
+  const [showDeleteHistoryDialog, setShowDeleteHistoryDialog] = useState(false)
+
+  const { data: deletionPreview, isFetching: isDeletionPreviewLoading } =
+    trpc.projects.deletionPreview.useQuery(
+      { id: project.id },
+      { enabled: !!project.id },
+    )
+
+  const activeJobCount = deletionPreview?.activeJobs.length ?? 0
+  const isDeleteBlocked = activeJobCount > 0
+
+  const restoreMutation = trpc.projects.restore.useMutation({
+    onSuccess: async (restoredProject) => {
+      await Promise.all([
+        trpcUtils.projects.list.invalidate(),
+        trpcUtils.projects.listRemoved.invalidate(),
+        trpcUtils.projects.get.invalidate({ id: project.id }),
+        trpcUtils.chats.list.invalidate(),
+        trpcUtils.chats.listArchived.invalidate(),
+      ])
+
+      if (!restoredProject) {
+        toast.error(t("settings.projects.toast.failedToRestoreNotFound"))
+        return
+      }
+
+      toast.success(t("settings.projects.toast.restored"))
+      onRestored(restoredProject.id)
+    },
+    onError: (err) => {
+      toast.error(
+        t("settings.projects.toast.failedToRestore", {
+          message: err.message,
+        }),
+      )
+    },
+  })
+
+  const deleteHistoryMutation = trpc.projects.deleteHistory.useMutation({
+    onSuccess: async () => {
+      setShowDeleteHistoryDialog(false)
+      await Promise.all([
+        trpcUtils.projects.listRemoved.invalidate(),
+        trpcUtils.projects.get.invalidate({ id: project.id }),
+        trpcUtils.chats.list.invalidate(),
+        trpcUtils.chats.listArchived.invalidate(),
+      ])
+      toast.success(t("settings.projects.toast.historyDeleted"))
+      onDeleted()
+    },
+    onError: (err) => {
+      toast.error(
+        t("settings.projects.toast.failedToDeleteHistory", {
+          message: err.message,
+        }),
+      )
+    },
+  })
+
+  const openInFinderMutation = trpc.external.openInFinder.useMutation()
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-2xl space-y-6 p-6">
+        <div>
+          <h4 className="mb-2 text-sm font-medium text-foreground">
+            {t("settings.projects.removedProject")}
+          </h4>
+          <div className="overflow-hidden rounded-lg border border-border bg-background">
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <ProjectIcon project={project} className="h-8 w-8" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {project.name}
+                  </p>
+                  <p className="truncate text-sm text-muted-foreground">
+                    {project.path}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5 pl-2"
+                onClick={() => openInFinderMutation.mutate(project.path)}
+                disabled={!project.path}
+              >
+                <img src={finderIcon} alt="" className="h-3.5 w-3.5" />
+                Finder
+              </Button>
+            </div>
+            <div className="border-t border-border p-4">
               <span className="text-sm font-medium text-foreground">
-                {t("settings.projects.removeProject")}
+                {t("settings.projects.removedOn")}
               </span>
               <p className="text-sm text-muted-foreground">
-                {t("settings.projects.removeDescription")}
+                {formatProjectDate(project.removedAt)}
               </p>
             </div>
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 hover:text-destructive hover:border-destructive/30 hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {t("common.remove")}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    {t("settings.projects.removeProjectTitle")}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {t("settings.projects.removeProjectConfirm", {
-                      name: project?.name || "",
-                    })}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => deleteMutation.mutate({ id: projectId })}
-                    disabled={deleteMutation.isPending}
-                    className={buttonVariants({ variant: "destructive" })}
-                  >
-                    {deleteMutation.isPending ? t("settings.projects.removing") : t("common.remove")}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <div className="border-t border-border p-4">
+              <span className="text-sm font-medium text-foreground">
+                {t("settings.projects.savedHistory")}
+              </span>
+              <p className="text-sm text-muted-foreground">
+                {deletionPreview
+                  ? t("settings.projects.savedHistoryWithCounts", {
+                      chatCount: deletionPreview.chatCount,
+                      subChatCount: deletionPreview.subChatCount,
+                      worktreeCount: deletionPreview.worktreeCount,
+                    })
+                  : isDeletionPreviewLoading
+                    ? t("settings.projects.savedHistoryLoading")
+                    : t("settings.projects.savedHistoryUnavailable")}
+              </p>
+            </div>
           </div>
+        </div>
+
+        <div>
+          <h4 className="mb-2 text-sm font-medium text-foreground">
+            {t("settings.projects.recovery")}
+          </h4>
+          <div className="overflow-hidden rounded-lg border border-border bg-background">
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.restoreProject")}
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.projects.restoreDescription")}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                onClick={() => restoreMutation.mutate({ id: project.id })}
+                disabled={restoreMutation.isPending}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {restoreMutation.isPending
+                  ? t("settings.projects.restoring")
+                  : t("settings.projects.restoreProject")}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <h4 className="mb-2 text-sm font-medium text-foreground">
+            {t("settings.projects.dangerZone")}
+          </h4>
+          <div className="overflow-hidden rounded-lg border border-border bg-background">
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.deleteProjectHistory")}
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.projects.deleteProjectHistoryDescription")}
+                </p>
+              </div>
+              <AlertDialog
+                open={showDeleteHistoryDialog}
+                onOpenChange={setShowDeleteHistoryDialog}
+              >
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1.5 hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t("settings.projects.deleteProjectHistory")}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t("settings.projects.deleteProjectHistoryTitle")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-2">
+                      <span className="block">
+                        {deletionPreview
+                          ? t(
+                              "settings.projects.deleteProjectHistoryConfirmWithCounts",
+                              {
+                                name: project.name,
+                                chatCount: deletionPreview.chatCount,
+                                subChatCount: deletionPreview.subChatCount,
+                                worktreeCount: deletionPreview.worktreeCount,
+                              },
+                            )
+                          : isDeletionPreviewLoading
+                            ? t(
+                                "settings.projects.deleteProjectHistoryConfirmLoading",
+                              )
+                            : t(
+                                "settings.projects.deleteProjectHistoryConfirmUnavailable",
+                              )}
+                      </span>
+                      {isDeleteBlocked && (
+                        <span className="block text-destructive">
+                          {t(
+                            "settings.projects.deleteProjectHistoryBlockedByJobs",
+                            {
+                              count: activeJobCount,
+                            },
+                          )}
+                        </span>
+                      )}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() =>
+                        deleteHistoryMutation.mutate({ id: project.id })
+                      }
+                      disabled={
+                        deleteHistoryMutation.isPending ||
+                        !deletionPreview ||
+                        isDeleteBlocked
+                      }
+                      className={buttonVariants({ variant: "destructive" })}
+                    >
+                      {deleteHistoryMutation.isPending
+                        ? t("settings.projects.deletingHistory")
+                        : t("common.delete")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         </div>
       </div>
@@ -769,9 +1193,11 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 export function AgentsProjectsTab() {
   const { t } = useI18n()
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedProjectSelection, setSelectedProjectSelection] =
+    useState<ProjectSelection>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const selectedProjectKey = projectSelectionKey(selectedProjectSelection)
 
   // Focus search on "/" hotkey
   useEffect(() => {
@@ -788,11 +1214,13 @@ export function AgentsProjectsTab() {
   }, [])
 
   const { data: projects, isLoading } = trpc.projects.list.useQuery()
+  const { data: removedProjects, isLoading: isRemovedLoading } =
+    trpc.projects.listRemoved.useQuery()
 
   const openFolderMutation = trpc.projects.openFolder.useMutation({
     onSuccess: (project) => {
       if (project) {
-        setSelectedProjectId(project.id)
+        setSelectedProjectSelection({ kind: "active", id: project.id })
       }
     },
   })
@@ -810,30 +1238,99 @@ export function AgentsProjectsTab() {
     )
   }, [projects, searchQuery])
 
+  const filteredRemovedProjects = useMemo(() => {
+    if (!removedProjects) return []
+    if (!searchQuery.trim()) return removedProjects
+    const q = searchQuery.toLowerCase()
+    return removedProjects.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.path?.toLowerCase().includes(q) ||
+        p.gitRepo?.toLowerCase().includes(q),
+    )
+  }, [removedProjects, searchQuery])
+
   const allProjectIds = useMemo(
-    () => filteredProjects.map((p) => p.id),
-    [filteredProjects]
+    () => [
+      ...filteredProjects.map((p) => `active:${p.id}`),
+      ...filteredRemovedProjects.map((p) => `removed:${p.id}`),
+    ],
+    [filteredProjects, filteredRemovedProjects],
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
     items: allProjectIds,
-    selectedItem: selectedProjectId,
-    onSelect: setSelectedProjectId,
+    selectedItem: selectedProjectKey,
+    onSelect: (key) => setSelectedProjectSelection(parseProjectSelectionKey(key)),
   })
+
+  const firstAvailableSelection = useMemo<ProjectSelection>(() => {
+    const firstActiveProject = projects?.[0]
+    if (firstActiveProject) return { kind: "active", id: firstActiveProject.id }
+    const firstRemovedProject = removedProjects?.[0]
+    if (firstRemovedProject) {
+      return { kind: "removed", id: firstRemovedProject.id }
+    }
+    return null
+  }, [projects, removedProjects])
 
   // Auto-select first project
   useEffect(() => {
-    if (selectedProjectId || isLoading) return
-    if (projects && projects.length > 0) {
-      setSelectedProjectId(projects[0]!.id)
+    if (selectedProjectSelection || isLoading || isRemovedLoading) return
+    if (firstAvailableSelection?.id) {
+      setSelectedProjectSelection(firstAvailableSelection)
     }
-  }, [projects, selectedProjectId, isLoading])
+  }, [
+    firstAvailableSelection,
+    selectedProjectSelection,
+    isLoading,
+    isRemovedLoading,
+  ])
+
+  // Clear stale selection after a project is removed from the active list.
+  useEffect(() => {
+    if (
+      !selectedProjectSelection ||
+      isLoading ||
+      isRemovedLoading ||
+      !projects ||
+      !removedProjects
+    ) {
+      return
+    }
+    const selectionStillExists =
+      selectedProjectSelection.kind === "active"
+        ? projects.some((project) => project.id === selectedProjectSelection.id)
+        : removedProjects.some(
+            (project) => project.id === selectedProjectSelection.id,
+          )
+    if (!selectionStillExists) {
+      setSelectedProjectSelection(firstAvailableSelection?.id ? firstAvailableSelection : null)
+    }
+  }, [
+    projects,
+    removedProjects,
+    selectedProjectSelection,
+    firstAvailableSelection,
+    isLoading,
+    isRemovedLoading,
+  ])
 
   // Sync selection from global selectedProject (e.g., toast action)
   useEffect(() => {
     if (!selectedProject?.id) return
-    setSelectedProjectId(selectedProject.id)
+    setSelectedProjectSelection({ kind: "active", id: selectedProject.id })
   }, [selectedProject?.id])
+
+  const selectedRemovedProject = useMemo(
+    () =>
+      selectedProjectSelection?.kind === "removed"
+        ? removedProjects?.find(
+            (project) => project.id === selectedProjectSelection.id,
+          )
+        : null,
+    [removedProjects, selectedProjectSelection],
+  )
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -850,7 +1347,10 @@ export function AgentsProjectsTab() {
         exitWidth={240}
         disableClickToClose={true}
       >
-        <div className="flex flex-col h-full bg-background border-r overflow-hidden" style={{ borderRightWidth: "0.5px" }}>
+        <div
+          className="flex flex-col h-full bg-background border-r overflow-hidden"
+          style={{ borderRightWidth: "0.5px" }}
+        >
           {/* Search + Add */}
           <div className="px-2 pt-2 flex-shrink-0 flex items-center gap-1.5">
             <input
@@ -871,12 +1371,20 @@ export function AgentsProjectsTab() {
           </div>
 
           {/* Project list */}
-          <div ref={listRef} onKeyDown={listKeyDown} tabIndex={-1} className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none">
-            {isLoading ? (
+          <div
+            ref={listRef}
+            onKeyDown={listKeyDown}
+            tabIndex={-1}
+            role="listbox"
+            aria-label={t("settings.projects.projectListLabel")}
+            className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none"
+          >
+            {isLoading || isRemovedLoading ? (
               <div className="flex items-center justify-center h-full">
                 <FolderFilledIcon className="h-5 w-5 text-muted-foreground animate-pulse" />
               </div>
-            ) : !projects || projects.length === 0 ? (
+            ) : (projects?.length ?? 0) + (removedProjects?.length ?? 0) ===
+              0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <FolderFilledIcon className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">
@@ -889,37 +1397,98 @@ export function AgentsProjectsTab() {
                   {t("settings.projects.addFirstProject")}
                 </button>
               </div>
-            ) : filteredProjects.length === 0 ? (
+            ) : filteredProjects.length === 0 &&
+              filteredRemovedProjects.length === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <p className="text-xs text-muted-foreground">
                   {t("settings.projects.noResults")}
                 </p>
               </div>
             ) : (
-              <div className="space-y-0.5">
-                {filteredProjects.map((project) => {
-                  const isSelected = selectedProjectId === project.id
-                  return (
-                    <button
-                      key={project.id}
-                      data-item-id={project.id}
-                      onClick={() => setSelectedProjectId(project.id)}
-                      className={cn(
-                        "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
-                        isSelected
-                          ? "bg-foreground/5 text-foreground"
-                          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <ProjectIcon project={project} className="h-4 w-4" />
-                        <span className="text-sm truncate flex-1">
-                          {project.name}
-                        </span>
+              <div className="space-y-4">
+                {filteredProjects.length > 0 && (
+                  <div className="space-y-0.5">
+                    {filteredRemovedProjects.length > 0 && (
+                      <div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                        {t("settings.projects.activeProjects")}
                       </div>
-                    </button>
-                  )
-                })}
+                    )}
+                    {filteredProjects.map((project) => {
+                      const key = `active:${project.id}`
+                      const isSelected = selectedProjectKey === key
+                      return (
+                        <button
+                          key={project.id}
+                          type="button"
+                          data-item-id={key}
+                          onClick={() =>
+                            setSelectedProjectSelection({
+                              kind: "active",
+                              id: project.id,
+                            })
+                          }
+                          className={cn(
+                            "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
+                            isSelected
+                              ? "bg-foreground/5 text-foreground"
+                              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <ProjectIcon
+                              project={project}
+                              className="h-4 w-4"
+                            />
+                            <span className="text-sm truncate flex-1">
+                              {project.name}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {filteredRemovedProjects.length > 0 && (
+                  <div className="space-y-0.5">
+                    <div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                      {t("settings.projects.removedProjects")}
+                    </div>
+                    {filteredRemovedProjects.map((project) => {
+                      const key = `removed:${project.id}`
+                      const isSelected = selectedProjectKey === key
+                      return (
+                        <button
+                          key={project.id}
+                          type="button"
+                          data-item-id={key}
+                          onClick={() =>
+                            setSelectedProjectSelection({
+                              kind: "removed",
+                              id: project.id,
+                            })
+                          }
+                          className={cn(
+                            "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
+                            isSelected
+                              ? "bg-foreground/5 text-foreground"
+                              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                          )}
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <ProjectIcon
+                              project={project}
+                              className="h-4 w-4 opacity-60"
+                            />
+                            <span className="flex-1 truncate text-sm">
+                              {project.name}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -928,13 +1497,22 @@ export function AgentsProjectsTab() {
 
       {/* Right content - detail panel */}
       <div className="flex-1 min-w-0 h-full overflow-hidden">
-        {selectedProjectId ? (
-          <ProjectDetail projectId={selectedProjectId} />
+        {selectedProjectSelection?.kind === "active" ? (
+          <ProjectDetail projectId={selectedProjectSelection.id} />
+        ) : selectedProjectSelection?.kind === "removed" &&
+          selectedRemovedProject ? (
+          <RemovedProjectDetail
+            project={selectedRemovedProject}
+            onRestored={(projectId) =>
+              setSelectedProjectSelection({ kind: "active", id: projectId })
+            }
+            onDeleted={() => setSelectedProjectSelection(null)}
+          />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <FolderFilledIcon className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
-              {projects && projects.length > 0
+              {(projects?.length ?? 0) + (removedProjects?.length ?? 0) > 0
                 ? t("settings.projects.selectToView")
                 : t("settings.projects.noneAdded")}
             </p>

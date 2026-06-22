@@ -40,7 +40,7 @@
     "lint:changed": "node scripts/run-biome-changed.mjs",
     "lint:all": "biome check .",
     "format": "biome format --write .",
-    "test": "bun test tests",
+    "test": "bun test --isolate tests",
     "architecture:check": "node scripts/check-architecture-guards.mjs",
     "runtime-control:smoke:evidence": "node scripts/check-runtime-control-smoke-evidence.mjs",
     "runtime-control:smoke:job": "node scripts/inspect-runtime-control-smoke-job.mjs",

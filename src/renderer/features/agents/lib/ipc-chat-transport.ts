@@ -21,10 +21,10 @@ import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
 import {
   approvedGuardedRunContractsAtom,
+  type ClaudeModelSource,
   compactingSubChatsAtom,
   MODEL_ID_MAP,
   pendingAuthRetryMessageAtom,
-  type ClaudeModelSource,
   subChatClaudeModelSourceAtomFamily,
   subChatModelIdAtomFamily,
 } from "../atoms"
