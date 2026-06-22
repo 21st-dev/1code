@@ -1,0 +1,53 @@
+## MODIFIED Requirements
+### Requirement: Command Guide Settings Surface
+The system SHALL provide a Commands settings surface that manages local command
+files and summarizes command-related local runtime capabilities available to the
+user.
+
+#### Scenario: User opens Commands
+- **WHEN** the user opens Settings > Commands
+- **THEN** the app shows Locus slash commands, local command files, runtime CLI command summaries, and plugin-provided command counts
+- **AND** the app allows user-owned and project-owned local command files to be created, edited, and deleted from this surface
+- **AND** the app labels runtime CLI, plugin command, and official index sections as reference or diagnostic material rather than editable local command files
+- **AND** the app provides official provider documentation links for complete command references and update guidance
+
+#### Scenario: No project is selected
+- **WHEN** no project path is selected
+- **THEN** Commands still shows global user commands, bundled slash commands, runtime status, and plugin summaries
+- **AND** project-scoped commands are labeled as unavailable until a project is selected
+- **AND** project command creation is disabled or hidden until a project is selected
+
+#### Scenario: User manages local command files
+- **WHEN** the user creates, edits, or deletes a local command file
+- **THEN** the action is available in Settings > Commands
+- **AND** the command list refreshes after the action completes
+- **AND** plugin-owned command files remain read-only
+
+#### Scenario: User wants complete official command documentation
+- **WHEN** the user needs the full Claude Code or Codex command reference
+- **THEN** Commands links to the official provider documentation instead of storing a copied manual
+- **AND** it explains that provider documentation and changelogs remain the source of truth for official commands and updates
+
+### Requirement: Official Command Index Snapshot
+The system SHALL provide an on-demand official command index snapshot without treating it as a bundled manual, runtime update mechanism, or local command install source.
+
+#### Scenario: User refreshes the official index
+- **WHEN** the user clicks the official index update action
+- **THEN** the app fetches selected Claude Code and Codex provider Markdown/llms sources
+- **AND** parses CLI, slash command, and flag references where present
+- **AND** stores the parsed command entries plus source URL, fetch timestamp, hash, and count in a local cache
+- **AND** displays the cached snapshot in Settings > Commands
+- **AND** does not create or modify local command files
+
+#### Scenario: Official source fetch fails
+- **WHEN** a provider source cannot be fetched or parsed
+- **THEN** Commands shows the source-specific error state
+- **AND** keeps any last cached or partially refreshed command index usable
+- **AND** does not block local command detection or local command management
+
+#### Scenario: Local runtime and official docs differ
+- **WHEN** both local runtime help output and an official CLI snapshot are available
+- **THEN** Commands shows the local runtime count next to the official CLI count
+- **AND** explains that differences can come from runtime version, bundled runtime lag, platform availability, or provider documentation changes
+- **AND** does not imply that updating the official index updates the local runtime executable
+- **AND** does not imply that official CLI commands or flags are installable local command files
