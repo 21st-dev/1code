@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import type { ValidatedAgentScopeContract } from "../src/main/lib/agent-guard"
+import {
+  type DesktopPermissionPolicy,
+  resolveDesktopPermissionPolicy,
+} from "../src/main/lib/agent-runtime/permission-policy"
 import {
   CodexAppServerGuardedScopeError,
   resolveCodexAppServerGuardedScope,
@@ -16,6 +19,22 @@ function contract(): ValidatedAgentScopeContract {
     blockedPaths: [],
     expansions: [],
   } as ValidatedAgentScopeContract
+}
+
+function nonAppServerPolicy(): DesktopPermissionPolicy {
+  const policy = resolveDesktopPermissionPolicy({
+    runtimeId: "codex",
+    mode: "agent",
+    hasScopeContract: true,
+    codexAdapterSource: "codex-app-server",
+  })
+  return {
+    ...policy,
+    runtimeMapping: {
+      ...policy.runtimeMapping,
+      adapterSource: "legacy-desktop",
+    },
+  } as unknown as DesktopPermissionPolicy
 }
 
 describe("Codex app-server guarded scope gate", () => {
@@ -56,16 +75,10 @@ describe("Codex app-server guarded scope gate", () => {
     ).toThrow("requires a validated scope contract")
   })
 
-  test("fails closed when ACP permission mapping is passed to app-server guarded scope", () => {
-    const permissionPolicy = resolveDesktopPermissionPolicy({
-      runtimeId: "codex",
-      mode: "agent",
-      hasScopeContract: true,
-    })
-
+  test("fails closed when a non-app-server permission mapping reaches guarded scope", () => {
     expect(() =>
       resolveCodexAppServerGuardedScope({
-        permissionPolicy,
+        permissionPolicy: nonAppServerPolicy(),
         guardedContract: contract(),
       }),
     ).toThrow("Permission policy is not for Codex app-server")

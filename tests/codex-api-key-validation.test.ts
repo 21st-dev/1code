@@ -105,7 +105,7 @@ describe("Codex API key validation", () => {
       "const desktopJob = createAndRegisterDesktopChatAgentJob",
     )
     const adapterCreationIndex = codexRouterSource.indexOf(
-      "const codexAdapter = useCodexAppServerAdapter",
+      "const codexAdapter = createCodexAppServerAdapter",
     )
 
     expect(validationIndex).toBeGreaterThan(0)

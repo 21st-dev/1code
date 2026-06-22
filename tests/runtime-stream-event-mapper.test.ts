@@ -473,12 +473,12 @@ describe("desktop stream event mapper", () => {
     expect(envelope).not.toContain("redactRendererDiagnosticChunk")
   })
 
-  test("Codex route redacts renderer diagnostics through the mapper", () => {
+  test("Codex route redacts renderer runtime chunks before emission", () => {
     const source = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
     const rendererEmitIndex = source.indexOf("const emitRendererChunk")
     const safeEmitIndex = source.indexOf("const safeEmit")
     const redactIndex = source.indexOf(
-      "redactRendererDiagnosticChunk",
+      "redactRendererRuntimeChunk",
       rendererEmitIndex,
     )
     const emitIndex = source.indexOf("emit.next(rendererChunk", rendererEmitIndex)
@@ -530,6 +530,10 @@ describe("desktop stream event mapper", () => {
       ["Codex", "src/main/lib/trpc/routers/codex.ts", "codex"],
     ] as const) {
       const source = readFileSync(routePath, "utf8")
+      const codexAppServerAdapter =
+        runtimeName === "Codex"
+          ? readFileSync("src/main/lib/codex/app-server-adapter.ts", "utf8")
+          : null
       const claudeEnvelope =
         runtimeName === "Claude"
           ? readFileSync(
@@ -551,45 +555,63 @@ describe("desktop stream event mapper", () => {
               "utf8",
             )
           : null
+      const claudeEnvelopeSource = claudeEnvelope ?? ""
+      const claudeControlsSource = claudeControls ?? ""
+      const claudeStartupSource = claudeStartup ?? ""
+      const codexAppServerAdapterSource = codexAppServerAdapter ?? ""
       const safeEmitIndex = source.indexOf("const safeEmit")
       const jobIndex =
         runtimeName === "Claude"
-          ? claudeStartup!.indexOf("createDesktopRunStartup({")
+          ? claudeStartupSource.indexOf("createDesktopRunStartup({")
           : source.indexOf("createAndRegisterDesktopChatAgentJob(db, {")
       const mapperCreateIndex =
         runtimeName === "Claude"
-          ? claudeStartup!.indexOf(
+          ? claudeStartupSource.indexOf(
               "streamEventMapper: desktopRunStartup.desktopJob.streamEventMapper",
               jobIndex,
             )
-          : source.indexOf(
-              "desktopStreamEventMapper = createDesktopStreamEventMapper",
-              jobIndex,
+          : codexAppServerAdapterSource.indexOf(
+              "mapDesktopStreamChunkToRunEvents({",
             )
       const appendIndex =
         runtimeName === "Claude"
-          ? claudeEnvelope!.indexOf("createRuntimeRendererChunkEmitter")
-          : source.indexOf("appendRunEventsToAgentJob", safeEmitIndex)
+          ? claudeEnvelopeSource.indexOf("createRuntimeRendererChunkEmitter")
+          : source.indexOf("appendRunEventsToAgentJob(db, [event])", jobIndex)
+      const traceEmitIndex =
+        runtimeName === "Claude"
+          ? -1
+          : codexAppServerAdapterSource.indexOf(
+              "request.trace.emit(event)",
+              mapperCreateIndex,
+            )
 
       if (runtimeName === "Claude") {
         expect(source).toContain("createClaudeAgentSdkDesktopRunEnvelope")
-        expect(claudeEnvelope).toContain("const emitRuntimeChunk")
+        expect(claudeEnvelopeSource).toContain("const emitRuntimeChunk")
       } else {
         expect(safeEmitIndex, `${runtimeName} safeEmit`).toBeGreaterThan(0)
         expect(jobIndex, `${runtimeName} desktop job`).toBeGreaterThan(safeEmitIndex)
       }
-      expect(mapperCreateIndex, `${runtimeName} mapper creation`).toBeGreaterThan(jobIndex)
       expect(appendIndex, `${runtimeName} mapper append`).toBeGreaterThan(0)
       if (runtimeName === "Claude") {
-        expect(claudeControls).toContain(`runtimeId: "${runtimeId}"`)
+        expect(mapperCreateIndex, `${runtimeName} mapper creation`).toBeGreaterThan(
+          jobIndex,
+        )
+        expect(claudeControlsSource).toContain(`runtimeId: "${runtimeId}"`)
         const emitter = readFileSync(
           "src/main/lib/agent-runtime/stream-event-mapper.ts",
           "utf8",
         )
         expect(emitter).toContain('chunkType !== "finish"')
       } else {
-        expect(source).toContain(`runtimeId: "${runtimeId}"`)
-        expect(source).toContain('type !== "finish"')
+        expect(mapperCreateIndex, "Codex app-server mapper creation").toBeGreaterThan(
+          0,
+        )
+        expect(codexAppServerAdapterSource).toContain(`runtimeId: "${runtimeId}"`)
+        expect(source).not.toContain("createDesktopStreamEventMapper")
+        expect(traceEmitIndex, "Codex app-server trace emit").toBeGreaterThan(
+          mapperCreateIndex,
+        )
       }
     }
   })

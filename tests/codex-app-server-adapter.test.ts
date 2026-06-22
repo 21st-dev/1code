@@ -9,9 +9,12 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
-import type { DesktopRunRequest } from "../src/main/lib/agent-runtime/desktop-run-request"
 import type { ValidatedAgentScopeContract } from "../src/main/lib/agent-guard"
+import type { DesktopRunRequest } from "../src/main/lib/agent-runtime/desktop-run-request"
+import {
+  type DesktopPermissionPolicy,
+  resolveDesktopPermissionPolicy,
+} from "../src/main/lib/agent-runtime/permission-policy"
 import { createCodexAppServerAdapter } from "../src/main/lib/codex/app-server-adapter"
 import type {
   CodexAppServerClientNotificationMethod,
@@ -186,7 +189,10 @@ class FakeCodexAppServerTransport implements CodexAppServerTransport {
     throw new Error(`unexpected method ${method}`)
   }
 
-  notify(method: CodexAppServerClientNotificationMethod, params?: unknown): void {
+  notify(
+    method: CodexAppServerClientNotificationMethod,
+    params?: unknown,
+  ): void {
     this.notifications.push({ method, params })
   }
 
@@ -230,6 +236,17 @@ function appServerPolicy(
     hasScopeContract,
     codexAdapterSource: "codex-app-server",
   })
+}
+
+function nonAppServerPolicy(): DesktopPermissionPolicy {
+  const policy = appServerPolicy()
+  return {
+    ...policy,
+    runtimeMapping: {
+      ...policy.runtimeMapping,
+      adapterSource: "legacy-desktop",
+    },
+  } as unknown as DesktopPermissionPolicy
 }
 
 function agentContext() {
@@ -311,14 +328,18 @@ describe("Codex app-server adapter", () => {
   })
 
   test("is disabled by default behind an explicit gate", async () => {
-    await expect(createCodexAppServerAdapter().run(createRequest())).rejects.toThrow(
+    await expect(
+      createCodexAppServerAdapter().run(createRequest()),
+    ).rejects.toThrow(
       "Codex app-server adapter is behind an explicit gate and is not enabled.",
     )
   })
 
-  test("fails closed until permission-policy owner exposes app-server mapping", async () => {
+  test("fails closed when permission policy is not app-server mapping", async () => {
     await expect(
-      createCodexAppServerAdapter({ enabled: true }).run(createRequest()),
+      createCodexAppServerAdapter({ enabled: true }).run(
+        createRequest(nonAppServerPolicy()),
+      ),
     ).rejects.toThrow(
       "Codex app-server permission policy mapping is not available; refusing app-server startup.",
     )
@@ -396,11 +417,13 @@ describe("Codex app-server adapter", () => {
     ).toMatchObject({
       threadId: "thread-resume-1",
     })
-    expect(chunks.find((chunk) => chunk.type === "session-init")).toMatchObject({
-      threadId: "thread-resume-1",
-      sessionId: "thread-resume-1",
-      adapterSource: "codex-app-server",
-    })
+    expect(chunks.find((chunk) => chunk.type === "session-init")).toMatchObject(
+      {
+        threadId: "thread-resume-1",
+        sessionId: "thread-resume-1",
+        adapterSource: "codex-app-server",
+      },
+    )
   })
 
   test("queries app-server MCP status and emits non-empty readiness summary", async () => {
@@ -648,7 +671,9 @@ describe("Codex app-server adapter", () => {
   })
 
   test("scrubs app-server selected secret env from Codex shell snapshots before and after run", async () => {
-    const codexHome = mkdtempSync(join(tmpdir(), "locus-app-server-codex-home-"))
+    const codexHome = mkdtempSync(
+      join(tmpdir(), "locus-app-server-codex-home-"),
+    )
     try {
       const snapshotDir = join(codexHome, "shell_snapshots")
       mkdirSync(snapshotDir, { recursive: true })
@@ -711,13 +736,18 @@ describe("Codex app-server adapter", () => {
   })
 
   test("scrubs app-managed Codex API key snapshots before and after run", async () => {
-    const codexHome = mkdtempSync(join(tmpdir(), "locus-app-server-codex-home-"))
+    const codexHome = mkdtempSync(
+      join(tmpdir(), "locus-app-server-codex-home-"),
+    )
     try {
       const snapshotDir = join(codexHome, "shell_snapshots")
       mkdirSync(snapshotDir, { recursive: true })
       const staleSnapshot = join(snapshotDir, "stale-api-key.sh")
       const runtimeSnapshot = join(snapshotDir, "runtime-api-key.sh")
-      writeFileSync(staleSnapshot, "export CODEX_API_KEY=sk-app-managed-selected\n")
+      writeFileSync(
+        staleSnapshot,
+        "export CODEX_API_KEY=sk-app-managed-selected\n",
+      )
       const transport = new FakeCodexAppServerTransport()
       transport.onTurnStart = () => {
         writeFileSync(
@@ -848,7 +878,8 @@ describe("Codex app-server adapter", () => {
             pluginId: "figma@openai-curated",
             pluginSource: "openai-curated:figma@7118aaa3",
             enabled: true,
-            pluginPath: "/global/.codex/plugins/cache/openai-curated/figma/7118aaa3",
+            pluginPath:
+              "/global/.codex/plugins/cache/openai-curated/figma/7118aaa3",
             cacheCoordinates: {
               marketplace: "openai-curated",
               name: "figma",

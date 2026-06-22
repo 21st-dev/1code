@@ -220,6 +220,10 @@ describe("desktop runtime adapter factory", () => {
       "src/main/lib/claude/agent-sdk-desktop-run-runtime.ts",
       "utf8",
     )
+    const desktopRuntimeLifecycle = readFileSync(
+      "src/main/lib/claude/agent-sdk-runtime-lifecycle.ts",
+      "utf8",
+    )
     const claudeDesktopJob = readFileSync(
       "src/main/lib/claude/agent-sdk-desktop-job.ts",
       "utf8",
@@ -238,21 +242,20 @@ describe("desktop runtime adapter factory", () => {
     expect(claudeDesktopRunStartup).toContain(
       "createClaudeAgentSdkDesktopRunStartup",
     )
-    expect(claudeDesktopRunStartup).toContain(
-      "createClaudeDesktopRunRequest({",
-    )
+    expect(claudeDesktopJob).toContain("createDesktopRunRequest({")
     expect(claudeDesktopRunRequest).toContain("createDesktopRunContextFromPreflight")
-    expect(claudeDesktopRunRequest).toContain(
-      "type DesktopRunPreflightResult",
+    expect(claudeDesktopRunRequest).toContain("DesktopRunPreflightResult")
+    expect(desktopRunRequest).toContain("cwd: preflight.cwd")
+    expect(desktopRunRequest).toContain("workspaceKind: preflight.kind")
+    expect(desktopRunRuntime).toContain(
+      "runClaudeAgentSdkDesktopRuntimeWithMcpReadiness",
     )
-    expect(claudeDesktopRunRequest).toContain("cwd: preflight.cwd")
-    expect(claudeDesktopRunRequest).toContain("kind: preflight.kind")
-    expect(desktopRunRuntime).toContain("runClaudeAgentSdkDesktopRequest")
-    expect(desktopRunRuntime).toContain("request.context")
+    expect(desktopRuntimeLifecycle).toContain("request.context")
     expect(claudeDesktopJob).toContain("createAndRegisterDesktopChatAgentJob")
     expect(desktopRunRequest).toContain("DesktopRunRequest")
     expect(desktopRunRequest).toContain("DesktopRunPreflightResult")
     expect(claudeRouter).not.toContain("const request: DesktopRunRequest")
-    expect(claudeRouter).not.toContain("runtimeCwd,")
+    expect(claudeRouter).not.toContain("createDesktopRunContextFromPreflight")
+    expect(claudeRouter).not.toContain("createClaudeDesktopRunRequest")
   })
 })

@@ -216,7 +216,7 @@ describe("desktop runtime preflight", () => {
       "const desktopRunRequest = createCodexDesktopRunRequest({",
     )
     const adapterIndex = codex.indexOf(
-      "const codexAdapter = useCodexAppServerAdapter",
+      "const codexAdapter = createCodexAppServerAdapter",
     )
     const adapterRunIndex = codex.indexOf(
       "codexAdapter.run(desktopRunRequest)",

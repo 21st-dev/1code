@@ -103,11 +103,10 @@
 
 ## 7. Verification
 
-- Local note: this shell currently has no `bun` or `openspec`, and
-  `node_modules` does not expose a resolvable `typescript` package for the
-  architecture guard. `git diff --check` and the 7.3 grep check passed.
-- [ ] 7.1 `bun run ts:check` is clean (no dangling ACP imports/types).
-- [ ] 7.2 `bun run test` passes; deleted ACP tests are gone and retained
+- Local note: verified with `/opt/homebrew/bin/bun` and
+  `/opt/homebrew/bin/openspec` in this shell.
+- [x] 7.1 `bun run ts:check` is clean (no dangling ACP imports/types).
+- [x] 7.2 `bun run test` passes; deleted ACP tests are gone and retained
   shared-code tests still pass.
 - [x] 7.3 `rg -n "codex-acp-temporary-compat|USE_ACP_TEMPORARY_COMPAT|createCodexAcpTemporaryCompatAdapter"`
   returns no hits outside this change folder and archived changes.
@@ -116,4 +115,4 @@
   ACP-shaped tool parts still renders (proves `acp-tool-normalizer` retention).
 - [ ] 7.5 `locus acp` stdio server still starts and serves a prompt turn
   (proves the server surface was untouched).
-- [ ] 7.6 `openspec validate remove-codex-acp-temporary-compat --strict --no-interactive` passes.
+- [x] 7.6 `openspec validate remove-codex-acp-temporary-compat --strict --no-interactive` passes.

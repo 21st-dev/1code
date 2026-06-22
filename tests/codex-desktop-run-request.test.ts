@@ -87,7 +87,7 @@ describe("Codex desktop run request", () => {
           id: "permission-policy-1",
           status: "ready",
           message:
-            "Plan mode denies project/workspace side effects; Locus may still persist local app state.",
+            "Plan mode denies project/workspace side effects; Codex app-server must install its approval gate before provider or tool work starts.",
         },
       ],
     })
