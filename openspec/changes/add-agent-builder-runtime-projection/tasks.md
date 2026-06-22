@@ -31,12 +31,19 @@ read-only aggregation.
 
 ## 3. Runtime-Neutral Prompt Application
 
-- [ ] 3.1 Ensure `@[agent:name]` resolves only to canonical Locus Agents.
-- [ ] 3.2 Keep Claude prompt-context application covered by tests.
-- [ ] 3.3 Add Codex prompt-context application or explicitly gate Codex with a
+- [x] 3.1 Ensure `@[agent:name]` resolves only to canonical Locus Agents.
+- [x] 3.2 Keep Claude prompt-context application covered by tests.
+- [x] 3.3 Add Codex prompt-context application or explicitly gate Codex with a
       runtime capability reason before provider work starts.
-- [ ] 3.4 Add missing-agent tests for every runtime path that accepts `@agent`
+- [x] 3.4 Add missing-agent tests for every runtime path that accepts `@agent`
       mentions.
+
+Proof note: Claude remains covered by `tests/claude-agent-sdk-prompt.test.ts`.
+Codex app-server prompt prep now goes through `prepareCodexAppServerRuntimePrompt`,
+which reuses canonical Locus Agent prompt-context preparation before long-text
+assembly; `tests/codex-app-server-attachments.test.ts` covers preserved
+missing-agent results, and `tests/codex-app-server-adapter.test.ts` verifies the
+prepared prompt reaches `turn/start`.
 
 ## 4. Agent Builder Read Model
 

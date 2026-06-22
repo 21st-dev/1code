@@ -16,13 +16,15 @@ describe("Codex app-server prompt owner", () => {
       "utf8",
     )
 
-    expect(codexAppServerAdapter).toContain(
-      "prepareCodexAppServerPromptWithLongText",
-    )
+    expect(codexAppServerAdapter).toContain("prepareCodexAppServerRuntimePrompt")
     expect(codexRouter).not.toContain("prepareCodexAppServerPromptWithLongText")
     expect(codexRouter).not.toContain("preparePromptWithAppAgents")
     expect(codexRouter).not.toContain("prependLongTextAttachmentPromptBlocks")
     expect(codexRouter).not.toContain("buildGuardedRunPromptBlock")
+    expect(codexAppServerAttachments).toContain("preparePromptWithAppAgents")
+    expect(codexAppServerAttachments).toContain(
+      "prepareCodexAppServerRuntimePrompt",
+    )
     expect(codexAppServerAttachments).toContain(
       "prependLongTextAttachmentPromptBlocks",
     )

@@ -1,19 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
-import { join } from "node:path"
 import { tmpdir } from "node:os"
-import type { ResolvedChatImageAttachment } from "../src/shared/chat-attachments"
+import { join } from "node:path"
 import type { DesktopRunAttachmentRef } from "../src/main/lib/agent-runtime/desktop-run-request"
 import {
-  CodexAppServerUnsupportedAttachmentError,
   buildCodexAppServerUserInputItems,
+  CodexAppServerUnsupportedAttachmentError,
   prepareCodexAppServerPromptWithLongText,
+  prepareCodexAppServerRuntimePrompt,
 } from "../src/main/lib/codex/app-server-attachments"
+import { setElectronUserDataPathProviderForTest } from "../src/main/lib/electron-app"
 import {
   deleteLongTextAttachment,
   stageLongTextAttachment,
 } from "../src/main/lib/long-text-attachments"
-import { setElectronUserDataPathProviderForTest } from "../src/main/lib/electron-app"
+import type { ResolvedChatImageAttachment } from "../src/shared/chat-attachments"
 
 let userDataDir = ""
 
@@ -175,6 +176,32 @@ describe("Codex app-server attachment mapper", () => {
       text_elements: [],
     })
     expect(JSON.stringify(items)).not.toContain(longText.localRef)
+  })
+
+  test("applies Locus Agent prompt context before long-text prompt assembly", async () => {
+    const longTextInputs: string[] = []
+    const result = await prepareCodexAppServerRuntimePrompt({
+      prompt: "@[agent:reviewer] review this",
+      prepareAppAgentPrompt: async (prompt) => ({
+        prompt: `# Locus Agent Context\nreviewer\n\n# User Request\n${prompt.replace("@[agent:reviewer]", "").trim()}`,
+        appAgentMentions: ["reviewer"],
+        resolvedAppAgents: [],
+        missingAppAgents: ["missing-reviewer"],
+      }),
+      prependLongTextPromptBlocks: async (prompt) => {
+        longTextInputs.push(prompt)
+        return `${prompt}\n\n# Long Text`
+      },
+    })
+
+    expect(result.appAgentMentions).toEqual(["reviewer"])
+    expect(result.missingAppAgents).toEqual(["missing-reviewer"])
+    expect(longTextInputs).toEqual([
+      "# Locus Agent Context\nreviewer\n\n# User Request\nreview this",
+    ])
+    expect(result.prompt).toContain("# Locus Agent Context")
+    expect(result.prompt).toContain("# Long Text")
+    expect(result.prompt).not.toContain("@[agent:reviewer]")
   })
 
   test("fails before app-server startup when a long-text local ref cannot resolve", async () => {

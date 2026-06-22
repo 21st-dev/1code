@@ -23,7 +23,7 @@ import {
 } from "./app-server-approval"
 import {
   buildCodexAppServerUserInputItems,
-  prepareCodexAppServerPromptWithLongText,
+  prepareCodexAppServerRuntimePrompt,
 } from "./app-server-attachments"
 import {
   buildCodexControlledEditDynamicToolSpec,
@@ -97,6 +97,7 @@ export type CreateCodexAppServerAdapterInput = {
   ) => void
   unregisterPendingQuestion?: (toolUseId: string) => void
   userInputTimeoutMs?: number
+  prepareRuntimePrompt?: typeof prepareCodexAppServerRuntimePrompt
 }
 
 export class CodexAppServerAdapterDisabledError extends Error {
@@ -341,6 +342,7 @@ export function createCodexAppServerAdapter({
   registerPendingQuestion,
   unregisterPendingQuestion,
   userInputTimeoutMs,
+  prepareRuntimePrompt = prepareCodexAppServerRuntimePrompt,
 }: CreateCodexAppServerAdapterInput = {}): CodexDesktopAdapter {
   return {
     metadata: CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA,
@@ -647,7 +649,7 @@ export function createCodexAppServerAdapter({
       }
 
       try {
-        const preparedPrompt = await prepareCodexAppServerPromptWithLongText({
+        const preparedPrompt = await prepareRuntimePrompt({
           prompt: request.prompt,
           longTextAttachments: request.attachments
             .filter((attachment) => attachment.kind === "long-text")
@@ -660,7 +662,7 @@ export function createCodexAppServerAdapter({
             })),
         })
         const input = buildCodexAppServerUserInputItems({
-          prompt: preparedPrompt,
+          prompt: preparedPrompt.prompt,
           attachmentRefs: request.attachments,
           resolvedImages,
           allowPreparedLongTextRefs: true,
