@@ -1,5 +1,5 @@
 import { useAtomValue, useSetAtom } from "jotai"
-import { FolderOpen, Info, Plus, Trash2 } from "lucide-react"
+import { FolderOpen, Info, Plus, RotateCcw, Trash2 } from "lucide-react"
 import {
   type ChangeEvent,
   useCallback,
@@ -54,6 +54,46 @@ import {
 import { Textarea } from "../../ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip"
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
+
+type ProjectListProject = {
+  id: string
+  name: string
+  path: string
+  iconPath?: string | null
+  updatedAt?: string | Date | null
+  removedAt?: string | Date | null
+  gitOwner?: string | null
+  gitProvider?: string | null
+}
+
+type ProjectSelection =
+  | {
+      kind: "active" | "removed"
+      id: string
+    }
+  | null
+
+function projectSelectionKey(selection: ProjectSelection): string | null {
+  return selection ? `${selection.kind}:${selection.id}` : null
+}
+
+function parseProjectSelectionKey(key: string): ProjectSelection {
+  const [kind, id] = key.split(":")
+  if ((kind === "active" || kind === "removed") && id) {
+    return { kind, id }
+  }
+  return null
+}
+
+function formatProjectDate(value: string | Date | null | undefined): string {
+  if (!value) return "—"
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return "—"
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })
+}
 
 function CommandTextarea({
   value,
@@ -896,15 +936,268 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   )
 }
 
+function RemovedProjectDetail({
+  project,
+  onRestored,
+  onDeleted,
+}: {
+  project: ProjectListProject
+  onRestored: (projectId: string) => void
+  onDeleted: () => void
+}) {
+  const { t } = useI18n()
+  const trpcUtils = trpc.useUtils()
+  const [showDeleteHistoryDialog, setShowDeleteHistoryDialog] = useState(false)
+
+  const { data: deletionPreview, isFetching: isDeletionPreviewLoading } =
+    trpc.projects.deletionPreview.useQuery(
+      { id: project.id },
+      { enabled: !!project.id },
+    )
+
+  const activeJobCount = deletionPreview?.activeJobs.length ?? 0
+  const isDeleteBlocked = activeJobCount > 0
+
+  const restoreMutation = trpc.projects.restore.useMutation({
+    onSuccess: async (restoredProject) => {
+      await Promise.all([
+        trpcUtils.projects.list.invalidate(),
+        trpcUtils.projects.listRemoved.invalidate(),
+        trpcUtils.projects.get.invalidate({ id: project.id }),
+        trpcUtils.chats.list.invalidate(),
+        trpcUtils.chats.listArchived.invalidate(),
+      ])
+
+      if (!restoredProject) {
+        toast.error(t("settings.projects.toast.failedToRestoreNotFound"))
+        return
+      }
+
+      toast.success(t("settings.projects.toast.restored"))
+      onRestored(restoredProject.id)
+    },
+    onError: (err) => {
+      toast.error(
+        t("settings.projects.toast.failedToRestore", {
+          message: err.message,
+        }),
+      )
+    },
+  })
+
+  const deleteHistoryMutation = trpc.projects.deleteHistory.useMutation({
+    onSuccess: async () => {
+      setShowDeleteHistoryDialog(false)
+      await Promise.all([
+        trpcUtils.projects.listRemoved.invalidate(),
+        trpcUtils.projects.get.invalidate({ id: project.id }),
+        trpcUtils.chats.list.invalidate(),
+        trpcUtils.chats.listArchived.invalidate(),
+      ])
+      toast.success(t("settings.projects.toast.historyDeleted"))
+      onDeleted()
+    },
+    onError: (err) => {
+      toast.error(
+        t("settings.projects.toast.failedToDeleteHistory", {
+          message: err.message,
+        }),
+      )
+    },
+  })
+
+  const openInFinderMutation = trpc.external.openInFinder.useMutation()
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-2xl space-y-6 p-6">
+        <div>
+          <h4 className="mb-2 text-sm font-medium text-foreground">
+            {t("settings.projects.removedProject")}
+          </h4>
+          <div className="overflow-hidden rounded-lg border border-border bg-background">
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <ProjectIcon project={project} className="h-8 w-8" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {project.name}
+                  </p>
+                  <p className="truncate text-sm text-muted-foreground">
+                    {project.path}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5 pl-2"
+                onClick={() => openInFinderMutation.mutate(project.path)}
+                disabled={!project.path}
+              >
+                <img src={finderIcon} alt="" className="h-3.5 w-3.5" />
+                Finder
+              </Button>
+            </div>
+            <div className="border-t border-border p-4">
+              <span className="text-sm font-medium text-foreground">
+                {t("settings.projects.removedOn")}
+              </span>
+              <p className="text-sm text-muted-foreground">
+                {formatProjectDate(project.removedAt)}
+              </p>
+            </div>
+            <div className="border-t border-border p-4">
+              <span className="text-sm font-medium text-foreground">
+                {t("settings.projects.savedHistory")}
+              </span>
+              <p className="text-sm text-muted-foreground">
+                {deletionPreview
+                  ? t("settings.projects.savedHistoryWithCounts", {
+                      chatCount: deletionPreview.chatCount,
+                      subChatCount: deletionPreview.subChatCount,
+                      worktreeCount: deletionPreview.worktreeCount,
+                    })
+                  : isDeletionPreviewLoading
+                    ? t("settings.projects.savedHistoryLoading")
+                    : t("settings.projects.savedHistoryUnavailable")}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h4 className="mb-2 text-sm font-medium text-foreground">
+            {t("settings.projects.recovery")}
+          </h4>
+          <div className="overflow-hidden rounded-lg border border-border bg-background">
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.restoreProject")}
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.projects.restoreDescription")}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                onClick={() => restoreMutation.mutate({ id: project.id })}
+                disabled={restoreMutation.isPending}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {restoreMutation.isPending
+                  ? t("settings.projects.restoring")
+                  : t("settings.projects.restoreProject")}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <h4 className="mb-2 text-sm font-medium text-foreground">
+            {t("settings.projects.dangerZone")}
+          </h4>
+          <div className="overflow-hidden rounded-lg border border-border bg-background">
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div className="min-w-0 flex-1">
+                <span className="text-sm font-medium text-foreground">
+                  {t("settings.projects.deleteProjectHistory")}
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {t("settings.projects.deleteProjectHistoryDescription")}
+                </p>
+              </div>
+              <AlertDialog
+                open={showDeleteHistoryDialog}
+                onOpenChange={setShowDeleteHistoryDialog}
+              >
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1.5 hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t("settings.projects.deleteProjectHistory")}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t("settings.projects.deleteProjectHistoryTitle")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-2">
+                      <span className="block">
+                        {deletionPreview
+                          ? t(
+                              "settings.projects.deleteProjectHistoryConfirmWithCounts",
+                              {
+                                name: project.name,
+                                chatCount: deletionPreview.chatCount,
+                                subChatCount: deletionPreview.subChatCount,
+                                worktreeCount: deletionPreview.worktreeCount,
+                              },
+                            )
+                          : isDeletionPreviewLoading
+                            ? t(
+                                "settings.projects.deleteProjectHistoryConfirmLoading",
+                              )
+                            : t(
+                                "settings.projects.deleteProjectHistoryConfirmUnavailable",
+                              )}
+                      </span>
+                      {isDeleteBlocked && (
+                        <span className="block text-destructive">
+                          {t(
+                            "settings.projects.deleteProjectHistoryBlockedByJobs",
+                            {
+                              count: activeJobCount,
+                            },
+                          )}
+                        </span>
+                      )}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() =>
+                        deleteHistoryMutation.mutate({ id: project.id })
+                      }
+                      disabled={
+                        deleteHistoryMutation.isPending ||
+                        !deletionPreview ||
+                        isDeleteBlocked
+                      }
+                      className={buttonVariants({ variant: "destructive" })}
+                    >
+                      {deleteHistoryMutation.isPending
+                        ? t("settings.projects.deletingHistory")
+                        : t("common.delete")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Main Two-Panel Component ---
 export function AgentsProjectsTab() {
   const { t } = useI18n()
   const selectedProject = useAtomValue(selectedProjectAtom)
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null,
-  )
+  const [selectedProjectSelection, setSelectedProjectSelection] =
+    useState<ProjectSelection>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const selectedProjectKey = projectSelectionKey(selectedProjectSelection)
 
   // Focus search on "/" hotkey
   useEffect(() => {
@@ -921,11 +1214,13 @@ export function AgentsProjectsTab() {
   }, [])
 
   const { data: projects, isLoading } = trpc.projects.list.useQuery()
+  const { data: removedProjects, isLoading: isRemovedLoading } =
+    trpc.projects.listRemoved.useQuery()
 
   const openFolderMutation = trpc.projects.openFolder.useMutation({
     onSuccess: (project) => {
       if (project) {
-        setSelectedProjectId(project.id)
+        setSelectedProjectSelection({ kind: "active", id: project.id })
       }
     },
   })
@@ -943,38 +1238,99 @@ export function AgentsProjectsTab() {
     )
   }, [projects, searchQuery])
 
+  const filteredRemovedProjects = useMemo(() => {
+    if (!removedProjects) return []
+    if (!searchQuery.trim()) return removedProjects
+    const q = searchQuery.toLowerCase()
+    return removedProjects.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.path?.toLowerCase().includes(q) ||
+        p.gitRepo?.toLowerCase().includes(q),
+    )
+  }, [removedProjects, searchQuery])
+
   const allProjectIds = useMemo(
-    () => filteredProjects.map((p) => p.id),
-    [filteredProjects],
+    () => [
+      ...filteredProjects.map((p) => `active:${p.id}`),
+      ...filteredRemovedProjects.map((p) => `removed:${p.id}`),
+    ],
+    [filteredProjects, filteredRemovedProjects],
   )
 
   const { containerRef: listRef, onKeyDown: listKeyDown } = useListKeyboardNav({
     items: allProjectIds,
-    selectedItem: selectedProjectId,
-    onSelect: setSelectedProjectId,
+    selectedItem: selectedProjectKey,
+    onSelect: (key) => setSelectedProjectSelection(parseProjectSelectionKey(key)),
   })
+
+  const firstAvailableSelection = useMemo<ProjectSelection>(() => {
+    const firstActiveProject = projects?.[0]
+    if (firstActiveProject) return { kind: "active", id: firstActiveProject.id }
+    const firstRemovedProject = removedProjects?.[0]
+    if (firstRemovedProject) {
+      return { kind: "removed", id: firstRemovedProject.id }
+    }
+    return null
+  }, [projects, removedProjects])
 
   // Auto-select first project
   useEffect(() => {
-    if (selectedProjectId || isLoading) return
-    if (projects && projects.length > 0) {
-      setSelectedProjectId(projects[0]?.id ?? null)
+    if (selectedProjectSelection || isLoading || isRemovedLoading) return
+    if (firstAvailableSelection?.id) {
+      setSelectedProjectSelection(firstAvailableSelection)
     }
-  }, [projects, selectedProjectId, isLoading])
+  }, [
+    firstAvailableSelection,
+    selectedProjectSelection,
+    isLoading,
+    isRemovedLoading,
+  ])
 
   // Clear stale selection after a project is removed from the active list.
   useEffect(() => {
-    if (!selectedProjectId || isLoading || !projects) return
-    if (!projects.some((project) => project.id === selectedProjectId)) {
-      setSelectedProjectId(projects[0]?.id ?? null)
+    if (
+      !selectedProjectSelection ||
+      isLoading ||
+      isRemovedLoading ||
+      !projects ||
+      !removedProjects
+    ) {
+      return
     }
-  }, [projects, selectedProjectId, isLoading])
+    const selectionStillExists =
+      selectedProjectSelection.kind === "active"
+        ? projects.some((project) => project.id === selectedProjectSelection.id)
+        : removedProjects.some(
+            (project) => project.id === selectedProjectSelection.id,
+          )
+    if (!selectionStillExists) {
+      setSelectedProjectSelection(firstAvailableSelection?.id ? firstAvailableSelection : null)
+    }
+  }, [
+    projects,
+    removedProjects,
+    selectedProjectSelection,
+    firstAvailableSelection,
+    isLoading,
+    isRemovedLoading,
+  ])
 
   // Sync selection from global selectedProject (e.g., toast action)
   useEffect(() => {
     if (!selectedProject?.id) return
-    setSelectedProjectId(selectedProject.id)
+    setSelectedProjectSelection({ kind: "active", id: selectedProject.id })
   }, [selectedProject?.id])
+
+  const selectedRemovedProject = useMemo(
+    () =>
+      selectedProjectSelection?.kind === "removed"
+        ? removedProjects?.find(
+            (project) => project.id === selectedProjectSelection.id,
+          )
+        : null,
+    [removedProjects, selectedProjectSelection],
+  )
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -1023,11 +1379,12 @@ export function AgentsProjectsTab() {
             aria-label={t("settings.projects.projectListLabel")}
             className="flex-1 overflow-y-auto px-2 pt-2 pb-2 outline-none"
           >
-            {isLoading ? (
+            {isLoading || isRemovedLoading ? (
               <div className="flex items-center justify-center h-full">
                 <FolderFilledIcon className="h-5 w-5 text-muted-foreground animate-pulse" />
               </div>
-            ) : !projects || projects.length === 0 ? (
+            ) : (projects?.length ?? 0) + (removedProjects?.length ?? 0) ===
+              0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <FolderFilledIcon className="h-8 w-8 text-border mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">
@@ -1040,37 +1397,98 @@ export function AgentsProjectsTab() {
                   {t("settings.projects.addFirstProject")}
                 </button>
               </div>
-            ) : filteredProjects.length === 0 ? (
+            ) : filteredProjects.length === 0 &&
+              filteredRemovedProjects.length === 0 ? (
               <div className="flex items-center justify-center py-8">
                 <p className="text-xs text-muted-foreground">
                   {t("settings.projects.noResults")}
                 </p>
               </div>
             ) : (
-              <div className="space-y-0.5">
-                {filteredProjects.map((project) => {
-                  const isSelected = selectedProjectId === project.id
-                  return (
-                    <button
-                      key={project.id}
-                      data-item-id={project.id}
-                      onClick={() => setSelectedProjectId(project.id)}
-                      className={cn(
-                        "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
-                        isSelected
-                          ? "bg-foreground/5 text-foreground"
-                          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <ProjectIcon project={project} className="h-4 w-4" />
-                        <span className="text-sm truncate flex-1">
-                          {project.name}
-                        </span>
+              <div className="space-y-4">
+                {filteredProjects.length > 0 && (
+                  <div className="space-y-0.5">
+                    {filteredRemovedProjects.length > 0 && (
+                      <div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                        {t("settings.projects.activeProjects")}
                       </div>
-                    </button>
-                  )
-                })}
+                    )}
+                    {filteredProjects.map((project) => {
+                      const key = `active:${project.id}`
+                      const isSelected = selectedProjectKey === key
+                      return (
+                        <button
+                          key={project.id}
+                          type="button"
+                          data-item-id={key}
+                          onClick={() =>
+                            setSelectedProjectSelection({
+                              kind: "active",
+                              id: project.id,
+                            })
+                          }
+                          className={cn(
+                            "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
+                            isSelected
+                              ? "bg-foreground/5 text-foreground"
+                              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <ProjectIcon
+                              project={project}
+                              className="h-4 w-4"
+                            />
+                            <span className="text-sm truncate flex-1">
+                              {project.name}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {filteredRemovedProjects.length > 0 && (
+                  <div className="space-y-0.5">
+                    <div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                      {t("settings.projects.removedProjects")}
+                    </div>
+                    {filteredRemovedProjects.map((project) => {
+                      const key = `removed:${project.id}`
+                      const isSelected = selectedProjectKey === key
+                      return (
+                        <button
+                          key={project.id}
+                          type="button"
+                          data-item-id={key}
+                          onClick={() =>
+                            setSelectedProjectSelection({
+                              kind: "removed",
+                              id: project.id,
+                            })
+                          }
+                          className={cn(
+                            "w-full text-left py-1.5 px-2 rounded-md transition-colors duration-150 cursor-pointer outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:-outline-offset-2",
+                            isSelected
+                              ? "bg-foreground/5 text-foreground"
+                              : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                          )}
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <ProjectIcon
+                              project={project}
+                              className="h-4 w-4 opacity-60"
+                            />
+                            <span className="flex-1 truncate text-sm">
+                              {project.name}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1079,13 +1497,22 @@ export function AgentsProjectsTab() {
 
       {/* Right content - detail panel */}
       <div className="flex-1 min-w-0 h-full overflow-hidden">
-        {selectedProjectId ? (
-          <ProjectDetail projectId={selectedProjectId} />
+        {selectedProjectSelection?.kind === "active" ? (
+          <ProjectDetail projectId={selectedProjectSelection.id} />
+        ) : selectedProjectSelection?.kind === "removed" &&
+          selectedRemovedProject ? (
+          <RemovedProjectDetail
+            project={selectedRemovedProject}
+            onRestored={(projectId) =>
+              setSelectedProjectSelection({ kind: "active", id: projectId })
+            }
+            onDeleted={() => setSelectedProjectSelection(null)}
+          />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <FolderFilledIcon className="h-12 w-12 text-border mb-4" />
             <p className="text-sm text-muted-foreground">
-              {projects && projects.length > 0
+              {(projects?.length ?? 0) + (removedProjects?.length ?? 0) > 0
                 ? t("settings.projects.selectToView")
                 : t("settings.projects.noneAdded")}
             </p>

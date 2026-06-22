@@ -8,7 +8,7 @@ import {
 } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { projects } from "../src/main/lib/db/schema"
+import { chats, projects, subChats } from "../src/main/lib/db/schema"
 import { createAgentJob } from "../src/main/lib/headless/job-store"
 import {
   getProjectRegistrationForCwd,
@@ -241,6 +241,44 @@ describe("project registry", () => {
       })
       expect(restored.project.removedAt).toBeNull()
       expect(db.select().from(projects).all()).toHaveLength(1)
+    })
+  })
+
+  test("unregister preserves chats and sub-chats until history deletion", async () => {
+    await withTempDir(async (root) => {
+      const db = createAgentJobTestDb()
+      const projectPath = join(root, "project")
+      mkdirSync(projectPath)
+      const registered = await registerProjectForPath({
+        db,
+        path: projectPath,
+      })
+      db.insert(chats)
+        .values({
+          id: "chat-1",
+          projectId: registered.project.id,
+          name: "Saved chat",
+        })
+        .run()
+      db.insert(subChats)
+        .values({
+          id: "sub-chat-1",
+          chatId: "chat-1",
+          messages: "[]",
+          mode: "agent",
+        })
+        .run()
+
+      const removed = unregisterProjectForPath({
+        db,
+        path: projectPath,
+      })
+
+      expect(removed.removed).toBe(true)
+      expect(db.select().from(projects).all()).toHaveLength(1)
+      expect(db.select().from(chats).all()).toHaveLength(1)
+      expect(db.select().from(subChats).all()).toHaveLength(1)
+      expect(db.select().from(projects).get()?.removedAt).toBeInstanceOf(Date)
     })
   })
 

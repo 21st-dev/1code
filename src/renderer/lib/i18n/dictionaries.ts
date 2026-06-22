@@ -909,6 +909,14 @@ export const en = {
   "settings.projects.toast.removed": "Project removed from list",
   "settings.projects.toast.failedToDelete":
     "Failed to delete project: {message}",
+  "settings.projects.toast.restored": "Project restored",
+  "settings.projects.toast.failedToRestore":
+    "Failed to restore project: {message}",
+  "settings.projects.toast.failedToRestoreNotFound":
+    "Project could not be restored because it no longer exists.",
+  "settings.projects.toast.historyDeleted": "Project history deleted",
+  "settings.projects.toast.failedToDeleteHistory":
+    "Failed to delete project history: {message}",
   "settings.projects.toast.iconUpdated": "Icon updated",
   "settings.projects.toast.failedToUploadIcon":
     "Failed to upload icon: {message}",
@@ -953,6 +961,8 @@ export const en = {
   "settings.projects.addPlatformOverrides":
     "Add platform-specific commands",
   "settings.projects.dangerZone": "Danger Zone",
+  "settings.projects.activeProjects": "Active Projects",
+  "settings.projects.removedProjects": "Removed Projects",
   "settings.projects.removeProject": "Remove from Projects list",
   "settings.projects.removeDescription":
     "Hide this project from active Projects. Chats, worktrees, and code files are kept.",
@@ -966,6 +976,33 @@ export const en = {
   "settings.projects.removeProjectBlockedByJobs":
     "Cannot remove while {count} queued or running jobs still reference this project.",
   "settings.projects.removing": "Removing...",
+  "settings.projects.removedProject": "Removed Project",
+  "settings.projects.removedOn": "Removed on",
+  "settings.projects.savedHistory": "Saved history",
+  "settings.projects.savedHistoryWithCounts":
+    "{chatCount} chats, {subChatCount} history tabs, and {worktreeCount} worktrees are still saved.",
+  "settings.projects.savedHistoryLoading": "Checking saved history...",
+  "settings.projects.savedHistoryUnavailable":
+    "Saved history preview is unavailable.",
+  "settings.projects.recovery": "Recovery",
+  "settings.projects.restoreProject": "Restore Project",
+  "settings.projects.restoreDescription":
+    "Return this project to the active Projects list with its saved chats and worktrees.",
+  "settings.projects.restoring": "Restoring...",
+  "settings.projects.deleteProjectHistory": "Delete Project History",
+  "settings.projects.deleteProjectHistoryDescription":
+    "Permanently delete this removed project's chats, history tabs, and local agent worktrees. Code files are not deleted.",
+  "settings.projects.deleteProjectHistoryTitle":
+    "Delete project history permanently?",
+  "settings.projects.deleteProjectHistoryConfirmWithCounts":
+    'This permanently deletes "{name}" from Locus history: {chatCount} chats, {subChatCount} history tabs, and {worktreeCount} local agent worktrees. Your code files are not deleted. This cannot be undone.',
+  "settings.projects.deleteProjectHistoryConfirmLoading":
+    "Checking chats and worktrees before deletion...",
+  "settings.projects.deleteProjectHistoryConfirmUnavailable":
+    "Deletion preview is unavailable. Close this dialog and try again.",
+  "settings.projects.deleteProjectHistoryBlockedByJobs":
+    "Cannot delete history while {count} queued or running jobs still reference this project.",
+  "settings.projects.deletingHistory": "Deleting history...",
   "settings.projects.searchPlaceholder": "Search projects...",
   "settings.projects.projectListLabel": "Project list",
   "settings.projects.addProjectFolder": "Open a Project",
@@ -4272,6 +4309,14 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.projects.toast.removed": "项目已从列表移除",
   "settings.projects.toast.failedToDelete":
     "删除项目失败：{message}",
+  "settings.projects.toast.restored": "项目已恢复",
+  "settings.projects.toast.failedToRestore":
+    "恢复项目失败：{message}",
+  "settings.projects.toast.failedToRestoreNotFound":
+    "项目已不存在，无法恢复。",
+  "settings.projects.toast.historyDeleted": "项目历史已删除",
+  "settings.projects.toast.failedToDeleteHistory":
+    "删除项目历史失败：{message}",
   "settings.projects.toast.iconUpdated": "图标已更新",
   "settings.projects.toast.failedToUploadIcon":
     "上传图标失败：{message}",
@@ -4316,6 +4361,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.projects.addPlatformOverrides":
     "添加平台专用命令",
   "settings.projects.dangerZone": "危险区",
+  "settings.projects.activeProjects": "活动项目",
+  "settings.projects.removedProjects": "已移除项目",
   "settings.projects.removeProject": "从项目列表移除",
   "settings.projects.removeDescription":
     "从活动项目中隐藏此项目。聊天、工作树和代码文件都会保留。",
@@ -4329,6 +4376,33 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.projects.removeProjectBlockedByJobs":
     "仍有 {count} 个排队或运行中的任务引用此项目，暂时不能移除。",
   "settings.projects.removing": "移除中...",
+  "settings.projects.removedProject": "已移除项目",
+  "settings.projects.removedOn": "移除时间",
+  "settings.projects.savedHistory": "保留的历史",
+  "settings.projects.savedHistoryWithCounts":
+    "仍保留 {chatCount} 个聊天、{subChatCount} 个历史标签和 {worktreeCount} 个工作树。",
+  "settings.projects.savedHistoryLoading": "正在检查保留的历史...",
+  "settings.projects.savedHistoryUnavailable":
+    "无法获取保留历史预览。",
+  "settings.projects.recovery": "恢复",
+  "settings.projects.restoreProject": "恢复项目",
+  "settings.projects.restoreDescription":
+    "把这个项目恢复到活动项目列表，并保留已有聊天和工作树。",
+  "settings.projects.restoring": "恢复中...",
+  "settings.projects.deleteProjectHistory": "删除项目历史",
+  "settings.projects.deleteProjectHistoryDescription":
+    "永久删除这个已移除项目的聊天、历史标签和本地智能体工作树。代码文件不会被删除。",
+  "settings.projects.deleteProjectHistoryTitle":
+    "永久删除项目历史？",
+  "settings.projects.deleteProjectHistoryConfirmWithCounts":
+    "这会从 Locus 历史中永久删除 \"{name}\"：{chatCount} 个聊天、{subChatCount} 个历史标签和 {worktreeCount} 个本地智能体工作树。你的代码文件不会被删除。此操作无法撤销。",
+  "settings.projects.deleteProjectHistoryConfirmLoading":
+    "正在检查删除前会影响的聊天和工作树...",
+  "settings.projects.deleteProjectHistoryConfirmUnavailable":
+    "无法获取删除预览。请关闭此弹窗后重试。",
+  "settings.projects.deleteProjectHistoryBlockedByJobs":
+    "仍有 {count} 个排队或运行中的任务引用此项目，暂时不能删除历史。",
+  "settings.projects.deletingHistory": "正在删除历史...",
   "settings.projects.searchPlaceholder": "搜索项目...",
   "settings.projects.projectListLabel": "项目列表",
   "settings.projects.addProjectFolder": "打开项目",
