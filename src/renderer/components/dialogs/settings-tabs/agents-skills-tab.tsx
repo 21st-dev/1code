@@ -48,14 +48,13 @@ import { useListKeyboardNav } from "./use-list-keyboard-nav"
 // --- Unified Item Type ---
 interface UnifiedItem {
   id: string
-  kind: "skill" | "command" | "registry-skill" | "registry-collection"
+  kind: "skill" | "registry-skill" | "registry-collection"
   name: string
   description: string
   source: "user" | "project" | "plugin" | "registry"
   pluginName?: string
   path: string
   content: string
-  argumentHint?: string
   registry?: {
     id: string
     status: string
@@ -77,7 +76,6 @@ interface UnifiedItem {
   }
 }
 
-type SkillsViewMode = "skills" | "commands"
 type SkillFilter = "all" | "installed" | "available" | "collections" | "updates"
 type SkillRuntime = "claude" | "codex"
 type RuntimeProjectionAvailabilityState =
@@ -133,7 +131,6 @@ function getItemStatusLabel(
   item: UnifiedItem,
   t: ReturnType<typeof useI18n>["t"],
 ) {
-  if (item.kind === "command") return t("settings.skills.statusCommand")
   if (item.kind === "registry-collection")
     return t("settings.skills.statusCollection")
   if (item.source === "plugin") return t("common.plugin")
@@ -182,7 +179,6 @@ function getRegistryStatusLabel(
 }
 
 function getItemStatusClass(item: UnifiedItem) {
-  if (item.kind === "command") return "bg-orange-500/10 text-orange-500"
   if (item.kind === "registry-collection")
     return "bg-violet-500/10 text-violet-500"
   if (item.source === "plugin") return "bg-violet-500/10 text-violet-500"
@@ -554,11 +550,7 @@ function ItemDetail({
             </div>
             <div className="mt-2 inline-flex items-center rounded-md border border-border bg-muted/40 px-2.5 py-1">
               <code className="text-xs text-foreground">
-                {item.kind === "command"
-                  ? `/${item.name}`
-                  : item.kind === "registry-collection"
-                    ? item.name
-                    : `@${item.name}`}
+                {item.kind === "registry-collection" ? item.name : `@${item.name}`}
               </code>
             </div>
           </div>
@@ -595,9 +587,7 @@ function ItemDetail({
               onChange={(e) => setDescription(e.target.value)}
               onBlur={handleBlur}
               placeholder={
-                item.kind === "command"
-                  ? t("settings.skills.commandDescriptionPlaceholder")
-                  : t("settings.skills.skillDescriptionPlaceholder")
+                t("settings.skills.skillDescriptionPlaceholder")
               }
             />
           )}
@@ -863,9 +853,7 @@ function ItemDetail({
               rows={16}
               className="font-mono resize-y"
               placeholder={
-                item.kind === "command"
-                  ? t("settings.skills.commandPromptPlaceholder")
-                  : t("settings.skills.skillInstructionsPlaceholder")
+                t("settings.skills.skillInstructionsPlaceholder")
               }
               autoFocus
             />
@@ -882,9 +870,7 @@ function ItemDetail({
               onClick={onDelete}
             >
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              {item.kind === "command"
-                ? t("settings.skills.deleteCommand")
-                : t("settings.skills.deleteSkill")}
+              {t("settings.skills.deleteSkill")}
             </Button>
           </div>
         )}
@@ -906,7 +892,6 @@ function CreateItemForm({
     description: string
     content: string
     source: "user" | "project"
-    kind: "skill" | "command"
   }) => void
   onCancel: () => void
   isSaving: boolean
@@ -918,7 +903,6 @@ function CreateItemForm({
   const [description, setDescription] = useState("")
   const [content, setContent] = useState("")
   const [source, setSource] = useState<"user" | "project">("user")
-  const [kind, setKind] = useState<"skill" | "command">("skill")
 
   const canSave = name.trim().length > 0
 
@@ -927,9 +911,7 @@ function CreateItemForm({
       <div className="max-w-2xl mx-auto p-6 space-y-5">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">
-            {kind === "skill"
-              ? t("settings.skills.newSkill")
-              : t("settings.skills.newCommand")}
+            {t("settings.skills.newSkill")}
           </h3>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onCancel}>
@@ -938,7 +920,7 @@ function CreateItemForm({
             <Button
               size="sm"
               onClick={() =>
-                onCreated({ name, description, content, source, kind })
+                onCreated({ name, description, content, source })
               }
               disabled={!canSave || isSaving}
             >
@@ -948,31 +930,11 @@ function CreateItemForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label>{t("settings.skills.type")}</Label>
-          <Select
-            value={kind}
-            onValueChange={(v) => setKind(v as "skill" | "command")}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="skill">
-                {t("settings.skills.typeSkill")}
-              </SelectItem>
-              <SelectItem value="command">
-                {t("settings.skills.typeCommand")}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-1.5">
           <Label>{t("settings.skills.name")}</Label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={kind === "skill" ? "my-skill" : "my-command"}
+            placeholder="my-skill"
             autoFocus
           />
           <p className="text-[11px] text-muted-foreground">
@@ -985,11 +947,7 @@ function CreateItemForm({
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder={
-              kind === "skill"
-                ? t("settings.skills.whatSkillDoes")
-                : t("settings.skills.whatCommandDoes")
-            }
+            placeholder={t("settings.skills.whatSkillDoes")}
           />
         </div>
 
@@ -1005,9 +963,7 @@ function CreateItemForm({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="user">
-                  {kind === "skill"
-                    ? t("settings.skills.scopeUserSkill")
-                    : t("settings.skills.scopeUserCommand")}
+                  {t("settings.skills.scopeUserSkill")}
                 </SelectItem>
                 <SelectItem value="project">
                   {projectName
@@ -1015,7 +971,7 @@ function CreateItemForm({
                         project: projectName,
                       })
                     : t("common.project")}{" "}
-                  ({kind === "skill" ? ".claude/skills/" : ".claude/commands/"})
+                  (.claude/skills/)
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -1029,11 +985,7 @@ function CreateItemForm({
             onChange={(e) => setContent(e.target.value)}
             rows={12}
             className="font-mono resize-y"
-            placeholder={
-              kind === "skill"
-                ? t("settings.skills.skillInstructionsPlaceholder")
-                : t("settings.skills.commandPromptPlaceholder")
-            }
+            placeholder={t("settings.skills.skillInstructionsPlaceholder")}
           />
         </div>
       </div>
@@ -1069,20 +1021,14 @@ function SidebarListItem({
         <span
           className={cn(
             "text-[10px] font-medium shrink-0 w-3 text-center",
-            item.kind === "command"
-              ? "text-orange-500/70"
-              : item.kind === "registry-collection"
-                ? "text-violet-500/70"
-                : item.source === "registry"
-                  ? "text-emerald-500/70"
-                  : "text-blue-500/70",
+            item.kind === "registry-collection"
+              ? "text-violet-500/70"
+              : item.source === "registry"
+                ? "text-emerald-500/70"
+                : "text-blue-500/70",
           )}
         >
-          {item.kind === "command"
-            ? "/"
-            : item.kind === "registry-collection"
-              ? "#"
-              : "@"}
+          {item.kind === "registry-collection" ? "#" : "@"}
         </span>
         <span className="text-sm truncate flex-1">{item.name}</span>
         <span
@@ -1108,7 +1054,6 @@ export function AgentsSkillsTab() {
   const { t } = useI18n()
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [activeView, setActiveView] = useState<SkillsViewMode>("skills")
   const [activeSkillFilter, setActiveSkillFilter] = useState<SkillFilter>("all")
   const [showAddForm, setShowAddForm] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -1138,15 +1083,6 @@ export function AgentsSkillsTab() {
     selectedProject?.path ? { cwd: selectedProject.path } : undefined,
   )
 
-  // Fetch commands
-  const {
-    data: commands = [],
-    isLoading: isLoadingCommands,
-    refetch: refetchCommands,
-  } = trpc.commands.list.useQuery(
-    selectedProject?.path ? { projectPath: selectedProject.path } : undefined,
-  )
-
   const {
     data: claudeRegistrySkills = [],
     isLoading: isLoadingClaudeRegistry,
@@ -1169,19 +1105,17 @@ export function AgentsSkillsTab() {
     isLoadingClaudeRegistry ||
     isLoadingCodexRegistry ||
     isLoadingRegistryCollections
-  const isLoading = isLoadingSkills || isLoadingCommands || isLoadingRegistry
+  const isLoading = isLoadingSkills || isLoadingRegistry
 
   const refetchAll = useCallback(async () => {
     await Promise.all([
       refetchSkills(),
-      refetchCommands(),
       refetchClaudeRegistry(),
       refetchCodexRegistry(),
       refetchRegistryCollections(),
     ])
   }, [
     refetchSkills,
-    refetchCommands,
     refetchClaudeRegistry,
     refetchCodexRegistry,
     refetchRegistryCollections,
@@ -1197,9 +1131,6 @@ export function AgentsSkillsTab() {
   const installRegistrySkillMutation = trpc.skills.registryInstall.useMutation()
   const rollbackRegistrySkillMutation =
     trpc.skills.registryRollback.useMutation()
-  const updateCommandMutation = trpc.commands.update.useMutation()
-  const createCommandMutation = trpc.commands.create.useMutation()
-  const deleteCommandMutation = trpc.commands.delete.useMutation()
 
   // Build unified items
   const allItems = useMemo<UnifiedItem[]>(() => {
@@ -1281,17 +1212,6 @@ export function AgentsSkillsTab() {
         registry: linkedRegistry,
       }
     })
-    const cmdItems: UnifiedItem[] = commands.map((c) => ({
-      id: `cmd:${c.source}:${c.pluginName || ""}:${c.name}`,
-      kind: "command" as const,
-      name: c.name,
-      description: c.description,
-      source: c.source,
-      pluginName: c.pluginName,
-      path: c.path,
-      content: c.content,
-      argumentHint: c.argumentHint,
-    }))
     const installedRegistryIds = new Set(
       skillItems
         .map((item) => item.registry?.id)
@@ -1368,10 +1288,9 @@ export function AgentsSkillsTab() {
       }),
     )
 
-    return [...skillItems, ...cmdItems, ...registryItems, ...collectionItems]
+    return [...skillItems, ...registryItems, ...collectionItems]
   }, [
     skills,
-    commands,
     claudeRegistrySkills,
     codexRegistrySkills,
     registryCollections,
@@ -1390,30 +1309,7 @@ export function AgentsSkillsTab() {
   }, [allItems, searchQuery])
 
   const visibleGroups = useMemo<ItemGroup[]>(() => {
-    if (activeView === "commands") {
-      const commandItems = filteredItems.filter(
-        (item) => item.kind === "command",
-      )
-      return [
-        {
-          id: "user-commands",
-          label: t("common.user"),
-          items: commandItems.filter((item) => item.source === "user"),
-        },
-        {
-          id: "project-commands",
-          label: t("common.project"),
-          items: commandItems.filter((item) => item.source === "project"),
-        },
-        {
-          id: "plugin-commands",
-          label: t("common.plugin"),
-          items: commandItems.filter((item) => item.source === "plugin"),
-        },
-      ].filter((group) => group.items.length > 0)
-    }
-
-    const skillItems = filteredItems.filter((item) => item.kind !== "command")
+    const skillItems = filteredItems
     if (activeSkillFilter !== "all") {
       return [
         {
@@ -1462,7 +1358,7 @@ export function AgentsSkillsTab() {
         items: skillItems.filter((item) => item.source === "plugin"),
       },
     ].filter((group) => group.items.length > 0)
-  }, [activeView, activeSkillFilter, filteredItems, t])
+  }, [activeSkillFilter, filteredItems, t])
 
   const visibleItems = useMemo(
     () => visibleGroups.flatMap((group) => group.items),
@@ -1475,7 +1371,7 @@ export function AgentsSkillsTab() {
   )
 
   const skillFilterCounts = useMemo<Record<SkillFilter, number>>(() => {
-    const skillItems = allItems.filter((item) => item.kind !== "command")
+    const skillItems = allItems
     return {
       all: skillItems.length,
       installed: skillItems.filter((item) =>
@@ -1518,38 +1414,21 @@ export function AgentsSkillsTab() {
       description: string
       content: string
       source: "user" | "project"
-      kind: "skill" | "command"
     }) => {
       try {
-        if (data.kind === "skill") {
-          const result = await createSkillMutation.mutateAsync({
-            name: data.name,
-            description: data.description,
-            content: data.content,
-            source: data.source,
-            cwd: selectedProject?.path,
-          })
-          toast.success(t("settings.skills.toast.skillCreated"), {
-            description: result.name,
-          })
-          setShowAddForm(false)
-          await refetchAll()
-          setSelectedItemId(`skill:${data.source}::${result.name}`)
-        } else {
-          const result = await createCommandMutation.mutateAsync({
-            name: data.name,
-            description: data.description,
-            content: data.content,
-            source: data.source,
-            projectPath: selectedProject?.path,
-          })
-          toast.success(t("settings.skills.toast.commandCreated"), {
-            description: result.name,
-          })
-          setShowAddForm(false)
-          await refetchAll()
-          setSelectedItemId(`cmd:${data.source}::${result.name}`)
-        }
+        const result = await createSkillMutation.mutateAsync({
+          name: data.name,
+          description: data.description,
+          content: data.content,
+          source: data.source,
+          cwd: selectedProject?.path,
+        })
+        toast.success(t("settings.skills.toast.skillCreated"), {
+          description: result.name,
+        })
+        setShowAddForm(false)
+        await refetchAll()
+        setSelectedItemId(`skill:${data.source}::${result.name}`)
       } catch (error) {
         const message =
           error instanceof Error
@@ -1562,7 +1441,6 @@ export function AgentsSkillsTab() {
     },
     [
       createSkillMutation,
-      createCommandMutation,
       selectedProject?.path,
       refetchAll,
       t,
@@ -1575,30 +1453,16 @@ export function AgentsSkillsTab() {
       data: { description: string; content: string },
     ) => {
       try {
-        if (item.kind === "skill") {
-          await updateSkillMutation.mutateAsync({
-            path: item.path,
-            name: item.name,
-            description: data.description,
-            content: data.content,
-            cwd: selectedProject?.path,
-          })
-        } else {
-          await updateCommandMutation.mutateAsync({
-            path: item.path,
-            name: item.name,
-            description: data.description,
-            content: data.content,
-            argumentHint: item.argumentHint,
-            projectPath: selectedProject?.path,
-          })
-        }
-        toast.success(
-          item.kind === "skill"
-            ? t("settings.skills.toast.skillSaved")
-            : t("settings.skills.toast.commandSaved"),
-          { description: item.name },
-        )
+        await updateSkillMutation.mutateAsync({
+          path: item.path,
+          name: item.name,
+          description: data.description,
+          content: data.content,
+          cwd: selectedProject?.path,
+        })
+        toast.success(t("settings.skills.toast.skillSaved"), {
+          description: item.name,
+        })
         await refetchAll()
       } catch (error) {
         const message =
@@ -1612,7 +1476,6 @@ export function AgentsSkillsTab() {
     },
     [
       updateSkillMutation,
-      updateCommandMutation,
       selectedProject?.path,
       refetchAll,
       t,
@@ -1622,23 +1485,13 @@ export function AgentsSkillsTab() {
   const handleDelete = useCallback(async () => {
     if (!deletingItem) return
     try {
-      if (deletingItem.kind === "skill") {
-        await deleteSkillMutation.mutateAsync({
-          path: deletingItem.path,
-          cwd: selectedProject?.path,
-        })
-      } else {
-        await deleteCommandMutation.mutateAsync({
-          path: deletingItem.path,
-          projectPath: selectedProject?.path,
-        })
-      }
-      toast.success(
-        deletingItem.kind === "skill"
-          ? t("settings.skills.toast.skillDeleted")
-          : t("settings.skills.toast.commandDeleted"),
-        { description: deletingItem.name },
-      )
+      await deleteSkillMutation.mutateAsync({
+        path: deletingItem.path,
+        cwd: selectedProject?.path,
+      })
+      toast.success(t("settings.skills.toast.skillDeleted"), {
+        description: deletingItem.name,
+      })
       setDeletingItem(null)
       setSelectedItemId(null)
       await refetchAll()
@@ -1654,7 +1507,6 @@ export function AgentsSkillsTab() {
   }, [
     deletingItem,
     deleteSkillMutation,
-    deleteCommandMutation,
     selectedProject?.path,
     refetchAll,
     t,
@@ -1791,41 +1643,34 @@ export function AgentsSkillsTab() {
     t,
   ])
 
-  const isSaving =
-    updateSkillMutation.isPending || updateCommandMutation.isPending
-  const isCreating =
-    createSkillMutation.isPending || createCommandMutation.isPending
-  const isDeleting =
-    deleteSkillMutation.isPending || deleteCommandMutation.isPending
+  const isSaving = updateSkillMutation.isPending
+  const isCreating = createSkillMutation.isPending
+  const isDeleting = deleteSkillMutation.isPending
   const isRegistryActionPending =
     installRegistrySkillMutation.isPending ||
     rollbackRegistrySkillMutation.isPending
   const totalCount = visibleItems.length
   const hasSearch = searchQuery.trim().length > 0
   const emptyTitle =
-    activeView === "commands"
-      ? t("settings.skills.noCommands")
-      : activeSkillFilter === "available"
-        ? t("settings.skills.noAvailableSkills")
-        : activeSkillFilter === "updates"
-          ? t("settings.skills.noSkillUpdates")
-          : activeSkillFilter === "installed"
-            ? t("settings.skills.noInstalledSkills")
-            : activeSkillFilter === "collections"
-              ? t("settings.skills.noExternalCollections")
-              : t("settings.skills.noSkills")
+    activeSkillFilter === "available"
+      ? t("settings.skills.noAvailableSkills")
+      : activeSkillFilter === "updates"
+        ? t("settings.skills.noSkillUpdates")
+        : activeSkillFilter === "installed"
+          ? t("settings.skills.noInstalledSkills")
+          : activeSkillFilter === "collections"
+            ? t("settings.skills.noExternalCollections")
+            : t("settings.skills.noSkills")
   const emptyHint =
-    activeView === "commands"
-      ? t("settings.skills.commandsEmptyHint")
-      : activeSkillFilter === "available"
-        ? t("settings.skills.availableSkillsHint")
-        : activeSkillFilter === "updates"
-          ? t("settings.skills.skillUpdatesHint")
-          : activeSkillFilter === "installed"
-            ? t("settings.skills.installedSkillsHint")
-            : activeSkillFilter === "collections"
-              ? t("settings.skills.externalCollectionsHint")
-              : t("settings.skills.emptyHint")
+    activeSkillFilter === "available"
+      ? t("settings.skills.availableSkillsHint")
+      : activeSkillFilter === "updates"
+        ? t("settings.skills.skillUpdatesHint")
+        : activeSkillFilter === "installed"
+          ? t("settings.skills.installedSkillsHint")
+          : activeSkillFilter === "collections"
+            ? t("settings.skills.externalCollectionsHint")
+            : t("settings.skills.emptyHint")
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -1880,58 +1725,28 @@ export function AgentsSkillsTab() {
             </button>
           </div>
           <div className="px-2 pt-2 flex-shrink-0">
-            <div className="grid grid-cols-2 rounded-lg bg-muted p-0.5">
-              <button
-                type="button"
-                onClick={() => setActiveView("skills")}
-                className={cn(
-                  "h-6 rounded-md text-xs font-medium transition-colors cursor-pointer",
-                  activeView === "skills"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t("settings.skills.viewSkills")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveView("commands")}
-                className={cn(
-                  "h-6 rounded-md text-xs font-medium transition-colors cursor-pointer",
-                  activeView === "commands"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t("settings.skills.viewCommands")}
-              </button>
+            <div className="flex flex-wrap gap-1">
+              {SKILL_FILTERS.map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setActiveSkillFilter(filter)}
+                  className={cn(
+                    "h-6 min-w-0 rounded-md px-2 text-[11px] font-medium transition-colors cursor-pointer",
+                    activeSkillFilter === filter
+                      ? "bg-foreground/10 text-foreground"
+                      : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                  )}
+                  title={getSkillFilterLabel(filter, t)}
+                >
+                  <span>{getSkillFilterLabel(filter, t)}</span>
+                  <span className="ml-1 text-[10px] text-muted-foreground/70">
+                    {skillFilterCounts[filter]}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
-          {activeView === "skills" && (
-            <div className="px-2 pt-2 flex-shrink-0">
-              <div className="flex flex-wrap gap-1">
-                {SKILL_FILTERS.map((filter) => (
-                  <button
-                    key={filter}
-                    type="button"
-                    onClick={() => setActiveSkillFilter(filter)}
-                    className={cn(
-                      "h-6 min-w-0 rounded-md px-2 text-[11px] font-medium transition-colors cursor-pointer",
-                      activeSkillFilter === filter
-                        ? "bg-foreground/10 text-foreground"
-                        : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-                    )}
-                    title={getSkillFilterLabel(filter, t)}
-                  >
-                    <span>{getSkillFilterLabel(filter, t)}</span>
-                    <span className="ml-1 text-[10px] text-muted-foreground/70">
-                      {skillFilterCounts[filter]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
           {/* Item list */}
           <div
             ref={listRef}
@@ -2056,9 +1871,7 @@ export function AgentsSkillsTab() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {deletingItem?.kind === "skill"
-                ? t("settings.skills.deleteSkillTitle")
-                : t("settings.skills.deleteCommandTitle")}
+              {t("settings.skills.deleteSkillTitle")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t("settings.skills.deleteConfirmPrefix")}{" "}

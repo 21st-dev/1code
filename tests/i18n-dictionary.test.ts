@@ -38,7 +38,6 @@ describe("i18n dictionary parity", () => {
       "settings.sidebar.skills": "技能",
       "settings.sidebar.plugins": "插件",
       "settings.preferences.subtitle": "配置智能体行为和应用功能",
-      "settings.skills.viewCommands": "命令",
       "sidebar.kanbanView": "看板视图",
       "sidebar.searchWorkspaces": "搜索工作区...",
       "sidebar.newChat": "新建快速对话",

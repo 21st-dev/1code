@@ -7,13 +7,26 @@ import {
   Command,
   ExternalLink,
   FileText,
+  Pencil,
   Plug,
+  Plus,
   RefreshCw,
   Terminal,
+  Trash2,
 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import type { ComponentType, ReactNode } from "react"
 import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog"
 import { Badge } from "../../ui/badge"
 import { Button } from "../../ui/button"
 import {
@@ -21,6 +34,24 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "../../ui/collapsible"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../ui/dialog"
+import { Input } from "../../ui/input"
+import { Label } from "../../ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select"
+import { Textarea } from "../../ui/textarea"
 import { BUILTIN_SLASH_COMMANDS } from "../../../features/agents/commands"
 import { selectedProjectAtom } from "../../../features/agents/atoms"
 import { trpc } from "../../../lib/trpc"
@@ -88,6 +119,28 @@ type OfficialCommandIndexSnapshot = {
 type OfficialDocLink = {
   label: string
   url: string
+}
+
+type LocalCommandFile = {
+  name: string
+  description: string
+  source: "user" | "project" | "plugin"
+  path: string
+  content: string
+  argumentHint?: string
+  pluginName?: string
+}
+
+type CommandEditorState =
+  | { mode: "create" }
+  | { mode: "edit"; command: LocalCommandFile }
+
+type CommandEditorDraft = {
+  name: string
+  description: string
+  argumentHint: string
+  content: string
+  source: "user" | "project"
 }
 
 function SourceBadge({ label }: { label: string }) {
@@ -642,15 +695,13 @@ function RuntimePanel({ runtime }: { runtime: RuntimeGuideItem }) {
 function CommandFileList({
   commands,
   badgeLabel,
+  onEdit,
+  onDelete,
 }: {
-  commands: {
-    name: string
-    description: string
-    source: "user" | "project" | "plugin"
-    path: string
-    pluginName?: string
-  }[]
+  commands: LocalCommandFile[]
   badgeLabel?: string
+  onEdit?: (command: LocalCommandFile) => void
+  onDelete?: (command: LocalCommandFile) => void
 }) {
   const { t } = useI18n()
 
@@ -686,10 +737,229 @@ function CommandFileList({
             <span className="max-w-[180px] truncate text-[10px] text-muted-foreground">
               {command.pluginName || command.path}
             </span>
+            {command.source !== "plugin" && (onEdit || onDelete) && (
+              <div className="mt-1 flex items-center gap-1">
+                {onEdit && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    onClick={() => onEdit(command)}
+                    aria-label={t("settings.commands.editCommand")}
+                    title={t("settings.commands.editCommand")}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-red-500 hover:bg-red-500/10 hover:text-red-600"
+                    onClick={() => onDelete(command)}
+                    aria-label={t("settings.commands.deleteCommand")}
+                    title={t("settings.commands.deleteCommand")}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ))}
     </div>
+  )
+}
+
+function CommandEditorDialog({
+  editor,
+  hasProject,
+  projectName,
+  isSaving,
+  onOpenChange,
+  onSubmit,
+}: {
+  editor: CommandEditorState | null
+  hasProject: boolean
+  projectName?: string
+  isSaving: boolean
+  onOpenChange: (open: boolean) => void
+  onSubmit: (draft: CommandEditorDraft, editor: CommandEditorState) => void
+}) {
+  const { t } = useI18n()
+  const [name, setName] = useState("")
+  const [description, setDescription] = useState("")
+  const [argumentHint, setArgumentHint] = useState("")
+  const [content, setContent] = useState("")
+  const [source, setSource] = useState<"user" | "project">("user")
+
+  useEffect(() => {
+    if (!editor) return
+
+    if (editor.mode === "edit") {
+      setName(editor.command.name)
+      setDescription(editor.command.description)
+      setArgumentHint(editor.command.argumentHint ?? "")
+      setContent(editor.command.content)
+      setSource(editor.command.source === "project" ? "project" : "user")
+      return
+    }
+
+    setName("")
+    setDescription("")
+    setArgumentHint("")
+    setContent("")
+    setSource("user")
+  }, [editor])
+
+  const canSave = Boolean(editor) && name.trim().length > 0
+
+  const handleSubmit = useCallback(() => {
+    if (!editor || !canSave) return
+    onSubmit(
+      {
+        name,
+        description,
+        argumentHint,
+        content,
+        source,
+      },
+      editor,
+    )
+  }, [argumentHint, canSave, content, description, editor, name, onSubmit, source])
+
+  const isEdit = editor?.mode === "edit"
+
+  return (
+    <Dialog open={!!editor} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100vh-4rem)] overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="border-b border-border px-5 py-4">
+          <DialogTitle className="text-base">
+            {isEdit
+              ? t("settings.commands.editCommand")
+              : t("settings.commands.newCommand")}
+          </DialogTitle>
+          <DialogDescription>
+            {t("settings.commands.commandEditorDescription")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[calc(100vh-14rem)] space-y-4 overflow-y-auto px-5 py-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>{t("settings.commands.commandName")}</Label>
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                disabled={isEdit}
+                placeholder="my-command"
+                autoFocus={!isEdit}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                {isEdit
+                  ? t("settings.commands.commandNameReadonly")
+                  : t("settings.commands.commandNameHint")}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{t("settings.commands.commandScope")}</Label>
+              {isEdit ? (
+                <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  {source === "project"
+                    ? projectName
+                      ? t("settings.commands.scopeProjectNamed", {
+                          project: projectName,
+                        })
+                      : t("settings.commands.sourceProject")
+                    : t("settings.commands.scopeUserCommand")}
+                </div>
+              ) : hasProject ? (
+                <Select
+                  value={source}
+                  onValueChange={(value) =>
+                    setSource(value as "user" | "project")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">
+                      {t("settings.commands.scopeUserCommand")}
+                    </SelectItem>
+                    <SelectItem value="project">
+                      {projectName
+                        ? t("settings.commands.scopeProjectNamed", {
+                            project: projectName,
+                          })
+                        : t("settings.commands.sourceProject")}{" "}
+                      (.claude/commands/)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  {t("settings.commands.scopeUserCommand")}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("settings.commands.commandDescription")}</Label>
+            <Input
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder={t("settings.commands.commandDescriptionPlaceholder")}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("settings.commands.argumentHint")}</Label>
+            <Input
+              value={argumentHint}
+              onChange={(event) => setArgumentHint(event.target.value)}
+              placeholder={t("settings.commands.argumentHintPlaceholder")}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("settings.commands.commandPrompt")}</Label>
+            <Textarea
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              rows={12}
+              className="font-mono resize-y"
+              placeholder={t("settings.commands.commandPromptPlaceholder")}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="border-t border-border bg-muted/40 px-5 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSaving}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button type="button" onClick={handleSubmit} disabled={!canSave || isSaving}>
+            {isSaving
+              ? isEdit
+                ? t("common.saving")
+                : t("common.creating")
+              : isEdit
+                ? t("common.save")
+                : t("common.create")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -699,6 +969,10 @@ export function AgentsCommandGuideTab() {
   const selectedProject = useAtomValue(selectedProjectAtom)
   const projectPath = selectedProject?.path
   const [showAdvancedReferences, setShowAdvancedReferences] = useState(false)
+  const [commandEditor, setCommandEditor] =
+    useState<CommandEditorState | null>(null)
+  const [deletingCommand, setDeletingCommand] =
+    useState<LocalCommandFile | null>(null)
 
   const runtimeGuideQuery = trpc.commands.runtimeGuide.useQuery(undefined, {
     staleTime: 60_000,
@@ -742,6 +1016,9 @@ export function AgentsCommandGuideTab() {
         })
       },
     })
+  const createCommandMutation = trpc.commands.create.useMutation()
+  const updateCommandMutation = trpc.commands.update.useMutation()
+  const deleteCommandMutation = trpc.commands.delete.useMutation()
 
   const commandFiles = commandsQuery.data ?? []
   const userAndProjectCommands = commandFiles.filter(
@@ -799,10 +1076,88 @@ export function AgentsCommandGuideTab() {
     refreshOfficialIndexMutation.mutate()
   }
 
+  const handleSubmitCommand = useCallback(
+    async (draft: CommandEditorDraft, editor: CommandEditorState) => {
+      try {
+        if (editor.mode === "create") {
+          const result = await createCommandMutation.mutateAsync({
+            name: draft.name,
+            description: draft.description,
+            argumentHint: draft.argumentHint || undefined,
+            content: draft.content,
+            source: draft.source,
+            projectPath,
+          })
+          toast.success(t("settings.commands.toast.commandCreated"), {
+            description: `/${result.name}`,
+          })
+        } else {
+          await updateCommandMutation.mutateAsync({
+            path: editor.command.path,
+            name: editor.command.name,
+            description: draft.description,
+            argumentHint: draft.argumentHint || undefined,
+            content: draft.content,
+            projectPath,
+          })
+          toast.success(t("settings.commands.toast.commandSaved"), {
+            description: `/${editor.command.name}`,
+          })
+        }
+
+        setCommandEditor(null)
+        await commandsQuery.refetch()
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : t("settings.commands.toast.failedToSaveCommand")
+        toast.error(t("settings.commands.toast.failedToSaveCommand"), {
+          description: message,
+        })
+      }
+    },
+    [
+      commandsQuery,
+      createCommandMutation,
+      projectPath,
+      t,
+      updateCommandMutation,
+    ],
+  )
+
+  const handleDeleteCommand = useCallback(async () => {
+    if (!deletingCommand) return
+
+    try {
+      await deleteCommandMutation.mutateAsync({
+        path: deletingCommand.path,
+        projectPath,
+      })
+      toast.success(t("settings.commands.toast.commandDeleted"), {
+        description: `/${deletingCommand.name}`,
+      })
+      setDeletingCommand(null)
+      await commandsQuery.refetch()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : t("settings.commands.toast.failedToDeleteCommand")
+      toast.error(t("settings.commands.toast.failedToDeleteCommand"), {
+        description: message,
+      })
+    }
+  }, [commandsQuery, deleteCommandMutation, deletingCommand, projectPath, t])
+
   const isRefreshing =
     runtimeGuideQuery.isFetching || commandsQuery.isFetching || pluginsQuery.isFetching
   const isOfficialIndexRefreshing =
     officialIndexQuery.isFetching || refreshOfficialIndexMutation.isPending
+  const isCommandMutationPending =
+    createCommandMutation.isPending ||
+    updateCommandMutation.isPending ||
+    deleteCommandMutation.isPending
 
   return (
     <div className="p-6 space-y-6">
@@ -886,8 +1241,24 @@ export function AgentsCommandGuideTab() {
                 })
               : t("settings.commands.noProjectScope")
           }
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 gap-1.5 px-2.5 text-xs"
+              onClick={() => setCommandEditor({ mode: "create" })}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("settings.commands.newCommand")}
+            </Button>
+          }
         />
-        <CommandFileList commands={userAndProjectCommands} />
+        <CommandFileList
+          commands={userAndProjectCommands}
+          onEdit={(command) => setCommandEditor({ mode: "edit", command })}
+          onDelete={setDeletingCommand}
+        />
       </section>
 
       <Collapsible
@@ -1058,6 +1429,51 @@ export function AgentsCommandGuideTab() {
           </section>
         </CollapsibleContent>
       </Collapsible>
+
+      <CommandEditorDialog
+        editor={commandEditor}
+        hasProject={!!projectPath}
+        projectName={selectedProject?.name}
+        isSaving={isCommandMutationPending}
+        onOpenChange={(open) => {
+          if (!open) setCommandEditor(null)
+        }}
+        onSubmit={handleSubmitCommand}
+      />
+
+      <AlertDialog
+        open={!!deletingCommand}
+        onOpenChange={(open) => {
+          if (!open) setDeletingCommand(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("settings.commands.deleteCommandTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("settings.commands.deleteCommandDescription", {
+                name: deletingCommand?.name ? `/${deletingCommand.name}` : "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCommandMutation.isPending}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCommand}
+              disabled={deleteCommandMutation.isPending}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {deleteCommandMutation.isPending
+                ? t("common.deleting")
+                : t("common.delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
