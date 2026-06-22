@@ -77,8 +77,16 @@ function createCallerStub() {
     {
       async checkInstalled(input) {
         checks.push(input)
-        if (input.runtime !== "claude-code") {
-          throw new Error("Codex MCP registry check is deferred.")
+        if (input.runtime === "codex") {
+          return {
+            success: true,
+            runtime: "codex",
+            serverName: input.serverName,
+            status: "connected-unverified",
+            toolCount: 1,
+            toolNames: ["router_codex_tool"],
+            reason: "codex-tools-visible-auto-verify-unavailable",
+          }
         }
         return {
           success: true,
@@ -172,7 +180,7 @@ describe("MCP registry tRPC router", () => {
     expect(calls).toEqual(["detail:io.github.example/router-detail:latest"])
   })
 
-  test("exposes explicit connect/list check without Codex fake support", async () => {
+  test("exposes explicit connect/list checks for Claude and Codex without fake verification", async () => {
     const { caller, checks } = createCallerStub()
 
     await expect(
@@ -195,7 +203,14 @@ describe("MCP registry tRPC router", () => {
         serverName: "router_registry",
         scope: "global",
       }),
-    ).rejects.toThrow("Codex MCP registry check is deferred")
+    ).resolves.toMatchObject({
+      success: true,
+      runtime: "codex",
+      serverName: "router_registry",
+      status: "connected-unverified",
+      toolNames: ["router_codex_tool"],
+      reason: "codex-tools-visible-auto-verify-unavailable",
+    })
 
     expect(checks).toEqual([
       {

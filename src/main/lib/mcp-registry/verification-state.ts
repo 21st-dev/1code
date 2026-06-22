@@ -11,6 +11,7 @@ export type McpRegistryVerificationStatus =
   | "installed-unverified"
   | "installed-needs-setup"
   | "ready-to-verify"
+  | "connected-unverified"
   | "failed-check"
   | "verified-local"
 
@@ -89,6 +90,7 @@ function normalizeRecord(
     record.status !== "installed-unverified" &&
     record.status !== "installed-needs-setup" &&
     record.status !== "ready-to-verify" &&
+    record.status !== "connected-unverified" &&
     record.status !== "failed-check" &&
     record.status !== "verified-local"
   ) {

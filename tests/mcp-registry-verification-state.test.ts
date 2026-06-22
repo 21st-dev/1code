@@ -111,4 +111,32 @@ describe("MCP registry verification state", () => {
       status: "ready-to-verify",
     })
   })
+
+  test("persists Codex connected-unverified below verified-local", async () => {
+    const record = await upsertMcpRegistryVerificationRecord(
+      {
+        runtime: "codex",
+        serverName: "codex_registry",
+        entryFingerprint: "sha256:entry",
+        configFingerprint: "sha256:config",
+        status: "connected-unverified",
+        reason: "codex-tools-visible-auto-verify-unavailable",
+      },
+      { now: new Date("2026-06-20T03:00:00.000Z") },
+    )
+
+    await expect(
+      getMcpRegistryVerificationRecord({
+        runtime: "codex",
+        serverName: "codex_registry",
+        entryFingerprint: "sha256:entry",
+        configFingerprint: "sha256:config",
+      }),
+    ).resolves.toEqual(record)
+    expect(mcpRegistryVerificationRecordToLocalState(record)).toEqual({
+      runtime: "codex",
+      status: "connected-unverified",
+      reason: "codex-tools-visible-auto-verify-unavailable",
+    })
+  })
 })

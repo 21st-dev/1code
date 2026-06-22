@@ -14,6 +14,11 @@ import {
   fetchMcpToolsStdio,
   type McpToolInfo,
 } from "../mcp-auth"
+import {
+  listMcpRegistryVerificationRecords,
+  upsertMcpRegistryVerificationRecord,
+  type McpRegistryVerificationRecord,
+} from "../mcp-registry/verification-state"
 
 export type CodexMcpServerForSession =
   | {
@@ -69,6 +74,16 @@ type CodexMcpServerConfigWrite = {
   transportType?: string
   disabled?: boolean
   disabledReason?: string
+}
+
+export type CodexMcpRegistryCheckResult = {
+  success: boolean
+  runtime: "codex"
+  serverName: string
+  status: "connected-unverified" | "installed-unverified" | "failed-check"
+  toolCount: number
+  toolNames: string[]
+  reason?: string
 }
 
 const codexMcpCache = new Map<string, CodexMcpSnapshot>()
@@ -623,6 +638,151 @@ export async function resolveCodexMcpSnapshot(params: {
 
 export function clearCodexMcpConfigCache(): void {
   codexMcpCache.clear()
+}
+
+const CODEX_REMOTE_MCP_TRANSPORTS = new Set(["http", "sse", "streamable_http"])
+
+function getCodexSettingsTransportType(
+  server: CodexMcpServerForSettings,
+): string {
+  const transportType = server.config.transportType
+  return typeof transportType === "string"
+    ? transportType.trim().toLowerCase()
+    : ""
+}
+
+function mostRecentMcpRegistryRecord(
+  records: McpRegistryVerificationRecord[],
+): McpRegistryVerificationRecord | null {
+  const sorted = [...records].sort((a, b) => {
+    const timeA = Date.parse(a.updatedAt)
+    const timeB = Date.parse(b.updatedAt)
+    if (Number.isFinite(timeA) && Number.isFinite(timeB)) {
+      return timeB - timeA
+    }
+    return b.updatedAt.localeCompare(a.updatedAt)
+  })
+  return sorted[0] ?? null
+}
+
+async function getLatestCodexMcpRegistryRecord(
+  serverName: string,
+): Promise<McpRegistryVerificationRecord | null> {
+  const records = await listMcpRegistryVerificationRecords()
+  return mostRecentMcpRegistryRecord(
+    records.filter(
+      (record) =>
+        record.runtime === "codex" && record.serverName === serverName,
+    ),
+  )
+}
+
+function codexRegistryCheckResult(input: {
+  serverName: string
+  status: CodexMcpRegistryCheckResult["status"]
+  toolNames?: string[]
+  reason?: string
+}): CodexMcpRegistryCheckResult {
+  const toolNames = input.toolNames ?? []
+  return {
+    success: input.status !== "failed-check",
+    runtime: "codex",
+    serverName: input.serverName,
+    status: input.status,
+    toolCount: toolNames.length,
+    toolNames,
+    ...(input.reason ? { reason: input.reason } : {}),
+  }
+}
+
+export async function checkCodexMcpRegistryServer(input: {
+  runtime: "codex"
+  serverName: string
+  scope: "global" | "project"
+  projectPath?: string
+}): Promise<CodexMcpRegistryCheckResult> {
+  if (input.scope !== "global") {
+    throw new Error(
+      "Codex MCP registry check currently supports global scope only.",
+    )
+  }
+
+  const serverName = input.serverName.trim()
+  const record = await getLatestCodexMcpRegistryRecord(serverName)
+  if (!record) {
+    throw new Error(
+      "Codex MCP registry check requires a stored registry identity for this server.",
+    )
+  }
+
+  const snapshot = await resolveCodexMcpSnapshot({
+    includeTools: true,
+    forceRefresh: true,
+  })
+  const server = snapshot.groups[0]?.mcpServers.find(
+    (candidate) => candidate.name === serverName,
+  )
+
+  if (!server) {
+    await upsertMcpRegistryVerificationRecord({
+      ...record,
+      status: "failed-check",
+      reason: "codex-server-not-found",
+    })
+    return codexRegistryCheckResult({
+      serverName,
+      status: "failed-check",
+      reason: "codex-server-not-found",
+    })
+  }
+
+  const transportType = getCodexSettingsTransportType(server)
+  if (!CODEX_REMOTE_MCP_TRANSPORTS.has(transportType)) {
+    const reason = `codex-check-remote-only:${transportType || "unknown"}`
+    await upsertMcpRegistryVerificationRecord({
+      ...record,
+      status: "installed-unverified",
+      reason,
+    })
+    return codexRegistryCheckResult({
+      serverName,
+      status: "installed-unverified",
+      reason,
+    })
+  }
+
+  const toolNames = server.tools
+    .map((tool) => tool.name.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+  if (server.status !== "connected" || toolNames.length === 0) {
+    const reason =
+      server.status === "needs-auth"
+        ? "codex-server-needs-auth"
+        : "codex-tool-list-failed"
+    await upsertMcpRegistryVerificationRecord({
+      ...record,
+      status: "failed-check",
+      reason,
+    })
+    return codexRegistryCheckResult({
+      serverName,
+      status: "failed-check",
+      reason,
+    })
+  }
+
+  await upsertMcpRegistryVerificationRecord({
+    ...record,
+    status: "connected-unverified",
+    reason: "codex-tools-visible-auto-verify-unavailable",
+  })
+  return codexRegistryCheckResult({
+    serverName,
+    status: "connected-unverified",
+    toolNames,
+    reason: "codex-tools-visible-auto-verify-unavailable",
+  })
 }
 
 function getCodexServerIdentity(server: CodexMcpServerForSettings): string {

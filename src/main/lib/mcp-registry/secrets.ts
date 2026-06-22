@@ -356,6 +356,7 @@ export function resolveMcpRegistryRuntimeLocalStateFromConfig(input: {
     metadata.status !== "installed-unverified" &&
     metadata.status !== "installed-needs-setup" &&
     metadata.status !== "ready-to-verify" &&
+    metadata.status !== "connected-unverified" &&
     metadata.status !== "failed-check" &&
     metadata.status !== "verified-local"
   ) {
@@ -379,7 +380,8 @@ export function resolveMcpRegistryRuntimeLocalStateFromConfig(input: {
 
   return {
     runtime,
-    status: missingKeys.length > 0 ? "installed-needs-setup" : "ready-to-verify",
+    status:
+      missingKeys.length > 0 ? "installed-needs-setup" : "ready-to-verify",
     ...(missingKeys.length > 0
       ? { reason: `missing setup: ${missingKeys.join(", ")}` }
       : {}),

@@ -279,6 +279,9 @@ const { setElectronUserDataPathProviderForTest } = await import(
 const { getMcpRegistryVerificationRecord } = await import(
   "../src/main/lib/mcp-registry/verification-state"
 )
+const { upsertMcpRegistryVerificationRecord } = await import(
+  "../src/main/lib/mcp-registry/verification-state"
+)
 
 function makeTempDir(): string {
   const dir = mkdtempSync(join(realOs.tmpdir(), "locus-runtime-mcp-test-"))
@@ -855,6 +858,132 @@ describe("Runtime MCP config service behavior", () => {
         config: { url: "https://api.example.com/mcp" },
       }),
     ).rejects.toThrow("global scope only")
+  })
+
+  test("checks Codex registry remotes by stored identity without marking verified", async () => {
+    const userDataDir = makeTempDir()
+    setElectronUserDataPathProviderForTest(() => userDataDir)
+    codexMcpListStdout = JSON.stringify([
+      {
+        name: "registry_remote",
+        enabled: true,
+        transport: {
+          type: "streamable_http",
+          url: "https://api.example.com/mcp",
+        },
+        auth_status: "unsupported",
+      },
+    ])
+    const identity = {
+      runtime: "codex" as const,
+      serverName: "registry_remote",
+      entryFingerprint: "sha256:codex-entry",
+      configFingerprint: "sha256:codex-config",
+    }
+    await upsertMcpRegistryVerificationRecord({
+      ...identity,
+      status: "installed-unverified",
+      reason: "installed-unverified",
+    })
+
+    await expect(
+      codexMcpConfig.checkCodexMcpRegistryServer({
+        runtime: "codex",
+        serverName: "registry_remote",
+        scope: "global",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      runtime: "codex",
+      serverName: "registry_remote",
+      status: "connected-unverified",
+      toolCount: 1,
+      toolNames: ["remote_tool"],
+      reason: "codex-tools-visible-auto-verify-unavailable",
+    })
+    await expect(
+      getMcpRegistryVerificationRecord(identity),
+    ).resolves.toMatchObject({
+      status: "connected-unverified",
+      reason: "codex-tools-visible-auto-verify-unavailable",
+    })
+    await expect(
+      getMcpRegistryVerificationRecord(identity),
+    ).resolves.not.toMatchObject({
+      status: "verified-local",
+    })
+    expect(codexCliCalls.map((call) => call.args)).toEqual([
+      ["mcp", "list", "--json"],
+    ])
+  })
+
+  test("keeps Codex registry stdio checks inert and rejects bare server-name checks", async () => {
+    const userDataDir = makeTempDir()
+    setElectronUserDataPathProviderForTest(() => userDataDir)
+    codexMcpListStdout = JSON.stringify([
+      {
+        name: "registry_stdio",
+        enabled: true,
+        transport: {
+          type: "stdio",
+          command: "fail-stdio",
+        },
+        auth_status: "unsupported",
+      },
+      {
+        name: "bare_remote",
+        enabled: true,
+        transport: {
+          type: "streamable_http",
+          url: "https://api.example.com/mcp",
+        },
+        auth_status: "unsupported",
+      },
+    ])
+    const stdioIdentity = {
+      runtime: "codex" as const,
+      serverName: "registry_stdio",
+      entryFingerprint: "sha256:stdio-entry",
+      configFingerprint: "sha256:stdio-config",
+    }
+    await upsertMcpRegistryVerificationRecord({
+      ...stdioIdentity,
+      status: "installed-unverified",
+      reason: "installed-unverified",
+    })
+
+    await expect(
+      codexMcpConfig.checkCodexMcpRegistryServer({
+        runtime: "codex",
+        serverName: "bare_remote",
+        scope: "global",
+      }),
+    ).rejects.toThrow("requires a stored registry identity")
+
+    await expect(
+      codexMcpConfig.checkCodexMcpRegistryServer({
+        runtime: "codex",
+        serverName: "registry_stdio",
+        scope: "global",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      runtime: "codex",
+      serverName: "registry_stdio",
+      status: "installed-unverified",
+      toolCount: 0,
+      toolNames: [],
+      reason: "codex-check-remote-only:stdio",
+    })
+    await expect(
+      getMcpRegistryVerificationRecord(stdioIdentity),
+    ).resolves.toMatchObject({
+      status: "installed-unverified",
+      reason: "codex-check-remote-only:stdio",
+    })
+    expect(codexCliCalls.map((call) => call.args)).toEqual([
+      ["mcp", "list", "--json"],
+    ])
   })
 
   test("starts Claude OAuth for global and registered project MCP servers", async () => {

@@ -76,9 +76,13 @@ export type McpRegistryRouterDeps = {
     projectPath?: string
   }) => Promise<{
     success: boolean
-    runtime: "claude-code"
+    runtime: "claude-code" | "codex"
     serverName: string
-    status: "ready-to-verify" | "failed-check"
+    status:
+      | "ready-to-verify"
+      | "connected-unverified"
+      | "installed-unverified"
+      | "failed-check"
     toolCount: number
     toolNames: string[]
     reason?: string
@@ -92,8 +96,11 @@ export function createMcpRegistryRouter(
   const checkInstalled =
     deps.checkInstalled ??
     (async (input) => {
-      if (input.runtime !== "claude-code") {
-        throw new Error("Codex MCP registry check is deferred.")
+      if (input.runtime === "codex") {
+        const { checkCodexMcpRegistryServer } = await import(
+          "../../runtime-mcp-config/codex"
+        )
+        return checkCodexMcpRegistryServer(input)
       }
       const { checkClaudeMcpRegistryServer } = await import(
         "../../runtime-mcp-config/claude"
