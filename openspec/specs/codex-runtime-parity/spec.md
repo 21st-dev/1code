@@ -79,7 +79,7 @@ The system SHALL provide Codex behavior equivalent to Claude Code for core safet
 The system SHALL expose normalized, non-secret Codex runtime availability status without collapsing setup, auth, provider, MCP, and policy failures into a generic runtime failure.
 
 #### Scenario: Bundled runtime component is unavailable
-- **WHEN** the bundled Codex CLI is missing, the bundled ACP runtime is missing or non-executable, or the ACP spawn probe fails
+- **WHEN** the bundled Codex CLI is missing or non-executable, or the Codex app-server fails to start
 - **THEN** the Codex runtime status identifies the failing component, local path when safe, sanitized error, and remediation hint
 - **AND** the system blocks provider work until the failing runtime component is fixed
 
@@ -162,27 +162,20 @@ The system SHALL fail this change's completion gate unless Codex parity-owned ca
 - **AND** desktop and CLI surfaces continue to show the degraded or unsupported state honestly
 
 ### Requirement: Codex App-Server Desktop Adapter Decision Gate
-The system SHALL require a documented decision matrix before replacing the current ACP Codex desktop/chat adapter with the app-server target or enabling any migration fallback.
+The system SHALL keep `codex app-server` as the sole Codex desktop/chat adapter now that the ACP temporary-compat rollback is removed, and SHALL require a documented decision matrix before adding or replacing that adapter.
 
-#### Scenario: App-server adapter work starts
-- **WHEN** implementation begins for a Codex app-server desktop/chat migration
-- **THEN** the change records a matrix comparing the current ACP adapter, `@openai/codex-sdk`, and `codex app-server`
+#### Scenario: Adapter replacement work starts
+- **WHEN** implementation begins to add or replace the Codex desktop/chat adapter
+- **THEN** the change records a matrix comparing the incumbent app-server adapter, `@openai/codex-sdk`, and any candidate transport
 - **AND** the matrix covers provider-profile binding, MCP, approvals, AskUserQuestion, attachments, streaming, usage/context metadata, session resume/fork/rollback, cancellation, diagnostics, and local-only behavior
-- **AND** `codex app-server` is treated as the desktop/chat target unless the matrix explicitly records a blocking gap and approved rescope
-- **AND** `@openai/codex-sdk` is not selected as the desktop/chat default solely because it has an official package name
+- **AND** `codex app-server` remains the desktop/chat default unless the matrix explicitly records a blocking gap and approved rescope
+- **AND** a candidate is not selected as the desktop/chat default solely because it has an official package name
 
-#### Scenario: ACP remains in temporary use
-- **WHEN** Locus keeps the ACP-based Codex adapter during the app-server migration
-- **THEN** runtime status and documentation identify ACP as the `temporary-compat` adapter
-- **AND** Locus does not describe ACP as the long-term official OpenAI integration surface
-- **AND** the fallback reason, default-disable condition, and removal condition are recorded in non-secret diagnostics or implementation notes
-- **AND** fallback is selected only through an explicit adapter gate or migration flag, not silent app-server fallback
-- **AND** ACP-supported behavior does not upgrade app-server capability states to `supported`
-
-#### Scenario: ACP fallback is disabled after app-server proof
-- **WHEN** app-server passes schema/client pinning, pre-execution fail-closed tests, provider-profile binding, MCP readiness, AskUserQuestion, supported attachment, stream/session/usage, cancellation, redaction, and desktop smoke evidence for required desktop behavior
-- **THEN** ACP fallback defaults off for desktop Codex chat
-- **AND** any remaining ACP route, dependency, or package path has an explicit approved compatibility gate and deletion follow-up
+#### Scenario: ACP rollback is removed
+- **WHEN** Codex desktop/chat starts after the ACP temporary-compat removal
+- **THEN** there is no `codex-acp-temporary-compat` adapter source, no ACP selection env gate, and no bundled ACP runtime/binary dependency
+- **AND** adapter selection always resolves `codex-app-server` with no rollback fallback
+- **AND** removal does not upgrade any app-server capability state to `supported`, and existing degraded or unsupported states remain represented honestly
 
 ### Requirement: Codex App-Server Behavior Preservation
 The system SHALL preserve existing Codex desktop/chat safety and runtime behavior when migrating to app-server, or explicitly rescope unavailable behavior before enabling app-server by default.
@@ -214,7 +207,7 @@ The system SHALL prove that the Codex app-server adapter can enforce Locus safet
 - **AND** the diagnostic explains the adapter safety setup failure without exposing secrets
 
 ### Requirement: Codex Programmatic Surface Boundary
-The system SHALL treat Codex SDK, Codex app-server, ACP, and `codex exec` as distinct Codex programmatic surfaces with separate capability states.
+The system SHALL treat Codex SDK, Codex app-server, and `codex exec` as distinct Codex programmatic surfaces with separate capability states.
 
 #### Scenario: Desktop and headless surfaces are displayed
 - **WHEN** Locus shows or records Codex runtime metadata
@@ -223,7 +216,7 @@ The system SHALL treat Codex SDK, Codex app-server, ACP, and `codex exec` as dis
 - **AND** each surface reports its own supported, degraded, and unsupported capability states
 
 #### Scenario: Headless Codex remains on exec
-- **WHEN** desktop/chat migrates to app-server while headless Codex still uses `codex exec`
+- **WHEN** desktop/chat runs on app-server while headless Codex still uses `codex exec`
 - **THEN** the headless path remains labeled as batch/fallback mode
 - **AND** missing rich event, approval, or session primitives remain degraded or unsupported for headless until separately implemented and tested
 

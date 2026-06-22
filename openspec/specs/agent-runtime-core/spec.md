@@ -397,7 +397,7 @@ The runtime core SHALL keep the Locus external run, event, capability, preflight
 #### Scenario: Codex desktop uses app-server
 - **WHEN** Codex desktop/chat uses app-server internally
 - **THEN** the adapter maps runtime-specific thread, turn, approval, tool, usage, and session data into the existing Locus normalized event and result shapes
-- **AND** callers do not need to know whether the underlying Codex transport is SDK, app-server, ACP, or exec except through renderer-safe metadata
+- **AND** callers do not need to know whether the underlying Codex transport is SDK, app-server, or exec except through renderer-safe metadata
 
 #### Scenario: Claude and Codex internals differ
 - **WHEN** Claude and Codex use different official SDKs, protocols, permission callbacks, or session primitives
