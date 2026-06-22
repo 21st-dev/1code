@@ -42,6 +42,27 @@ an agent is unavailable for a selected runtime.
 
 ## Decisions
 
+### Decision: Product labels are ratified for implementation
+
+The approved product vocabulary for this direction is:
+
+- Agent Builder: the unified surface for creating, inspecting, importing,
+  projecting, and diagnosing reusable agent personas.
+- Locus Agent, or Agent when the Locus context is clear: the canonical
+  app-managed record derived from the existing App Agents model.
+- Claude native agents: Claude-owned `.claude/agents` definitions discovered or
+  projected through explicit runtime capability state.
+- Codex native agents: Codex-owned native subagent definitions, only after a
+  stable runtime primitive is implemented and proven.
+- Plugin-provided agents: read-only plugin-owned agent definitions unless the
+  user duplicates them into a Locus Agent.
+- Prompt-only mode: a useful but degraded projection mode that applies Agent
+  instructions through prompt context without claiming runtime-native execution.
+
+"Custom Agents" is not an approved product-facing category for this direction.
+Existing storage keys, DB table names, and compatibility code may keep their
+current names until a scoped migration changes them.
+
 ### Decision: Locus Agent is canonical
 
 The product-facing Agent is a Locus-managed record derived from the existing App
@@ -177,8 +198,6 @@ plugin-provided.
 
 ## Open Questions
 
-- Final product label: should the app keep "App Agents" in Settings, or rename
-  the UI to "Agents" while keeping `app_agents` as the DB name?
 - Should Claude native agent editing remain hidden, read-only, or available as
   an advanced runtime-specific action after import/export is implemented?
 - What conflict preview and rollback UX is sufficient before a later change can

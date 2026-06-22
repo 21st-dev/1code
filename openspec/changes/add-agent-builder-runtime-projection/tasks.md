@@ -5,11 +5,11 @@ projection writes, or runtime-native execution work. Section 5 is a later gate,
 not permission to ship the full direction in one pass. Section 6 verification
 applies to every implementation slice.
 
-- [ ] 1.1 Ratify the product labels: Locus Agent / Agent, Claude native agents,
+- [x] 1.1 Ratify the product labels: Locus Agent / Agent, Claude native agents,
       Codex native agents, plugin-provided agents, and prompt-only mode.
-- [ ] 1.2 Update audit docs so they no longer describe `trpc.agents` as a second
+- [x] 1.2 Update audit docs so they no longer describe `trpc.agents` as a second
       SQLite agents table.
-- [ ] 1.3 Update `docs/OWNERSHIP_MAP.md` with the Agent Builder aggregation owner
+- [x] 1.3 Update `docs/OWNERSHIP_MAP.md` with the Agent Builder aggregation owner
       before implementing long-lived services.
 
 ## 2. Canonical Locus Agent Cleanup

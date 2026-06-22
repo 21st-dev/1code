@@ -32,7 +32,7 @@ follows (+ hidden Debug, unlockable from About):
 |---|---|
 | **General** | Preferences · Appearance · Keyboard · About |
 | **Workspace** | Projects · Models |
-| **Agent Capabilities** | Commands · Skills · Custom Agents · MCP · Plugins |
+| **Agent Capabilities** | Commands · Skills · Agents (App Agents today) · MCP · Plugins |
 | **Advanced** | Debug only after unlock |
 
 ### IA smells (organization debt)
@@ -49,7 +49,8 @@ follows (+ hidden Debug, unlockable from About):
    No dedicated **Notifications** home despite 3 notification settings.
 5. **Beta tab now holds only 2 real toggles** (Rollback/history + Offline mode) and
    doubles as the secret devtools unlock.
-6. **Two "Custom Agents" tab implementations exist; one is dead** (see §4).
+6. **The old Custom Agents settings component was dead; the live settings
+   surface is App Agents today and should converge into Agent Builder** (see §4).
 
 ---
 
@@ -165,13 +166,18 @@ were not uniform "ghosts," so Phase 2 treated each by what it actually was:
 ## 4. Dead / duplicated components
 
 > **Resolved by `remove-dead-settings-state`:** the dead tab file below was
-> deleted and its barrel export removed.
+> deleted and its barrel export removed. The remaining live Settings surface is
+> App Agents today; the approved long-term vocabulary is Agent Builder / Locus
+> Agents. Sidebar Claude native file-agent CRUD (`agent-dialog.tsx` +
+> `trpc.agents`) is a runtime-owned capability, not a second Settings tab or a
+> second SQLite agents table.
 
 - **`agents-custom-agents-tab.tsx` → `AgentsCustomAgentsTab` (1,058 lines): DEAD.**
-  Exported from `settings-tabs/index.ts` but **never rendered**. The wired
-  "Custom Agents" tab is `AgentsAppAgentsTab` (`agents-app-agents-tab.tsx`, 872
-  lines). Two implementations of the same tab; only the App Agents one is live.
-  → Confirm and remove the dead 1,058-line file.
+  It was exported from `settings-tabs/index.ts` but **never rendered**. The live
+  Settings surface is `AgentsAppAgentsTab` (`agents-app-agents-tab.tsx`, 872
+  lines), backed by the `app_agents` table. The similarly named sidebar
+  `agent-dialog.tsx` path uses Claude native `.claude/agents` files through
+  `trpc.agents`; it is not a Settings tab and is not another SQLite agent table.
 
 ---
 
@@ -183,7 +189,7 @@ naming, overlap), not the dead/orphan analysis:
 
 - **Models** (`agents-models-tab.tsx`, 2,168) · **Plugins** (5,103) ·
   **Skills** (1,712) · **MCP** (1,589) · **Command Guide** (1,063) ·
-  **Custom Agents / App Agents** (872) · **Projects/Worktree** (949).
+  **Agents / App Agents** (872) · **Projects/Worktree** (949).
 
 These five "Agent Capabilities" tabs are the bulk of Settings' weight and the
 strongest candidate for the "too much / too deep" concern — worth asking whether
@@ -197,6 +203,8 @@ some belong outside Settings entirely (e.g., a dedicated management surface).
    *inventory only*. Next gate: (a) remove dead atoms + fix orphan wiring
    (invisible to users), then separately (b) restructure tabs (user-visible IA).
 2. **Teams/billing identity** (§3) — keep or remove the SaaS leftovers.
-3. **Dead Custom Agents tab** (§4) — confirm removal of the 1,058-line file.
+3. **Agent Builder convergence** (§4) — rename/converge App Agents and any
+   runtime-native agent listings under the approved Agent Builder / Locus Agent
+   vocabulary.
 4. **Where do the 5 "Agent Capabilities" tabs belong** — stay in Settings, or
    split into a dedicated management surface?

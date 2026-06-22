@@ -29,6 +29,27 @@ or UI helper.
   usability stay with Runtime MCP Config and MCP Registry owners; plugin
   runtime-native activation identity stays with Runtime Plugins.
 
+## Agent Builder And Locus Agents
+
+- Canonical owners:
+  - Locus Agent CRUD and prompt-context transformation:
+    `src/main/lib/app-agents/`
+  - Agent Builder aggregation, import, and projection orchestration:
+    `src/main/lib/agent-builder/`
+  - Runtime projection state and availability:
+    `src/main/lib/runtime-capability-projection/`
+- Consumers: Settings or capability-center Agent Builder surfaces, mention
+  providers, runtime availability surfaces, runtime-specific projection adapters
+- Rule: Locus-managed Agents are the canonical product object for user-created
+  reusable personas. Agent Builder may aggregate Locus Agents, runtime-native
+  discovered agents, and plugin-provided agents, but it must preserve source,
+  owner, mutability, projection mode, and sanitized diagnostics in DTOs.
+  Runtime-native `.claude/agents`, future Codex-native subagents, and
+  plugin-provided agents must not become editable Locus Agents unless the user
+  explicitly imports or duplicates them. Renderer code must not infer Agent
+  runtime support from runtime names, file paths, or install state. "Custom
+  Agents" must not return as a product-facing category.
+
 ## Runtime Chat UI Event State
 
 - Canonical owner: `src/renderer/features/agents/lib/runtime-event-state.ts`
