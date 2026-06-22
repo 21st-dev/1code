@@ -46,7 +46,9 @@
 - [x] 3.4 Exclude stdio/package targets from the connected check (do not launch the
   server process to list tools); leave them `Installed / Unverified` in v1.
 - [x] 3.5 Ensure browse, preview, install, and the default Check never call MCP
-  tools, start package managers/Docker, or launch stdio/package servers.
+  tools, start package managers/Docker, or launch stdio/package servers. Remote
+  Check may make a user-triggered network request to the MCP server URL to list
+  tools.
 
 ## 4. Status + UI Wording
 

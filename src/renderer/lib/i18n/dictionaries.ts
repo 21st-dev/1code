@@ -1090,6 +1090,8 @@ export const en = {
   "settings.mcp.codexConnectedUnverified": "Tools visible",
   "settings.mcp.codexConnectedUnverifiedDescription":
     "Codex can connect to this registry server and list its tools. Locus cannot auto-verify Codex tool execution yet, so this is not Verified on Codex.",
+  "settings.mcp.registryCheckNetworkDisclosure":
+    "Check connects to the MCP server URL and lists tools. It does not call tools or auto-verify Codex execution.",
   "settings.mcp.reconnect": "Reconnect",
   "settings.mcp.authenticate": "Authenticate",
   "settings.mcp.logout": "Logout",
@@ -4504,6 +4506,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.mcp.codexConnectedUnverified": "工具可见",
   "settings.mcp.codexConnectedUnverifiedDescription":
     "Codex 可以连接到这个注册表服务器并列出工具。Locus 目前还不能自动验证 Codex 的工具执行结果，因此这不是 Codex 已验证。",
+  "settings.mcp.registryCheckNetworkDisclosure":
+    "检查会连接到 MCP server URL 并列出工具；不会调用工具，也不会自动验证 Codex 的执行结果。",
   "settings.mcp.reconnect": "重新连接",
   "settings.mcp.authenticate": "授权",
   "settings.mcp.logout": "退出登录",

@@ -74,15 +74,17 @@ Connected/check status binds to that identity, never to a bare server-name guess
 Fields the Codex writer cannot represent make the target non-materializable
 (blocked with a reason), not silently dropped.
 
-### Connect/list Check stays inert — remote transports only in v1
-The Codex Check connects and lists tools only. It must not call MCP tools. But for
-stdio/package servers, *listing tools launches the server process* — Codex refresh
-already skips stdio probes ("can launch GUI/permission flows", `codex.ts`). So the
-v1 connected check is limited to setup-free remote HTTP/SSE/streamable_http
-targets. stdio/package connected checks stay out until a separate, explicitly
-confirmed path defines safe launch semantics. stdio/package Codex installs may
-still be offered (if materializable) but remain `Installed / Unverified` with no
-connected check in v1.
+### Connect/list Check is explicit network I/O, not tool execution
+The Codex Check connects to the configured MCP server URL and lists tools. That is
+a real user-triggered outbound network request for remote transports; it is not a
+fully inert local inspection. It must not call MCP tools. But for stdio/package
+servers, *listing tools launches the server process* — Codex refresh already skips
+stdio probes ("can launch GUI/permission flows", `codex.ts`). So the v1 connected
+check is limited to setup-free remote HTTP/SSE/streamable_http targets.
+stdio/package connected checks stay out until a separate, explicitly confirmed
+path defines safe launch semantics. stdio/package Codex installs may still be
+offered (if materializable) but remain `Installed / Unverified` with no connected
+check in v1.
 
 ## Spec boundary with the observability change
 This change modifies only `Claude Required Target And Codex Honest Fallback`.
@@ -98,6 +100,10 @@ there. The two changes have non-overlapping deltas.
   Unverified` until a check/run observes it; failure surfaces as a failed check.
 - **Field-materialization gaps.** Mitigation: non-materializable targets stay
   blocked with a concrete reason; no silent unusable writes.
+- **Authenticated remote checks can fail closed.** Mitigation: the check uses
+  materialized headers/env-header references when Codex exposes them, but missing
+  runtime env or omitted header materialization can produce `failed-check`. That
+  is a reachability/auth failure, not a `Verified on Codex` proof.
 
 ## Verification
 - Unit: `codexCanMaterialize` accepts materializable targets and rejects
@@ -105,6 +111,8 @@ there. The two changes have non-overlapping deltas.
 - Unit: installability offers Codex install only for materializable targets and
   blocks others with concrete reasons.
 - Unit: Codex never reaches `verified-local` from connect/list signals.
-- Unit: browse/preview/install/Check never call MCP tools.
+- Unit: browse/preview/install/Check never call MCP tools or launch stdio/package
+  servers; remote Check is allowed to make the explicit user-triggered network
+  request needed to list tools.
 - Smoke: install a materializable registry MCP server to Codex, run a connect/list
   check, confirm `connected` (tools visible) and not `Verified on Codex`.

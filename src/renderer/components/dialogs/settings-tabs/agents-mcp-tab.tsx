@@ -701,6 +701,11 @@ function McpServerDetail({
               variant="outline"
               size="sm"
               className="h-7 px-2 text-xs"
+              title={
+                provider === "codex" && isRegistryManagedServer(server)
+                  ? t("settings.mcp.registryCheckNetworkDisclosure")
+                  : undefined
+              }
               onClick={onCheck}
               disabled={isChecking}
             >

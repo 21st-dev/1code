@@ -26,10 +26,15 @@ install and Codex connect/list check paths used by Settings > MCP.
 ## Result
 
 - Install returned `installed-unverified`.
-- Connect/list check returned `connected-unverified`.
+- Connect/list check made a real outbound request to the configured calculator
+  MCP server URL and returned `connected-unverified`.
 - Tool inventory contained `calculate`.
 - Verification records with `verified-local`: `0`.
 - Check reason: `codex-tools-visible-auto-verify-unavailable`.
+- The smoke target did not require auth. Authenticated remote checks depend on
+  materialized headers/env-header references being available to the runtime; if
+  auth materialization is missing, the expected result is `failed-check`, not
+  `Verified on Codex`.
 
 ## Secret Scan
 

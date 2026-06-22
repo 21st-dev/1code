@@ -113,6 +113,9 @@ describe("MCP registry management-time inert boundary", () => {
     expect(installDialogBlock).toContain("settings.mcp.registryInstallToClaude")
     expect(installDialogBlock).toContain("settings.mcp.registryInstallToCodex")
     expect(checkPropBlock).toContain("isRegistryManagedServer")
+    expect(mcpTabSource).toContain(
+      "settings.mcp.registryCheckNetworkDisclosure",
+    )
   })
 
   test("keeps explicit registry check connect-list only without unclassified tool calls", () => {
