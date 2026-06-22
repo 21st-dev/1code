@@ -113,6 +113,8 @@
 - [ ] 7.4 Desktop smoke: a Codex chat (app-server path) starts, streams, handles
   approvals, and renders tool calls; an **existing** Codex sub-chat with prior
   ACP-shaped tool parts still renders (proves `acp-tool-normalizer` retention).
-- [ ] 7.5 `locus acp` stdio server still starts and serves a prompt turn
+- [x] 7.5 `locus acp` stdio server still starts and serves a prompt turn
   (proves the server surface was untouched).
+  Evidence: `bun test tests/headless-cli-dispatcher.test.ts -t "runs minimal ACP stdio with JSON-only stdout and protocol jobs"` passed with the
+  headless fake runner.
 - [x] 7.6 `openspec validate remove-codex-acp-temporary-compat --strict --no-interactive` passes.
