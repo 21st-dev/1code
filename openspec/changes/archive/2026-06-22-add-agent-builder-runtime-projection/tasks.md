@@ -1,9 +1,9 @@
 ## 1. Product And Spec Alignment
 
-First implementation slice: complete sections 1-4 before starting import,
-projection writes, or runtime-native execution work. Section 5 is a later gate,
-not permission to ship the full direction in one pass. Section 6 verification
-applies to every implementation slice.
+This archived implementation slice covers product/spec alignment, canonical
+Agent cleanup, cross-runtime prompt-context consistency, and the read-only Agent
+Builder aggregation model. Import, projection writes, and runtime-native
+execution work are parked in `add-agent-native-projection-writes`.
 
 - [x] 1.1 Ratify the product labels: Locus Agent / Agent, Claude native agents,
       Codex native agents, plugin-provided agents, and prompt-only mode.
@@ -65,33 +65,18 @@ read-only detail view. `tests/agent-builder-read-model.test.ts` covers mutabilit
 runtime projection status, and non-path diagnostics; `tests/agent-builder-ui.test.ts`
 guards the renderer against returning to legacy agent lists.
 
-## 5. Import And Projection
+## 5. Verification
 
-Do not start this section until sections 1-4 are implemented and reviewed.
-
-- [ ] 5.1 Add "Import as Locus Agent" for runtime-native discovered agents.
-- [ ] 5.2 Add "Duplicate to Locus Agent" for plugin-provided agents.
-- [ ] 5.3 Add projection records for prompt-context availability.
-- [ ] 5.4 Add Claude native materialization only for Locus-managed isolated
-      runtime homes after compatibility, discovery, and drift checks are
-      implemented.
-- [ ] 5.5 Add Codex native projection only after a stable native primitive and
-      smoke evidence exist.
-- [ ] 5.6 Defer writes to user-managed `~/.claude/agents` or project
-      `.claude/agents` directories to a separate approved change with conflict
-      preview, ownership markers, rollback, and manual smoke evidence.
-
-## 6. Verification
-
-- [x] 6.1 Add unit tests for source badges, mutability, projection status, and
+- [x] 5.1 Add unit tests for source badges, mutability, projection status, and
       non-secret diagnostics.
-- [x] 6.2 Add runtime prompt tests for Claude and Codex paths.
-- [x] 6.3 Add architecture guards against duplicate Agent business paths.
-- [x] 6.4 Run `openspec validate add-agent-builder-runtime-projection --strict
+- [x] 5.2 Add runtime prompt tests for Claude and Codex paths.
+- [x] 5.3 Add architecture guards against duplicate Agent business paths.
+- [x] 5.4 Run `openspec validate add-agent-builder-runtime-projection --strict
       --no-interactive`.
 
 Proof note: current slices were verified with targeted Agent Builder/i18n tests,
 Claude/Codex prompt tests from section 3, `bun run ts:check`,
 `bun run lint:changed`, `node scripts/check-architecture-guards.mjs`, and
-`openspec validate --all --strict --no-interactive`. Section 5 remains gated
-behind a separate implementation/review pass and is intentionally unchecked.
+`openspec validate --all --strict --no-interactive`. Import, projection writes,
+and runtime-native execution remain gated behind a separate implementation/review
+pass.

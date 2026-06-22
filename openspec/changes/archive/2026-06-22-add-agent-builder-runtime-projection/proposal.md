@@ -20,16 +20,15 @@ imported, or projected through explicit runtime availability and proof states.
 - Keep App Agents as the canonical Locus Agent source of truth rather than
   merging Claude-native, Codex-native, and plugin-provided agents into one
   mutable table.
-- Add runtime projection semantics for Locus Agents: prompt-context application,
-  Claude-native agent materialization, future Codex-native subagent materializing,
-  and read-only plugin/runtime-native listings are separate projection modes.
+- Add runtime projection semantics for Locus Agents: prompt-context application
+  and read-only plugin/runtime-native listings are separate from future native
+  materialization work.
 - Require visible source and availability states: Locus, Claude native, Codex
   native, plugin-provided, prompt-only, native-loadable, needs setup, blocked,
   unsupported, or read-only as applicable.
-- Define import and projection flows instead of silent bidirectional sync:
-  runtime-native agents can be imported as Locus Agents, and Locus Agents can be
-  projected into runtime-native formats only with explicit user intent and drift
-  diagnostics.
+- Define the guardrails that prevent silent bidirectional sync. Import,
+  duplicate, native materialization, and durable projection writes are deferred
+  to `add-agent-native-projection-writes`.
 - Retire "Custom Agents" as a product-facing label. Claude file agents become a
   runtime-specific capability such as "Claude native agents" or "Claude
   subagents" when exposed.
@@ -39,16 +38,10 @@ imported, or projected through explicit runtime availability and proof states.
 ## Sequencing Guard
 
 This change is intentionally large and MUST ship in recoverable phases. The
-first implementation slice should stop at product/spec alignment, canonical
-Agent cleanup, cross-runtime prompt-context consistency, and a read-only Agent
-Builder aggregation model. Import, projection writes, and native execution
-claims belong to later slices after the read model is stable.
-
-The first native materialization implementation MUST write only into
-Locus-managed isolated runtime homes for managed runs. Writing to user-managed
-runtime directories such as `~/.claude/agents` or project `.claude/agents`
-requires a later approved change with conflict previews, drift detection, and
-rollback evidence.
+archived implementation slice stops at product/spec alignment, canonical Agent
+cleanup, cross-runtime prompt-context consistency, and a read-only Agent Builder
+aggregation model. Import, projection writes, and native execution claims are
+parked in `add-agent-native-projection-writes`.
 
 ## Impact
 
@@ -57,11 +50,8 @@ rollback evidence.
 - Affected code, when implemented:
   - Agent Builder UI under Settings / capability center surfaces
   - `src/main/lib/app-agents/**` canonical Agent CRUD and prompt context
-  - `src/main/lib/runtime-capability-projection/**` projection records and
-    runtime availability reporting
-  - Claude runtime isolated config preparation for optional native agent
-    projection
-  - Codex runtime adapter only after a stable native subagent path is proven
+  - `src/main/lib/runtime-capability-projection/**` runtime availability
+    reporting
   - Renderer mention providers and context recommendations
   - i18n dictionaries and architecture guards that prevent "Custom Agents" from
     returning as a product label

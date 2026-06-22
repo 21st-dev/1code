@@ -20,8 +20,8 @@ an agent is unavailable for a selected runtime.
 
 - Make Locus Agents the canonical product object for user-created reusable
   personas.
-- Provide one Agent Builder surface for creating, inspecting, importing,
-  projecting, and diagnosing agents.
+- Provide one Agent Builder surface for creating, inspecting, and diagnosing
+  agents across Locus-managed, runtime-native, and plugin-provided sources.
 - Distinguish source ownership from runtime availability.
 - Allow runtime-native support without requiring every runtime to emulate every
   other runtime.
@@ -39,6 +39,9 @@ an agent is unavailable for a selected runtime.
 - Do not make plugin-provided agents editable in place.
 - Do not build hosted/background/remote agents as part of this change.
 - Do not rename DB tables as part of the product vocabulary change.
+- Do not add import, duplicate, native materialization, or projection write
+  flows in this archived slice; those are parked in
+  `add-agent-native-projection-writes`.
 
 ## Decisions
 
@@ -46,14 +49,14 @@ an agent is unavailable for a selected runtime.
 
 The approved product vocabulary for this direction is:
 
-- Agent Builder: the unified surface for creating, inspecting, importing,
-  projecting, and diagnosing reusable agent personas.
+- Agent Builder: the unified surface for creating, inspecting, and diagnosing
+  reusable agent personas.
 - Locus Agent, or Agent when the Locus context is clear: the canonical
   app-managed record derived from the existing App Agents model.
 - Claude native agents: Claude-owned `.claude/agents` definitions discovered or
   projected through explicit runtime capability state.
 - Codex native agents: Codex-owned native subagent definitions, only after a
-  stable runtime primitive is implemented and proven.
+  stable runtime primitive is implemented and proven by a later change.
 - Plugin-provided agents: read-only plugin-owned agent definitions unless the
   user duplicates them into a Locus Agent.
 - Prompt-only mode: a useful but degraded projection mode that applies Agent
@@ -83,19 +86,12 @@ The Agent Builder list can show Locus Agents, Claude native agents, Codex native
 agents, and plugin-provided agents in one surface, but every row must retain a
 source badge, owner, mutability, and runtime status.
 
-### Decision: Runtime projection is explicit
+### Decision: Runtime availability is explicit
 
-A Locus Agent can be applied through prompt context or projected into a runtime
-native format. Projection creates runtime availability state, not a new source of
-truth. Drift, failed materialization, unsupported runtime primitives, and
-missing setup must be visible before a run depends on that projection.
-
-### Decision: Native import is copy-in, not sync-by-default
-
-Runtime-native agents can be imported as Locus Agents. Import creates a new
-Locus-owned record with provenance and does not keep silently overwriting either
-side. Future bidirectional sync would require a separate approved change with
-conflict handling.
+A Locus Agent can be applied through prompt context. Runtime-native discovery
+creates availability and source state, not a new source of truth. Unsupported
+runtime primitives and missing setup must be visible before a run depends on an
+agent.
 
 ### Decision: Prompt-only remains a first-class but degraded mode
 
@@ -103,23 +99,11 @@ Prompt-context application is useful and should remain available. It must be
 labeled as prompt-only or degraded when the selected runtime lacks native agent
 execution semantics.
 
-### Decision: First native projection writes only isolated runtime homes
-
-The first implementation that materializes Locus Agents into runtime-native
-formats must stage them only inside Locus-managed isolated runtime homes used for
-managed runs. It must not write to user-global or project runtime directories
-such as `~/.claude/agents` or `.claude/agents`.
-
-Writing to real user-managed runtime directories is a later product/security
-change. That later change must prove ownership markers, drift detection,
-conflict preview, rollback, and user confirmation before durable writes can
-touch runtime assets the user may manage outside Locus.
-
 ## Proposed Ownership
 
 - Canonical Locus Agent CRUD and prompt-context transformation:
   `src/main/lib/app-agents/**`
-- Agent Builder aggregation/import/project orchestration:
+- Agent Builder aggregation and future import/projection orchestration:
   `src/main/lib/agent-builder/**` (new owner)
 - Runtime projection state and availability:
   `src/main/lib/runtime-capability-projection/**`
@@ -137,9 +121,7 @@ long-lived `agent-builder` services.
 The existing `app_agents` table can remain the base canonical table. A later
 implementation may add metadata needed for Agent Builder behavior, such as
 source provenance, registry source, imported-from runtime, and projection
-preferences. Runtime projection records should reference the Locus Agent id and
-runtime id, and include fingerprints, status, non-secret reason text, and last
-checked timestamps.
+preferences.
 
 Runtime-native and plugin-provided listings should not be stored as editable
 Locus Agents unless the user imports or duplicates them.
@@ -147,17 +129,14 @@ Locus Agents unless the user imports or duplicates them.
 ## Runtime Projection Modes
 
 - `prompt-context`: inject Locus Agent instructions into the request.
-- `native-materialized`: stage a runtime-native representation for a managed run
-  in a Locus-managed isolated runtime home. Durable writes to user-managed
-  runtime directories are out of scope for the first implementation.
 - `native-discovered`: show a runtime-owned native agent that exists outside
   Locus canonical storage.
 - `plugin-provided`: show a read-only agent supplied by a reviewed plugin.
 - `unsupported`: show that no stable runtime path exists.
 
 Exact enum names may change during implementation, but the UI must preserve the
-distinction between prompt-only, native materialized, native discovered, and
-plugin-provided.
+distinction between prompt-only, native discovered, and plugin-provided. Native
+materialization is parked in `add-agent-native-projection-writes`.
 
 ## Migration Plan
 
@@ -169,15 +148,9 @@ plugin-provided.
    either receives prompt-context application or is gated with explicit reason.
 4. Add Agent Builder read model that aggregates Locus Agents and read-only
    runtime-native/plugin listings.
-5. Add explicit import-from-native and duplicate-from-plugin flows.
-6. Add runtime projection state for Locus Agents, starting with prompt-context
-   projection records.
-7. Add native materialization only inside Locus-managed isolated runtime homes
-   when proof is available.
-8. Add durable writes to user-managed runtime directories only through a later
-   approved change with conflict and rollback evidence.
-9. Add Codex native subagent projection only after a stable primitive and smoke
-   evidence exist.
+5. Park explicit import-from-native, duplicate-from-plugin, projection records,
+   native materialization, durable writes, and Codex native subagent projection
+   in a later approved change.
 
 ## Risks / Trade-offs
 
@@ -185,9 +158,8 @@ plugin-provided.
   Mitigation: every row shows source, mutability, runtime status, and projection
   mode.
 - Risk: Native file writes could overwrite user-managed runtime assets.
-  Mitigation: first native projection writes only to Locus-managed isolated
-  runtime homes; durable writes to user-global or project runtime directories
-  require a later approved change with explicit projection enablement,
+  Mitigation: this archived slice does not write native files; write behavior is
+  deferred to a later approved change with explicit projection enablement,
   fingerprints, conflict previews, and rollback-safe writes.
 - Risk: Renderer code may infer runtime support from names or file paths.
   Mitigation: runtime support and projection status come from main-process
@@ -198,7 +170,5 @@ plugin-provided.
 
 ## Open Questions
 
-- Should Claude native agent editing remain hidden, read-only, or available as
-  an advanced runtime-specific action after import/export is implemented?
 - What conflict preview and rollback UX is sufficient before a later change can
   write durable native agent files into user-managed runtime directories?

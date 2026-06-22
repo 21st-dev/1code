@@ -12,7 +12,8 @@ instead of separate product-level App Agents and Custom Agents surfaces.
 - **AND** each row shows source, owner runtime or plugin when applicable,
   mutability, invocation mode, and runtime availability status
 - **AND** the UI does not label runtime-native or plugin-provided listings as
-  editable Locus Agents unless the user imports or duplicates them
+  editable Locus Agents unless a later explicit import or duplicate flow creates
+  a Locus-managed copy
 
 #### Scenario: Custom Agents label would be shown
 - **WHEN** a user-facing label, heading, navigation item, dialog, or toast refers
@@ -35,14 +36,14 @@ truth for user-created reusable personas.
 - **WHEN** Locus discovers a Claude-native agent, Codex-native agent, or other
   runtime-owned agent definition
 - **THEN** the system shows it as runtime-owned and read-only by default
-- **AND** the user may import it as a new Locus Agent instead of editing it as the
-  canonical record in place
+- **AND** it does not become editable or canonical without a later explicit
+  import flow
 
 #### Scenario: Plugin-provided agent is discovered
 - **WHEN** a reviewed plugin exposes an agent definition
 - **THEN** the system shows the agent as plugin-provided and read-only
-- **AND** the user may duplicate it into a Locus Agent only through an explicit
-  action that preserves source provenance
+- **AND** it does not become editable or canonical without a later explicit
+  duplicate flow that preserves source provenance
 
 ### Requirement: Agent Runtime Support Status
 
@@ -69,28 +70,3 @@ feature parity across runtimes.
 - **THEN** the Agent Builder reports unsupported or blocked status with a
   non-secret reason
 - **AND** run-starting surfaces disable or warn before provider work starts
-
-### Requirement: Agent Import And Projection Are Explicit
-
-The system SHALL require explicit user intent before importing runtime-native
-agents into Locus or projecting Locus Agents into runtime-native formats.
-
-#### Scenario: User imports a runtime-native agent
-- **WHEN** the user chooses to import a runtime-native agent
-- **THEN** Locus creates or previews a Locus Agent copy with provenance
-- **AND** the runtime-owned source remains unchanged unless a later explicit write
-  action is approved
-
-#### Scenario: User enables native projection
-- **WHEN** the user enables native projection for a Locus Agent and runtime
-- **THEN** Locus previews the target runtime, target scope, materialized content
-  fingerprint, and overwrite or drift risk before writing
-- **AND** the write is blocked when the target asset has drifted or is not owned
-  by Locus-managed projection state
-
-#### Scenario: Projection fails
-- **WHEN** projection fails because the runtime is unavailable, the target scope
-  is unsupported, a conflict exists, or the runtime has no stable primitive
-- **THEN** Locus keeps the canonical Agent record intact
-- **AND** reports the projection failure as sanitized runtime availability state
-
