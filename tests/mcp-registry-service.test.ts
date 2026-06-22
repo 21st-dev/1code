@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import type { McpServerConfig } from "../src/main/lib/claude-config"
+import { setElectronUserDataPathProviderForTest } from "../src/main/lib/electron-app"
 import type {
   OfficialMcpRegistryProvider,
   OfficialMcpRegistryServerListResponse,
@@ -10,10 +14,13 @@ import {
   resolveMcpRegistryRuntimeLocalStateFromConfig,
 } from "../src/main/lib/mcp-registry/secrets"
 import { createMcpRegistryService } from "../src/main/lib/mcp-registry/service"
+import { getMcpRegistryVerificationRecord } from "../src/main/lib/mcp-registry/verification-state"
 import {
   setElectronSafeStorageForTest,
   setSecureStorageMacKeychainPreflightForTest,
 } from "../src/main/lib/secure-storage"
+
+let userDataDir = ""
 
 function listResponse(): OfficialMcpRegistryServerListResponse {
   return {
@@ -150,7 +157,9 @@ function createProviderStub(): {
 }
 
 describe("MCP registry service", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    userDataDir = await mkdtemp(join(tmpdir(), "locus-mcp-registry-service-"))
+    setElectronUserDataPathProviderForTest(() => userDataDir)
     setSecureStorageMacKeychainPreflightForTest(true)
     setElectronSafeStorageForTest({
       isEncryptionAvailable() {
@@ -169,9 +178,12 @@ describe("MCP registry service", () => {
     })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     setSecureStorageMacKeychainPreflightForTest(null)
     setElectronSafeStorageForTest(null)
+    setElectronUserDataPathProviderForTest(null)
+    await rm(userDataDir, { recursive: true, force: true })
+    userDataDir = ""
   })
 
   test("normalizes list and search results from the provider", async () => {
@@ -261,11 +273,16 @@ describe("MCP registry service", () => {
   test("installs setup-free registry targets through the injected Claude writer", async () => {
     const { provider, calls } = createProviderStub()
     const writes: unknown[] = []
+    const codexWrites: unknown[] = []
     const service = createMcpRegistryService({
       provider,
       resolveCodexRuntimeAuthenticated: () => true,
       async writeClaudeConfig(input) {
         writes.push(input)
+        return { success: true, name: input.name.trim() }
+      },
+      async writeCodexConfig(input) {
+        codexWrites.push(input)
         return { success: true, name: input.name.trim() }
       },
     })
@@ -306,9 +323,67 @@ describe("MCP registry service", () => {
         },
       },
     })
-    expect((writes[0] as { config: McpServerConfig }).config).not.toHaveProperty(
-      "_locusPluginMcp",
-    )
+    expect(
+      (writes[0] as { config: McpServerConfig }).config,
+    ).not.toHaveProperty("_locusPluginMcp")
+
+    const codexResult = await service.installEntry({
+      serverName: "io.github.example/detail",
+      targetId: "remote:streamable_http:0",
+      runtime: "codex",
+      scope: "global",
+      installName: "codex_registry_remote",
+    })
+    const codexEntryFingerprint = codexResult.entryFingerprint
+    const codexConfigFingerprint = codexResult.configFingerprint
+    expect(codexResult).toMatchObject({
+      success: true,
+      runtime: "codex",
+      serverName: "codex_registry_remote",
+      status: "installed-unverified",
+      entryFingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      configFingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+    })
+    await expect(
+      getMcpRegistryVerificationRecord({
+        runtime: "codex",
+        serverName: "codex_registry_remote",
+        entryFingerprint: codexEntryFingerprint,
+        configFingerprint: codexConfigFingerprint,
+      }),
+    ).resolves.toMatchObject({
+      runtime: "codex",
+      serverName: "codex_registry_remote",
+      status: "installed-unverified",
+      reason: "installed-unverified",
+    })
+
+    expect(codexWrites).toEqual([
+      expect.objectContaining({
+        name: "codex_registry_remote",
+        scope: "global",
+        config: {
+          url: "https://mcp.example.com/mcp",
+          transportType: "streamable_http",
+        },
+      }),
+    ])
+
+    expect(calls).toEqual([
+      "detail:io.github.example/detail:latest",
+      "detail:io.github.example/detail:latest",
+    ])
+  })
+
+  test("does not trust renderer-reported Codex runtime auth during install", async () => {
+    const { provider } = createProviderStub()
+    const service = createMcpRegistryService({
+      provider,
+      resolveCodexRuntimeAuthenticated: () => false,
+      async writeCodexConfig() {
+        throw new Error("Codex config must not be written")
+      },
+    })
 
     await expect(
       service.installEntry({
@@ -316,13 +391,9 @@ describe("MCP registry service", () => {
         targetId: "remote:streamable_http:0",
         runtime: "codex",
         scope: "global",
+        resolvedSetup: { runtimeAuthenticated: true },
       }),
-    ).rejects.toThrow("Codex MCP registry install is deferred")
-
-    expect(calls).toEqual([
-      "detail:io.github.example/detail:latest",
-      "detail:io.github.example/detail:latest",
-    ])
+    ).rejects.toThrow("runtime-auth:codex")
   })
 
   test("saves inactive needs-setup config when required setup is missing", async () => {
@@ -377,9 +448,9 @@ describe("MCP registry service", () => {
         },
       },
     })
-    expect((writes[0] as { config: McpServerConfig }).config).not.toHaveProperty(
-      "_locusPluginMcp",
-    )
+    expect(
+      (writes[0] as { config: McpServerConfig }).config,
+    ).not.toHaveProperty("_locusPluginMcp")
     expect(calls).toEqual(["detail:io.github.example/needs-setup"])
   })
 

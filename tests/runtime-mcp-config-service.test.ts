@@ -7,7 +7,7 @@ import {
   mock,
   test,
 } from "bun:test"
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import * as realOs from "node:os"
 import { join, resolve } from "node:path"
 import * as dbSchema from "../src/main/lib/db/schema"
@@ -797,6 +797,64 @@ describe("Runtime MCP config service behavior", () => {
       "node",
       "server.js",
     ])
+  })
+
+  test("writes Codex MCP registry configs through the runtime owner", async () => {
+    const tempHome = makeTempDir()
+    mockHome = tempHome
+    process.env.HOME = tempHome
+
+    await codexMcpConfig.writeCodexMcpServerConfig({
+      name: "registry_remote",
+      scope: "global",
+      config: {
+        url: "https://api.example.com/mcp",
+        transportType: "streamable_http",
+        headers: { "X-Inline": "inline" },
+        envHttpHeaders: { "X-Env": "CODEX_REMOTE_TOKEN" },
+        bearerTokenEnvVar: "CODEX_REMOTE_TOKEN",
+      },
+    })
+
+    const configPath = join(tempHome, ".codex", "config.toml")
+    let configToml = readFileSync(configPath, "utf-8")
+    expect(configToml).toContain('[mcp_servers."registry_remote"]')
+    expect(configToml).toContain('url = "https://api.example.com/mcp"')
+    expect(configToml).toContain('http_headers = { "X-Inline" = "inline" }')
+    expect(configToml).toContain(
+      'env_http_headers = { "X-Env" = "CODEX_REMOTE_TOKEN" }',
+    )
+    expect(configToml).toContain('bearer_token_env_var = "CODEX_REMOTE_TOKEN"')
+
+    await codexMcpConfig.writeCodexMcpServerConfig({
+      name: "registry_remote",
+      scope: "global",
+      config: {
+        command: "node",
+        args: ["server.js"],
+        cwd: tempHome,
+        env: { INLINE: "1" },
+        envVars: ["CODEX_REMOTE_TOKEN"],
+        transportType: "stdio",
+      },
+    })
+
+    configToml = readFileSync(configPath, "utf-8")
+    expect(configToml).not.toContain("https://api.example.com/mcp")
+    expect(configToml).toContain('command = "node"')
+    expect(configToml).toContain('args = ["server.js"]')
+    expect(configToml).toContain(`cwd = "${tempHome}"`)
+    expect(configToml).toContain('env_vars = ["CODEX_REMOTE_TOKEN"]')
+    expect(configToml).toContain('[mcp_servers."registry_remote".env]')
+    expect(configToml).toContain('"INLINE" = "1"')
+
+    await expect(
+      codexMcpConfig.writeCodexMcpServerConfig({
+        name: "project_registry",
+        scope: "project",
+        config: { url: "https://api.example.com/mcp" },
+      }),
+    ).rejects.toThrow("global scope only")
   })
 
   test("starts Claude OAuth for global and registered project MCP servers", async () => {

@@ -21,6 +21,7 @@ import {
   getResolvedSetupPlainValue,
   type McpRegistrySetupResolutionInput,
 } from "./setup"
+import { upsertMcpRegistryVerificationRecord } from "./verification-state"
 
 type ClaudeMcpConfigWriter = (input: {
   name: string
@@ -43,6 +44,16 @@ async function defaultWriteClaudeConfig(
     "../runtime-mcp-config/claude"
   )
   const result = await writeClaudeMcpServerConfig(input)
+  return { success: true, name: result.name }
+}
+
+async function defaultWriteCodexConfig(
+  input: Parameters<CodexMcpConfigWriter>[0],
+): ReturnType<CodexMcpConfigWriter> {
+  const { writeCodexMcpServerConfig } = await import(
+    "../runtime-mcp-config/codex"
+  )
+  const result = await writeCodexMcpServerConfig(input)
   return { success: true, name: result.name }
 }
 
@@ -157,6 +168,35 @@ function resolveSetupMap(input: {
   return { configValues, encryptedValues, envVarRefs }
 }
 
+function resolveCodexSetupMap(input: {
+  fields: McpRegistrySetupField[]
+  resolvedSetup: McpRegistrySetupResolutionInput | undefined
+  source: "env" | "header"
+}): {
+  configValues: Record<string, string>
+  envVarRefs: Record<string, string>
+} {
+  const configValues: Record<string, string> = {}
+  const envVarRefs: Record<string, string> = {}
+
+  for (const field of input.fields) {
+    const resolved = resolvedSetupValueForField({
+      field,
+      resolvedSetup: input.resolvedSetup,
+      source: input.source,
+    })
+    if (resolved.envVar) {
+      envVarRefs[field.name] = resolved.envVar
+      continue
+    }
+    if (resolved.value) {
+      configValues[field.name] = resolved.value
+    }
+  }
+
+  return { configValues, envVarRefs }
+}
+
 function resolveVariableValues(input: {
   target: McpRegistryInstallTarget
   resolvedSetup: McpRegistrySetupResolutionInput | undefined
@@ -201,6 +241,34 @@ function resolveVariableValues(input: {
       Object.keys(encryptedVariables).length > 0 ||
       Object.keys(envVarRefs).length > 0,
   }
+}
+
+function resolveCodexVariableValues(input: {
+  target: McpRegistryInstallTarget
+  resolvedSetup: McpRegistrySetupResolutionInput | undefined
+}): {
+  plainVariables: Record<string, string>
+  envVarRefs: Record<string, string>
+} {
+  const plainVariables: Record<string, string> = {}
+  const envVarRefs: Record<string, string> = {}
+
+  for (const field of input.target.variableSchema) {
+    const resolved = resolvedSetupValueForField({
+      field,
+      resolvedSetup: input.resolvedSetup,
+      source: "variable",
+    })
+    if (resolved.envVar) {
+      envVarRefs[field.name] = resolved.envVar
+      continue
+    }
+    if (resolved.value) {
+      plainVariables[field.name] = resolved.value
+    }
+  }
+
+  return { plainVariables, envVarRefs }
 }
 
 function escapeRegExp(value: string): string {
@@ -372,17 +440,114 @@ function materializeClaudeMcpConfig(input: {
   throw new Error(`Unsupported registry target transport: ${target.transport}`)
 }
 
+function materializeCodexMcpConfig(input: {
+  target: McpRegistryInstallTarget
+  resolvedSetup?: McpRegistrySetupResolutionInput
+}): McpServerConfig {
+  const target = input.target
+  const envSetup = resolveCodexSetupMap({
+    fields: target.envSchema,
+    resolvedSetup: input.resolvedSetup,
+    source: "env",
+  })
+  const headerSetup = resolveCodexSetupMap({
+    fields: target.headerSchema,
+    resolvedSetup: input.resolvedSetup,
+    source: "header",
+  })
+  const variableSetup = resolveCodexVariableValues({
+    target,
+    resolvedSetup: input.resolvedSetup,
+  })
+  if (Object.keys(variableSetup.envVarRefs).length > 0) {
+    throw new Error(
+      "Codex MCP registry install cannot materialize variable env references.",
+    )
+  }
+
+  let urlTemplate = target.urlTemplate
+  let args = target.args
+  let cwd = target.cwd
+  urlTemplate = applyVariablesToTemplate({
+    value: urlTemplate,
+    variables: variableSetup.plainVariables,
+    urlEncode: true,
+  })
+  args = args.map(
+    (arg) =>
+      applyVariablesToTemplate({
+        value: arg,
+        variables: variableSetup.plainVariables,
+        urlEncode: false,
+      }) ?? arg,
+  )
+  cwd = applyVariablesToTemplate({
+    value: cwd,
+    variables: variableSetup.plainVariables,
+    urlEncode: false,
+  })
+
+  if (target.transport === "stdio") {
+    if (!target.commandTemplate) {
+      throw new Error("Registry target is missing a stdio command.")
+    }
+    return {
+      command: target.commandTemplate,
+      ...(args.length > 0 ? { args } : {}),
+      ...(cwd ? { cwd } : {}),
+      ...(nonEmptyRecord(envSetup.configValues)
+        ? { env: envSetup.configValues }
+        : {}),
+      ...(nonEmptyRecord(envSetup.envVarRefs)
+        ? { envVars: Object.values(envSetup.envVarRefs).sort() }
+        : {}),
+      transportType: target.transport,
+    }
+  }
+
+  if (
+    target.transport === "http" ||
+    target.transport === "sse" ||
+    target.transport === "streamable_http"
+  ) {
+    if (!urlTemplate) {
+      throw new Error("Registry target is missing a remote URL.")
+    }
+    const headerFields = fieldByName(target.headerSchema)
+    const bearerTokenEnvRefs: Record<string, string> = {}
+    for (const [headerName, envName] of Object.entries(
+      input.resolvedSetup?.bearerTokenEnvRefs ?? {},
+    )) {
+      if (!envName?.trim()) continue
+      if (!headerFields.has(headerName)) continue
+      bearerTokenEnvRefs[headerName] = envName.trim()
+    }
+    return {
+      url: urlTemplate,
+      ...(nonEmptyRecord(headerSetup.configValues)
+        ? { headers: headerSetup.configValues }
+        : {}),
+      ...(nonEmptyRecord(headerSetup.envVarRefs)
+        ? { envHttpHeaders: headerSetup.envVarRefs }
+        : {}),
+      ...(bearerTokenEnvRefs.Authorization
+        ? { bearerTokenEnvVar: bearerTokenEnvRefs.Authorization }
+        : {}),
+      transportType: target.transport,
+    }
+  }
+
+  throw new Error(`Unsupported registry target transport: ${target.transport}`)
+}
+
 export async function installMcpRegistryTarget(
   input: McpRegistryInstallInput,
 ): Promise<McpRegistryInstallResult> {
-  if (input.runtime === "codex") {
-    throw new Error("Codex MCP registry install is deferred.")
-  }
-
   const installability = previewMcpRegistryRuntimeInstallability({
     entry: input.entry,
     target: input.target,
     runtime: input.runtime,
+    resolvedSetup: input.resolvedSetup,
   })
   if (!installability.installableConfig) {
     throw new Error("Registry target cannot be materialized for this runtime.")
@@ -398,6 +563,11 @@ export async function installMcpRegistryTarget(
       `MCP registry target requires setup: ${setup.missingKeys.join(", ")}`,
     )
   }
+  if (input.runtime === "codex" && setup.missingSetupBehavior !== "none") {
+    throw new Error(
+      `MCP registry target requires setup: ${setup.missingKeys.join(", ")}`,
+    )
+  }
   const installStatus =
     setup.missingSetupBehavior === "save-needs-setup"
       ? "installed-needs-setup"
@@ -409,6 +579,36 @@ export async function installMcpRegistryTarget(
   })
   const serverName =
     input.installName?.trim() || suggestMcpServerName(input.entry)
+
+  if (input.runtime === "codex") {
+    const config = materializeCodexMcpConfig({
+      target: input.target,
+      resolvedSetup: input.resolvedSetup,
+    })
+    await (input.writeCodexConfig ?? defaultWriteCodexConfig)({
+      name: serverName,
+      scope: input.scope,
+      projectPath: input.projectPath,
+      config,
+    })
+    await upsertMcpRegistryVerificationRecord({
+      runtime: input.runtime,
+      serverName,
+      status: "installed-unverified",
+      entryFingerprint: preview.entryFingerprint,
+      configFingerprint: preview.configFingerprint,
+      reason: "installed-unverified",
+    })
+    return {
+      success: true,
+      runtime: input.runtime,
+      serverName,
+      status: "installed-unverified",
+      entryFingerprint: preview.entryFingerprint,
+      configFingerprint: preview.configFingerprint,
+    }
+  }
+
   const materialized = materializeClaudeMcpConfig({
     target: input.target,
     resolvedSetup: input.resolvedSetup,

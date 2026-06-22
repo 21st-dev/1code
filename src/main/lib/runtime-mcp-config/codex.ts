@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto"
 import { statSync } from "node:fs"
-import { basename, isAbsolute, resolve } from "node:path"
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises"
+import { homedir } from "node:os"
+import { basename, dirname, isAbsolute, join, resolve } from "node:path"
 import { eq } from "drizzle-orm"
 import { z } from "zod"
 import { sanitizeMcpConfigForRenderer } from "../../../shared/mcp-import-preview"
@@ -54,9 +56,25 @@ export type CodexMcpSnapshot = {
   toolsResolved: boolean
 }
 
+type CodexMcpServerConfigWrite = {
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  envVars?: string[]
+  cwd?: string
+  url?: string
+  headers?: Record<string, string>
+  envHttpHeaders?: Record<string, string>
+  bearerTokenEnvVar?: string
+  transportType?: string
+  disabled?: boolean
+  disabledReason?: string
+}
+
 const codexMcpCache = new Map<string, CodexMcpSnapshot>()
 
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
+const CODEX_CONFIG_HOME_ENV = "CODEX_HOME"
 
 const codexMcpListEntrySchema = z
   .object({
@@ -280,6 +298,159 @@ function isExistingCodexMcpCwd(pathCandidate: string): boolean {
   } catch {
     return false
   }
+}
+
+function getCodexConfigHome(): string {
+  const explicit = process.env[CODEX_CONFIG_HOME_ENV]?.trim()
+  return explicit ? resolve(explicit) : join(homedir(), ".codex")
+}
+
+export function getCodexConfigPath(): string {
+  return join(getCodexConfigHome(), "config.toml")
+}
+
+function escapeTomlBasicString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
+function tomlString(value: string): string {
+  return `"${escapeTomlBasicString(value)}"`
+}
+
+function tomlStringArray(values: string[]): string {
+  return `[${values.map(tomlString).join(", ")}]`
+}
+
+function tomlInlineStringMap(values: Record<string, string>): string {
+  const entries = Object.entries(values)
+    .filter(([key, value]) => key.trim() && value.trim())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${tomlString(key)} = ${tomlString(value)}`)
+  return `{ ${entries.join(", ")} }`
+}
+
+function isTomlTableHeader(line: string): boolean {
+  return /^\s*\[[^\]]+\]\s*$/.test(line)
+}
+
+function isCodexMcpServerTomlHeader(line: string, serverName: string): boolean {
+  const escapedName = escapeTomlBasicString(serverName)
+  const trimmed = line.trim()
+  const serverHeader = `[mcp_servers."${escapedName}"]`
+  const serverSubtablePrefix = `[mcp_servers."${escapedName}".`
+  return (
+    trimmed === serverHeader ||
+    (trimmed.startsWith(serverSubtablePrefix) && trimmed.endsWith("]"))
+  )
+}
+
+function removeCodexMcpServerTomlBlock(
+  source: string,
+  serverName: string,
+): string {
+  const lines = source.split(/\r?\n/)
+  const output: string[] = []
+  let skipping = false
+
+  for (const line of lines) {
+    if (isTomlTableHeader(line)) {
+      skipping = isCodexMcpServerTomlHeader(line, serverName)
+    }
+    if (!skipping) output.push(line)
+  }
+
+  return `${output.join("\n").trimEnd()}\n`
+}
+
+function buildCodexMcpServerTomlBlock(input: {
+  name: string
+  config: CodexMcpServerConfigWrite
+}): string {
+  const lines = [`[mcp_servers."${escapeTomlBasicString(input.name)}"]`]
+  const config = input.config
+  if (config.disabled === true) {
+    lines.push("enabled = false")
+    if (config.disabledReason?.trim()) {
+      lines.push(
+        `disabled_reason = ${tomlString(config.disabledReason.trim())}`,
+      )
+    }
+  }
+
+  if (config.url?.trim()) {
+    lines.push(`url = ${tomlString(config.url.trim())}`)
+    if (config.transportType === "sse") {
+      lines.push('transport = "sse"')
+    }
+    if (config.headers && Object.keys(config.headers).length > 0) {
+      lines.push(`http_headers = ${tomlInlineStringMap(config.headers)}`)
+    }
+    if (
+      config.envHttpHeaders &&
+      Object.keys(config.envHttpHeaders).length > 0
+    ) {
+      lines.push(
+        `env_http_headers = ${tomlInlineStringMap(config.envHttpHeaders)}`,
+      )
+    }
+    if (config.bearerTokenEnvVar?.trim()) {
+      lines.push(
+        `bearer_token_env_var = ${tomlString(config.bearerTokenEnvVar.trim())}`,
+      )
+    }
+    return `${lines.join("\n")}\n`
+  }
+
+  const command = config.command?.trim()
+  if (!command) {
+    throw new Error("Command is required for Codex stdio MCP config.")
+  }
+  lines.push(`command = ${tomlString(command)}`)
+  if (config.args && config.args.length > 0) {
+    lines.push(`args = ${tomlStringArray(config.args)}`)
+  }
+  if (config.cwd?.trim()) {
+    lines.push(`cwd = ${tomlString(config.cwd.trim())}`)
+  }
+  if (config.envVars && config.envVars.length > 0) {
+    lines.push(
+      `env_vars = ${tomlStringArray([...new Set(config.envVars)].sort())}`,
+    )
+  }
+  if (config.env && Object.keys(config.env).length > 0) {
+    lines.push("")
+    lines.push(`[mcp_servers."${escapeTomlBasicString(input.name)}".env]`)
+    for (const [key, value] of Object.entries(config.env).sort(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
+      lines.push(`${tomlString(key)} = ${tomlString(value)}`)
+    }
+  }
+  return `${lines.join("\n")}\n`
+}
+
+async function readCodexConfigToml(): Promise<string> {
+  try {
+    return await readFile(getCodexConfigPath(), "utf-8")
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return ""
+    }
+    throw error
+  }
+}
+
+async function writeCodexConfigToml(source: string): Promise<void> {
+  const configPath = getCodexConfigPath()
+  await mkdir(dirname(configPath), { recursive: true })
+  const tempPath = `${configPath}.tmp`
+  await writeFile(tempPath, source)
+  await rename(tempPath, configPath)
 }
 
 function getCodexMcpFingerprint(servers: CodexMcpServerForSession[]): string {
@@ -604,6 +775,37 @@ export async function addCodexMcpServer(input: {
   await runCodexCliChecked(args)
   clearCodexMcpConfigCache()
   return { success: true }
+}
+
+export async function writeCodexMcpServerConfig(input: {
+  name: string
+  scope: "global" | "project"
+  projectPath?: string
+  config: CodexMcpServerConfigWrite
+}): Promise<{ success: true; name: string }> {
+  if (input.scope !== "global") {
+    throw new Error(
+      "Codex MCP registry install currently supports global scope only.",
+    )
+  }
+
+  const serverName = input.name.trim()
+  if (!/^[a-zA-Z0-9_-]+$/.test(serverName)) {
+    throw new Error(
+      "Codex MCP server name must contain only letters, numbers, underscores, or hyphens.",
+    )
+  }
+
+  const existing = await readCodexConfigToml()
+  const withoutServer = removeCodexMcpServerTomlBlock(existing, serverName)
+  const block = buildCodexMcpServerTomlBlock({
+    name: serverName,
+    config: input.config,
+  })
+  const next = `${withoutServer.trimEnd()}\n\n${block}`.trimStart()
+  await writeCodexConfigToml(`${next.trimEnd()}\n`)
+  clearCodexMcpConfigCache()
+  return { success: true, name: serverName }
 }
 
 export async function removeCodexMcpServer(input: {
