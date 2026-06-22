@@ -75,6 +75,6 @@
 - [x] 5.8 `bun run lint:changed`.
 - [x] 5.9 Architecture guard.
 - [x] 5.10 `openspec validate open-codex-mcp-registry-install --strict --no-interactive`.
-- [ ] 5.11 Smoke: install a materializable registry MCP server to Codex, run a
+- [x] 5.11 Smoke: install a materializable registry MCP server to Codex, run a
   connect/list check, confirm connected (tools visible) and not `Verified on Codex`;
   prove no plaintext secret is committed in evidence, logs, or renderer state.
