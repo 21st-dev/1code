@@ -28,7 +28,7 @@ runs.
 
 #### Scenario: Codex provider-profile run starts
 - **WHEN** Codex starts with a provider profile
-- **THEN** Codex receives per-run ACP config overrides for the Locus provider
+- **THEN** Codex receives per-run app-server config overrides for the Locus provider
   gateway
 - **AND** the process environment contains the gateway token only under a
   Locus-owned variable

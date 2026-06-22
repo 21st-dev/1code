@@ -78,7 +78,7 @@ headless adapters.
 
 #### Scenario: Adapter selection changes
 - **WHEN** a change adds, removes, or selects between batch, SDK, app-server,
-  ACP, or future runtime adapter sources
+  or future runtime adapter sources
 - **THEN** the change updates the canonical runtime execution selector
 - **AND** route, CLI, protocol, and Local Job API code do not derive a second
   durable adapter-selection truth table
