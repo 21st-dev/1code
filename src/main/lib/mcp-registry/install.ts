@@ -29,6 +29,13 @@ type ClaudeMcpConfigWriter = (input: {
   config: McpServerConfig
 }) => Promise<{ success: true; name: string }>
 
+type CodexMcpConfigWriter = (input: {
+  name: string
+  scope: "global" | "project"
+  projectPath?: string
+  config: McpServerConfig
+}) => Promise<{ success: true; name: string }>
+
 async function defaultWriteClaudeConfig(
   input: Parameters<ClaudeMcpConfigWriter>[0],
 ): ReturnType<ClaudeMcpConfigWriter> {
@@ -48,6 +55,7 @@ export type McpRegistryInstallInput = {
   installName?: string
   resolvedSetup?: McpRegistrySetupResolutionInput
   writeClaudeConfig?: ClaudeMcpConfigWriter
+  writeCodexConfig?: CodexMcpConfigWriter
 }
 
 export type McpRegistryInstallResult = {

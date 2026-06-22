@@ -176,7 +176,10 @@ describe("MCP registry service", () => {
 
   test("normalizes list and search results from the provider", async () => {
     const { provider, calls } = createProviderStub()
-    const service = createMcpRegistryService({ provider })
+    const service = createMcpRegistryService({
+      provider,
+      resolveCodexRuntimeAuthenticated: () => false,
+    })
 
     await expect(service.listEntries({ limit: 10 })).resolves.toMatchObject({
       entries: [
@@ -202,7 +205,10 @@ describe("MCP registry service", () => {
 
   test("returns detail previews and can preview a selected target", async () => {
     const { provider, calls } = createProviderStub()
-    const service = createMcpRegistryService({ provider })
+    const service = createMcpRegistryService({
+      provider,
+      resolveCodexRuntimeAuthenticated: () => true,
+    })
 
     const detail = await service.getEntryDetail({
       serverName: "io.github.example/detail",
@@ -223,7 +229,7 @@ describe("MCP registry service", () => {
             },
             {
               runtime: "codex",
-              status: "codex-deferred",
+              status: "installable-config",
             },
           ],
         },
@@ -257,6 +263,7 @@ describe("MCP registry service", () => {
     const writes: unknown[] = []
     const service = createMcpRegistryService({
       provider,
+      resolveCodexRuntimeAuthenticated: () => true,
       async writeClaudeConfig(input) {
         writes.push(input)
         return { success: true, name: input.name.trim() }
@@ -336,6 +343,7 @@ describe("MCP registry service", () => {
     }
     const service = createMcpRegistryService({
       provider,
+      resolveCodexRuntimeAuthenticated: () => false,
       async writeClaudeConfig(input) {
         writes.push(input)
         return { success: true, name: input.name.trim() }
@@ -391,6 +399,7 @@ describe("MCP registry service", () => {
     }
     const service = createMcpRegistryService({
       provider,
+      resolveCodexRuntimeAuthenticated: () => false,
       async writeClaudeConfig(input) {
         writes.push(input)
         return { success: true, name: input.name.trim() }
@@ -499,6 +508,7 @@ describe("MCP registry service", () => {
     }
     const service = createMcpRegistryService({
       provider,
+      resolveCodexRuntimeAuthenticated: () => false,
       async writeClaudeConfig(input) {
         writes.push({ config: input.config })
         return { success: true, name: input.name.trim() }
@@ -569,6 +579,7 @@ describe("MCP registry service", () => {
     }
     const service = createMcpRegistryService({
       provider,
+      resolveCodexRuntimeAuthenticated: () => false,
       async writeClaudeConfig(input) {
         writes.push({ config: input.config })
         return { success: true, name: input.name.trim() }
@@ -635,6 +646,7 @@ describe("MCP registry service", () => {
     }
     const service = createMcpRegistryService({
       provider,
+      resolveCodexRuntimeAuthenticated: () => false,
       async writeClaudeConfig(input) {
         writes.push({ config: input.config })
         return { success: true, name: input.name.trim() }
@@ -704,6 +716,7 @@ describe("MCP registry service", () => {
     }
     const service = createMcpRegistryService({
       provider,
+      resolveCodexRuntimeAuthenticated: () => false,
       async writeClaudeConfig(input) {
         writes.push({ config: input.config })
         return { success: true, name: input.name.trim() }

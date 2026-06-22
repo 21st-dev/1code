@@ -13,6 +13,7 @@ import {
   type McpRegistryRuntimeId,
   type McpRegistryRuntimeInstallability,
   type McpRegistryRuntimeLocalState,
+  type McpRegistryRuntimeSetupResolutions,
   previewDefaultMcpRegistryRuntimeInstallability,
 } from "./installability"
 import type {
@@ -132,9 +133,14 @@ function sanitizeCommand(value: string | undefined): string | undefined {
 
 function previewDefaultMcpRegistrySetupClassifications(
   target: McpRegistryInstallTarget,
+  resolvedSetup: McpRegistryRuntimeSetupResolutions | undefined,
 ): McpRegistrySetupClassification[] {
   return (["claude-code", "codex"] as McpRegistryRuntimeId[]).map((runtime) =>
-    classifyMcpRegistrySetup({ runtime, target }),
+    classifyMcpRegistrySetup({
+      runtime,
+      target,
+      resolved: resolvedSetup?.[runtime],
+    }),
   )
 }
 
@@ -142,6 +148,7 @@ export function buildMcpRegistryInstallPreview(input: {
   entry: McpRegistryEntry
   target: McpRegistryInstallTarget
   localStates?: McpRegistryRuntimeLocalState[]
+  resolvedSetup?: McpRegistryRuntimeSetupResolutions
 }): McpRegistryInstallPreview {
   const provenance = classifyMcpRegistryProvenance(input.entry)
   const command = sanitizeCommand(input.target.commandTemplate)
@@ -184,9 +191,11 @@ export function buildMcpRegistryInstallPreview(input: {
       entry: input.entry,
       target: input.target,
       localStates: input.localStates,
+      resolvedSetup: input.resolvedSetup,
     }),
     setupClassifications: previewDefaultMcpRegistrySetupClassifications(
       input.target,
+      input.resolvedSetup,
     ),
     wouldWritePaths: [],
     warnings: buildWarnings({ entry: input.entry, provenance }),
@@ -196,12 +205,14 @@ export function buildMcpRegistryInstallPreview(input: {
 export function buildMcpRegistryInstallPreviews(input: {
   entry: McpRegistryEntry
   localStates?: McpRegistryRuntimeLocalState[]
+  resolvedSetup?: McpRegistryRuntimeSetupResolutions
 }): McpRegistryInstallPreview[] {
   return input.entry.installTargets.map((target) =>
     buildMcpRegistryInstallPreview({
       entry: input.entry,
       target,
       localStates: input.localStates,
+      resolvedSetup: input.resolvedSetup,
     }),
   )
 }

@@ -18,6 +18,10 @@ import {
   buildMcpRegistryInstallPreviews,
   type McpRegistryInstallPreview,
 } from "./preview"
+import type {
+  McpRegistryRuntimeSetupResolutions,
+} from "./installability"
+import type { McpRegistrySetupResolutionInput } from "./setup"
 
 export type McpRegistryService = {
   listEntries: (input?: OfficialMcpRegistryListInput) => Promise<{
@@ -52,12 +56,59 @@ export type McpRegistryService = {
 export type CreateMcpRegistryServiceOptions = {
   provider?: OfficialMcpRegistryProvider
   writeClaudeConfig?: McpRegistryInstallInput["writeClaudeConfig"]
+  writeCodexConfig?: McpRegistryInstallInput["writeCodexConfig"]
+  resolveCodexRuntimeAuthenticated?: () => boolean | Promise<boolean>
+}
+
+async function defaultResolveCodexRuntimeAuthenticated(): Promise<boolean> {
+  const [{ getCodexIntegrationStatus }, { getCodexApiKeyStatus }] =
+    await Promise.all([
+      import("../codex/integration-status"),
+      import("../codex/api-key-store"),
+    ])
+  const apiKeyStatus = getCodexApiKeyStatus()
+  if (apiKeyStatus.hasApiKey) return true
+
+  try {
+    const integration = await getCodexIntegrationStatus()
+    return integration.isConnected
+  } catch {
+    return false
+  }
+}
+
+function stripRendererRuntimeAuthenticated(
+  resolvedSetup: McpRegistrySetupResolutionInput | undefined,
+): McpRegistrySetupResolutionInput | undefined {
+  if (!resolvedSetup) return undefined
+  const { runtimeAuthenticated: _ignored, ...rest } = resolvedSetup
+  return rest
+}
+
+function withCodexRuntimeAuthenticated(
+  resolvedSetup: McpRegistrySetupResolutionInput | undefined,
+  runtimeAuthenticated: boolean,
+): McpRegistrySetupResolutionInput {
+  return {
+    ...(stripRendererRuntimeAuthenticated(resolvedSetup) ?? {}),
+    runtimeAuthenticated,
+  }
 }
 
 export function createMcpRegistryService(
   options: CreateMcpRegistryServiceOptions = {},
 ): McpRegistryService {
   const provider = options.provider ?? createOfficialMcpRegistryProvider()
+  const resolveCodexRuntimeAuthenticated =
+    options.resolveCodexRuntimeAuthenticated ??
+    defaultResolveCodexRuntimeAuthenticated
+
+  const getDefaultSetupResolutions =
+    async (): Promise<McpRegistryRuntimeSetupResolutions> => ({
+      codex: {
+        runtimeAuthenticated: await resolveCodexRuntimeAuthenticated(),
+      },
+    })
 
   const normalizeList = async (input?: OfficialMcpRegistryListInput) => {
     const result = await provider.listServers(input)
@@ -73,9 +124,10 @@ export function createMcpRegistryService(
     const entry = normalizeOfficialMcpRegistryEntry(
       await provider.getServerDetail(input),
     )
+    const resolvedSetup = await getDefaultSetupResolutions()
     return {
       entry,
-      previews: buildMcpRegistryInstallPreviews({ entry }),
+      previews: buildMcpRegistryInstallPreviews({ entry, resolvedSetup }),
     }
   }
 
@@ -98,7 +150,11 @@ export function createMcpRegistryService(
       if (!target) {
         throw new Error("MCP registry install target was not found.")
       }
-      return buildMcpRegistryInstallPreview({ entry, target })
+      return buildMcpRegistryInstallPreview({
+        entry,
+        target,
+        resolvedSetup: await getDefaultSetupResolutions(),
+      })
     },
     async installEntry(input) {
       const { targetId, ...detailInput } = input
@@ -116,8 +172,15 @@ export function createMcpRegistryService(
         scope: input.scope,
         projectPath: input.projectPath,
         installName: input.installName,
-        resolvedSetup: input.resolvedSetup,
+        resolvedSetup:
+          input.runtime === "codex"
+            ? withCodexRuntimeAuthenticated(
+                input.resolvedSetup,
+                await resolveCodexRuntimeAuthenticated(),
+              )
+            : stripRendererRuntimeAuthenticated(input.resolvedSetup),
         writeClaudeConfig: options.writeClaudeConfig,
+        writeCodexConfig: options.writeCodexConfig,
       })
     },
   }

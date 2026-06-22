@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  codexCanMaterialize,
   previewDefaultMcpRegistryRuntimeInstallability,
   previewMcpRegistryRuntimeInstallability,
 } from "../src/main/lib/mcp-registry/installability"
@@ -47,7 +48,7 @@ function remoteNeedsSetupEntry() {
 }
 
 describe("MCP registry runtime installability", () => {
-  test("marks Claude package configs installable and Codex deferred", () => {
+  test("marks package configs materializable while Codex waits for real auth/setup", () => {
     const entry = packageEntry()
     const target = entry.installTargets[0]
     if (!target) throw new Error("Expected package target")
@@ -57,25 +58,76 @@ describe("MCP registry runtime installability", () => {
     ).toEqual([
       {
         runtime: "claude-code",
-        status: "installable-config",
+        status: "needs-setup",
         declaredCompatibility: "declared",
         installableConfig: true,
-        requiredSetupKeys: [],
-        reasons: [],
+        requiredSetupKeys: ["local-dependency:package:npm:@example/package"],
+        reasons: [
+          "required-setup-missing",
+          "missing:local-dependency:package:npm:@example/package",
+        ],
       },
       {
         runtime: "codex",
-        status: "codex-deferred",
+        status: "needs-setup",
         declaredCompatibility: "declared",
-        installableConfig: false,
-        requiredSetupKeys: [],
+        installableConfig: true,
+        requiredSetupKeys: [
+          "local-dependency:package:npm:@example/package",
+          "runtime-auth:codex",
+        ],
         reasons: [
-          "codex-registry-support-deferred",
-          "codex-config-writes-do-not-cover-registry-fields",
-          "codex-runtime-proof-missing",
+          "required-setup-missing",
+          "missing:local-dependency:package:npm:@example/package",
+          "missing:runtime-auth:codex",
         ],
       },
     ])
+  })
+
+  test("allows setup-free Codex remote targets only when main-process auth is resolved", () => {
+    const entry = normalizeOfficialMcpRegistryEntry({
+      server: {
+        name: "io.github.example/public-remote",
+        version: "1.0.0",
+        compatibility: { runtimes: ["codex"] },
+        remotes: [
+          {
+            type: "streamable-http",
+            url: "https://public.example.com/mcp",
+          },
+        ],
+      },
+    })
+    const target = entry.installTargets[0]
+    if (!target) throw new Error("Expected remote target")
+
+    expect(codexCanMaterialize(target)).toBe(true)
+    expect(
+      previewMcpRegistryRuntimeInstallability({
+        entry,
+        target,
+        runtime: "codex",
+      }),
+    ).toMatchObject({
+      status: "needs-setup",
+      installableConfig: true,
+      requiredSetupKeys: ["runtime-auth:codex"],
+      reasons: ["required-setup-missing", "missing:runtime-auth:codex"],
+    })
+    expect(
+      previewMcpRegistryRuntimeInstallability({
+        entry,
+        target,
+        runtime: "codex",
+        resolvedSetup: { runtimeAuthenticated: true },
+      }),
+    ).toMatchObject({
+      status: "installable-config",
+      installableConfig: true,
+      requiredSetupKeys: [],
+      reasons: [],
+    })
   })
 
   test("marks required setup before install and preserves local verification states", () => {
@@ -94,8 +146,15 @@ describe("MCP registry runtime installability", () => {
       status: "needs-setup",
       declaredCompatibility: "declared",
       installableConfig: true,
-      requiredSetupKeys: ["header:Authorization"],
-      reasons: ["required-setup-missing"],
+      requiredSetupKeys: [
+        "bearer-token-env:Authorization",
+        "header:Authorization",
+      ],
+      reasons: [
+        "required-setup-missing",
+        "missing:bearer-token-env:Authorization",
+        "missing:header:Authorization",
+      ],
     })
 
     expect(
@@ -149,7 +208,7 @@ describe("MCP registry runtime installability", () => {
       declaredCompatibility: "declared",
       installableConfig: false,
       requiredSetupKeys: [],
-      reasons: ["adapter-config-incomplete"],
+      reasons: ["adapter-config-missing-command"],
     })
   })
 })

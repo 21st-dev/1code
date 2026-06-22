@@ -68,6 +68,7 @@ function createCallerStub() {
   const router = createMcpRegistryRouter(
     createMcpRegistryService({
       provider,
+      resolveCodexRuntimeAuthenticated: () => true,
       async writeClaudeConfig(input) {
         writes.push(input)
         return { success: true, name: input.name.trim() }
@@ -125,7 +126,7 @@ describe("MCP registry tRPC router", () => {
       targetId: "remote:streamable_http:0",
       runtimeInstallability: [
         { runtime: "claude-code", status: "installable-config" },
-        { runtime: "codex", status: "codex-deferred" },
+        { runtime: "codex", status: "installable-config" },
       ],
     })
 
