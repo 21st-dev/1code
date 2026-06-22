@@ -110,15 +110,15 @@
   shared-code tests still pass.
 - [x] 7.3 `rg -n "codex-acp-temporary-compat|USE_ACP_TEMPORARY_COMPAT|createCodexAcpTemporaryCompatAdapter"`
   returns no hits outside this change folder and archived changes.
-- [ ] 7.4 Desktop smoke: a Codex chat (app-server path) starts, streams, handles
+- [x] 7.4 Desktop smoke: a Codex chat (app-server path) starts, streams, handles
   approvals, and renders tool calls; an **existing** Codex sub-chat with prior
   ACP-shaped tool parts still renders (proves `acp-tool-normalizer` retention).
-  Partial evidence is recorded in `desktop-smoke-evidence.md`: app-server
+  Evidence is recorded in `desktop-smoke-evidence.md`: app-server
   provider-plan and guarded approval desktop smokes passed; renderer
   ACP-shaped hydration/render normalization is covered by
-  `tests/assistant-message-render-parts.test.ts`; built-app DOM render proof is
-  still not counted because the probe mounted an empty ChatView shell without
-  seeded message text.
+  `tests/assistant-message-render-parts.test.ts`; built-app DOM proof opened an
+  existing seeded sub-chat through `window.desktopApi.newWindow` and observed
+  the legacy user prompt, read-tool target, and Bash output in the renderer.
 - [x] 7.5 `locus acp` stdio server still starts and serves a prompt turn
   (proves the server surface was untouched).
   Evidence: `bun test tests/headless-cli-dispatcher.test.ts -t "runs minimal ACP stdio with JSON-only stdout and protocol jobs"` passed with the

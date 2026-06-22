@@ -81,17 +81,42 @@ Result: passed.
   render as `tool-Bash` with `input.command = "echo legacy-acp-render-ok"` and
   preserved output.
 
-## Remaining desktop DOM proof gap
+## Legacy ACP-shaped built-app DOM smoke
 
-The built-app renderer probe successfully started Electron with isolated
-`LOCUS_USER_DATA_DIR`, loaded local mode, created a second product window via
-`window.desktopApi.newWindow({ chatId, subChatId })`, and logged:
+Command:
+
+```sh
+ROOT="/private/tmp/locus-codex-acp-removal-20260622-162755"
+LOCUS_USER_DATA_DIR="$ROOT/user-data" \
+ELECTRON_RENDERER_URL="file://$PWD/out/renderer/index.html" \
+PATH="/opt/homebrew/bin:$PATH" \
+./node_modules/.bin/electron out/main/probe-legacy-acp-render-built.cjs
+```
+
+Result: passed.
+
+- The probe used isolated Electron user data, seeded a persisted Codex chat with
+  prior ACP-shaped tool parts, and opened the existing sub-chat through the
+  product `window.desktopApi.newWindow({ chatId, subChatId })` path.
+- The seeded chat included `worktreePath` set to
+  `/Users/ethan/Code/GitHub/agent-code-for-me`, matching the project workspace
+  path required by `ChatView` for project-backed chats.
+- The built renderer created the Codex `ACPChatTransport` wrapper for the
+  app-server provider path and mounted the existing sub-chat in `window-2`.
+- The DOM proof output was:
 
 ```text
 newWindow-result:{"blocked":false}
-[App] Opening chat from window params: legacy-acp-render-chat legacy-acp-render-sub-chat
+containsUserPrompt: true
+containsReadTool: true
+containsReadFile: true
+containsBashOutput: true
 ```
 
-However, the page body did not include the seeded user message or tool output
-within the probe timeout. The DOM showed the sidebar and an empty mounted
-ChatView shell. This is not counted as successful full desktop DOM render proof.
+- The captured body text included the seeded user prompt
+  `legacy acp render probe`, the rendered read tool target `README.md`, the
+  rendered command `$ echo legacy-acp-render-ok`, and command output
+  `legacy-acp-render-ok`.
+- The main-process `chats.get` response for the same window returned the seeded
+  `subChats[0].messages` JSON and normal timestamp values such as
+  `2026-06-22T04:27:56.000Z`.
