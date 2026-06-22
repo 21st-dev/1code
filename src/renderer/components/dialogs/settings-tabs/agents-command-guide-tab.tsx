@@ -14,9 +14,14 @@ import {
   Terminal,
   Trash2,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
 import type { ComponentType, ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { selectedProjectAtom } from "../../../features/agents/atoms"
+import { BUILTIN_SLASH_COMMANDS } from "../../../features/agents/commands"
+import { type TranslationKey, useI18n } from "../../../lib/i18n"
+import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,11 +57,6 @@ import {
   SelectValue,
 } from "../../ui/select"
 import { Textarea } from "../../ui/textarea"
-import { BUILTIN_SLASH_COMMANDS } from "../../../features/agents/commands"
-import { selectedProjectAtom } from "../../../features/agents/atoms"
-import { trpc } from "../../../lib/trpc"
-import { useI18n, type TranslationKey } from "../../../lib/i18n"
-import { cn } from "../../../lib/utils"
 
 type RuntimeGuideItem = {
   runtime: "claude-code" | "codex"
