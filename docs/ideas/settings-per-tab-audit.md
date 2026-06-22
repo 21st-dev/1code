@@ -70,26 +70,24 @@ Codex Account (subscription + Codex API key) · *Advanced routing* collapsible
   providers / Helper-task models / API keys".
 - The Models list (hide/show via `hiddenModelsAtom`) and search are fine — no finding.
 
-### 🔴 E. Destructive action with no confirmation
+### 🟢 E. Destructive action confirmation added
 
-- **Evidence:** `handleRemoveCodexApiKey` (line 1709) calls the delete mutation
-  directly — no confirm. Yet account-remove (275), profile-delete (649), and
-  Codex-logout (1625) all confirm. Inconsistent; one click wipes a saved key.
-- **Action:** add a confirmation to remove-Codex-API-key (and audit `handleReset`
-  for the same).
+- **Original evidence:** `handleRemoveCodexApiKey` called the delete mutation
+  directly, while account-remove, profile-delete, and Codex-logout already
+  confirmed.
 - **Resolution:** Codex API key removal and helper resets now use app
   `AlertDialog` confirmation.
 
 ### 🟡 F/G/H. Consistency + control smells (code-visible)
 
-- **F — native `window.confirm`:** all confirmations use the raw browser popup,
-  not the app's styled dialog components (`ConfirmArchiveDialog`, AlertDialog).
-  Functional but unpolished for a desktop app. → route through the app's dialog.
+- **F — app dialog consistency:** confirmations now use the app's styled dialog
+  components (`ConfirmArchiveDialog`, AlertDialog).
 - **G — raw `<select>`:** protocol + auth use bare `<select>` (2×) instead of the
   styled `Select` component used elsewhere (0× in this tab). Visual inconsistency.
-- **H — headers as raw JSON text box:** error-prone (mitigated: it validates and
-  toasts `invalidHeaders`). Low priority; could become key/value rows later.
-- **Resolution:** F and G are fixed; H remains a low-priority follow-up.
+- **H — provider headers editing:** current code uses key/value rows with
+  duplicate/empty validation in `providerHeadersFromRows`; this is no longer
+  the old raw JSON textbox issue.
+- **Resolution:** F, G, and H are fixed in current code.
 
 ### Not found
 - No outright **dead** control (the legacy override is a live fallback, not dead).
@@ -155,15 +153,13 @@ trust, update review, and per-plugin MCP management.
 - **Action:** bridge to the MCP tab (or clarify which owns MCP auth); remove the
   unused `setActiveTab`. Folded into `add-runtime-native-plugin-execution`.
 
-### 🟡 C. Inconsistent confirmation rigor — incl. a security action with none
+### 🟢 C. Destructive/security actions use app confirmations
 
-- **Evidence:** the runtime-marketplace write action uses a strong **type-the-target-name**
-  confirmation; but **revoke developer-plugin trust** (`handleRevokeDeveloperTrust`,
-  4603 — a security action) and **remove developer source** (4577) fire on a single
-  click with **no confirmation**.
-- **Action:** add confirmations to the destructive/security actions; right-size the
-  heavy type-to-confirm so rigor is proportional to risk. Folded into
-  `add-runtime-native-plugin-execution`.
+- **Current state:** the runtime-marketplace write action still uses the stronger
+  type-the-target-name confirmation, while **revoke developer-plugin trust** and
+  **remove developer source** now use the app `AlertDialog` flow.
+- **Resolution:** destructive/security actions now go through the app confirmation
+  pattern here.
 
 ### 🟡 D. Codex plugins are listed but render "unsupported"
 
@@ -296,15 +292,12 @@ hash-based drift detection (`installedHash`/`contentHash` → `modified`).
   it's proven. Same isolation-coherence question the plugin proof raised — now it
   applies to skills, which were never proof-gated.
 
-### 🟡 C. Mixed confirmation rigor — the file-clobbering path uses the weak popup
+### 🟢 C. Mixed confirmation rigor resolved for file-clobbering paths
 
-- **Evidence:** delete uses the styled `AlertDialog` (good), but **force-overwrite
-  of an existing user skill** / "replace local changes" (`window.confirm`, line 307)
-  and **force-install-to-both-runtimes** (`window.confirm`, 1396) use the native
-  browser popup. The path that can **destroy local skill edits** is on the weaker
-  confirm; `AlertDialog` is imported (19-26) but not used there.
-- **Action:** route the overwrite confirms through `AlertDialog` too (same as Models
-  §F); rigor should track "this clobbers your local edits."
+- **Current state:** delete, force-overwrite of an existing user skill, and
+  force-install-to-both-runtimes now use the app `AlertDialog` flow.
+- **Resolution:** the paths that can replace local skill edits now use the same
+  app confirmation pattern as the rest of Settings.
 
 ### 🟡 D. Skills tab also does full Commands CRUD — overlaps the separate Command Guide tab
 
@@ -331,8 +324,7 @@ hash-based drift detection (`installedHash`/`contentHash` → `modified`).
 2. **Codex skill isolation coherence (§B)** — verify `~/.codex/skills` is consumed
    by the isolated run; stage it or relabel/block the Codex target if not.
    *[must-verify; confirmed gap in code]*
-3. **Overwrite confirms → app `AlertDialog` (§C)?** *[recommend yes]*
-4. **Commands ownership vs Command Guide (§D)?** *[IA call — Phase 3]*
+3. **Commands ownership vs Command Guide (§D)?** *[IA call — Phase 3]*
 
 ---
 
@@ -348,11 +340,12 @@ hints) · official command snapshot (slash/flag/CLI reference + cross-runtime
 comparison + refresh) · installed-command list (user/project/plugin, read-only,
 source badges).
 
-**Positives (not findings).** Read-only → **no destructive actions, no confirmation
-smells** (clean where Models §E and Skills §C were not). The runtime guide is a
-genuinely useful binary-health diagnostic. Plugin commands are gated by
-`discoverAllowedClaudePluginRuntimeComponents` (consistent with the plugin work).
-The only mutation is `refreshOfficialIndex` (a harmless cache refresh).
+**Positives (not findings).** Read-only → **no destructive actions needing
+confirmation** (clean where Models §E and Skills §C previously were not). The
+runtime guide is a genuinely useful binary-health diagnostic. Plugin commands are
+gated by `discoverAllowedClaudePluginRuntimeComponents` (consistent with the
+plugin work). The only mutation is `refreshOfficialIndex` (a harmless cache
+refresh).
 
 ### 🟡 A. Commands are split across two tabs — confusing ownership (headline; the §D pair)
 
@@ -535,15 +528,13 @@ thin.
 - **Appearance (739) — clean.** Theme atoms wired; **code-theme is NOT orphaned**
   (`vscodeCodeTheme*Atom` consumed by `lib/hooks/use-code-theme.ts`, resolving the
   reconciliation-ledger concern). `kanbanViewEnabledAtom` here is the **toggle**.
-- **Keyboard (723).** 🟡 **A — "Reset all to defaults" has no confirmation.**
-  `handleResetAll` (button :692) wipes **all** custom hotkeys on one click; the tab
-  has no `AlertDialog`/`confirm`. → add a confirm (Models §E / Skills §C pattern).
+- **Keyboard (723).** 🟢 **A — "Reset all to defaults" uses confirmation.**
+  Reset-all now opens the app `AlertDialog` before wiping custom hotkeys.
   *Positive:* the kanban shortcut is correctly hidden when the feature is off
   (Keyboard **reads** `kanbanViewEnabledAtom`; not a duplicate of Appearance's toggle).
 
 ### Decisions to ratify (placement tabs)
-1. **Keyboard "Reset all" confirmation** — add an `AlertDialog` before wiping all
-   custom hotkeys? *[recommend yes; minor]*
+1. No placement-tab confirmation follow-up remains open from this audit.
 
 ---
 

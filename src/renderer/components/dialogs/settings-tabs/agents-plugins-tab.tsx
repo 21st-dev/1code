@@ -32,6 +32,16 @@ import {
 import { useI18n } from "../../../lib/i18n"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog"
 import { Button } from "../../ui/button"
 import {
   CustomAgentIconFilled,
@@ -5050,6 +5060,10 @@ export function AgentsPluginsTab() {
   const [runtimeActionPreview, setRuntimeActionPreview] =
     useState<RuntimePluginWritePreview | null>(null)
   const [runtimeActionConfirmation, setRuntimeActionConfirmation] = useState("")
+  const [developerSourceToRemove, setDeveloperSourceToRemove] =
+    useState<PluginSourceData | null>(null)
+  const [developerTrustToRevoke, setDeveloperTrustToRevoke] =
+    useState<PluginData | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [runtimeFilter, setRuntimeFilter] = useState<RuntimeFilter>("all")
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -6274,20 +6288,15 @@ export function AgentsPluginsTab() {
     }
   }, [chooseDeveloperSourceMutation, refetchSources, refetch, refetchDoctor, t])
 
-  const handleRemoveDeveloperSource = useCallback(
+  const removeDeveloperSource = useCallback(
     async (source: PluginSourceData) => {
       if (source.kind !== "developer-local") return
-      const confirmed = window.confirm(
-        t("settings.plugins.confirmRemoveDeveloperSource", {
-          name: source.name,
-        }),
-      )
-      if (!confirmed) return
       try {
         await removeDeveloperSourceMutation.mutateAsync({ id: source.id })
         toast.success(t("settings.plugins.toast.developerSourceRemoved"))
         await Promise.all([refetchSources(), refetch(), refetchDoctor()])
         setSelectedSourceId(null)
+        setDeveloperSourceToRemove(null)
       } catch (error) {
         const message =
           error instanceof Error
@@ -6297,6 +6306,14 @@ export function AgentsPluginsTab() {
       }
     },
     [removeDeveloperSourceMutation, refetchSources, refetch, refetchDoctor, t],
+  )
+
+  const handleRemoveDeveloperSource = useCallback(
+    (source: PluginSourceData) => {
+      if (source.kind !== "developer-local") return
+      setDeveloperSourceToRemove(source)
+    },
+    [],
   )
 
   const handleTrustDeveloperPlugin = useCallback(
@@ -6320,14 +6337,8 @@ export function AgentsPluginsTab() {
     [trustDeveloperPluginMutation, refetch, refetchDoctor, t],
   )
 
-  const handleRevokeDeveloperTrust = useCallback(
+  const revokeDeveloperTrust = useCallback(
     async (plugin: PluginData) => {
-      const confirmed = window.confirm(
-        t("settings.plugins.confirmRevokeDeveloperTrust", {
-          name: formatPluginName(plugin.name),
-        }),
-      )
-      if (!confirmed) return
       try {
         await revokeDeveloperTrustMutation.mutateAsync({
           reviewKey: plugin.reviewKey,
@@ -6336,6 +6347,7 @@ export function AgentsPluginsTab() {
           description: formatPluginName(plugin.name),
         })
         await Promise.all([refetch(), refetchDoctor()])
+        setDeveloperTrustToRevoke(null)
       } catch (error) {
         const message =
           error instanceof Error
@@ -6346,6 +6358,10 @@ export function AgentsPluginsTab() {
     },
     [revokeDeveloperTrustMutation, refetch, refetchDoctor, t],
   )
+
+  const handleRevokeDeveloperTrust = useCallback((plugin: PluginData) => {
+    setDeveloperTrustToRevoke(plugin)
+  }, [])
 
   const handleLoadDeveloperPlugin = useCallback(
     async (plugin: PluginData) => {
@@ -6955,6 +6971,80 @@ export function AgentsPluginsTab() {
           </div>
         )}
       </div>
+      <AlertDialog
+        open={developerSourceToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeveloperSourceToRemove(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("settings.plugins.removeDeveloperSourceTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {developerSourceToRemove
+                ? t("settings.plugins.confirmRemoveDeveloperSource", {
+                    name: developerSourceToRemove.name,
+                  })
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={removeDeveloperSourceMutation.isPending}
+            >
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={removeDeveloperSourceMutation.isPending}
+              onClick={() => {
+                if (!developerSourceToRemove) return
+                void removeDeveloperSource(developerSourceToRemove)
+              }}
+            >
+              {t("common.remove")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={developerTrustToRevoke !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeveloperTrustToRevoke(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("settings.plugins.revokeDeveloperTrustTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {developerTrustToRevoke
+                ? t("settings.plugins.confirmRevokeDeveloperTrust", {
+                    name: formatPluginName(developerTrustToRevoke.name),
+                  })
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={revokeDeveloperTrustMutation.isPending}
+            >
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={revokeDeveloperTrustMutation.isPending}
+              onClick={() => {
+                if (!developerTrustToRevoke) return
+                void revokeDeveloperTrust(developerTrustToRevoke)
+              }}
+            >
+              {t("settings.plugins.revokeDeveloperTrust")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

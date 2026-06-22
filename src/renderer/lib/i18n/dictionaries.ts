@@ -1330,6 +1330,8 @@ export const en = {
   "settings.plugins.trustDeveloperPlugin": "Trust fingerprint",
   "settings.plugins.loadDeveloperPlugin": "Load local code",
   "settings.plugins.revokeDeveloperTrust": "Revoke trust",
+  "settings.plugins.revokeDeveloperTrustTitle": "Revoke developer trust?",
+  "settings.plugins.removeDeveloperSourceTitle": "Remove developer source?",
   "settings.plugins.confirmRevokeDeveloperTrust":
     "Revoke local trust for {name}? The plugin will not be able to load trusted local code until you review and trust the current fingerprint again.",
   "settings.plugins.confirmRemoveDeveloperSource":
@@ -4756,6 +4758,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.plugins.trustDeveloperPlugin": "信任 fingerprint",
   "settings.plugins.loadDeveloperPlugin": "加载本地代码",
   "settings.plugins.revokeDeveloperTrust": "撤销信任",
+  "settings.plugins.revokeDeveloperTrustTitle": "撤销开发者信任？",
+  "settings.plugins.removeDeveloperSourceTitle": "移除开发者来源？",
   "settings.plugins.confirmRevokeDeveloperTrust":
     "撤销 {name} 的本地信任？再次复审并信任当前 fingerprint 前，这个插件不能加载可信本地代码。",
   "settings.plugins.confirmRemoveDeveloperSource":
