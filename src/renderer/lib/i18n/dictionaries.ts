@@ -328,6 +328,9 @@ export const en = {
   "settings.keyboard.searchPlaceholder": "Search shortcuts...",
   "settings.keyboard.noShortcutsFound": "No shortcuts found",
   "settings.keyboard.resetAllToDefaults": "Reset all to defaults",
+  "settings.keyboard.resetAllConfirmTitle": "Reset all shortcuts?",
+  "settings.keyboard.resetAllConfirmDescription":
+    "This will remove every custom shortcut and restore the default keyboard shortcuts.",
   "settings.keyboard.categoryShortcut": "{category} shortcut",
   "settings.keyboard.ctrlTabPreferenceDescription":
     "Controlled by Ctrl+Tab preference",
@@ -810,6 +813,7 @@ export const en = {
   "settings.skills.restoreRuntime": "Restore {runtime}",
   "settings.skills.rollBackRuntime": "Roll back {runtime}",
   "settings.skills.installBoth": "Install Both",
+  "settings.skills.confirmInstallBothTitle": "Install for both runtimes?",
   "settings.skills.confirmInstallBoth":
     'Install "{id}" for both Claude and Codex? Existing local changes in either runtime will be backed up and replaced.',
   "settings.skills.syncedBoth": "{id} synced for Claude and Codex",
@@ -845,6 +849,7 @@ export const en = {
   "settings.skills.recommendation": "Recommendation",
   "settings.skills.version": "version",
   "settings.skills.installed": "installed",
+  "settings.skills.confirmOverwriteTitle": "Replace local skill files?",
   "settings.skills.confirmReplaceUserSkill":
     'Replace existing user skill "{id}" with the registry version? A backup will be created.',
   "settings.skills.confirmReplaceLocalChanges":
@@ -921,7 +926,6 @@ export const en = {
   "settings.skills.noneFound": "No skills found",
   "settings.skills.createFirst": "Create your first skill",
   "settings.skills.deleteSkillTitle": "Delete Skill",
-  "settings.skills.deleteCommandTitle": "Delete Command",
   "settings.skills.deleteConfirmPrefix": "Are you sure you want to delete",
   "settings.skills.deleteConfirmSuffix":
     "This will remove the file from disk and cannot be undone.",
@@ -3759,6 +3763,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.keyboard.searchPlaceholder": "搜索快捷键...",
   "settings.keyboard.noShortcutsFound": "没有找到快捷键",
   "settings.keyboard.resetAllToDefaults": "全部重置为默认值",
+  "settings.keyboard.resetAllConfirmTitle": "重置所有快捷键？",
+  "settings.keyboard.resetAllConfirmDescription":
+    "这会移除所有自定义快捷键，并恢复默认键盘快捷键。",
   "settings.keyboard.categoryShortcut": "{category} 快捷键",
   "settings.keyboard.ctrlTabPreferenceDescription":
     "由 Ctrl+Tab 偏好控制",
@@ -4232,6 +4239,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.skills.restoreRuntime": "恢复 {runtime}",
   "settings.skills.rollBackRuntime": "回滚 {runtime}",
   "settings.skills.installBoth": "同时安装",
+  "settings.skills.confirmInstallBothTitle": "同时安装到两个运行时？",
   "settings.skills.confirmInstallBoth":
     "要把 \"{id}\" 同时安装到 Claude 和 Codex 吗？任一运行时里的本地修改都会先备份再替换。",
   "settings.skills.syncedBoth": "{id} 已同步到 Claude 和 Codex",
@@ -4267,6 +4275,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.skills.recommendation": "建议",
   "settings.skills.version": "版本",
   "settings.skills.installed": "已安装",
+  "settings.skills.confirmOverwriteTitle": "替换本地技能文件？",
   "settings.skills.confirmReplaceUserSkill":
     "要用注册表版本替换已有用户技能 \"{id}\" 吗？系统会创建备份。",
   "settings.skills.confirmReplaceLocalChanges":
@@ -4343,7 +4352,6 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.skills.noneFound": "没有找到技能",
   "settings.skills.createFirst": "创建第一个技能",
   "settings.skills.deleteSkillTitle": "删除技能",
-  "settings.skills.deleteCommandTitle": "删除命令",
   "settings.skills.deleteConfirmPrefix": "确定要删除",
   "settings.skills.deleteConfirmSuffix":
     "这会从磁盘移除文件，且无法撤销。",

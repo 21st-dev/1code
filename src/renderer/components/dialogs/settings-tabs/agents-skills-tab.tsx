@@ -367,6 +367,10 @@ function RegistryActionButtons({
   isRegistryActionPending?: boolean
 }) {
   const { t } = useI18n()
+  const [pendingForceInstall, setPendingForceInstall] = useState<{
+    runtime: SkillRuntime
+    description: string
+  } | null>(null)
 
   if (!item.registry) return null
 
@@ -408,8 +412,10 @@ function RegistryActionButtons({
             size="sm"
             variant={runtime === "claude" ? "default" : "outline"}
             onClick={() => {
-              const force = needsForce
-                ? window.confirm(
+              if (needsForce) {
+                setPendingForceInstall({
+                  runtime,
+                  description:
                     status === "modified"
                       ? t("settings.skills.confirmReplaceLocalChanges", {
                           id: item.registry?.id || "",
@@ -417,10 +423,10 @@ function RegistryActionButtons({
                       : t("settings.skills.confirmReplaceUserSkill", {
                           id: item.registry?.id || "",
                         }),
-                  )
-                : false
-              if (needsForce && !force) return
-              onRegistryInstall(item, runtime, force)
+                })
+                return
+              }
+              onRegistryInstall(item, runtime, false)
             }}
             disabled={isRegistryActionPending}
           >
@@ -433,6 +439,38 @@ function RegistryActionButtons({
           </Button>
         )
       })}
+      <AlertDialog
+        open={!!pendingForceInstall}
+        onOpenChange={(open) => {
+          if (!open) setPendingForceInstall(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("settings.skills.confirmOverwriteTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingForceInstall?.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRegistryActionPending}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isRegistryActionPending}
+              onClick={() => {
+                if (!pendingForceInstall || !onRegistryInstall) return
+                onRegistryInstall(item, pendingForceInstall.runtime, true)
+                setPendingForceInstall(null)
+              }}
+            >
+              {t("common.continue")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {SKILL_RUNTIMES.map((runtime) => {
         const runtimeState = getRegistryRuntimeState(item, runtime)
         if (!runtimeState?.hasRollback || !onRegistryRollback) return null
@@ -1056,6 +1094,8 @@ export function AgentsSkillsTab() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeSkillFilter, setActiveSkillFilter] = useState<SkillFilter>("all")
   const [showAddForm, setShowAddForm] = useState(false)
+  const [confirmInstallBothItem, setConfirmInstallBothItem] =
+    useState<UnifiedItem | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Focus search on "/" hotkey
@@ -1541,7 +1581,7 @@ export function AgentsSkillsTab() {
     [installRegistrySkillMutation, refetchAll, t],
   )
 
-  const handleRegistryInstallBoth = useCallback(
+  const runRegistryInstallBoth = useCallback(
     async (item: UnifiedItem) => {
       if (!item.registry?.id) return
       const registryId = item.registry.id
@@ -1553,15 +1593,6 @@ export function AgentsSkillsTab() {
       const actionableRuntimes = SKILL_RUNTIMES.filter((runtime) =>
         isRuntimeActionable(getRegistryRuntimeState(item, runtime)),
       )
-
-      if (needsForce) {
-        const confirmed = window.confirm(
-          t("settings.skills.confirmInstallBoth", {
-            id: registryId,
-          }),
-        )
-        if (!confirmed) return
-      }
 
       try {
         await Promise.all(
@@ -1591,6 +1622,23 @@ export function AgentsSkillsTab() {
       }
     },
     [installRegistrySkillMutation, refetchAll, t],
+  )
+
+  const handleRegistryInstallBoth = useCallback(
+    (item: UnifiedItem) => {
+      const needsForce = SKILL_RUNTIMES.some((runtime) => {
+        const status = getRegistryRuntimeState(item, runtime)?.status
+        return status === "user-owned" || status === "modified"
+      })
+
+      if (needsForce) {
+        setConfirmInstallBothItem(item)
+        return
+      }
+
+      void runRegistryInstallBoth(item)
+    },
+    [runRegistryInstallBoth],
   )
 
   const handleRegistryRollback = useCallback(
@@ -1889,6 +1937,44 @@ export function AgentsSkillsTab() {
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               {isDeleting ? t("common.deleting") : t("common.delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!confirmInstallBothItem}
+        onOpenChange={(open) => {
+          if (!open) setConfirmInstallBothItem(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("settings.skills.confirmInstallBothTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmInstallBothItem?.registry?.id
+                ? t("settings.skills.confirmInstallBoth", {
+                    id: confirmInstallBothItem.registry.id,
+                  })
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRegistryActionPending}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isRegistryActionPending}
+              onClick={() => {
+                if (!confirmInstallBothItem) return
+                const item = confirmInstallBothItem
+                setConfirmInstallBothItem(null)
+                void runRegistryInstallBoth(item)
+              }}
+            >
+              {t("common.continue")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

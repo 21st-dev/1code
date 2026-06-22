@@ -26,6 +26,16 @@ import {
 import { useHotkeyRecorder } from "../../../lib/hotkeys/use-hotkey-recorder"
 import { type TranslationKey, useI18n } from "../../../lib/i18n"
 import { cn } from "../../../lib/utils"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../ui/alert-dialog"
 import { CmdIcon, ControlIcon, OptionIcon, ShiftIcon } from "../../ui/icons"
 import { ResizableSidebar } from "../../ui/resizable-sidebar"
 import { useListKeyboardNav } from "./use-list-keyboard-nav"
@@ -419,6 +429,7 @@ export function AgentsKeyboardTab() {
   const [isRecording, setIsRecording] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [conflictMessage, setConflictMessage] = useState<string | null>(null)
+  const [showResetAllConfirm, setShowResetAllConfirm] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Focus search on "/" hotkey
@@ -596,6 +607,7 @@ export function AgentsKeyboardTab() {
   // Reset all hotkeys to defaults
   const handleResetAll = useCallback(() => {
     setCustomHotkeys({ version: 1, bindings: {} })
+    setShowResetAllConfirm(false)
   }, [setCustomHotkeys])
 
   // Count total shortcuts
@@ -689,7 +701,7 @@ export function AgentsKeyboardTab() {
             <div className="pt-2 pb-2 px-2 flex-shrink-0">
               <button
                 type="button"
-                onClick={handleResetAll}
+                onClick={() => setShowResetAllConfirm(true)}
                 className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <RotateCcw className="h-3 w-3" />
@@ -718,6 +730,28 @@ export function AgentsKeyboardTab() {
           <EmptyDetailPanel />
         )}
       </div>
+
+      <AlertDialog
+        open={showResetAllConfirm}
+        onOpenChange={setShowResetAllConfirm}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("settings.keyboard.resetAllConfirmTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("settings.keyboard.resetAllConfirmDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetAll}>
+              {t("common.reset")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
