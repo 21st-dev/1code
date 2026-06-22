@@ -497,7 +497,10 @@ describe("plugin target mode UI source guards", () => {
     expect(pluginsTabSource).toContain(
       "settings.plugins.confirmRevokeDeveloperTrust",
     )
-    expect(pluginsTabSource).toContain("window.confirm")
+    expect(pluginsTabSource).toContain("developerSourceToRemove")
+    expect(pluginsTabSource).toContain("developerTrustToRevoke")
+    expect(pluginsTabSource).toContain("AlertDialogAction")
+    expect(pluginsTabSource).not.toContain("window.confirm")
     expect(pluginsTabSource).toContain(
       "developer.gate.canTrustCurrentFingerprint",
     )
