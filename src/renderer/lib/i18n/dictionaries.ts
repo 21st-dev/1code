@@ -529,9 +529,9 @@ export const en = {
   "settings.models.resetProviderConfirm":
     "Reset this provider configuration? Saved endpoint metadata and token will be removed.",
 
-  "settings.commands.title": "Command Guide",
+  "settings.commands.title": "Commands",
   "settings.commands.subtitle":
-    "See what you can select from chat with /, plus local CLI, plugin, and official references.",
+    "Manage local / command files, then inspect local CLI, plugin, and official references.",
   "settings.commands.refresh": "Refresh local detection",
   "settings.commands.localIndexNotice":
     "Local index only: app shortcuts, command files, installed plugins, and runtime --help output. Official docs remain the complete reference.",
@@ -629,6 +629,33 @@ export const en = {
   "settings.commands.noRuntimeCommands": "No runtime CLI commands detected.",
   "settings.commands.noLocalCommands": "No local command files detected.",
   "settings.commands.noDescription": "No description.",
+  "settings.commands.newCommand": "New Command",
+  "settings.commands.editCommand": "Edit Command",
+  "settings.commands.deleteCommand": "Delete Command",
+  "settings.commands.commandEditorDescription":
+    "Local command files are reusable prompt files that appear in chat after typing /.",
+  "settings.commands.commandName": "Name",
+  "settings.commands.commandNameHint":
+    "Will be converted to kebab-case when the file is created.",
+  "settings.commands.commandNameReadonly":
+    "Rename by creating a new command and deleting the old one.",
+  "settings.commands.commandScope": "Scope",
+  "settings.commands.scopeUserCommand": "User (~/.claude/commands/)",
+  "settings.commands.scopeProjectNamed": "Project: {project}",
+  "settings.commands.commandDescription": "Description",
+  "settings.commands.commandDescriptionPlaceholder": "What this command does...",
+  "settings.commands.argumentHint": "Argument hint",
+  "settings.commands.argumentHintPlaceholder": "Optional, for example [file_path]",
+  "settings.commands.commandPrompt": "Prompt",
+  "settings.commands.commandPromptPlaceholder": "Command prompt (markdown)...",
+  "settings.commands.deleteCommandTitle": "Delete Command",
+  "settings.commands.deleteCommandDescription":
+    "Delete {name}? This removes the local command file from disk and cannot be undone.",
+  "settings.commands.toast.commandCreated": "Command created",
+  "settings.commands.toast.commandSaved": "Command saved",
+  "settings.commands.toast.commandDeleted": "Command deleted",
+  "settings.commands.toast.failedToSaveCommand": "Failed to save command",
+  "settings.commands.toast.failedToDeleteCommand": "Failed to delete command",
   "settings.commands.sourceProject": "Project",
   "settings.commands.sourceUser": "User",
   "settings.commands.sourcePlugin": "Plugin",
@@ -931,10 +958,10 @@ export const en = {
   "settings.skills.toast.registryChecked": "Skill registry checked",
   "settings.skills.toast.failedToCheckRegistry":
     "Failed to check registry",
-  "settings.skills.searchPlaceholder": "Search skills & commands...",
+  "settings.skills.searchPlaceholder": "Search skills...",
   "settings.skills.checkRegistry": "Check skill registry",
-  "settings.skills.createNew": "Create new skill or command",
-  "settings.skills.noSkillsOrCommands": "No skills or commands",
+  "settings.skills.createNew": "Create new skill",
+  "settings.skills.noSkillsOrCommands": "No skills",
   "settings.skills.noSkills": "No skills",
   "settings.skills.noCommands": "No commands",
   "settings.skills.noAvailableSkills": "No installable skills",
@@ -942,7 +969,7 @@ export const en = {
   "settings.skills.noInstalledSkills": "No installed skills",
   "settings.skills.noSkillUpdates": "No updates",
   "settings.skills.emptyHint":
-    "Scans user skills, project skills, registry skills, commands, and enabled plugins.",
+    "Scans user skills, project skills, registry skills, external collections, and enabled plugins.",
   "settings.skills.commandsEmptyHint":
     "Commands are slash shortcuts from user, project, or enabled plugin command folders.",
   "settings.skills.availableSkillsHint":
@@ -955,8 +982,8 @@ export const en = {
     "Registry-managed skills with updates or local changes will appear here.",
   "settings.skills.noResults": "No results found",
   "settings.skills.selectToView": "Select an item to view details",
-  "settings.skills.noneFound": "No skills or commands found",
-  "settings.skills.createFirst": "Create your first skill or command",
+  "settings.skills.noneFound": "No skills found",
+  "settings.skills.createFirst": "Create your first skill",
   "settings.skills.deleteSkillTitle": "Delete Skill",
   "settings.skills.deleteCommandTitle": "Delete Command",
   "settings.skills.deleteConfirmPrefix": "Are you sure you want to delete",
@@ -3950,9 +3977,9 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.resetProviderConfirm":
     "要重置这个提供方配置吗？已保存的端点信息和密钥都会被移除。",
 
-  "settings.commands.title": "命令指南",
+  "settings.commands.title": "命令",
   "settings.commands.subtitle":
-    "查看对话里输入 / 后可选的命令，以及本机 CLI、插件和官方参考索引。",
+    "管理本地 / 命令文件，并查看本机 CLI、插件和官方参考索引。",
   "settings.commands.refresh": "刷新本机检测",
   "settings.commands.localIndexNotice":
     "这里是本机索引：应用快捷工作流、命令文件、已安装插件和运行时 --help 输出。完整说明仍以官方文档为准。",
@@ -4050,6 +4077,32 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.commands.noRuntimeCommands": "没有检测到运行时 CLI 命令。",
   "settings.commands.noLocalCommands": "没有检测到本地命令文件。",
   "settings.commands.noDescription": "没有描述。",
+  "settings.commands.newCommand": "新建命令",
+  "settings.commands.editCommand": "编辑命令",
+  "settings.commands.deleteCommand": "删除命令",
+  "settings.commands.commandEditorDescription":
+    "本地命令文件是可复用提示词文件，会在对话输入 / 后出现。",
+  "settings.commands.commandName": "名称",
+  "settings.commands.commandNameHint": "创建文件时会转换成 kebab-case。",
+  "settings.commands.commandNameReadonly":
+    "如需重命名，请新建命令后删除旧命令。",
+  "settings.commands.commandScope": "范围",
+  "settings.commands.scopeUserCommand": "用户 (~/.claude/commands/)",
+  "settings.commands.scopeProjectNamed": "项目：{project}",
+  "settings.commands.commandDescription": "描述",
+  "settings.commands.commandDescriptionPlaceholder": "这个命令做什么...",
+  "settings.commands.argumentHint": "参数提示",
+  "settings.commands.argumentHintPlaceholder": "可选，例如 [file_path]",
+  "settings.commands.commandPrompt": "提示词",
+  "settings.commands.commandPromptPlaceholder": "命令提示词 (Markdown)...",
+  "settings.commands.deleteCommandTitle": "删除命令",
+  "settings.commands.deleteCommandDescription":
+    "要删除 {name} 吗？这会从磁盘移除本地命令文件，且无法撤销。",
+  "settings.commands.toast.commandCreated": "命令已创建",
+  "settings.commands.toast.commandSaved": "命令已保存",
+  "settings.commands.toast.commandDeleted": "命令已删除",
+  "settings.commands.toast.failedToSaveCommand": "保存命令失败",
+  "settings.commands.toast.failedToDeleteCommand": "删除命令失败",
   "settings.commands.sourceProject": "项目",
   "settings.commands.sourceUser": "用户",
   "settings.commands.sourcePlugin": "插件",
@@ -4347,10 +4400,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.skills.toast.registryChecked": "技能注册表已检查",
   "settings.skills.toast.failedToCheckRegistry":
     "检查注册表失败",
-  "settings.skills.searchPlaceholder": "搜索技能和命令...",
+  "settings.skills.searchPlaceholder": "搜索技能...",
   "settings.skills.checkRegistry": "检查技能注册表",
-  "settings.skills.createNew": "新建技能或命令",
-  "settings.skills.noSkillsOrCommands": "没有技能或命令",
+  "settings.skills.createNew": "新建技能",
+  "settings.skills.noSkillsOrCommands": "没有技能",
   "settings.skills.noSkills": "没有技能",
   "settings.skills.noCommands": "没有命令",
   "settings.skills.noAvailableSkills": "没有可安装技能",
@@ -4358,7 +4411,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.skills.noInstalledSkills": "没有已安装技能",
   "settings.skills.noSkillUpdates": "没有可更新内容",
   "settings.skills.emptyHint":
-    "会扫描用户技能、项目技能、注册表技能、命令和已启用插件。",
+    "会扫描用户技能、项目技能、注册表技能、外部集合和已启用插件。",
   "settings.skills.commandsEmptyHint":
     "命令来自用户、项目或已启用插件的命令文件夹，是斜杠快捷指令。",
   "settings.skills.availableSkillsHint":
@@ -4371,8 +4424,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "有更新或本地修改的注册表管理技能会显示在这里。",
   "settings.skills.noResults": "没有找到结果",
   "settings.skills.selectToView": "选择一项查看详情",
-  "settings.skills.noneFound": "没有找到技能或命令",
-  "settings.skills.createFirst": "创建第一个技能或命令",
+  "settings.skills.noneFound": "没有找到技能",
+  "settings.skills.createFirst": "创建第一个技能",
   "settings.skills.deleteSkillTitle": "删除技能",
   "settings.skills.deleteCommandTitle": "删除命令",
   "settings.skills.deleteConfirmPrefix": "确定要删除",

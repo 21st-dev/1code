@@ -82,7 +82,9 @@ export function SettingsContent() {
   }
 
   const contentWidthClassName =
-    activeTab === "models" ? "w-full max-w-6xl mx-auto" : "w-full max-w-2xl mx-auto"
+    activeTab === "models" || activeTab === "commands"
+      ? "w-full max-w-6xl mx-auto"
+      : "w-full max-w-2xl mx-auto"
 
   return (
     <div className="h-full overflow-y-auto">
