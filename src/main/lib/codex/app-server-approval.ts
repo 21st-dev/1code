@@ -1,33 +1,33 @@
 import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import {
-  decideCodexAcpToolPermission,
-  type CodexAcpPermissionTool,
-} from "./acp-permission"
-import type { CodexAskUserQuestionPending } from "./ask-user-question"
-import {
-  QUESTIONS_SKIPPED_MESSAGE,
-  QUESTIONS_TIMED_OUT_MESSAGE,
-  type CodexAskUserQuestionApproval,
-} from "./ask-user-question"
-import type { CodexAppServerMessageId } from "./app-server-transport"
+  resolveGuardedScopedShellWriteApproval,
+  type ValidatedAgentScopeContract,
+} from "../agent-guard"
+import { normalizeToolPathInsideCwd } from "../agent-guard/contract"
 import type {
   CodexAppServerPermissionMapping,
   ObservedToolPolicy,
 } from "../agent-runtime/permission-policy"
 import { redactRuntimePayload } from "../agent-runtime/redaction"
 import {
-  resolveGuardedScopedShellWriteApproval,
-  type ValidatedAgentScopeContract,
-} from "../agent-guard"
-import { normalizeToolPathInsideCwd } from "../agent-guard/contract"
-import {
   applyCodexControlledEdit,
+  type CodexAppServerDynamicToolCallParams,
+  type CodexAppServerDynamicToolCallResponse,
   dynamicToolResponse,
   isCodexControlledEditToolCall,
   prepareCodexControlledEdit,
-  type CodexAppServerDynamicToolCallParams,
-  type CodexAppServerDynamicToolCallResponse,
 } from "./app-server-controlled-edit"
+import type { CodexAppServerMessageId } from "./app-server-transport"
+import type { CodexAskUserQuestionPending } from "./ask-user-question"
+import {
+  type CodexAskUserQuestionApproval,
+  QUESTIONS_SKIPPED_MESSAGE,
+  QUESTIONS_TIMED_OUT_MESSAGE,
+} from "./ask-user-question"
+import {
+  type CodexAcpPermissionTool,
+  decideCodexAcpToolPermission,
+} from "./tool-permission"
 
 type JsonPrimitive = string | number | boolean | null
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }

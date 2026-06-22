@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { stripCodexAnsi } from "./acp-spawn-probe"
+import { stripCodexAnsi } from "./ansi-cleanup"
 import { resolveBundledCodexCliPath } from "./cli-path"
 
 export type RunCodexCliOptions = {

@@ -156,7 +156,7 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
     const codexAnsiCleanup = readFileSync(
-      "src/main/lib/codex/acp-spawn-probe.ts",
+      "src/main/lib/codex/ansi-cleanup.ts",
       "utf8",
     )
 

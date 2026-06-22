@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { stripCodexAnsi } from "../src/main/lib/codex/acp-spawn-probe"
+import { stripCodexAnsi } from "../src/main/lib/codex/ansi-cleanup"
 
 describe("Codex ANSI cleanup", () => {
   test("strips terminal control sequences", () => {

@@ -31,7 +31,7 @@ const {
   isCodexPlanModeBlockedTool,
   normalizeCodexDynamicPermissionTool,
   normalizeCodexPermissionTool,
-} = await import("../src/main/lib/codex/acp-permission")
+} = await import("../src/main/lib/codex/tool-permission")
 const { validateAgentScopeContract } = await import(
   "../src/main/lib/agent-guard"
 )

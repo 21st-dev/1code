@@ -525,9 +525,9 @@ const CODEX_RUNTIME_MANIFEST = manifest({
         kind: "runtime-code",
         references: [
           "src/main/lib/agent-runtime/permission-policy.ts",
-          "src/main/lib/codex/acp-permission.ts",
+          "src/main/lib/codex/tool-permission.ts",
           "src/main/lib/codex/app-server-approval.ts",
-          "tests/codex-acp-permission.test.ts",
+          "tests/codex-tool-permission.test.ts",
           "tests/codex-app-server-approval.test.ts",
         ],
       },

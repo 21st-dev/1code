@@ -9,17 +9,17 @@ import {
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path"
 import type { AgentGuardEvent } from "../../../shared/agent-scope-contracts"
 import {
-  decideCodexAcpToolPermission,
-  type CodexAcpPermissionTool,
-} from "./acp-permission"
+  normalizeToolPathInsideCwd,
+  type ValidatedAgentScopeContract,
+} from "../agent-guard"
 import type {
   CodexAppServerPermissionMapping,
   ObservedToolPolicy,
 } from "../agent-runtime/permission-policy"
 import {
-  normalizeToolPathInsideCwd,
-  type ValidatedAgentScopeContract,
-} from "../agent-guard"
+  type CodexAcpPermissionTool,
+  decideCodexAcpToolPermission,
+} from "./tool-permission"
 
 type JsonObject = Record<string, unknown>
 

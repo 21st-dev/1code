@@ -1,4 +1,4 @@
-import { stripCodexAnsi } from "./acp-spawn-probe"
+import { stripCodexAnsi } from "./ansi-cleanup"
 
 const URL_CANDIDATE_REGEX = /https?:\/\/[^\s]+/g
 

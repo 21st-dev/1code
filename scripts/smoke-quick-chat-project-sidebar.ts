@@ -273,7 +273,7 @@ async function main() {
   const { decideAssistantToolPermission, resolveDesktopPermissionPolicy } =
     await import("../src/main/lib/agent-runtime/permission-policy")
   const { decideCodexAcpToolPermission } = await import(
-    "../src/main/lib/codex/acp-permission"
+    "../src/main/lib/codex/tool-permission"
   )
   const {
     createCodexAppServerApprovalBridge,
