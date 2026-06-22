@@ -4,12 +4,10 @@ import { useAtomValue } from "jotai"
 import { ListTree, MoreHorizontal } from "lucide-react"
 import { memo, useCallback, useContext, useMemo, useState } from "react"
 import { useI18n } from "@/lib/i18n"
-import { normalizeAcpParts } from "../../../../shared/acp-tool-normalizer"
 import type {
   CanonicalChatMessage,
   CanonicalChatMessagePart,
 } from "../../../../shared/chat-message"
-import { normalizeCodexToolPart } from "../../../../shared/codex-tool-normalizer"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +52,7 @@ import {
   SaveOutputButton,
 } from "../ui/message-action-buttons"
 import { MessageJsonDisplay } from "../ui/message-json-display"
+import { normalizeAssistantMessagePartsForRender } from "./assistant-message-render-parts"
 import { ForkContext } from "./isolated-message-group"
 import { MemoizedTextPart } from "./memoized-text-part"
 
@@ -413,11 +412,7 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
   // Normalize ACP/codex tool parts into canonical types (e.g. "tool-Read README.md" → "tool-Read").
   // Note: no useMemo — AI SDK mutates parts in-place, so the array reference
   // doesn't change and useMemo would return stale results.
-  const messageParts = normalizeAcpParts(
-    (message.parts || []).map((part: CanonicalChatMessagePart) =>
-      normalizeCodexToolPart(part),
-    ),
-  )
+  const messageParts = normalizeAssistantMessagePartsForRender(message.parts)
 
   const contentParts = useMemo(
     () => messageParts.filter((p) => p.type !== "step-start"),
