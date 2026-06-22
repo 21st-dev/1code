@@ -4,7 +4,6 @@
 Ensure Settings controls are placed in conceptually correct tabs, without
 duplicated controls, vestigial tabs, preference resets, or lost developer-only
 affordances.
-
 ## Requirements
 ### Requirement: Each setting lives in the tab matching its concept
 
@@ -12,7 +11,8 @@ Every setting control MUST appear in the Settings tab whose subject matches the
 setting, and MUST NOT be duplicated across tabs. Local-model/offline config belongs
 in Models; agent-behavior toggles (e.g. rollback) in Preferences; view/appearance
 toggles (e.g. the Kanban view, code theme) in Appearance; keyboard-navigation
-settings in Keyboard only.
+settings in Keyboard only. Local command file management belongs in Commands,
+not Skills.
 
 #### Scenario: Offline config is in Models, not Beta
 
@@ -29,6 +29,12 @@ settings in Keyboard only.
 
 - **WHEN** a setting (e.g. the Ctrl+Tab target) is presented
 - **THEN** it appears in exactly one tab (Keyboard), not in two
+
+#### Scenario: Command management is in Commands, not Skills
+
+- **WHEN** the user wants to create, edit, or delete local command files
+- **THEN** those controls appear in Settings > Commands
+- **AND** Settings > Skills does not include a Commands sub-view or command file CRUD controls
 
 ### Requirement: No empty or vestigial settings tab ships
 
