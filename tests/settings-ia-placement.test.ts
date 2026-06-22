@@ -33,6 +33,12 @@ describe("Settings IA placement", () => {
   const about = read(
     "src/renderer/components/dialogs/settings-tabs/agents-about-tab.tsx",
   )
+  const commands = read(
+    "src/renderer/components/dialogs/settings-tabs/agents-command-guide-tab.tsx",
+  )
+  const skills = read(
+    "src/renderer/components/dialogs/settings-tabs/agents-skills-tab.tsx",
+  )
   const settingsContent = read(
     "src/renderer/features/settings/settings-content.tsx",
   )
@@ -101,6 +107,24 @@ describe("Settings IA placement", () => {
     ])
     expect(preferences).not.toContain("ctrlTabTargetAtom")
     expect(appearance).not.toContain("ctrlTabTargetAtom")
+  })
+
+  test("keeps command file management in Commands, not Skills", () => {
+    expectContainsAll(commands, [
+      "trpc.commands.list.useQuery",
+      "trpc.commands.create.useMutation",
+      "trpc.commands.update.useMutation",
+      "trpc.commands.delete.useMutation",
+      "settings.commands.newCommand",
+    ])
+    expectContainsNone(skills, [
+      "trpc.commands.list.useQuery",
+      "trpc.commands.create.useMutation",
+      "trpc.commands.update.useMutation",
+      "trpc.commands.delete.useMutation",
+      'setActiveView("commands")',
+      "settings.skills.viewCommands",
+    ])
   })
 
   test("keeps Debug unlock on About version and Beta tab removed", () => {
