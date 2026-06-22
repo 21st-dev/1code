@@ -272,7 +272,7 @@ async function main() {
   )
   const { decideAssistantToolPermission, resolveDesktopPermissionPolicy } =
     await import("../src/main/lib/agent-runtime/permission-policy")
-  const { decideCodexAcpToolPermission } = await import(
+  const { decideCodexToolPermission } = await import(
     "../src/main/lib/codex/tool-permission"
   )
   const {
@@ -436,7 +436,7 @@ async function main() {
     assistantToolDecisions.claudeBash.decision === "deny" &&
     assistantToolDecisions.claudeMcp.decision === "deny"
   const codexPermissionDecisions = {
-    shell: decideCodexAcpToolPermission({
+    shell: decideCodexToolPermission({
       tool: {
         toolUseId: "codex-shell",
         toolName: "Bash",
@@ -448,7 +448,7 @@ async function main() {
       observedToolPolicy: codexAppServerPolicy.observedToolPolicy,
       contract: null,
     }),
-    file: decideCodexAcpToolPermission({
+    file: decideCodexToolPermission({
       tool: {
         toolUseId: "codex-file",
         toolName: "Edit",
@@ -460,7 +460,7 @@ async function main() {
       observedToolPolicy: codexAppServerPolicy.observedToolPolicy,
       contract: null,
     }),
-    mcp: decideCodexAcpToolPermission({
+    mcp: decideCodexToolPermission({
       tool: {
         toolUseId: "codex-mcp",
         toolName: "mcp__repo__status",

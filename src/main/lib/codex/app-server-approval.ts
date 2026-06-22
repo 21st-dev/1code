@@ -25,8 +25,8 @@ import {
   QUESTIONS_TIMED_OUT_MESSAGE,
 } from "./ask-user-question"
 import {
-  type CodexAcpPermissionTool,
-  decideCodexAcpToolPermission,
+  type CodexToolPermissionRequest,
+  decideCodexToolPermission,
 } from "./tool-permission"
 
 type JsonPrimitive = string | number | boolean | null
@@ -111,13 +111,13 @@ export type CodexAppServerApprovalBridgeInput = {
 type AppServerApprovalDecision =
   | {
       allowedByPolicy: true
-      tool: CodexAcpPermissionTool
+      tool: CodexToolPermissionRequest
       message?: string
       permissionsGrant?: CodexAppServerPermissionsRequestApprovalParams["permissions"]
     }
   | {
       allowedByPolicy: false
-      tool: CodexAcpPermissionTool
+      tool: CodexToolPermissionRequest
       message: string
     }
 
@@ -187,7 +187,7 @@ function approvalAccepted(approval: CodexAskUserQuestionApproval): boolean {
 
 function createCommandTool(
   params: CodexAppServerCommandExecutionRequestApprovalParams,
-): CodexAcpPermissionTool {
+): CodexToolPermissionRequest {
   const toolUseId = params.approvalId || params.itemId
   const command = cleanString(params.command)
   return {
@@ -205,7 +205,7 @@ function createCommandTool(
 
 function createLegacyCommandTool(
   params: CodexAppServerExecCommandApprovalParams,
-): CodexAcpPermissionTool {
+): CodexToolPermissionRequest {
   const command = params.command.filter(Boolean).join(" ").trim()
   return {
     toolUseId: params.approvalId || params.callId,
@@ -222,7 +222,7 @@ function createLegacyCommandTool(
 
 function createFileTool(
   params: CodexAppServerFileChangeRequestApprovalParams,
-): CodexAcpPermissionTool {
+): CodexToolPermissionRequest {
   const path = cleanString(params.grantRoot)
   return {
     toolUseId: params.itemId,
@@ -238,7 +238,7 @@ function createFileTool(
 
 function createLegacyPatchTool(
   params: CodexAppServerApplyPatchApprovalParams,
-): CodexAcpPermissionTool {
+): CodexToolPermissionRequest {
   const firstPath = Object.keys(params.fileChanges)[0] || params.grantRoot || ""
   return {
     toolUseId: params.callId,
@@ -273,7 +273,7 @@ function permissionWritePaths(
 
 function createPermissionTool(
   params: CodexAppServerPermissionsRequestApprovalParams,
-): CodexAcpPermissionTool {
+): CodexToolPermissionRequest {
   const writePath = permissionWritePaths(params)[0] ?? ""
   return {
     toolUseId: params.itemId,
@@ -290,13 +290,13 @@ function createPermissionTool(
 }
 
 function policyDecisionForTool(input: {
-  tool: CodexAcpPermissionTool
+  tool: CodexToolPermissionRequest
   permission: CodexAppServerPermissionMapping
   guardedContract?: ValidatedAgentScopeContract | null
   onGuardEvent?: (event: AgentGuardEvent) => void
   onObservedToolDecision?: CodexAppServerApprovalBridgeInput["onObservedToolDecision"]
 }): AppServerApprovalDecision {
-  const decision = decideCodexAcpToolPermission({
+  const decision = decideCodexToolPermission({
     tool: input.tool,
     mode: input.permission.controlLevel === "plan" ? "plan" : "agent",
     controlLevel: input.permission.controlLevel,
@@ -323,7 +323,7 @@ function policyDecisionForTool(input: {
 }
 
 function policyDecisionForCommandTool(input: {
-  tool: CodexAcpPermissionTool
+  tool: CodexToolPermissionRequest
   permission: CodexAppServerPermissionMapping
   guardedContract?: ValidatedAgentScopeContract | null
   onGuardEvent?: (event: AgentGuardEvent) => void
@@ -379,7 +379,7 @@ export function resolveCodexAppServerPermissionsApprovalDecision(input: {
         input.guardedContract.cwd,
         rawPath,
       )
-      const pathTool: CodexAcpPermissionTool = {
+      const pathTool: CodexToolPermissionRequest = {
         ...tool,
         toolInput: {
           ...tool.toolInput,
@@ -504,7 +504,7 @@ export function createCodexAppServerApprovalBridge({
   async function askUser(input: {
     requestId: CodexAppServerMessageId
     prefix: string
-    tool: CodexAcpPermissionTool
+    tool: CodexToolPermissionRequest
     question: ReturnType<typeof approvalQuestion>
   }): Promise<CodexAskUserQuestionApproval> {
     if (!canAskUser || !emit || !registerPendingQuestion || !unregisterPendingQuestion) {

@@ -24,13 +24,13 @@ mock.module("electron", () => ({
 }))
 
 const {
-  buildCodexAcpPermissionResponse,
-  createCodexAcpPermissionHandler,
-  decideCodexAcpToolPermission,
-  installCodexAcpPermissionHandler,
+  buildCodexToolPermissionResponse,
+  createCodexToolPermissionHandler,
+  decideCodexToolPermission,
+  installCodexToolPermissionHandler,
   isCodexPlanModeBlockedTool,
-  normalizeCodexDynamicPermissionTool,
-  normalizeCodexPermissionTool,
+  normalizeCodexDynamicToolPermissionRequest,
+  normalizeCodexToolPermissionRequest,
 } = await import("../src/main/lib/codex/tool-permission")
 const { validateAgentScopeContract } = await import(
   "../src/main/lib/agent-guard"
@@ -59,20 +59,20 @@ function permissionRequest(
   }
 }
 
-describe("Codex ACP permission enforcement", () => {
+describe("Codex tool permission enforcement", () => {
   test("selects reject options for denied permission requests", () => {
-    expect(buildCodexAcpPermissionResponse(permissionOptions, "deny")).toEqual({
+    expect(buildCodexToolPermissionResponse(permissionOptions, "deny")).toEqual({
       outcome: { outcome: "selected", optionId: "abort" },
     })
-    expect(buildCodexAcpPermissionResponse(permissionOptions, "allow")).toEqual(
+    expect(buildCodexToolPermissionResponse(permissionOptions, "allow")).toEqual(
       {
         outcome: { outcome: "selected", optionId: "approved" },
       },
     )
   })
 
-  test("normalizes ACP execute requests into guarded Bash input", () => {
-    const tool = normalizeCodexPermissionTool(
+  test("normalizes SDK execute requests into guarded Bash input", () => {
+    const tool = normalizeCodexToolPermissionRequest(
       permissionRequest({
         title: "printf %s denied-by-locus > permission-smoke.txt",
         kind: "execute",
@@ -97,7 +97,7 @@ describe("Codex ACP permission enforcement", () => {
   })
 
   test("denies plan-mode edit and execute permission requests before execution", async () => {
-    const handler = createCodexAcpPermissionHandler({ mode: "plan" })
+    const handler = createCodexToolPermissionHandler({ mode: "plan" })
 
     const response = await handler(
       permissionRequest({
@@ -119,7 +119,7 @@ describe("Codex ACP permission enforcement", () => {
       workspaceKind: "folderless",
     })
     const permission = getCodexAppServerPermissionMapping(policy)
-    const handler = createCodexAcpPermissionHandler({
+    const handler = createCodexToolPermissionHandler({
       mode: "agent",
       controlLevel: permission.controlLevel,
       observedToolPolicy: permission.observedToolPolicy,
@@ -150,7 +150,7 @@ describe("Codex ACP permission enforcement", () => {
     })
 
     expect(
-      decideCodexAcpToolPermission({
+      decideCodexToolPermission({
         tool: {
           toolUseId: "unknown-1",
           toolName: "futureSideEffect",
@@ -199,7 +199,7 @@ describe("Codex ACP permission enforcement", () => {
       },
     )
     const events: AgentGuardEvent[] = []
-    const handler = createCodexAcpPermissionHandler({
+    const handler = createCodexToolPermissionHandler({
       mode: "agent",
       contract,
       onGuardEvent: (event) => events.push(event),
@@ -231,7 +231,7 @@ describe("Codex ACP permission enforcement", () => {
     })
     const permission = getCodexAppServerPermissionMapping(policy)
     const observed: any[] = []
-    const handler = createCodexAcpPermissionHandler({
+    const handler = createCodexToolPermissionHandler({
       mode: "agent",
       controlLevel: permission.controlLevel,
       observedToolPolicy: permission.observedToolPolicy,
@@ -282,13 +282,13 @@ describe("Codex ACP permission enforcement", () => {
     expect(observed[1].risk.riskCategories).toContain("sensitive-path")
   })
 
-  test("normalizes dynamic ACP edit tool input and denies observed .env writes", () => {
+  test("normalizes dynamic edit tool input and denies observed .env writes", () => {
     const policy = resolveDesktopPermissionPolicy({
       runtimeId: "codex",
       mode: "agent",
     })
     const permission = getCodexAppServerPermissionMapping(policy)
-    const tool = normalizeCodexDynamicPermissionTool({
+    const tool = normalizeCodexDynamicToolPermissionRequest({
       toolCallId: "dynamic-1",
       toolName: "acp.acp_provider_agent_dynamic_tool",
       input: {
@@ -315,7 +315,7 @@ describe("Codex ACP permission enforcement", () => {
       },
     })
 
-    const decision = decideCodexAcpToolPermission({
+    const decision = decideCodexToolPermission({
       tool: tool!,
       mode: "agent",
       controlLevel: permission.controlLevel,
@@ -359,9 +359,9 @@ describe("Codex ACP permission enforcement", () => {
       },
     }
 
-    const result = await installCodexAcpPermissionHandler({
+    const result = await installCodexToolPermissionHandler({
       model,
-      handler: createCodexAcpPermissionHandler({ mode: "plan" }),
+      handler: createCodexToolPermissionHandler({ mode: "plan" }),
     })
 
     expect(result).toEqual({ ok: true })

@@ -18,24 +18,24 @@ import {
   type ObservedToolPolicy,
 } from "../agent-runtime/permission-policy"
 
-type AcpPermissionHandler = (
+type CodexPermissionHandler = (
   params: RequestPermissionRequest,
 ) => Promise<RequestPermissionResponse>
 
-type AcpPermissionClientLike = {
-  setPermissionRequestHandler?: (handler: AcpPermissionHandler) => void
+type CodexPermissionClientLike = {
+  setPermissionRequestHandler?: (handler: CodexPermissionHandler) => void
 }
 
-type AcpLanguageModelLike = {
+type CodexPermissionLanguageModelLike = {
   connectClient?: () => Promise<void>
-  client?: AcpPermissionClientLike | null
+  client?: CodexPermissionClientLike | null
 }
 
-export type CodexAcpPermissionInstallResult =
+export type CodexToolPermissionInstallResult =
   | { ok: true }
   | { ok: false; error: string }
 
-export type CodexAcpPermissionTool = {
+export type CodexToolPermissionRequest = {
   toolUseId: string
   toolName: string
   toolInput: Record<string, unknown>
@@ -43,7 +43,7 @@ export type CodexAcpPermissionTool = {
   title: string
 }
 
-export type CodexAcpPermissionPolicyInput = {
+export type CodexToolPermissionPolicyInput = {
   mode: "plan" | "agent"
   controlLevel?: ResolvedDesktopRuntimeControlLevel
   observedToolPolicy?: ObservedToolPolicy
@@ -59,14 +59,14 @@ export type CodexObservedToolDecision = {
   message?: string
 }
 
-export type CodexAcpToolPermissionDecision = {
+export type CodexToolPermissionDecision = {
   decision: "allow" | "deny"
   message?: string
   observed?: CodexObservedToolDecision
   guardEvent?: AgentGuardEvent
 }
 
-export type CodexAcpDynamicToolInput = {
+export type CodexDynamicToolPermissionInput = {
   toolCallId?: unknown
   toolName?: unknown
   input?: unknown
@@ -223,7 +223,7 @@ function getPathFromDynamicArgs(
   return getTitleDetail(title)
 }
 
-function normalizeCodexPermissionToolInput(
+function normalizeCodexToolPermissionInput(
   toolCall: ToolCallUpdate,
   toolName: string,
 ): Record<string, unknown> {
@@ -257,7 +257,7 @@ function normalizeCodexPermissionToolInput(
   return rawInput
 }
 
-function normalizeCodexDynamicPermissionToolInput(
+function normalizeCodexDynamicToolPermissionInput(
   rawInput: Record<string, unknown>,
   toolName: string,
   title: string,
@@ -296,9 +296,9 @@ function normalizeCodexDynamicPermissionToolInput(
   return rawInput
 }
 
-export function normalizeCodexPermissionTool(
+export function normalizeCodexToolPermissionRequest(
   toolCall: ToolCallUpdate,
-): CodexAcpPermissionTool {
+): CodexToolPermissionRequest {
   const title = typeof toolCall.title === "string" ? toolCall.title : ""
   const toolName =
     getToolNameFromTitle(title) ||
@@ -309,15 +309,15 @@ export function normalizeCodexPermissionTool(
   return {
     toolUseId: toolCall.toolCallId,
     toolName,
-    toolInput: normalizeCodexPermissionToolInput(toolCall, toolName),
+    toolInput: normalizeCodexToolPermissionInput(toolCall, toolName),
     kind: toolCall.kind ?? null,
     title,
   }
 }
 
-export function normalizeCodexDynamicPermissionTool(
-  input: CodexAcpDynamicToolInput,
-): CodexAcpPermissionTool | null {
+export function normalizeCodexDynamicToolPermissionRequest(
+  input: CodexDynamicToolPermissionInput,
+): CodexToolPermissionRequest | null {
   const parsedInput = parseJsonRecord(input.input)
   const rawToolCallId =
     parsedInput?.toolCallId ?? input.toolCallId ?? parsedInput?.id
@@ -336,7 +336,7 @@ export function normalizeCodexDynamicPermissionTool(
 
   const toolName = getToolNameFromTitle(title) || "Unknown"
   const rawArgs = parsedInput?.args
-  const toolInput = normalizeCodexDynamicPermissionToolInput(
+  const toolInput = normalizeCodexDynamicToolPermissionInput(
     isRecord(rawArgs) ? rawArgs : (parsedInput ?? {}),
     toolName,
     title,
@@ -362,7 +362,7 @@ function optionByKind(
   return undefined
 }
 
-export function buildCodexAcpPermissionResponse(
+export function buildCodexToolPermissionResponse(
   options: PermissionOption[],
   decision: "allow" | "deny",
 ): RequestPermissionResponse {
@@ -382,7 +382,7 @@ export function buildCodexAcpPermissionResponse(
 }
 
 export function isCodexPlanModeBlockedTool(
-  tool: CodexAcpPermissionTool,
+  tool: CodexToolPermissionRequest,
 ): boolean {
   return (
     (tool.kind ? PLAN_BLOCKED_KINDS.has(tool.kind) : false) ||
@@ -390,15 +390,15 @@ export function isCodexPlanModeBlockedTool(
   )
 }
 
-export function decideCodexAcpToolPermission({
+export function decideCodexToolPermission({
   tool,
   mode,
   controlLevel,
   observedToolPolicy,
   contract,
-}: CodexAcpPermissionPolicyInput & {
-  tool: CodexAcpPermissionTool
-}): CodexAcpToolPermissionDecision {
+}: CodexToolPermissionPolicyInput & {
+  tool: CodexToolPermissionRequest
+}): CodexToolPermissionDecision {
   if (controlLevel === "assistant") {
     const assistantDecision = decideAssistantToolPermission({
       toolName: tool.toolName,
@@ -461,17 +461,17 @@ export function decideCodexAcpToolPermission({
   }
 }
 
-export function createCodexAcpPermissionHandler({
+export function createCodexToolPermissionHandler({
   mode,
   controlLevel,
   observedToolPolicy,
   contract,
   onGuardEvent,
   onObservedToolDecision,
-}: CodexAcpPermissionPolicyInput): AcpPermissionHandler {
+}: CodexToolPermissionPolicyInput): CodexPermissionHandler {
   return async (params) => {
-    const tool = normalizeCodexPermissionTool(params.toolCall)
-    const decision = decideCodexAcpToolPermission({
+    const tool = normalizeCodexToolPermissionRequest(params.toolCall)
+    const decision = decideCodexToolPermission({
       tool,
       mode,
       controlLevel,
@@ -481,19 +481,19 @@ export function createCodexAcpPermissionHandler({
     if (decision.observed) onObservedToolDecision?.(decision.observed)
     if (decision.guardEvent) onGuardEvent?.(decision.guardEvent)
 
-    return buildCodexAcpPermissionResponse(params.options, decision.decision)
+    return buildCodexToolPermissionResponse(params.options, decision.decision)
   }
 }
 
-export async function installCodexAcpPermissionHandler(params: {
+export async function installCodexToolPermissionHandler(params: {
   model: unknown
-  handler: AcpPermissionHandler
-}): Promise<CodexAcpPermissionInstallResult> {
-  const model = params.model as AcpLanguageModelLike
+  handler: CodexPermissionHandler
+}): Promise<CodexToolPermissionInstallResult> {
+  const model = params.model as CodexPermissionLanguageModelLike
   if (typeof model.connectClient !== "function") {
     return {
       ok: false,
-      error: "Codex ACP language model does not expose connectClient.",
+      error: "Codex permission language model does not expose connectClient.",
     }
   }
 
@@ -505,7 +505,7 @@ export async function installCodexAcpPermissionHandler(params: {
       error:
         error instanceof Error
           ? error.message
-          : "Codex ACP connection could not be initialized.",
+          : "Codex permission connection could not be initialized.",
     }
   }
 
@@ -513,7 +513,7 @@ export async function installCodexAcpPermissionHandler(params: {
   if (!client || typeof client.setPermissionRequestHandler !== "function") {
     return {
       ok: false,
-      error: "Codex ACP permission handler seam is unavailable.",
+      error: "Codex permission handler seam is unavailable.",
     }
   }
 

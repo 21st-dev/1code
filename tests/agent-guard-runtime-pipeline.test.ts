@@ -216,7 +216,7 @@ describe("agent guard runtime pipeline", () => {
     expect(codex).toContain("respondToolApproval")
     expect(codexAppServerAdapter).toContain("guardedContract")
     expect(codexAppServerApproval).toContain(
-      "decideCodexAcpToolPermission",
+      "decideCodexToolPermission",
     )
     expect(codexAppServerControlledEdit).toContain(
       "codexControlledEditDeveloperInstructions",

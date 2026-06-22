@@ -17,8 +17,8 @@ import type {
   ObservedToolPolicy,
 } from "../agent-runtime/permission-policy"
 import {
-  type CodexAcpPermissionTool,
-  decideCodexAcpToolPermission,
+  type CodexToolPermissionRequest,
+  decideCodexToolPermission,
 } from "./tool-permission"
 
 type JsonObject = Record<string, unknown>
@@ -45,7 +45,7 @@ export type CodexAppServerDynamicToolCallResponse = {
 }
 
 export type CodexControlledEditPrepared = {
-  tool: CodexAcpPermissionTool
+  tool: CodexToolPermissionRequest
   operation: "create" | "replace"
   cwd: string
   relativePath: string
@@ -260,7 +260,7 @@ export function prepareCodexControlledEdit(input: {
     return { ok: false, message: "Controlled edit path escapes the guarded workspace." }
   }
 
-  const tool: CodexAcpPermissionTool = {
+  const tool: CodexToolPermissionRequest = {
     toolUseId: input.params.callId,
     toolName: "Edit",
     toolInput: {
@@ -271,7 +271,7 @@ export function prepareCodexControlledEdit(input: {
     kind: "edit",
     title: `Edit ${relativePath}`,
   }
-  const decision = decideCodexAcpToolPermission({
+  const decision = decideCodexToolPermission({
     tool,
     mode: "agent",
     controlLevel: input.permission.controlLevel,
