@@ -22,10 +22,10 @@ import {
 import {
   getRuntimeNativePluginScopedSelectionsState,
   hashPluginManifestReviewDocument,
-  recordPluginReviewScans,
-  resolveRuntimeNativePluginEffectiveEnablement,
   type RuntimeNativePluginActivationScopeContext,
   type RuntimeNativePluginEnablementRecord,
+  recordPluginReviewScans,
+  resolveRuntimeNativePluginEffectiveEnablement,
 } from "./update-review-state"
 
 export interface AllowedClaudePluginRuntimeComponents {

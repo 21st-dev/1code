@@ -2,10 +2,10 @@ import type { PluginUpdateReviewStatus } from "../../../shared/plugin-update-rev
 import type { PluginInfo } from "../plugins"
 import {
   buildRuntimeNativeActivationPolicy,
-  runtimeSupportsProvenNativePluginLoading,
-  runtimeSupportsProvenPerRunPluginControl,
   type RuntimeNativeActivationIdentity,
   type RuntimeNativeActivationPolicy,
+  runtimeSupportsProvenNativePluginLoading,
+  runtimeSupportsProvenPerRunPluginControl,
 } from "../plugins/runtime-native-activation"
 
 export interface CodexAppServerPluginCacheCoordinates {
@@ -80,7 +80,10 @@ export function getCodexAppServerPluginCacheCoordinates(
 
   const sourceRemainder = plugin.source.slice(sourcePrefix.length)
   const versionSeparator = sourceRemainder.lastIndexOf("@")
-  if (versionSeparator <= 0 || versionSeparator === sourceRemainder.length - 1) {
+  if (
+    versionSeparator <= 0 ||
+    versionSeparator === sourceRemainder.length - 1
+  ) {
     return undefined
   }
 

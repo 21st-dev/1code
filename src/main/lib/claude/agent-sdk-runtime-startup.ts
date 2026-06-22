@@ -1,4 +1,5 @@
 import * as electron from "electron"
+import type { RuntimeNativePluginActivationScopeContext } from "../plugins/update-review-state"
 import {
   type ClaudeAgentSdkIsolatedConfig,
   type ClaudeAgentSdkNativePluginConfig,
@@ -10,7 +11,6 @@ import {
   type PrepareClaudeAgentSdkRuntimeStartupEnvironmentInput,
   prepareClaudeAgentSdkRuntimeStartupEnvironment,
 } from "./env"
-import type { RuntimeNativePluginActivationScopeContext } from "../plugins/update-review-state"
 
 type PrepareClaudeAgentSdkOllamaStartupDiagnostics =
   typeof prepareClaudeAgentSdkOllamaStartupDiagnostics

@@ -69,8 +69,8 @@ import { cn } from "../../../lib/utils"
 import { VoiceInputControl } from "../../../lib/voice/voice-input-control"
 import {
   type AgentMode,
-  type ClaudeModelSource,
   approvedGuardedRunContractsAtom,
+  type ClaudeModelSource,
   getNextMode,
   lastSelectedClaudeModelSourceAtom,
   lastSelectedCodexModelIdAtom,

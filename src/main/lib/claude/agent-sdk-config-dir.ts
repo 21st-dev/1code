@@ -1,11 +1,11 @@
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import path from "node:path"
+import type { RuntimeNativePluginActivationScopeContext } from "../plugins/update-review-state"
 import {
   type ClaudeNativePluginStagingFailureInput,
   replaceClaudeNativePluginStagingFailures,
 } from "./plugin-staging-state"
-import type { RuntimeNativePluginActivationScopeContext } from "../plugins/update-review-state"
 
 type ClaudeAgentSdkConfigDirFs = {
   mkdir: typeof fs.mkdir
@@ -47,7 +47,8 @@ export interface ClaudePluginStagingEntry {
   tags?: string[]
 }
 
-export interface ClaudeStagedNativePluginEntry extends ClaudePluginStagingEntry {
+export interface ClaudeStagedNativePluginEntry
+  extends ClaudePluginStagingEntry {
   stagedPath: string
 }
 

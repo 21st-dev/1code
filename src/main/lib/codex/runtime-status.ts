@@ -1,23 +1,23 @@
 import {
   buildCodexRuntimeAvailabilityFromComponents,
-  createCodexRuntimeComponent,
   type CodexRuntimeComponentStatus,
+  createCodexRuntimeComponent,
   type RuntimeExecutableLike,
 } from "../../../shared/codex-runtime-status"
 import { CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA } from "../agent-runtime/desktop-adapter-metadata"
 import type { DesktopRuntimeAdapterMetadata } from "../agent-runtime/desktop-runner"
 import { getRegisteredAgentRuntimeManifest } from "../agent-runtime/runtime-registry"
+import { type ElectronAppLike, getElectronApp } from "../electron-app"
 import { isLocalOnlyMode } from "../local-only"
 import { getRuntimeExecutableStatus } from "../runtime-executable"
 import { BUNDLED_CODEX_CLI_VERSION, getBundledCodexCliPath } from "./cli-path"
 import {
-  resolveCodexDesktopAdapterSelection,
   type CodexDesktopAdapterSelection,
+  resolveCodexDesktopAdapterSelection,
 } from "./desktop-adapter-selection"
 import { extractCodexError } from "./errors"
 import { getCodexIntegrationStatus } from "./integration-status"
 import { redactCodexLoginOutput } from "./login-output"
-import { getElectronApp, type ElectronAppLike } from "../electron-app"
 
 export type CodexAdapterRuntimeStatusMetadata = {
   bundledCodexVersion: string

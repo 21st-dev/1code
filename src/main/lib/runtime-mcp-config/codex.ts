@@ -16,8 +16,8 @@ import {
 } from "../mcp-auth"
 import {
   listMcpRegistryVerificationRecords,
-  upsertMcpRegistryVerificationRecord,
   type McpRegistryVerificationRecord,
+  upsertMcpRegistryVerificationRecord,
 } from "../mcp-registry/verification-state"
 
 export type CodexMcpServerForSession =

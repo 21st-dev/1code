@@ -4,8 +4,8 @@ import { buildRuntimeNativeActivationIdentity } from "../plugins/runtime-native-
 import {
   getEffectiveRuntimeNativePluginEnablementState,
   hashPluginManifestReviewDocument,
-  recordPluginReviewScans,
   type RuntimeNativePluginActivationScopeContext,
+  recordPluginReviewScans,
 } from "../plugins/update-review-state"
 import {
   buildCodexAppServerResolvedPluginConfigOverrides,

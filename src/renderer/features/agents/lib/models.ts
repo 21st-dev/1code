@@ -1,8 +1,8 @@
 import type { ClaudeModelInfo } from "../../../../shared/custom-agent-models"
 import {
+  type ProviderProfileMetadata,
   parseProviderProfileSource,
   providerProfileSource,
-  type ProviderProfileMetadata,
 } from "../../../../shared/provider-profile-types"
 
 export {
