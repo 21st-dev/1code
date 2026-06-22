@@ -2,7 +2,7 @@
  * Agents Mention Provider
  *
  * Wraps the appAgents endpoint as a mention provider.
- * Provides App Agent search with descriptions and tool guidance.
+ * Provides Locus Agent search with descriptions and tool guidance.
  */
 
 import { trpcClient } from "../../../lib/trpc"
@@ -54,7 +54,7 @@ export const agentsProvider = createMentionProvider<AgentData>({
     }
 
     try {
-      // Use tRPC to list App Agents
+      // Use tRPC to list Locus Agents
       const agents = await trpcClient.appAgents.list.query()
 
       // Map to MentionItem format
@@ -134,7 +134,7 @@ export const agentsProvider = createMentionProvider<AgentData>({
           description: "",
           prompt: "",
           source: "app",
-          path: "App Agents",
+          path: "Locus Agents",
         },
         metadata: {
           type: "agent",

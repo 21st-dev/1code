@@ -49,7 +49,7 @@ export function toAppAgentDTO(row: AppAgent): AppAgentDTO {
     tools: parseToolList(row.tools),
     disallowedTools: parseToolList(row.disallowedTools),
     source: "app",
-    path: "App Agents",
+    path: "Locus Agents",
     createdAt: row.createdAt?.toISOString() ?? null,
     updatedAt: row.updatedAt?.toISOString() ?? null,
   }

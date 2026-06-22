@@ -74,7 +74,7 @@ const AGENT_CAPABILITY_TABS: SettingsTabDefinition[] = [
   },
   {
     id: "agents" as SettingsTab,
-    labelKey: "settings.sidebar.customAgents",
+    labelKey: "settings.sidebar.agents",
     icon: CustomAgentIconFilled,
   },
   {

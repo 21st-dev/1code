@@ -26,7 +26,7 @@ const saveAppAgentSchema = z.object({
 function requireValidName(name: string) {
   const normalized = normalizeAppAgentName(name)
   if (!normalized || normalized.includes("..")) {
-    throw new Error("Invalid App Agent name")
+    throw new Error("Invalid Locus Agent name")
   }
   return normalized
 }
@@ -40,7 +40,7 @@ function ensureNameAvailable(name: string, currentId?: string) {
     .get()
 
   if (existing && existing.id !== currentId) {
-    throw new Error(`App Agent "${name}" already exists`)
+    throw new Error(`Locus Agent "${name}" already exists`)
   }
 }
 
@@ -99,7 +99,7 @@ export const appAgentsRouter = router({
       .get()
 
     if (!row) {
-      throw new Error("Failed to create App Agent")
+      throw new Error("Failed to create Locus Agent")
     }
 
     return toAppAgentDTO(row)
@@ -116,7 +116,7 @@ export const appAgentsRouter = router({
         .get()
 
       if (!existing) {
-        throw new Error("App Agent not found")
+        throw new Error("Locus Agent not found")
       }
 
       const name = requireValidName(input.name)
@@ -141,7 +141,7 @@ export const appAgentsRouter = router({
         .get()
 
       if (!row) {
-        throw new Error("Failed to update App Agent")
+        throw new Error("Failed to update Locus Agent")
       }
 
       return toAppAgentDTO(row)

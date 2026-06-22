@@ -129,11 +129,11 @@ function assertDictionaryContainsValue(entries, key, expectedValue) {
   }
 }
 
-function assertDictionaryValuesExclude(entries, forbiddenValues) {
+function assertDictionaryValuesExclude(entries, forbiddenValues, label) {
   for (const entry of entries) {
     for (const forbiddenValue of forbiddenValues) {
       if (entry.value.includes(forbiddenValue)) {
-        fail(`src/renderer/lib/i18n/dictionaries.ts ${formatDictionaryEntry(entry)} must not use retired Chat vocabulary ${JSON.stringify(forbiddenValue)}.`)
+        fail(`src/renderer/lib/i18n/dictionaries.ts ${formatDictionaryEntry(entry)} must not use retired ${label} vocabulary ${JSON.stringify(forbiddenValue)}.`)
       }
     }
   }
@@ -422,6 +422,8 @@ function assertCanonicalVocabularyI18n() {
     ["settings.debug.chats", "工作区"],
     ["settings.debug.subChats", "Chats"],
     ["settings.debug.subChats", "对话"],
+    ["settings.sidebar.agents", "Agent Builder"],
+    ["settings.sidebar.agents", "智能体构建器"],
   ]
 
   for (const [key, expectedValue] of expectedValues) {
@@ -431,7 +433,10 @@ function assertCanonicalVocabularyI18n() {
   const retiredChatTerms = ["sub-chat", "Sub-chat", "subchat", "子对话"]
   // Scan every dictionary value, not just today's known Chat labels. This keeps
   // future keys from quietly reintroducing retired user-facing vocabulary.
-  assertDictionaryValuesExclude(dictionaryEntries, retiredChatTerms)
+  assertDictionaryValuesExclude(dictionaryEntries, retiredChatTerms, "Chat")
+
+  const retiredAgentTerms = ["Custom Agents", "App Agent", "App Agents", "应用智能体"]
+  assertDictionaryValuesExclude(dictionaryEntries, retiredAgentTerms, "Agent")
 }
 
 assertOwnershipDocs()

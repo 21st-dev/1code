@@ -217,7 +217,7 @@ async function getRegistrySummaryById(id: string) {
   const summaries = await loadRegistrySummaries()
   const entry = summaries.find((item) => item.id === id)
   if (!entry) {
-    throw new Error(`Registry App Agent "${id}" not found`)
+    throw new Error(`Registry Locus Agent "${id}" not found`)
   }
   const source = SOURCES.find((item) => item.id === entry.sourceId)
   if (!source) {
@@ -243,7 +243,7 @@ export async function getRegistryAppAgent(
   const response = await fetchWithTimeout(getRawUrl(source, entry.upstreamPath))
   const raw = await response.text()
   if (raw.length > 250_000) {
-    throw new Error("Registry App Agent file is too large")
+    throw new Error("Registry Locus Agent file is too large")
   }
 
   const parsed = parseMarkdownFrontmatter(raw)
@@ -270,7 +270,7 @@ export async function importRegistryAppAgent(
 ): Promise<AppAgentDTO> {
   const agent = await getRegistryAppAgent(id)
   if (!agent.prompt) {
-    throw new Error("Registry App Agent is missing prompt content")
+    throw new Error("Registry Locus Agent is missing prompt content")
   }
 
   const db = getDatabase()
@@ -312,7 +312,7 @@ export async function importRegistryAppAgent(
     .get()
 
   if (!row) {
-    throw new Error("Failed to import App Agent")
+    throw new Error("Failed to import Locus Agent")
   }
 
   return toAppAgentDTO(row)

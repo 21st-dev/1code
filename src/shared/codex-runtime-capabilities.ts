@@ -221,8 +221,8 @@ const CODEX_APP_SERVER_CAPABILITY_OVERRIDES: Partial<
     status: "degraded",
     scope: "runtime-specific",
     reason:
-      "Codex App Agent mentions can be prompt-prepared, but runtime-neutral app-server execution and limitation reporting are incomplete.",
-    hint: "Do not count prompt preparation alone as app-server App Agent support.",
+      "Codex Locus Agent mentions can be prompt-prepared, but runtime-neutral app-server execution and limitation reporting are incomplete.",
+    hint: "Do not count prompt preparation alone as app-server Locus Agent support.",
     support: null,
   },
 }

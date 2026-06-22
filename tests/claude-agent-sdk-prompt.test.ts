@@ -15,7 +15,7 @@ async function collectAsyncIterable(value: AsyncIterable<any>): Promise<any[]> {
 }
 
 describe("Claude Agent SDK prompt", () => {
-  test("owns App Agent, skill, and long text prompt assembly", async () => {
+  test("owns Locus Agent, skill, and long text prompt assembly", async () => {
     const logs: unknown[][] = []
     const warnings: unknown[][] = []
     const prompt = await prepareClaudeAgentSdkRuntimePrompt({
@@ -56,11 +56,11 @@ describe("Claude Agent SDK prompt", () => {
       ].join("\n"),
     )
     expect(logs).toEqual([
-      ["[claude] App Agents mentioned:", ["Reviewer"]],
+      ["[claude] Locus Agents mentioned:", ["Reviewer"]],
       ["[claude] Skills mentioned:", ["Audit"]],
     ])
     expect(warnings).toEqual([
-      ["[claude] Missing App Agents:", ["Reviewer"]],
+      ["[claude] Missing Locus Agents:", ["Reviewer"]],
     ])
   })
 

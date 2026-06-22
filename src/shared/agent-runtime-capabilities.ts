@@ -135,7 +135,7 @@ const CAPABILITY_LABELS: Record<AgentRuntimeCapabilityId, string> = {
   runtimePlugins: "Runtime plugins",
   runtimeCommands: "Runtime commands",
   runtimeWorkflows: "Runtime workflows",
-  appAgents: "App Agents and skills",
+  appAgents: "Locus Agents and skills",
 }
 
 function assertNoSecretText(value: string, context: string): void {
@@ -471,8 +471,8 @@ const CLAUDE_RUNTIME_MANIFEST = manifest({
       status: "degraded",
       scope: "runtime-specific",
       reason:
-        "Locus App Agent mentions can be prompt-prepared for Claude, but runtime-native agent execution is incomplete.",
-      hint: "Do not count prompt preparation alone as full App Agent runtime support.",
+        "Locus Agent mentions can be prompt-prepared for Claude, but runtime-native agent execution is incomplete.",
+      hint: "Do not count prompt preparation alone as full Locus Agent runtime support.",
     }),
   ],
 })
@@ -666,8 +666,8 @@ const CODEX_RUNTIME_MANIFEST = manifest({
       status: "degraded",
       scope: "runtime-specific",
       reason:
-        "Codex App Agent mentions are prompt-prepared, but runtime-neutral execution and limitation reporting are incomplete.",
-      hint: "Do not count prompt injection alone as App Agent parity.",
+        "Codex Locus Agent mentions are prompt-prepared, but runtime-neutral execution and limitation reporting are incomplete.",
+      hint: "Do not count prompt injection alone as Locus Agent parity.",
     }),
   ],
 })
