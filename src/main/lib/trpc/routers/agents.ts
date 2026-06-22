@@ -1,19 +1,14 @@
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import * as fs from "fs/promises"
-import * as path from "path"
-import * as os from "os"
-import {
-  parseAgentMd,
-  generateAgentMd,
-  scanAgentsDirectory,
-  type AgentModel,
-  type FileAgent,
-} from "./agent-utils"
+import { isCustomAgentModel } from "../../../../shared/custom-agent-models"
+import { listClaudeNativeAgents } from "../../agent-builder/claude-native-agents"
 import { getPluginComponentPaths } from "../../plugins"
 import { discoverAllowedClaudePluginRuntimeComponents } from "../../plugins/runtime-gates"
+import { publicProcedure, router } from "../index"
+import { type AgentModel, generateAgentMd, parseAgentMd } from "./agent-utils"
 import { getEnabledPlugins } from "./claude-settings"
-import { isCustomAgentModel } from "../../../../shared/custom-agent-models"
 
 const agentModelSchema = z.custom<AgentModel>(isCustomAgentModel)
 
@@ -27,39 +22,7 @@ const listAgentsProcedure = publicProcedure
       .optional(),
   )
   .query(async ({ input }) => {
-    const userAgentsDir = path.join(os.homedir(), ".claude", "agents")
-    const userAgentsPromise = scanAgentsDirectory(userAgentsDir, "user")
-
-    let projectAgentsPromise = Promise.resolve<FileAgent[]>([])
-    if (input?.cwd) {
-      const projectAgentsDir = path.join(input.cwd, ".claude", "agents")
-      projectAgentsPromise = scanAgentsDirectory(projectAgentsDir, "project", input.cwd)
-    }
-
-    // Discover plugin agents
-    const enabledPluginSources = await getEnabledPlugins()
-    const allowedPluginComponents =
-      await discoverAllowedClaudePluginRuntimeComponents(enabledPluginSources)
-    const pluginAgentsPromises = allowedPluginComponents.map(async ({ plugin }) => {
-      const paths = getPluginComponentPaths(plugin)
-      try {
-        const agents = await scanAgentsDirectory(paths.agents, "plugin")
-        return agents.map((agent) => ({ ...agent, pluginName: plugin.source }))
-      } catch {
-        return []
-      }
-    })
-
-    // Scan all directories in parallel
-    const [userAgents, projectAgents, ...pluginAgentsArrays] =
-      await Promise.all([
-        userAgentsPromise,
-        projectAgentsPromise,
-        ...pluginAgentsPromises,
-      ])
-    const pluginAgents = pluginAgentsArrays.flat()
-
-    return [...projectAgents, ...userAgents, ...pluginAgents]
+    return listClaudeNativeAgents({ cwd: input?.cwd })
   })
 
 export const agentsRouter = router({
@@ -106,9 +69,7 @@ export const agentsRouter = router({
             source,
             path: agentPath,
           }
-        } catch {
-          continue
-        }
+        } catch {}
       }
 
       // Search in plugin directories
@@ -127,9 +88,7 @@ export const agentsRouter = router({
             pluginName: plugin.source,
             path: agentPath,
           }
-        } catch {
-          continue
-        }
+        } catch {}
       }
       return null
     }),
@@ -148,7 +107,7 @@ export const agentsRouter = router({
         model: agentModelSchema.optional(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Validate name (kebab-case, no special chars)
@@ -217,11 +176,13 @@ export const agentsRouter = router({
         model: agentModelSchema.optional(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       // Validate names
-      const safeOriginalName = input.originalName.toLowerCase().replace(/[^a-z0-9-]/g, "-")
+      const safeOriginalName = input.originalName
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-")
       const safeName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-")
       if (!safeOriginalName || !safeName || safeName.includes("..")) {
         throw new Error("Invalid agent name")
@@ -293,7 +254,7 @@ export const agentsRouter = router({
         name: z.string(),
         source: z.enum(["user", "project"]),
         cwd: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const safeName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-")

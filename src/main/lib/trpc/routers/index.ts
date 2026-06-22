@@ -1,6 +1,7 @@
 import type { BrowserWindow } from "electron"
 import { createGitRouter } from "../../git"
 import { router } from "../index"
+import { agentBuilderRouter } from "./agent-builder"
 import { agentJobsRouter } from "./agent-jobs"
 import { agentRuntimeRouter } from "./agent-runtime"
 import { agentSchedulesRouter } from "./agent-schedules"
@@ -62,6 +63,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     plugins: pluginsRouter,
     appUpdates: appUpdatesRouter,
     githubWorkflow: githubWorkflowRouter,
+    agentBuilder: agentBuilderRouter,
     agentWorkbench: agentWorkbenchRouter,
     chatAttachments: chatAttachmentsRouter,
     agentRuntime: agentRuntimeRouter,

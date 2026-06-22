@@ -47,14 +47,23 @@ prepared prompt reaches `turn/start`.
 
 ## 4. Agent Builder Read Model
 
-- [ ] 4.1 Add a main-process read model that aggregates Locus Agents,
+- [x] 4.1 Add a main-process read model that aggregates Locus Agents,
       runtime-native discovered agents, and plugin-provided agents with source,
       owner, mutability, and sanitized diagnostics.
-- [ ] 4.2 Render one Agent Builder surface from that read model.
-- [ ] 4.3 Show runtime support rows per agent without inferring capability truth
+- [x] 4.2 Render one Agent Builder surface from that read model.
+- [x] 4.3 Show runtime support rows per agent without inferring capability truth
       in renderer code.
-- [ ] 4.4 Preserve read-only behavior for plugin-provided and runtime-owned
+- [x] 4.4 Preserve read-only behavior for plugin-provided and runtime-owned
       listings unless the user imports or duplicates them.
+
+Proof note: `src/main/lib/agent-builder/read-model.ts` now produces the
+Agent Builder aggregation model with source, owner, mutability, runtime support,
+and sanitized diagnostics. `trpc.agentBuilder.list` exposes that model to the
+settings Agent Builder surface; Locus rows remain editable through
+`trpc.appAgents`, while Claude-native and plugin-provided rows render through a
+read-only detail view. `tests/agent-builder-read-model.test.ts` covers mutability,
+runtime projection status, and non-path diagnostics; `tests/agent-builder-ui.test.ts`
+guards the renderer against returning to legacy agent lists.
 
 ## 5. Import And Projection
 
@@ -74,9 +83,15 @@ Do not start this section until sections 1-4 are implemented and reviewed.
 
 ## 6. Verification
 
-- [ ] 6.1 Add unit tests for source badges, mutability, projection status, and
+- [x] 6.1 Add unit tests for source badges, mutability, projection status, and
       non-secret diagnostics.
-- [ ] 6.2 Add runtime prompt tests for Claude and Codex paths.
-- [ ] 6.3 Add architecture guards against duplicate Agent business paths.
-- [ ] 6.4 Run `openspec validate add-agent-builder-runtime-projection --strict
+- [x] 6.2 Add runtime prompt tests for Claude and Codex paths.
+- [x] 6.3 Add architecture guards against duplicate Agent business paths.
+- [x] 6.4 Run `openspec validate add-agent-builder-runtime-projection --strict
       --no-interactive`.
+
+Proof note: current slices were verified with targeted Agent Builder/i18n tests,
+Claude/Codex prompt tests from section 3, `bun run ts:check`,
+`bun run lint:changed`, `node scripts/check-architecture-guards.mjs`, and
+`openspec validate --all --strict --no-interactive`. Section 5 remains gated
+behind a separate implementation/review pass and is intentionally unchecked.
