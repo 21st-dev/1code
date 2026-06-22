@@ -9,7 +9,7 @@ export type ClaudePromptMentions = {
 
 /**
  * Parse @[agent:name], @[skill:name], and @[tool:servername] mentions from
- * prompt text. Agent mentions are resolved as App Agents before the request is
+ * prompt text. Agent mentions are resolved as Locus Agents before the request is
  * sent. File and folder mentions remain as readable paths for the runtime.
  */
 export function parseClaudePromptMentions(prompt: string): ClaudePromptMentions {

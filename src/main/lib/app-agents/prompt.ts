@@ -102,19 +102,19 @@ export async function preparePromptWithAppAgents(
   if (missingAppAgents.length > 0) {
     contextBlocks.push(
       [
-        "## Missing App Agents",
+        "## Missing Locus Agents",
         `The following selected profiles were not found: ${missingAppAgents.join(", ")}.`,
       ].join("\n"),
     )
   }
 
   const userRequest =
-    cleanedPrompt.trim() || "Apply the App Agent context to this request."
+    cleanedPrompt.trim() || "Apply the Locus Agent context to this request."
 
   return {
     prompt: [
-      "# App Agent Context",
-      "Use the following app-managed agent profile(s) for this request.",
+      "# Locus Agent Context",
+      "Use the following Locus-managed agent profile(s) for this request.",
       "",
       contextBlocks.join("\n\n"),
       "",

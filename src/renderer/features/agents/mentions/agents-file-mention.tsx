@@ -745,7 +745,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
     },
   )
 
-  // Fetch App Agents from local app storage (cached for 5 minutes)
+  // Fetch Locus Agents from local app storage (cached for 5 minutes)
   const { data: appAgents = [], isFetching: isFetchingAgents } = trpc.appAgents.list.useQuery(
     undefined,
     {
@@ -883,7 +883,7 @@ export const AgentsFileMention = memo(function AgentsFileMention({
       }))
   }, [skills, debouncedSearchText])
 
-  // Convert App Agents to mention options
+  // Convert Locus Agents to mention options
   const agentOptions: FileMentionOption[] = useMemo(() => {
     const searchLower = debouncedSearchText.toLowerCase()
 

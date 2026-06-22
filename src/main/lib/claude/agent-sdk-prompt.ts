@@ -96,7 +96,7 @@ export async function prepareClaudeAgentSdkRuntimePrompt({
     parseClaudePromptMentions(prompt)
 
   if (agentMentions.length > 0) {
-    logger.log("[claude] App Agents mentioned:", agentMentions)
+    logger.log("[claude] Locus Agents mentioned:", agentMentions)
   }
 
   if (skillMentions.length > 0) {
@@ -108,7 +108,7 @@ export async function prepareClaudeAgentSdkRuntimePrompt({
     agentMentions,
   )
   if (appAgentPrompt.missingAppAgents.length > 0) {
-    logger.warn("[claude] Missing App Agents:", appAgentPrompt.missingAppAgents)
+    logger.warn("[claude] Missing Locus Agents:", appAgentPrompt.missingAppAgents)
   }
 
   let finalPrompt = appAgentPrompt.prompt

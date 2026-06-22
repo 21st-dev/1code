@@ -14,14 +14,20 @@ applies to every implementation slice.
 
 ## 2. Canonical Locus Agent Cleanup
 
-- [ ] 2.1 Rename user-facing App Agent copy to the approved Agent Builder labels
+- [x] 2.1 Rename user-facing App Agent copy to the approved Agent Builder labels
       while preserving storage keys and DB table names unless explicitly approved.
-- [ ] 2.2 Prove whether `agent-dialog.tsx` and `trpc.agents` UI CRUD are dead,
+- [x] 2.2 Prove whether `agent-dialog.tsx` and `trpc.agents` UI CRUD are dead,
       hidden, or still reachable.
-- [ ] 2.3 Remove or hide the Custom Agents UI path after proving no active
+- [x] 2.3 Remove or hide the Custom Agents UI path after proving no active
       product entrypoint depends on it.
-- [ ] 2.4 Add i18n or architecture guards preventing "Custom Agents" from
+- [x] 2.4 Add i18n or architecture guards preventing "Custom Agents" from
       returning as a product-facing label.
+
+Proof note: `rg -n "AgentDialog|agent-dialog|trpc\.agents\.(create|update|delete)"`
+showed `agent-dialog.tsx` as the only `trpc.agents.create/update` UI path, with no
+imports of `AgentDialog`. The dead dialog was deleted; the main-process
+`trpc.agents` router stays as the Claude-native file-agent capability for later
+read-only aggregation.
 
 ## 3. Runtime-Neutral Prompt Application
 
