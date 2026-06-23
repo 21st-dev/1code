@@ -6,6 +6,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import type { AgentScopeContract } from "../../../../shared/agent-scope-contracts"
+import type { AgentChatProvider } from "../../../../shared/agent-chat-provider"
 import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
 import type { ChatImageAttachmentSource } from "../../../../shared/chat-attachments"
 import {
@@ -221,7 +222,7 @@ export interface ChatInputAreaProps {
   // Context
   subChatId: string
   parentChatId: string
-  provider?: "claude-code" | "codex"
+  provider?: AgentChatProvider
   repository?: string
   projectPath?: string
   changedFiles: SubChatFileChange[]
@@ -2149,92 +2150,101 @@ export const ChatInputArea = memo(function ChatInputArea({
                   </DropdownMenu>
 
                   <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
-                    <AgentModelSelector
-                      open={isModelDropdownOpen}
-                      onOpenChange={setIsModelDropdownOpen}
-                      selectedAgentId={provider}
-                      onSelectedAgentIdChange={(nextProvider) => {
-                        if (!canSwitchProvider) return
-                        if (nextProvider === provider) return
-                        onProviderChange?.(nextProvider)
-                      }}
-                      allowProviderSwitch={canSwitchProvider}
-                      onContinueWithProvider={
-                        !canSwitchProvider ? onContinueWithProvider : undefined
-                      }
-                      selectedModelLabel={selectedModelLabel}
-                      triggerClassName="min-w-0 max-w-full"
-                      providerProfiles={providerProfiles}
-                      onOpenModelsSettings={() => {
-                        setSettingsTab("models")
-                        setSettingsOpen(true)
-                      }}
-                      claude={{
-                        models: availableModels.models.filter(
-                          (m) => !hiddenModels.includes(m.id),
-                        ),
-                        selectedModelId: selectedModel?.id,
-                        onSelectModel: (modelId) => {
-                          const model =
-                            availableModels.models.find(
+                    {provider === "qwen-code" ? (
+                      <div
+                        className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground"
+                        title="Qwen Code"
+                      >
+                        <span className="truncate">Qwen Code</span>
+                      </div>
+                    ) : (
+                      <AgentModelSelector
+                        open={isModelDropdownOpen}
+                        onOpenChange={setIsModelDropdownOpen}
+                        selectedAgentId={provider}
+                        onSelectedAgentIdChange={(nextProvider) => {
+                          if (!canSwitchProvider) return
+                          if (nextProvider === provider) return
+                          onProviderChange?.(nextProvider)
+                        }}
+                        allowProviderSwitch={canSwitchProvider}
+                        onContinueWithProvider={
+                          !canSwitchProvider ? onContinueWithProvider : undefined
+                        }
+                        selectedModelLabel={selectedModelLabel}
+                        triggerClassName="min-w-0 max-w-full"
+                        providerProfiles={providerProfiles}
+                        onOpenModelsSettings={() => {
+                          setSettingsTab("models")
+                          setSettingsOpen(true)
+                        }}
+                        claude={{
+                          models: availableModels.models.filter(
+                            (m) => !hiddenModels.includes(m.id),
+                          ),
+                          selectedModelId: selectedModel?.id,
+                          onSelectModel: (modelId) => {
+                            const model =
+                              availableModels.models.find(
+                                (item) => item.id === modelId,
+                              ) || availableModels.models[0]
+                            if (!model) return
+                            setSelectedModel(model)
+                            setSelectedSubChatModelId(model.id)
+                            setLastSelectedModelId(model.id)
+                          },
+                          selectedModelSource: effectiveClaudeModelSource,
+                          onSelectModelSource: (source) => {
+                            setSelectedClaudeModelSource(source)
+                            setLastSelectedClaudeModelSource(source)
+                          },
+                          isOffline:
+                            availableModels.isOffline &&
+                            availableModels.hasOllama,
+                          ollamaModels: availableModels.ollamaModels,
+                          selectedOllamaModel: currentOllamaModel,
+                          recommendedOllamaModel:
+                            availableModels.recommendedModel,
+                          onSelectOllamaModel: setSelectedOllamaModel,
+                          isConnected: isClaudeConnected,
+                          thinkingEnabled,
+                          onThinkingChange: setThinkingEnabled,
+                        }}
+                        codex={{
+                          models: codexUiModels,
+                          selectedModelId: selectedCodexModel.id,
+                          onSelectModel: (modelId) => {
+                            const model = codexUiModels.find(
                               (item) => item.id === modelId,
-                            ) || availableModels.models[0]
-                          if (!model) return
-                          setSelectedModel(model)
-                          setSelectedSubChatModelId(model.id)
-                          setLastSelectedModelId(model.id)
-                        },
-                        selectedModelSource: effectiveClaudeModelSource,
-                        onSelectModelSource: (source) => {
-                          setSelectedClaudeModelSource(source)
-                          setLastSelectedClaudeModelSource(source)
-                        },
-                        isOffline:
-                          availableModels.isOffline &&
-                          availableModels.hasOllama,
-                        ollamaModels: availableModels.ollamaModels,
-                        selectedOllamaModel: currentOllamaModel,
-                        recommendedOllamaModel:
-                          availableModels.recommendedModel,
-                        onSelectOllamaModel: setSelectedOllamaModel,
-                        isConnected: isClaudeConnected,
-                        thinkingEnabled,
-                        onThinkingChange: setThinkingEnabled,
-                      }}
-                      codex={{
-                        models: codexUiModels,
-                        selectedModelId: selectedCodexModel.id,
-                        onSelectModel: (modelId) => {
-                          const model = codexUiModels.find(
-                            (item) => item.id === modelId,
-                          )
-                          if (!model) return
-                          const nextThinking = model.thinkings.includes(
-                            selectedSubChatCodexThinking as CodexThinkingLevel,
-                          )
-                            ? (selectedSubChatCodexThinking as CodexThinkingLevel)
-                            : model.thinkings.includes("high")
-                              ? "high"
-                              : model.thinkings[0]!
+                            )
+                            if (!model) return
+                            const nextThinking = model.thinkings.includes(
+                              selectedSubChatCodexThinking as CodexThinkingLevel,
+                            )
+                              ? (selectedSubChatCodexThinking as CodexThinkingLevel)
+                              : model.thinkings.includes("high")
+                                ? "high"
+                                : model.thinkings[0]!
 
-                          setSelectedSubChatCodexModelId(model.id)
-                          setSelectedSubChatCodexThinking(nextThinking)
-                          setLastSelectedCodexModelId(model.id)
-                          setLastSelectedCodexThinking(nextThinking)
-                        },
-                        selectedModelSource: selectedSubChatCodexModelSource,
-                        onSelectModelSource: (source) => {
-                          setSelectedSubChatCodexModelSource(source)
-                          setLastSelectedCodexModelSource(source)
-                        },
-                        selectedThinking: selectedCodexThinking,
-                        onSelectThinking: (thinking) => {
-                          setSelectedSubChatCodexThinking(thinking)
-                          setLastSelectedCodexThinking(thinking)
-                        },
-                        isConnected: setupStatus.codex.connected,
-                      }}
-                    />
+                            setSelectedSubChatCodexModelId(model.id)
+                            setSelectedSubChatCodexThinking(nextThinking)
+                            setLastSelectedCodexModelId(model.id)
+                            setLastSelectedCodexThinking(nextThinking)
+                          },
+                          selectedModelSource: selectedSubChatCodexModelSource,
+                          onSelectModelSource: (source) => {
+                            setSelectedSubChatCodexModelSource(source)
+                            setLastSelectedCodexModelSource(source)
+                          },
+                          selectedThinking: selectedCodexThinking,
+                          onSelectThinking: (thinking) => {
+                            setSelectedSubChatCodexThinking(thinking)
+                            setLastSelectedCodexThinking(thinking)
+                          },
+                          isConnected: setupStatus.codex.connected,
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
 

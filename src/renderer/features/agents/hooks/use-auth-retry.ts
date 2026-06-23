@@ -1,13 +1,12 @@
 import { useEffect } from "react"
 import { useAtom } from "jotai"
 import { pendingAuthRetryMessageAtom } from "../atoms"
+import type { AgentChatProvider } from "../../../../shared/agent-chat-provider"
 import type { LongTextAttachmentPart } from "../../../../shared/long-text-attachments"
 import {
   isSupportedChatImageMediaType,
   type ChatImageAttachmentPart,
 } from "../../../../shared/chat-attachments"
-
-type AuthRetryProvider = "claude-code" | "codex"
 
 type AuthRetryPart =
   | { type: "text"; text: string }
@@ -27,7 +26,7 @@ export function useAuthRetry({
   sendMessage,
 }: {
   subChatId: string
-  provider: AuthRetryProvider
+  provider: AgentChatProvider
   isStreaming: boolean
   sendMessage: SendAuthRetryMessage
 }) {
@@ -36,6 +35,10 @@ export function useAuthRetry({
   )
 
   useEffect(() => {
+    if (provider === "qwen-code") {
+      return
+    }
+
     if (
       !pendingAuthRetry ||
       !pendingAuthRetry.readyToRetry ||

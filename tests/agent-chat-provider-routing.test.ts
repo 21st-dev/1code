@@ -24,6 +24,22 @@ describe("agent chat provider routing metadata", () => {
     expect(inferAgentChatProviderFromMessages([{ metadata }])).toBe("codex")
   })
 
+  test("persists explicit Qwen provider metadata without model inference", () => {
+    const metadata = buildAgentChatMessageMetadata({
+      model: "qwen-code",
+      provider: "qwen-code",
+      modelSource: "runtime-managed",
+      providerProfileId: null,
+    })
+
+    expect(metadata).toEqual({
+      model: "qwen-code",
+      provider: "qwen-code",
+      modelSource: "runtime-managed",
+    })
+    expect(inferAgentChatProviderFromMessages([{ metadata }])).toBe("qwen-code")
+  })
+
   test("keeps legacy model-name inference as a fallback only", () => {
     expect(
       inferAgentChatProviderFromMessages([

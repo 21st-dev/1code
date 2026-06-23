@@ -181,19 +181,26 @@ function useAvailableModels() {
 }
 
 // Agent providers
-const agents: Array<{
-  id: AgentProviderId | "cursor"
+type NewChatAgent = {
+  id: AgentChatProvider | "cursor"
   name: string
   hasModels?: boolean
   disabled?: boolean
-}> = [
+}
+
+const agents: NewChatAgent[] = [
   { id: "claude-code", name: "Claude Code", hasModels: true },
   { id: "cursor", name: "Cursor CLI", disabled: true },
   { id: "codex", name: "OpenAI Codex" },
 ]
+const qwenAgent: NewChatAgent = { id: "qwen-code", name: "Qwen Code" }
 
 function isAgentProviderId(id: string): id is AgentProviderId {
   return id === "claude-code" || id === "codex"
+}
+
+function isAgentChatProvider(id: string): id is AgentChatProvider {
+  return id === "claude-code" || id === "codex" || id === "qwen-code"
 }
 
 interface NewChatFormProps {
@@ -269,10 +276,17 @@ export function NewChatForm({
         ),
       )
       .map((manifest) => manifest.runtimeId)
-      .filter(isAgentProviderId)
+      .filter(isAgentChatProvider)
   }, [isFolderlessQuickChat, runtimeCapabilityManifests])
   const quickChatRuntimeGateLoaded =
     !isFolderlessQuickChat || runtimeCapabilityManifests !== undefined
+  const qwenRuntimeVisible = useMemo(
+    () =>
+      runtimeCapabilityManifests?.some(
+        (manifest) => manifest.runtimeId === "qwen-code",
+      ) ?? false,
+    [runtimeCapabilityManifests],
+  )
 
   // Clear invalid project from storage without letting it drive new-chat mode.
   useEffect(() => {
@@ -440,15 +454,19 @@ export function NewChatForm({
     if (!match) return null
     return `${match[1]}/${match[2].replace(/\.git$/, "")}`
   }
+  const selectableAgents = useMemo(
+    () => (qwenRuntimeVisible ? [...agents, qwenAgent] : agents),
+    [qwenRuntimeVisible],
+  )
   const enabledAgents = useMemo(
     () =>
-      agents.filter((agent) => {
+      selectableAgents.filter((agent) => {
         if (agent.disabled) return false
         if (!quickChatAllowedProviderIds) return true
-        if (agent.id !== "claude-code" && agent.id !== "codex") return false
+        if (!isAgentChatProvider(agent.id)) return false
         return quickChatAllowedProviderIds.includes(agent.id)
       }),
-    [quickChatAllowedProviderIds],
+    [quickChatAllowedProviderIds, selectableAgents],
   )
   const fallbackAgent = enabledAgents[0] ?? agents[0]!
   const [selectedAgent, setSelectedAgent] = useState(
@@ -468,9 +486,8 @@ export function NewChatForm({
   }, [enabledAgents, fallbackAgent, lastSelectedAgentId, selectedAgent.id])
   const selectedAgentIsRuntimeAllowed = useMemo(
     () =>
-      selectedAgent.id === "claude-code" || selectedAgent.id === "codex"
-        ? enabledAgents.some((agent) => agent.id === selectedAgent.id)
-        : false,
+      isAgentChatProvider(selectedAgent.id) &&
+      enabledAgents.some((agent) => agent.id === selectedAgent.id),
     [enabledAgents, selectedAgent.id],
   )
 
@@ -602,6 +619,9 @@ export function NewChatForm({
   ])
 
   const selectedChatModel = useMemo(() => {
+    if (selectedAgent.id === "qwen-code") {
+      return "qwen-code"
+    }
     if (selectedAgent.id === "codex") {
       const selectedProfileId = parseProviderProfileSource(
         lastSelectedCodexModelSource,
@@ -627,6 +647,11 @@ export function NewChatForm({
     selectedCodexThinking,
     selectedModel?.id,
   ])
+  const selectedRuntimeProvider: AgentChatProvider = isAgentChatProvider(
+    selectedAgent.id,
+  )
+    ? selectedAgent.id
+    : "claude-code"
 
   // Determine current Ollama model (selected or recommended)
   const currentOllamaModel =
@@ -636,6 +661,9 @@ export function NewChatForm({
   const claudeAgent =
     enabledAgents.find((agent) => agent.id === "claude-code") || fallbackAgent
   const selectedModelLabel = useMemo(() => {
+    if (selectedAgent.id === "qwen-code") {
+      return "Qwen Code"
+    }
     if (selectedAgent.id === "codex") {
       const selectedProfileId = parseProviderProfileSource(
         lastSelectedCodexModelSource,
@@ -760,13 +788,18 @@ export function NewChatForm({
   const imageAttachmentCapability = useMemo(
     () =>
       getChatImageAttachmentCapability({
-        provider: selectedAgent.id as "claude-code" | "codex",
+        provider: selectedRuntimeProvider,
         offlineModeEnabled:
           selectedAgent.id === "claude-code" &&
           availableModels.isOffline &&
           availableModels.hasOllama,
       }),
-    [availableModels.hasOllama, availableModels.isOffline, selectedAgent.id],
+    [
+      availableModels.hasOllama,
+      availableModels.isOffline,
+      selectedAgent.id,
+      selectedRuntimeProvider,
+    ],
   )
   const imageAttachmentBlocked =
     readyImageCount > 0 && !imageAttachmentCapability.supportsImages
@@ -1282,15 +1315,19 @@ export function NewChatForm({
       projectId: projectForChat?.id ?? null,
       name: message.trim().slice(0, 50), // Use first 50 chars as chat name
       model: selectedChatModel,
-      provider: selectedAgent.id as AgentChatProvider,
+      provider: selectedRuntimeProvider,
       modelSource:
-        selectedAgent.id === "codex"
-          ? lastSelectedCodexModelSource
-          : effectiveClaudeModelSource,
+        selectedRuntimeProvider === "qwen-code"
+          ? "runtime-managed"
+          : selectedRuntimeProvider === "codex"
+            ? lastSelectedCodexModelSource
+            : effectiveClaudeModelSource,
       providerProfileId:
-        selectedAgent.id === "codex"
-          ? selectedCodexProfileId
-          : selectedClaudeProfileId,
+        selectedRuntimeProvider === "qwen-code"
+          ? null
+          : selectedRuntimeProvider === "codex"
+            ? selectedCodexProfileId
+            : selectedClaudeProfileId,
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
         projectForChat && workMode === "worktree"
@@ -1319,6 +1356,7 @@ export function NewChatForm({
     pastedTexts,
     selectedChatModel,
     selectedAgent.id,
+    selectedRuntimeProvider,
     lastSelectedCodexModelSource,
     effectiveClaudeModelSource,
     claudeSourceNormalization,
@@ -2116,86 +2154,97 @@ export function NewChatForm({
                     )}
 
                     <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
-                      <AgentModelSelector
-                        open={isModelDropdownOpen}
-                        onOpenChange={setIsModelDropdownOpen}
-                        selectedAgentId={
-                          selectedAgent.id as "claude-code" | "codex"
-                        }
-                        allowedProviderIds={quickChatAllowedProviderIds}
-                        onSelectedAgentIdChange={(provider) => {
-                          if (provider === "claude-code") {
-                            setSelectedAgent(claudeAgent)
-                          } else {
-                            setSelectedAgent(
-                              enabledAgents.find(
-                                (agent) => agent.id === "codex",
-                              ) || fallbackAgent,
-                            )
-                          }
-                          setLastSelectedAgentId(provider)
-                        }}
-                        selectedModelLabel={selectedModelLabel}
-                        triggerClassName="min-w-0 max-w-full"
-                        providerProfiles={providerProfiles}
-                        onOpenModelsSettings={() => {
-                          setSettingsActiveTab("models")
-                          setSettingsDialogOpen(true)
-                        }}
-                        claude={{
-                          models: availableModels.models.filter(
-                            (m) => !hiddenModels.includes(m.id),
-                          ),
-                          selectedModelId: selectedModel?.id,
-                          onSelectModel: (modelId) => {
-                            const model =
-                              availableModels.models.find(
-                                (m) => m.id === modelId,
-                              ) || availableModels.models[0]
-                            if (!model) return
-                            setSelectedModel(model)
-                            setLastSelectedModelId(model.id)
-                          },
-                          selectedModelSource: effectiveClaudeModelSource,
-                          onSelectModelSource: setSelectedClaudeModelSource,
-                          isOffline:
-                            availableModels.isOffline &&
-                            availableModels.hasOllama,
-                          ollamaModels: availableModels.ollamaModels,
-                          selectedOllamaModel: currentOllamaModel,
-                          recommendedOllamaModel:
-                            availableModels.recommendedModel,
-                          onSelectOllamaModel: setSelectedOllamaModel,
-                          isConnected: isClaudeConnected,
-                          thinkingEnabled,
-                          onThinkingChange: setThinkingEnabled,
-                        }}
-                        codex={{
-                          models: codexUiModels,
-                          selectedModelId: selectedCodexModel.id,
-                          onSelectModel: (modelId) => {
-                            const model = codexUiModels.find(
-                              (item) => item.id === modelId,
-                            )
-                            if (!model) return
-                            const nextThinking = model.thinkings.includes(
-                              lastSelectedCodexThinking as CodexThinkingLevel,
-                            )
-                              ? (lastSelectedCodexThinking as CodexThinkingLevel)
-                              : model.thinkings.includes("high")
-                                ? "high"
-                                : "medium"
+                      {selectedAgent.id === "qwen-code" ? (
+                        <div
+                          className="flex h-8 min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground"
+                          title="Qwen Code"
+                        >
+                          <AgentIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">Qwen Code</span>
+                        </div>
+                      ) : (
+                        <AgentModelSelector
+                          open={isModelDropdownOpen}
+                          onOpenChange={setIsModelDropdownOpen}
+                          selectedAgentId={selectedAgent.id as AgentProviderId}
+                          allowedProviderIds={quickChatAllowedProviderIds?.filter(
+                            isAgentProviderId,
+                          )}
+                          onSelectedAgentIdChange={(provider) => {
+                            if (provider === "claude-code") {
+                              setSelectedAgent(claudeAgent)
+                            } else {
+                              setSelectedAgent(
+                                enabledAgents.find(
+                                  (agent) => agent.id === "codex",
+                                ) || fallbackAgent,
+                              )
+                            }
+                            setLastSelectedAgentId(provider)
+                          }}
+                          selectedModelLabel={selectedModelLabel}
+                          triggerClassName="min-w-0 max-w-full"
+                          providerProfiles={providerProfiles}
+                          onOpenModelsSettings={() => {
+                            setSettingsActiveTab("models")
+                            setSettingsDialogOpen(true)
+                          }}
+                          claude={{
+                            models: availableModels.models.filter(
+                              (m) => !hiddenModels.includes(m.id),
+                            ),
+                            selectedModelId: selectedModel?.id,
+                            onSelectModel: (modelId) => {
+                              const model =
+                                availableModels.models.find(
+                                  (m) => m.id === modelId,
+                                ) || availableModels.models[0]
+                              if (!model) return
+                              setSelectedModel(model)
+                              setLastSelectedModelId(model.id)
+                            },
+                            selectedModelSource: effectiveClaudeModelSource,
+                            onSelectModelSource: setSelectedClaudeModelSource,
+                            isOffline:
+                              availableModels.isOffline &&
+                              availableModels.hasOllama,
+                            ollamaModels: availableModels.ollamaModels,
+                            selectedOllamaModel: currentOllamaModel,
+                            recommendedOllamaModel:
+                              availableModels.recommendedModel,
+                            onSelectOllamaModel: setSelectedOllamaModel,
+                            isConnected: isClaudeConnected,
+                            thinkingEnabled,
+                            onThinkingChange: setThinkingEnabled,
+                          }}
+                          codex={{
+                            models: codexUiModels,
+                            selectedModelId: selectedCodexModel.id,
+                            onSelectModel: (modelId) => {
+                              const model = codexUiModels.find(
+                                (item) => item.id === modelId,
+                              )
+                              if (!model) return
+                              const nextThinking = model.thinkings.includes(
+                                lastSelectedCodexThinking as CodexThinkingLevel,
+                              )
+                                ? (lastSelectedCodexThinking as CodexThinkingLevel)
+                                : model.thinkings.includes("high")
+                                  ? "high"
+                                  : "medium"
 
-                            setLastSelectedCodexModelId(model.id)
-                            setLastSelectedCodexThinking(nextThinking)
-                          },
-                          selectedModelSource: lastSelectedCodexModelSource,
-                          onSelectModelSource: setLastSelectedCodexModelSource,
-                          selectedThinking: selectedCodexThinking,
-                          onSelectThinking: setLastSelectedCodexThinking,
-                          isConnected: setupStatus.codex.connected,
-                        }}
-                      />
+                              setLastSelectedCodexModelId(model.id)
+                              setLastSelectedCodexThinking(nextThinking)
+                            },
+                            selectedModelSource: lastSelectedCodexModelSource,
+                            onSelectModelSource:
+                              setLastSelectedCodexModelSource,
+                            selectedThinking: selectedCodexThinking,
+                            onSelectThinking: setLastSelectedCodexThinking,
+                            isConnected: setupStatus.codex.connected,
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
 

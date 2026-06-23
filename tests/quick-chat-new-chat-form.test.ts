@@ -15,7 +15,11 @@ describe("quick chat new chat form", () => {
     expect(form).toContain("useRuntimeCapabilityManifestStore")
     expect(form).toContain('capability.id === "quickChatAssistant"')
     expect(form).toContain('capability.status === "supported"')
-    expect(form).toContain("allowedProviderIds={quickChatAllowedProviderIds}")
+    expect(form).toContain("qwenRuntimeVisible")
+    expect(form).toContain('manifest.runtimeId === "qwen-code"')
+    expect(form).toContain(
+      "allowedProviderIds={quickChatAllowedProviderIds?.filter(",
+    )
     expect(form).toContain('toast.error(t("quickChat.providerUnavailable"))')
     expect(form).toContain("quickChatRuntimeGateLoaded")
     expect(form).toContain("selectedAgentIsRuntimeAllowed")

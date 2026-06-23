@@ -154,5 +154,11 @@ describe("rich chat attachment send pipeline", () => {
         offlineModeEnabled: true,
       }).supportsImages,
     ).toBe(true)
+
+    expect(
+      getChatImageAttachmentCapability({
+        provider: "qwen-code",
+      }).supportsImages,
+    ).toBe(false)
   })
 })

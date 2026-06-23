@@ -139,8 +139,12 @@ describe("provider routing UX source guards", () => {
 
   test("new chats persist selected provider metadata for transport routing", () => {
     expect(newChatFormSource).toContain(
-      "provider: selectedAgent.id as AgentChatProvider",
+      "provider: selectedRuntimeProvider",
     )
+    expect(newChatFormSource).toContain(
+      'selectedRuntimeProvider === "qwen-code"',
+    )
+    expect(newChatFormSource).toContain('"runtime-managed"')
     expect(newChatFormSource).toContain("modelSource:")
     expect(newChatFormSource).toContain("providerProfileId:")
     expect(chatsRouterSource).toContain("buildAgentChatMessageMetadata")

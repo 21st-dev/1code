@@ -182,6 +182,7 @@ import {
 } from "../lib/drafts"
 import { IPCChatTransport } from "../lib/ipc-chat-transport"
 import { buildAgentMessageParts } from "../lib/message-parts"
+import { QwenChatTransport } from "../lib/qwen-chat-transport"
 import { useRuntimeCapabilitySupported } from "../lib/runtime-manifest-store"
 import {
   createQueueItem, createTextPreview, generateQueueId,
@@ -1608,7 +1609,7 @@ const ChatViewInner = memo(function ChatViewInner({
   chat: Chat<any>
   subChatId: string
   parentChatId: string
-  provider?: "claude-code" | "codex"
+  provider?: AgentChatProvider
   isFirstSubChat: boolean
   onAutoRename: (userMessage: string, subChatId: string) => void
   onCreateNewSubChat?: () => void
@@ -4763,7 +4764,7 @@ export function ChatView({
   const [
     subChatProviderOverrides,
     setSubChatProviderOverrides,
-  ] = useState<Record<string, "claude-code" | "codex">>({})
+  ] = useState<Record<string, AgentChatProvider>>({})
 
   useEffect(() => {
     setSubChatProviderOverrides({})
@@ -5775,10 +5776,12 @@ Make sure to preserve all functionality from both branches when resolving confli
         const overrideProvider = subChatProviderOverrides[subChatId]
         if (!overrideProvider) return existing
 
-        const existingProvider: "claude-code" | "codex" =
+        const existingProvider: AgentChatProvider =
           (existing as any)?.transport instanceof ACPChatTransport
             ? "codex"
-            : "claude-code"
+            : (existing as any)?.transport instanceof QwenChatTransport
+              ? "qwen-code"
+              : "claude-code"
         if (existingProvider === overrideProvider) return existing
 
         const subChatForOverride = agentSubChats.find((sc) => sc.id === subChatId)
@@ -5830,7 +5833,11 @@ Make sure to preserve all functionality from both branches when resolving confli
         workspaceKind: isFolderlessChat ? "folderless" : "project",
       })
 
-      let transport: IPCChatTransport | ACPChatTransport | null = null
+      let transport:
+        | IPCChatTransport
+        | ACPChatTransport
+        | QwenChatTransport
+        | null = null
 
       if (chatProvider === "codex") {
         console.log("[getOrCreateChat] Using ACPChatTransport", { provider: chatProvider })
@@ -5841,6 +5848,14 @@ Make sure to preserve all functionality from both branches when resolving confli
           projectPath,
           mode: subChatMode,
           provider: "codex",
+        })
+      } else if (chatProvider === "qwen-code") {
+        console.log("[getOrCreateChat] Using QwenChatTransport", { provider: chatProvider })
+        transport = new QwenChatTransport({
+          chatId,
+          subChatId,
+          cwd: runtimeCwd,
+          mode: subChatMode,
         })
       } else {
         transport = new IPCChatTransport({
@@ -6088,7 +6103,11 @@ Make sure to preserve all functionality from both branches when resolving confli
     })
 
     const chatProvider = newSubChatProvider
-    let newSubChatTransport: IPCChatTransport | ACPChatTransport | null = null
+    let newSubChatTransport:
+      | IPCChatTransport
+      | ACPChatTransport
+      | QwenChatTransport
+      | null = null
 
     if (worktreePath || isFolderlessChat) {
       if (chatProvider === "codex") {
@@ -6100,6 +6119,14 @@ Make sure to preserve all functionality from both branches when resolving confli
           projectPath: isFolderlessChat ? undefined : projectPath,
           mode: newSubChatMode,
           provider: "codex",
+        })
+      } else if (chatProvider === "qwen-code") {
+        console.log("[createNewSubChat] Using QwenChatTransport", { provider: chatProvider })
+        newSubChatTransport = new QwenChatTransport({
+          chatId,
+          subChatId: newId,
+          cwd: runtimeCwd,
+          mode: newSubChatMode,
         })
       } else {
         // Local worktree chat: use IPC transport

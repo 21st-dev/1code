@@ -1,4 +1,4 @@
-export const agentChatProviders = ["claude-code", "codex"] as const
+export const agentChatProviders = ["claude-code", "codex", "qwen-code"] as const
 
 export type AgentChatProvider = (typeof agentChatProviders)[number]
 
@@ -12,7 +12,11 @@ export type AgentChatMessageMetadata = {
 export function normalizeAgentChatProvider(
   provider: string | null | undefined,
 ): AgentChatProvider | null {
-  return provider === "claude-code" || provider === "codex" ? provider : null
+  return provider === "claude-code" ||
+    provider === "codex" ||
+    provider === "qwen-code"
+    ? provider
+    : null
 }
 
 export function normalizeAgentChatMetadataModel(model: unknown): string | null {

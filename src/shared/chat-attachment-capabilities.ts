@@ -4,7 +4,7 @@ import {
   supportedChatImageMediaTypes,
 } from "./chat-attachments"
 
-export type ChatAttachmentProvider = "claude-code" | "codex"
+export type ChatAttachmentProvider = "claude-code" | "codex" | "qwen-code"
 
 export type ChatImageAttachmentCapability = {
   supportsImages: boolean
@@ -19,6 +19,16 @@ export function getChatImageAttachmentCapability(input: {
   provider: ChatAttachmentProvider
   offlineModeEnabled?: boolean
 }): ChatImageAttachmentCapability {
+  if (input.provider === "qwen-code") {
+    return {
+      supportsImages: false,
+      maxImages: CHAT_IMAGE_MAX_COUNT,
+      maxImageBytes: CHAT_IMAGE_SINGLE_LIMIT_BYTES,
+      supportedMediaTypes: supportedChatImageMediaTypes,
+      disclosureKey: "remote-provider",
+    }
+  }
+
   if (input.provider === "claude-code" && input.offlineModeEnabled) {
     return {
       supportsImages: false,
@@ -38,4 +48,3 @@ export function getChatImageAttachmentCapability(input: {
     disclosureKey: "remote-provider",
   }
 }
-
