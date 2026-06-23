@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 
 const onboardingSource = () =>
   readFileSync(
-    "src/renderer/features/onboarding/anthropic-onboarding-page.tsx",
+    "src/renderer/features/onboarding/components/panels/claude-code-action.tsx",
     "utf8",
   )
 
@@ -14,7 +14,7 @@ const dictionarySource = () =>
   readFileSync("src/renderer/lib/i18n/dictionaries.ts", "utf8")
 
 describe("Anthropic onboarding Claude Code auth", () => {
-  test("refreshes Claude integration before marking onboarding complete", () => {
+  test("refreshes Claude integration before the post-import side effect", () => {
     const source = onboardingSource()
 
     expect(source).toContain("const trpcUtils = trpc.useUtils()")
@@ -35,14 +35,14 @@ describe("Anthropic onboarding Claude Code auth", () => {
     const invalidateIndex = source.indexOf(
       "trpcUtils.claudeCode.getIntegration.invalidate()",
     )
-    const completeIndex = source.indexOf(
-      "setAnthropicOnboardingCompleted(true)",
-    )
+    // Onboarding "completion" is now derived from the refreshed integration
+    // (no stored flag); the helper-APIs prompt is the only post-import effect.
+    const promptIndex = source.indexOf("setHelperApisSetupPromptPending(true)")
 
     expect(importIndex).toBeGreaterThanOrEqual(0)
     expect(setDataIndex).toBeGreaterThan(importIndex)
     expect(invalidateIndex).toBeGreaterThan(setDataIndex)
-    expect(completeIndex).toBeGreaterThan(invalidateIndex)
+    expect(promptIndex).toBeGreaterThan(invalidateIndex)
   })
 
   test("checks secure storage before opening Claude Code OAuth", () => {

@@ -11,12 +11,7 @@ import {
   parseProviderProfileSource,
   providerProfileSource,
 } from "../../../../shared/provider-profile-types"
-import {
-  codexLoginModalOpenAtom,
-  codexOnboardingAuthMethodAtom,
-  codexOnboardingCompletedAtom,
-  sessionInfoAtom,
-} from "../../../lib/atoms"
+import { codexLoginModalOpenAtom, sessionInfoAtom } from "../../../lib/atoms"
 import { en, type TranslationKey, zhCN } from "../../../lib/i18n/dictionaries"
 import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
@@ -44,7 +39,9 @@ import { applyRuntimeEventStateChunk } from "./runtime-event-state"
 function tr(key: TranslationKey, values?: Record<string, string | number>) {
   const useZh =
     typeof navigator !== "undefined" &&
-    (navigator.language || navigator.languages?.[0] || "").toLowerCase().startsWith("zh")
+    (navigator.language || navigator.languages?.[0] || "")
+      .toLowerCase()
+      .startsWith("zh")
   const template = (useZh ? zhCN[key] : en[key]) || en[key] || key
 
   return template.replace(/\{(\w+)\}/g, (match, name) => {
@@ -89,7 +86,9 @@ async function getStoredCodexCredentials(): Promise<{
   hasApiKey: boolean
   hasSubscription: boolean
   hasAny: boolean
+  authMethod: "chatgpt" | "api_key"
 }> {
+  // App-managed Codex API key is what "openai-api-key" runs use.
   let hasApiKey = false
   try {
     const status = await trpcClient.codex.getCodexApiKeyStatus.query()
@@ -98,24 +97,7 @@ async function getStoredCodexCredentials(): Promise<{
     hasApiKey = false
   }
 
-  const hasSubscription =
-    appStore.get(codexOnboardingCompletedAtom) &&
-    appStore.get(codexOnboardingAuthMethodAtom) === "chatgpt"
-
-  return {
-    hasApiKey,
-    hasSubscription,
-    hasAny: hasApiKey || hasSubscription,
-  }
-}
-
-async function resolveCodexCredentialsForAuthError(): Promise<{
-  hasApiKey: boolean
-  hasSubscription: boolean
-  hasAny: boolean
-}> {
-  const snapshot = await getStoredCodexCredentials()
-
+  // Subscription state is owned by the Codex CLI login, not a stored flag.
   let hasSubscription = false
   try {
     const integration = await trpcClient.codex.getIntegration.query()
@@ -125,15 +107,31 @@ async function resolveCodexCredentialsForAuthError(): Promise<{
   }
 
   return {
-    hasApiKey: snapshot.hasApiKey,
+    hasApiKey,
     hasSubscription,
-    hasAny: snapshot.hasApiKey || hasSubscription,
+    hasAny: hasApiKey || hasSubscription,
+    authMethod: hasSubscription ? "chatgpt" : hasApiKey ? "api_key" : "chatgpt",
+  }
+}
+
+async function resolveCodexCredentialsForAuthError(): Promise<{
+  hasApiKey: boolean
+  hasSubscription: boolean
+  hasAny: boolean
+}> {
+  const snapshot = await getStoredCodexCredentials()
+  return {
+    hasApiKey: snapshot.hasApiKey,
+    hasSubscription: snapshot.hasSubscription,
+    hasAny: snapshot.hasAny,
   }
 }
 
 function getSelectedCodexModel(subChatId: string): string {
   const selectedModelId = appStore.get(subChatCodexModelIdAtomFamily(subChatId))
-  const selectedThinking = appStore.get(subChatCodexThinkingAtomFamily(subChatId))
+  const selectedThinking = appStore.get(
+    subChatCodexThinkingAtomFamily(subChatId),
+  )
   const selectedModel =
     CODEX_MODELS.find((model) => model.id === selectedModelId) ||
     CODEX_MODELS.find((model) => model.id === "gpt-5.5") ||
@@ -193,26 +191,29 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
       | undefined
     const metadataModel = normalizeAgentChatMetadataModel(userMetadata?.model)
     const metadataModelSource =
-      typeof userMetadata?.modelSource === "string" && userMetadata.modelSource.trim()
+      typeof userMetadata?.modelSource === "string" &&
+      userMetadata.modelSource.trim()
         ? userMetadata.modelSource.trim()
         : typeof userMetadata?.providerProfileId === "string" &&
             userMetadata.providerProfileId.trim()
           ? providerProfileSource(userMetadata.providerProfileId.trim())
           : null
-    const selectedCodexModelSource = metadataModelSource ?? appStore.get(
-      subChatCodexModelSourceAtomFamily(this.config.subChatId),
-    )
-    const selectedCodexAuthMethod = appStore.get(codexOnboardingAuthMethodAtom)
+    const selectedCodexModelSource =
+      metadataModelSource ??
+      appStore.get(subChatCodexModelSourceAtomFamily(this.config.subChatId))
     const codexCredentials = await getStoredCodexCredentials()
     const effectiveCodexModelSource =
-      selectedCodexModelSource === "openai-api-key" && !codexCredentials.hasApiKey
+      selectedCodexModelSource === "openai-api-key" &&
+      !codexCredentials.hasApiKey
         ? "chatgpt"
         : selectedCodexModelSource === "chatgpt" &&
-            selectedCodexAuthMethod === "api_key" &&
+            codexCredentials.authMethod === "api_key" &&
             codexCredentials.hasApiKey
           ? "openai-api-key"
           : selectedCodexModelSource
-    const providerProfileId = parseProviderProfileSource(effectiveCodexModelSource)
+    const providerProfileId = parseProviderProfileSource(
+      effectiveCodexModelSource,
+    )
     const codexAuthMethod =
       effectiveCodexModelSource === "openai-api-key" ? "api_key" : "chatgpt"
     const selectedModel =
@@ -257,7 +258,9 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
             ...(forceNewSession ? { forceNewSession: true } : {}),
             ...(images.length > 0 ? { images } : {}),
             ...(longTextAttachments.length > 0 ? { longTextAttachments } : {}),
-            ...(appStore.get(approvedGuardedRunContractsAtom).get(this.config.subChatId)
+            ...(appStore
+              .get(approvedGuardedRunContractsAtom)
+              .get(this.config.subChatId)
               ? {
                   scopeContract: appStore
                     .get(approvedGuardedRunContractsAtom)
@@ -282,7 +285,9 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
                 forceFreshSessionSubChats.add(this.config.subChatId)
 
                 if (providerProfileId) {
-                  const error = new Error("Provider Profile authentication failed")
+                  const error = new Error(
+                    "Provider Profile authentication failed",
+                  )
                   toast.error(tr("agent.transport.codexRequestFailed"), {
                     description: error.message,
                   })
@@ -291,15 +296,19 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
                 }
 
                 void (async () => {
-                  const credentials = await resolveCodexCredentialsForAuthError()
-                  const shouldAutoRetryOnce = credentials.hasAny && !forceNewSession
+                  const credentials =
+                    await resolveCodexCredentialsForAuthError()
+                  const shouldAutoRetryOnce =
+                    credentials.hasAny && !forceNewSession
 
                   appStore.set(pendingAuthRetryMessageAtom, {
                     subChatId: this.config.subChatId,
                     provider: "codex",
                     prompt,
                     ...(images.length > 0 && { images }),
-                    ...(longTextAttachments.length > 0 && { longTextAttachments }),
+                    ...(longTextAttachments.length > 0 && {
+                      longTextAttachments,
+                    }),
                     readyToRetry: shouldAutoRetryOnce,
                   })
 
@@ -326,9 +335,14 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
               }
 
               if (chunk.type === "error") {
-                if (!chunk.errorText || chunk.errorText !== lastRuntimeStatusError) {
+                if (
+                  !chunk.errorText ||
+                  chunk.errorText !== lastRuntimeStatusError
+                ) {
                   toast.error(tr("agent.transport.codexError"), {
-                    description: chunk.errorText || tr("agent.transport.unexpectedCodexError"),
+                    description:
+                      chunk.errorText ||
+                      tr("agent.transport.unexpectedCodexError"),
                   })
                 }
               }
@@ -338,7 +352,8 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
                 const description =
                   chunk.blocker?.hint && chunk.blocker?.message
                     ? `${chunk.blocker.message} ${chunk.blocker.hint}`
-                    : chunk.blocker?.message || tr("agent.transport.unexpectedCodexError")
+                    : chunk.blocker?.message ||
+                      tr("agent.transport.unexpectedCodexError")
                 toast.error(tr("agent.transport.codexError"), {
                   description,
                 })
@@ -348,7 +363,8 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
                 lastRuntimeStatusError = chunk.errorText || null
                 toast.error(tr("agent.transport.codexError"), {
                   description:
-                    chunk.errorText || tr("agent.transport.unexpectedCodexError"),
+                    chunk.errorText ||
+                    tr("agent.transport.unexpectedCodexError"),
                 })
               }
 
@@ -368,7 +384,9 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
               }
 
               if (chunk.type === "finish") {
-                const approvedContracts = appStore.get(approvedGuardedRunContractsAtom)
+                const approvedContracts = appStore.get(
+                  approvedGuardedRunContractsAtom,
+                )
                 if (approvedContracts.has(this.config.subChatId)) {
                   const nextContracts = new Map(approvedContracts)
                   nextContracts.delete(this.config.subChatId)
@@ -494,7 +512,7 @@ export class ACPChatTransport implements ChatTransport<UIMessage> {
   }
 
   private extractLongTextAttachments(
-    message: UIMessage | undefined
+    message: UIMessage | undefined,
   ): LongTextAttachmentPart[] {
     return getCanonicalMessageParts(message).flatMap((part) => {
       const attachment = normalizeLongTextAttachmentPart(part)

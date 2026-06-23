@@ -1,49 +1,25 @@
-import {
-  Provider as JotaiProvider,
-  useAtom,
-  useAtomValue,
-  useSetAtom,
-} from "jotai"
+import { Provider as JotaiProvider, useSetAtom } from "jotai"
 import { ThemeProvider, useTheme } from "next-themes"
-import { useEffect, useMemo, useRef } from "react"
-import { Toaster, toast } from "sonner"
+import { useEffect } from "react"
+import { Toaster } from "sonner"
+import { IconSpinner } from "./components/ui/icons"
 import { TooltipProvider } from "./components/ui/tooltip"
 import { TRPCProvider } from "./contexts/TRPCProvider"
 import {
   getInitialWindowParams,
   WindowProvider,
 } from "./contexts/WindowContext"
-import {
-  selectedAgentChatIdAtom,
-  selectedProjectAtom,
-} from "./features/agents/atoms"
+import { selectedAgentChatIdAtom } from "./features/agents/atoms"
 import { useAgentSubChatStore } from "./features/agents/stores/sub-chat-store"
 import { AgentsLayout } from "./features/layout/agents-layout"
 import {
-  AnthropicOnboardingPage,
-  ApiKeyOnboardingPage,
-  CodexOnboardingPage,
-  OnboardingProviderPage,
-  SelectRepoPage,
+  OnboardingSurface,
+  useLegacyMigrations,
+  useOnboardingFlow,
 } from "./features/onboarding"
-import {
-  anthropicOnboardingCompletedAtom,
-  apiKeyOnboardingCompletedAtom,
-  codexOnboardingAuthMethodAtom,
-  codexOnboardingCompletedAtom,
-  customClaudeConfigAtom,
-  LEGACY_CODEX_API_KEY_STORAGE_KEY,
-  LEGACY_OPENAI_API_KEY_STORAGE_KEY,
-  normalizeCodexApiKey,
-  normalizeCustomClaudeConfig,
-  onboardingProviderModeAtom,
-  repoOnboardingSkippedAtom,
-} from "./lib/atoms"
-import { useLocalOnlyModeState } from "./lib/hooks/use-local-only-mode"
-import { I18nProvider, useI18n } from "./lib/i18n"
+import { I18nProvider } from "./lib/i18n"
 import { appStore } from "./lib/jotai-store"
 import { VSCodeThemeProvider } from "./lib/themes/theme-provider"
-import { trpc } from "./lib/trpc"
 
 /**
  * Custom Toaster that adapts to theme
@@ -61,40 +37,18 @@ function ThemedToaster() {
 }
 
 /**
- * Main content router - decides which page to show based on onboarding state
+ * Main content router. Onboarding completion is derived from the provider /
+ * runtime owners (see useSetupStatus), so this is just: resolve → onboard → app.
  */
 function AppContent() {
-  const { t } = useI18n()
-  const onboardingProviderMode = useAtomValue(onboardingProviderModeAtom)
-  const setOnboardingProviderMode = useSetAtom(onboardingProviderModeAtom)
-  const { isLocalOnly, isResolved: isLocalOnlyResolved } =
-    useLocalOnlyModeState()
-  const [legacyCustomClaudeConfig, setLegacyCustomClaudeConfig] = useAtom(
-    customClaudeConfigAtom,
-  )
-  const anthropicOnboardingCompleted = useAtomValue(
-    anthropicOnboardingCompletedAtom,
-  )
-  const setAnthropicOnboardingCompleted = useSetAtom(
-    anthropicOnboardingCompletedAtom,
-  )
-  const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
-  const setApiKeyOnboardingCompleted = useSetAtom(apiKeyOnboardingCompletedAtom)
-  const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
-  const setCodexOnboardingAuthMethod = useSetAtom(codexOnboardingAuthMethodAtom)
-  const repoOnboardingSkipped = useAtomValue(repoOnboardingSkippedAtom)
-  const selectedProject = useAtomValue(selectedProjectAtom)
   const setSelectedChatId = useSetAtom(selectedAgentChatIdAtom)
   const { setActiveSubChat, addToOpenSubChats, setChatId } =
     useAgentSubChatStore()
-  const legacyProviderMigrationAttemptedRef = useRef(false)
-  const legacyCodexApiKeyMigrationAttemptedRef = useRef(false)
-  const legacyVoiceApiKeyMigrationAttemptedRef = useRef(false)
-  const importLegacyProviderConfig =
-    trpc.claudeProviderConfig.importLegacy.useMutation()
-  const saveCodexApiKeyMutation = trpc.codex.saveCodexApiKey.useMutation()
-  const trpcUtils = trpc.useUtils()
+
+  // One-time migrations of credentials persisted by older app versions.
+  useLegacyMigrations()
+
+  const { step } = useOnboardingFlow()
 
   // Apply initial window params (chatId/subChatId) when opening via "Open in new window"
   useEffect(() => {
@@ -132,234 +86,19 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Check if user has existing CLI config (API key or proxy)
-  // Based on PR #29 by @sa4hnd
-  const { data: cliConfig, isLoading: isLoadingCliConfig } =
-    trpc.claudeCode.hasExistingCliConfig.useQuery()
-  const { data: secureProviderConfig } =
-    trpc.claudeProviderConfig.get.useQuery()
-  const { data: claudeCodeIntegration } =
-    trpc.claudeCode.getIntegration.useQuery()
-
-  // Migration: If user already completed Anthropic onboarding but has no billing method set,
-  // automatically set it to "claude-subscription" (legacy users before billing method was added)
-  useEffect(() => {
-    if (
-      !onboardingProviderMode &&
-      anthropicOnboardingCompleted &&
-      !isLocalOnly
-    ) {
-      setOnboardingProviderMode("claude-subscription")
-    }
-  }, [
-    onboardingProviderMode,
-    anthropicOnboardingCompleted,
-    isLocalOnly,
-    setOnboardingProviderMode,
-  ])
-
-  useEffect(() => {
-    if (!isLocalOnlyResolved || !isLocalOnly) return
-    if (
-      onboardingProviderMode === "claude-subscription" &&
-      anthropicOnboardingCompleted &&
-      claudeCodeIntegration &&
-      !claudeCodeIntegration.isConnected
-    ) {
-      setAnthropicOnboardingCompleted(false)
-    }
-  }, [
-    anthropicOnboardingCompleted,
-    onboardingProviderMode,
-    claudeCodeIntegration,
-    isLocalOnly,
-    isLocalOnlyResolved,
-    setAnthropicOnboardingCompleted,
-  ])
-
-  // Auto-skip onboarding if user has existing CLI config (API key or proxy)
-  // This allows users with ANTHROPIC_API_KEY to use the app without OAuth
-  useEffect(() => {
-    if (cliConfig?.hasConfig && !onboardingProviderMode) {
-      console.log(
-        "[App] Detected existing CLI config, auto-completing onboarding",
-      )
-      setOnboardingProviderMode("api-key")
-      setApiKeyOnboardingCompleted(true)
-    }
-  }, [
-    cliConfig?.hasConfig,
-    onboardingProviderMode,
-    setOnboardingProviderMode,
-    setApiKeyOnboardingCompleted,
-  ])
-
-  useEffect(() => {
-    const config = secureProviderConfig?.config
-    if (!config?.hasToken) return
-
-    if (!onboardingProviderMode) {
-      setOnboardingProviderMode(
-        config.baseUrl.includes("anthropic.com") ? "api-key" : "custom-model",
-      )
-    }
-    setApiKeyOnboardingCompleted(true)
-  }, [
-    onboardingProviderMode,
-    secureProviderConfig?.config,
-    setApiKeyOnboardingCompleted,
-    setOnboardingProviderMode,
-  ])
-
-  useEffect(() => {
-    if (legacyCodexApiKeyMigrationAttemptedRef.current) return
-    if (typeof window === "undefined") return
-
-    const legacyValue = window.localStorage.getItem(
-      LEGACY_CODEX_API_KEY_STORAGE_KEY,
+  if (step === "loading") {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <IconSpinner className="h-5 w-5 text-muted-foreground" />
+      </div>
     )
-    if (legacyValue === null) return
-
-    legacyCodexApiKeyMigrationAttemptedRef.current = true
-    window.localStorage.removeItem(LEGACY_CODEX_API_KEY_STORAGE_KEY)
-
-    const normalized = normalizeCodexApiKey(legacyValue)
-    if (!normalized) return
-
-    saveCodexApiKeyMutation.mutate(
-      { apiKey: normalized },
-      {
-        onSuccess: async () => {
-          setCodexOnboardingAuthMethod("api_key")
-          setCodexOnboardingCompleted(true)
-          await trpcUtils.codex.getCodexApiKeyStatus.invalidate()
-          await trpcUtils.codex.getIntegration.invalidate()
-        },
-        onError: (error) => {
-          console.warn("[App] Failed to migrate legacy Codex API key:", error)
-          toast.error(t("toast.models.failedToMigrateCodexApiKey"))
-        },
-      },
-    )
-  }, [
-    saveCodexApiKeyMutation,
-    setCodexOnboardingAuthMethod,
-    setCodexOnboardingCompleted,
-    t,
-    trpcUtils.codex.getCodexApiKeyStatus,
-    trpcUtils.codex.getIntegration,
-  ])
-
-  useEffect(() => {
-    if (legacyVoiceApiKeyMigrationAttemptedRef.current) return
-    if (typeof window === "undefined") return
-
-    legacyVoiceApiKeyMigrationAttemptedRef.current = true
-    window.localStorage.removeItem(LEGACY_OPENAI_API_KEY_STORAGE_KEY)
-    void trpcUtils.voice.isAvailable.invalidate()
-  }, [trpcUtils.voice.isAvailable])
-
-  // Migrate the legacy renderer-stored custom Claude token into secure
-  // main-process storage, then clear the raw token from localStorage.
-  useEffect(() => {
-    if (legacyProviderMigrationAttemptedRef.current) return
-
-    const normalized = normalizeCustomClaudeConfig(legacyCustomClaudeConfig)
-    if (!normalized) return
-
-    legacyProviderMigrationAttemptedRef.current = true
-    const authMode = normalized.baseUrl.includes("anthropic.com")
-      ? "api_key"
-      : "auth_token"
-
-    importLegacyProviderConfig.mutate(
-      { ...normalized, authMode },
-      {
-        onSuccess: () => {
-          setLegacyCustomClaudeConfig({ model: "", token: "", baseUrl: "" })
-          if (!onboardingProviderMode) {
-            setOnboardingProviderMode(
-              normalized.baseUrl.includes("anthropic.com")
-                ? "api-key"
-                : "custom-model",
-            )
-          }
-          setApiKeyOnboardingCompleted(true)
-        },
-        onError: (error) => {
-          console.warn(
-            "[App] Failed to migrate legacy Claude provider config:",
-            error,
-          )
-          setLegacyCustomClaudeConfig({ model: "", token: "", baseUrl: "" })
-          toast.error(t("toast.models.failedToMigrateLegacyClaudeProvider"))
-        },
-      },
-    )
-  }, [
-    importLegacyProviderConfig,
-    onboardingProviderMode,
-    legacyCustomClaudeConfig,
-    setApiKeyOnboardingCompleted,
-    setOnboardingProviderMode,
-    setLegacyCustomClaudeConfig,
-    t,
-  ])
-
-  // Fetch projects to validate selectedProject exists
-  const { data: projects, isLoading: isLoadingProjects } =
-    trpc.projects.list.useQuery()
-
-  // Validated project - only valid if exists in DB
-  const validatedProject = useMemo(() => {
-    if (!selectedProject) return null
-    // While loading, trust localStorage value to prevent flicker
-    if (isLoadingProjects) return selectedProject
-    // After loading, validate against DB
-    if (!projects) return null
-    const exists = projects.some((p) => p.id === selectedProject.id)
-    return exists ? selectedProject : null
-  }, [selectedProject, projects, isLoadingProjects])
-
-  // Determine which page to show:
-  // 1. No provider/auth mode selected -> OnboardingProviderPage
-  // 2. Claude subscription selected but not completed -> AnthropicOnboardingPage
-  // 3. Codex selected but not completed -> CodexOnboardingPage
-  // 4. API key or custom model selected but not completed -> ApiKeyOnboardingPage
-  // 5. No valid project selected and repository onboarding not deferred -> SelectRepoPage
-  // 6. Otherwise -> AgentsLayout
-  if (!onboardingProviderMode) {
-    return <OnboardingProviderPage />
   }
 
-  if (
-    onboardingProviderMode === "claude-subscription" &&
-    !anthropicOnboardingCompleted
-  ) {
-    return <AnthropicOnboardingPage />
+  if (step === "complete") {
+    return <AgentsLayout />
   }
 
-  if (
-    (onboardingProviderMode === "codex-subscription" ||
-      onboardingProviderMode === "codex-api-key") &&
-    !codexOnboardingCompleted
-  ) {
-    return <CodexOnboardingPage />
-  }
-
-  if (
-    (onboardingProviderMode === "api-key" ||
-      onboardingProviderMode === "custom-model") &&
-    !apiKeyOnboardingCompleted
-  ) {
-    return <ApiKeyOnboardingPage />
-  }
-
-  if (!validatedProject && !isLoadingProjects && !repoOnboardingSkipped) {
-    return <SelectRepoPage />
-  }
-
-  return <AgentsLayout />
+  return <OnboardingSurface />
 }
 
 export function App() {

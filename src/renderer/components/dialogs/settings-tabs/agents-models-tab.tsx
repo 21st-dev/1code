@@ -26,14 +26,8 @@ import { toast } from "sonner"
 import {
   type ProviderDiagnosticCheckId,
   type ProviderDiagnosticStatus,
-  type ProviderProfileAuthMode,
   type ProviderProfileDefaultPurpose,
-  type ProviderProfileProtocol,
-  type ProviderProfileTarget,
-  providerProfileAuthModes,
-  providerProfileProtocols,
   providerProfileSource,
-  providerProfileTargets,
 } from "../../../../shared/provider-profile-types"
 import {
   type ClaudeModelSource,
@@ -41,6 +35,11 @@ import {
   lastSelectedClaudeModelSourceAtom,
   lastSelectedCodexModelSourceAtom,
 } from "../../../features/agents/atoms"
+import {
+  getProviderAuthModeLabel,
+  getProviderTargetLabel,
+  ProviderProfileEditor,
+} from "../../../features/agents/components/provider-profile-editor"
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
@@ -50,8 +49,6 @@ import {
   autoOfflineModeAtom,
   claudeLoginModalConfigAtom,
   codexLoginModalOpenAtom,
-  codexOnboardingAuthMethodAtom,
-  codexOnboardingCompletedAtom,
   hiddenModelsAtom,
   modelsSettingsTargetAtom,
   normalizeCodexApiKey,
@@ -662,25 +659,6 @@ function purposeMatchesProfile(
   }
 }
 
-const PROVIDER_TARGET_LABEL_KEYS: Record<
-  ProviderProfileTarget,
-  TranslationKey
-> = {
-  claude: "settings.models.providerProfiles.targetClaude",
-  codex: "settings.models.providerProfiles.targetCodex",
-  helpers: "settings.models.providerProfiles.targetHelpers",
-  local: "settings.models.providerProfiles.targetLocal",
-}
-
-const PROVIDER_AUTH_MODE_LABEL_KEYS: Record<
-  ProviderProfileAuthMode,
-  TranslationKey
-> = {
-  bearer: "settings.models.providerProfiles.authBearer",
-  "x-api-key": "settings.models.providerProfiles.authXApiKey",
-  none: "settings.models.providerProfiles.authNone",
-}
-
 const DIAGNOSTIC_CHECK_LABEL_KEYS: Record<
   ProviderDiagnosticCheckId,
   TranslationKey
@@ -708,20 +686,6 @@ const DIAGNOSTIC_STATUS_LABEL_KEYS: Record<
   skipped: "settings.models.providerProfiles.statusSkipped",
 }
 
-function getProviderTargetLabel(
-  target: ProviderProfileTarget,
-  t: (key: TranslationKey) => string,
-) {
-  return t(PROVIDER_TARGET_LABEL_KEYS[target])
-}
-
-function getProviderAuthModeLabel(
-  mode: ProviderProfileAuthMode,
-  t: (key: TranslationKey) => string,
-) {
-  return t(PROVIDER_AUTH_MODE_LABEL_KEYS[mode])
-}
-
 function getDiagnosticCheckLabel(
   id: ProviderDiagnosticCheckId,
   t: (key: TranslationKey) => string,
@@ -734,22 +698,6 @@ function getDiagnosticStatusLabel(
   t: (key: TranslationKey) => string,
 ) {
   return t(DIAGNOSTIC_STATUS_LABEL_KEYS[status])
-}
-
-function getPresetRegionLabel(
-  region: string,
-  t: (key: TranslationKey) => string,
-) {
-  switch (region) {
-    case "china":
-      return t("settings.models.providerProfiles.regionChina")
-    case "global":
-      return t("settings.models.providerProfiles.regionGlobal")
-    case "local":
-      return t("settings.models.providerProfiles.regionLocal")
-    default:
-      return t("settings.models.providerProfiles.regionGeneric")
-  }
 }
 
 function getProviderInitials(name: string) {
@@ -782,62 +730,6 @@ function profileStatusClassName(ok: boolean) {
     : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300"
 }
 
-type ProviderHeaderDraftRow = {
-  id: string
-  key: string
-  value: string
-  existing: boolean
-}
-
-let providerHeaderDraftId = 0
-
-function createProviderHeaderDraftRow(
-  input: Partial<Omit<ProviderHeaderDraftRow, "id">> = {},
-): ProviderHeaderDraftRow {
-  providerHeaderDraftId += 1
-  return {
-    id: `provider-header-${providerHeaderDraftId}`,
-    key: input.key ?? "",
-    value: input.value ?? "",
-    existing: input.existing ?? false,
-  }
-}
-
-function providerHeaderRowsFromMetadata(
-  headers: Record<string, string>,
-): ProviderHeaderDraftRow[] {
-  return Object.keys(headers)
-    .sort((a, b) => a.localeCompare(b))
-    .map((key) =>
-      createProviderHeaderDraftRow({
-        key,
-        value: "",
-        existing: true,
-      }),
-    )
-}
-
-function providerHeadersFromRows(
-  rows: ProviderHeaderDraftRow[],
-): Record<string, string> | null {
-  const headers: Record<string, string> = {}
-  const seenKeys = new Set<string>()
-
-  for (const row of rows) {
-    const key = row.key.trim()
-    const value = row.value.trim()
-    if (!key && !value) continue
-    if (!key || !value) return null
-
-    const normalizedKey = key.toLowerCase()
-    if (seenKeys.has(normalizedKey)) return null
-    seenKeys.add(normalizedKey)
-    headers[key] = value
-  }
-
-  return headers
-}
-
 function ProviderProfilesSettingsSection() {
   const { t } = useI18n()
   const setLastSelectedClaudeModelSource = useSetAtom(
@@ -847,209 +739,26 @@ function ProviderProfilesSettingsSection() {
     lastSelectedCodexModelSourceAtom,
   )
   const trpcUtils = trpc.useUtils()
-  const { data: presetsData } = trpc.providerProfiles.listPresets.useQuery()
   const { data: profilesData } = trpc.providerProfiles.listProfiles.useQuery()
   const { data: defaultsData } = trpc.providerProfiles.getDefaults.useQuery()
-  const saveProfileMutation = trpc.providerProfiles.saveProfile.useMutation()
   const deleteProfileMutation =
     trpc.providerProfiles.deleteProfile.useMutation()
   const testProfileMutation = trpc.providerProfiles.testProfile.useMutation()
   const setDefaultMutation = trpc.providerProfiles.setDefault.useMutation()
 
-  const presets = presetsData?.presets ?? []
   const profiles = profilesData?.profiles ?? []
   const defaults = defaultsData?.defaults
   const [editingId, setEditingId] = useState<string | undefined>()
-  const [presetId, setPresetId] = useState("")
-  const [name, setName] = useState("")
-  const [protocol, setProtocol] =
-    useState<ProviderProfileProtocol>("openai-chat")
-  const [baseUrl, setBaseUrl] = useState("")
-  const [defaultModel, setDefaultModel] = useState("")
-  const [authMode, setAuthMode] = useState<ProviderProfileAuthMode>("bearer")
-  const [token, setToken] = useState("")
-  const [headerRows, setHeaderRows] = useState<ProviderHeaderDraftRow[]>([])
-  const [headersDirty, setHeadersDirty] = useState(false)
-  const [targetRuntimes, setTargetRuntimes] = useState<ProviderProfileTarget[]>(
-    ["claude", "codex", "helpers"],
-  )
   const [testingProfileId, setTestingProfileId] = useState<string | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState>(null)
 
-  const selectedPreset = useMemo(
-    () => presets.find((preset) => preset.id === presetId),
-    [presetId, presets],
-  )
   const editingProfile = useMemo(
     () => profiles.find((profile) => profile.id === editingId),
     [editingId, profiles],
   )
-  const formIdPrefix = editingId
-    ? `provider-profile-${editingId}`
-    : "provider-profile-new"
-  const destinationChanged = Boolean(
-    editingProfile &&
-      (editingProfile.baseUrl !== baseUrl.trim() ||
-        editingProfile.protocol !== protocol ||
-        editingProfile.authMode !== authMode),
-  )
-  const tokenRefreshRequired = Boolean(
-    editingProfile?.hasToken &&
-      destinationChanged &&
-      authMode !== "none" &&
-      !token.trim(),
-  )
-
-  const applyPreset = useCallback(
-    (nextPresetId: string) => {
-      const preset = presets.find((item) => item.id === nextPresetId)
-      if (!preset) return
-      setEditingId(undefined)
-      setPresetId(preset.id)
-      setName(preset.name)
-      setProtocol(preset.protocol)
-      setBaseUrl(preset.baseUrl)
-      setDefaultModel(preset.defaultModel)
-      setAuthMode(preset.authMode)
-      setToken("")
-      setHeaderRows([])
-      setHeadersDirty(false)
-      setTargetRuntimes([...preset.targetRuntimes])
-    },
-    [presets],
-  )
-
-  useEffect(() => {
-    if (presetId || presets.length === 0 || editingId) return
-    applyPreset(presets[0]!.id)
-  }, [applyPreset, editingId, presetId, presets])
-
-  const resetForm = useCallback(() => {
-    setEditingId(undefined)
-    if (presetId) {
-      applyPreset(presetId)
-      return
-    }
-    if (presets[0]) {
-      applyPreset(presets[0].id)
-    }
-  }, [applyPreset, presetId, presets])
 
   const editProfile = (profile: (typeof profiles)[number]) => {
     setEditingId(profile.id)
-    setPresetId(profile.presetId ?? "")
-    setName(profile.name)
-    setProtocol(profile.protocol)
-    setBaseUrl(profile.baseUrl)
-    setDefaultModel(profile.defaultModel)
-    setAuthMode(profile.authMode)
-    setToken("")
-    setHeaderRows(providerHeaderRowsFromMetadata(profile.headers))
-    setHeadersDirty(false)
-    setTargetRuntimes([...profile.targetRuntimes])
-  }
-
-  const addHeaderRow = () => {
-    setHeadersDirty(true)
-    setHeaderRows((current) => [...current, createProviderHeaderDraftRow()])
-  }
-
-  const updateHeaderRow = (
-    rowId: string,
-    field: "key" | "value",
-    value: string,
-  ) => {
-    setHeadersDirty(true)
-    setHeaderRows((current) =>
-      current.map((row) =>
-        row.id === rowId
-          ? {
-              ...row,
-              [field]: value,
-              existing: false,
-            }
-          : row,
-      ),
-    )
-  }
-
-  const removeHeaderRow = (rowId: string) => {
-    setHeadersDirty(true)
-    setHeaderRows((current) => current.filter((row) => row.id !== rowId))
-  }
-
-  const toggleTarget = (target: ProviderProfileTarget) => {
-    setTargetRuntimes((current) =>
-      current.includes(target)
-        ? current.filter((item) => item !== target)
-        : [...current, target],
-    )
-  }
-
-  const canSaveProfile = Boolean(
-    name.trim() &&
-      baseUrl.trim() &&
-      defaultModel.trim() &&
-      targetRuntimes.length > 0 &&
-      (authMode === "none" || token.trim() || editingProfile?.hasToken) &&
-      !tokenRefreshRequired,
-  )
-
-  const handleSaveProfile = () => {
-    if (tokenRefreshRequired) {
-      toast.error(t("settings.models.providerProfiles.tokenRefreshRequired"))
-      return
-    }
-
-    let headers: Record<string, string> | undefined
-    if (headersDirty) {
-      const parsedHeaders = providerHeadersFromRows(headerRows)
-      if (parsedHeaders === null) {
-        toast.error(t("settings.models.providerProfiles.invalidHeaders"))
-        return
-      }
-      headers = parsedHeaders
-    }
-
-    saveProfileMutation.mutate(
-      {
-        ...(editingId ? { id: editingId } : {}),
-        name: name.trim(),
-        presetId: presetId || null,
-        protocol,
-        baseUrl: baseUrl.trim(),
-        defaultModel: defaultModel.trim(),
-        authMode,
-        ...(token.trim() ? { token: token.trim() } : {}),
-        ...(headers !== undefined ? { headers } : {}),
-        targetRuntimes,
-        capabilities: {
-          ...(selectedPreset?.capabilities ??
-            editingProfile?.capabilities ??
-            {}),
-          claude: targetRuntimes.includes("claude"),
-          codex: targetRuntimes.includes("codex"),
-          helpers: targetRuntimes.includes("helpers"),
-          local: targetRuntimes.includes("local"),
-        },
-      },
-      {
-        onSuccess: async ({ profile }) => {
-          setEditingId(profile.id)
-          setToken("")
-          await Promise.all([
-            trpcUtils.providerProfiles.listProfiles.invalidate(),
-            trpcUtils.providerProfiles.getDefaults.invalidate(),
-          ])
-          toast.success(t("toast.models.providerProfileSaved"))
-        },
-        onError: (error) => {
-          toast.error(
-            error.message || t("toast.models.failedToSaveProviderProfile"),
-          )
-        },
-      },
-    )
   }
 
   const handleDeleteProfile = (profileId: string) => {
@@ -1062,7 +771,7 @@ function ProviderProfilesSettingsSection() {
           { id: profileId },
           {
             onSuccess: async () => {
-              if (editingId === profileId) resetForm()
+              if (editingId === profileId) setEditingId(undefined)
               await Promise.all([
                 trpcUtils.providerProfiles.listProfiles.invalidate(),
                 trpcUtils.providerProfiles.getDefaults.invalidate(),
@@ -1164,337 +873,13 @@ function ProviderProfilesSettingsSection() {
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border bg-background">
-        <div className="grid gap-5 border-b border-border p-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                {t("settings.models.providerProfiles.preset")}
-              </Label>
-              <div className="flex flex-wrap gap-2" role="listbox">
-                {presets.map((preset) => {
-                  const selected = presetId === preset.id
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => applyPreset(preset.id)}
-                      aria-pressed={selected}
-                      className={cn(
-                        "inline-flex min-h-9 items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-                        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/70",
-                        selected
-                          ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                          : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
-                      )}
-                    >
-                      <span>{preset.name}</span>
-                      <span
-                        className={cn(
-                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                          selected
-                            ? "bg-primary-foreground/20 text-primary-foreground"
-                            : "bg-background text-muted-foreground",
-                        )}
-                      >
-                        {getPresetRegionLabel(preset.region, t)}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {t("settings.models.providerProfiles.presetHint")}
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor={`${formIdPrefix}-name`}
-                  className="text-sm font-medium"
-                >
-                  {t("settings.models.providerProfiles.name")}
-                </Label>
-                <Input
-                  id={`${formIdPrefix}-name`}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor={`${formIdPrefix}-base-url`}
-                  className="text-sm font-medium"
-                >
-                  {t("common.baseUrl")}
-                </Label>
-                <Input
-                  id={`${formIdPrefix}-base-url`}
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.example.com/v1"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor={`${formIdPrefix}-model`}
-                  className="text-sm font-medium"
-                >
-                  {t("onboarding.customModel.modelName")}
-                </Label>
-                <Input
-                  id={`${formIdPrefix}-model`}
-                  value={defaultModel}
-                  onChange={(e) => setDefaultModel(e.target.value)}
-                  placeholder="model-id"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor={`${formIdPrefix}-protocol`}
-                  className="text-sm font-medium"
-                >
-                  {t("common.protocol")}
-                </Label>
-                <Select
-                  value={protocol}
-                  onValueChange={(value) =>
-                    setProtocol(value as ProviderProfileProtocol)
-                  }
-                >
-                  <SelectTrigger
-                    id={`${formIdPrefix}-protocol`}
-                    className="h-8"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providerProfileProtocols.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor={`${formIdPrefix}-auth`}
-                  className="text-sm font-medium"
-                >
-                  {t("common.auth")}
-                </Label>
-                <Select
-                  value={authMode}
-                  onValueChange={(value) =>
-                    setAuthMode(value as ProviderProfileAuthMode)
-                  }
-                >
-                  <SelectTrigger id={`${formIdPrefix}-auth`} className="h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providerProfileAuthModes.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {getProviderAuthModeLabel(item, t)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor={`${formIdPrefix}-token`}
-                  className="text-sm font-medium"
-                >
-                  {t("common.apiKey")}
-                </Label>
-                <Input
-                  id={`${formIdPrefix}-token`}
-                  type="password"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder={
-                    editingProfile?.hasToken ? t("common.savedToken") : "sk-..."
-                  }
-                  disabled={authMode === "none"}
-                />
-                {tokenRefreshRequired && (
-                  <p className="text-xs text-amber-600 dark:text-amber-300">
-                    {t("settings.models.providerProfiles.tokenRefreshRequired")}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium">
-                {t("settings.models.providerProfiles.targets")}
-              </Label>
-              <div className="flex flex-wrap gap-2">
-                {providerProfileTargets.map((target) => (
-                  <button
-                    key={target}
-                    type="button"
-                    onClick={() => toggleTarget(target)}
-                    aria-pressed={targetRuntimes.includes(target)}
-                    className={[
-                      "min-h-8 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
-                      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/70",
-                      targetRuntimes.includes(target)
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground",
-                    ].join(" ")}
-                  >
-                    {getProviderTargetLabel(target, t)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <Label className="text-sm font-medium">
-                  {t("settings.models.providerProfiles.headers")}
-                </Label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={addHeaderRow}
-                  className="h-7 gap-1 px-2 text-xs"
-                >
-                  <Plus className="h-3 w-3" />
-                  {t("settings.models.providerProfiles.addHeader")}
-                </Button>
-              </div>
-              {headerRows.length > 0 && (
-                <div className="space-y-1.5">
-                  <div className="hidden grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_2rem] gap-2 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
-                    <span>
-                      {t("settings.models.providerProfiles.headerKey")}
-                    </span>
-                    <span>
-                      {t("settings.models.providerProfiles.headerValue")}
-                    </span>
-                    <span />
-                  </div>
-                  {headerRows.map((row, index) => (
-                    <div
-                      key={row.id}
-                      className="grid gap-2 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_2rem]"
-                    >
-                      <Input
-                        id={`${formIdPrefix}-header-key-${row.id}`}
-                        value={row.key}
-                        onChange={(e) =>
-                          updateHeaderRow(row.id, "key", e.target.value)
-                        }
-                        placeholder="HTTP-Referer"
-                        aria-label={`${t("settings.models.providerProfiles.headerKey")} ${index + 1}`}
-                      />
-                      <Input
-                        id={`${formIdPrefix}-header-value-${row.id}`}
-                        value={row.value}
-                        onChange={(e) =>
-                          updateHeaderRow(row.id, "value", e.target.value)
-                        }
-                        placeholder={
-                          row.existing
-                            ? t(
-                                "settings.models.providerProfiles.savedHeaderValue",
-                              )
-                            : "https://example.com"
-                        }
-                        aria-label={`${t("settings.models.providerProfiles.headerValue")} ${index + 1}`}
-                      />
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => removeHeaderRow(row.id)}
-                        aria-label={t(
-                          "settings.models.providerProfiles.removeHeader",
-                        )}
-                        className="h-8 w-8 text-muted-foreground hover:bg-red-500/10 hover:text-red-600"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {t("settings.models.providerProfiles.headersHint")}
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                {editingId
-                  ? t("settings.models.providerProfiles.editing")
-                  : t("settings.models.providerProfiles.create")}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {selectedPreset?.region
-                  ? `${selectedPreset.name} · ${getPresetRegionLabel(selectedPreset.region, t)}`
-                  : t("settings.models.providerProfiles.customPreset")}
-              </div>
-            </div>
-            <div className="grid gap-2 text-xs text-muted-foreground">
-              <div className="flex items-center justify-between gap-3">
-                <span>{t("common.protocol")}</span>
-                <Badge variant="outline" className="text-[10px]">
-                  {protocol}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span>{t("common.auth")}</span>
-                <Badge variant="outline" className="text-[10px]">
-                  {authMode === "none"
-                    ? getProviderAuthModeLabel(authMode, t)
-                    : token.trim() || editingProfile?.hasToken
-                      ? t("common.savedToken")
-                      : t("settings.models.providerProfiles.noToken")}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span>{t("settings.models.providerProfiles.targets")}</span>
-                <span className="text-right">
-                  {targetRuntimes
-                    .map((target) => getProviderTargetLabel(target, t))
-                    .join(", ")}
-                </span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                onClick={handleSaveProfile}
-                disabled={!canSaveProfile || saveProfileMutation.isPending}
-              >
-                {saveProfileMutation.isPending
-                  ? t("common.saving")
-                  : t("common.save")}
-              </Button>
-              <Button size="sm" variant="outline" onClick={resetForm}>
-                {t("common.reset")}
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {t("settings.models.providerProfiles.secretNotice")}
-            </p>
-          </div>
-        </div>
+        <ProviderProfileEditor
+          key={editingId ?? "new"}
+          editingProfile={editingProfile}
+          onSaved={(profile) => setEditingId(profile.id)}
+          onReset={() => setEditingId(undefined)}
+          className="border-b border-border p-4"
+        />
 
         <div className="grid gap-2 p-3">
           {profiles.length === 0 ? (
@@ -2001,10 +1386,6 @@ export function AgentsModelsTab() {
   // OpenAI API key state
   const [codexApiKey, setCodexApiKey] = useState("")
   const [isSavingCodexApiKey, setIsSavingCodexApiKey] = useState(false)
-  const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
-  const setCodexOnboardingAuthMethod = useSetAtom(codexOnboardingAuthMethodAtom)
-  const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
   const setLastSelectedCodexModelSource = useSetAtom(
     lastSelectedCodexModelSourceAtom,
   )
@@ -2071,11 +1452,8 @@ export function AgentsModelsTab() {
   }
 
   const hasAppCodexApiKey = Boolean(codexApiKeyStatus?.hasApiKey)
-  const hasLocalCodexSubscription =
-    codexOnboardingCompleted && codexOnboardingAuthMethod === "chatgpt"
   const isCodexSubscriptionConnected =
-    codexIntegration?.state === "connected_chatgpt" ||
-    (!codexIntegration && hasLocalCodexSubscription)
+    codexIntegration?.state === "connected_chatgpt"
   const isCodexSubscriptionActive =
     isCodexSubscriptionConnected && !hasAppCodexApiKey
   const [hiddenModels, setHiddenModels] = useAtom(hiddenModelsAtom)
@@ -2099,8 +1477,7 @@ export function AgentsModelsTab() {
       : codexIntegration?.state === "not_logged_in"
         ? t("settings.models.codex.notConnected")
         : t("settings.models.codex.statusUnavailable")
-  const showCodexLoading =
-    isCodexLoading && !hasAppCodexApiKey && !hasLocalCodexSubscription
+  const showCodexLoading = isCodexLoading && !hasAppCodexApiKey
 
   const handleCodexApiKeyBlur = async () => {
     const trimmedKey = codexApiKey.trim()
@@ -2120,8 +1497,6 @@ export function AgentsModelsTab() {
         apiKey: normalized,
       })
       setCodexApiKey("")
-      setCodexOnboardingAuthMethod("api_key")
-      setCodexOnboardingCompleted(true)
       setLastSelectedCodexModelSource("openai-api-key")
       await trpcUtils.codex.getCodexApiKeyStatus.invalidate()
       await trpcUtils.codex.getIntegration.invalidate()
@@ -2148,7 +1523,6 @@ export function AgentsModelsTab() {
     try {
       await removeCodexApiKeyMutation.mutateAsync()
       setCodexApiKey("")
-      setCodexOnboardingAuthMethod("chatgpt")
       setLastSelectedCodexModelSource("chatgpt")
 
       if (codexIntegration?.state === "connected_api_key") {

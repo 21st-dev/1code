@@ -44,6 +44,24 @@ import {
   clearPendingUserQuestionForRuntimeChunk,
 } from "./runtime-event-state"
 
+/**
+ * Whether the default Claude auth path can actually run. Desktop runs consume
+ * Locus-managed Claude credentials here; ambient shell API keys are stripped by
+ * the main-process runtime env owner and are not a runnable default path.
+ */
+async function isClaudeDefaultAuthUsable(): Promise<boolean> {
+  try {
+    const integration = await trpcClient.claudeCode.getIntegration
+      .query()
+      .catch(
+        () => null as { isConnected?: boolean; isExpired?: boolean } | null,
+      )
+    return Boolean(integration?.isConnected && !integration?.isExpired)
+  } catch {
+    return false
+  }
+}
+
 function tr(key: TranslationKey, values?: Record<string, string | number>) {
   const useZh =
     typeof navigator !== "undefined" &&
@@ -257,6 +275,35 @@ export class IPCChatTransport implements ChatTransport<UIMessage> {
           normalizedSource.source as ClaudeModelSource,
         )
       }
+    }
+
+    // Run-admission guard: never launch the OAuth path when OAuth is not usable.
+    // A profile-only setup whose stored source is still "claude-oauth" (e.g. the
+    // default) is diverted to a usable Provider Profile instead of failing.
+    if (
+      modelSource === "claude-oauth" &&
+      !(await isClaudeDefaultAuthUsable())
+    ) {
+      const profiles = (await trpcClient.providerProfiles.listProfiles.query())
+        .profiles
+      const diverted = normalizeClaudeModelSourceForRun({
+        source: "claude-oauth",
+        providerProfiles: profiles,
+        canUseClaudeOAuth: false,
+      })
+      if (!diverted.ok) {
+        toast.error(diverted.blocker.message, {
+          description: diverted.blocker.hint,
+        })
+        throw new Error(diverted.blocker.message)
+      }
+      if (diverted.changed) {
+        appStore.set(
+          subChatClaudeModelSourceAtomFamily(this.config.subChatId),
+          diverted.source as ClaudeModelSource,
+        )
+      }
+      modelSource = diverted.source
     }
 
     // Get selected Ollama model for offline mode

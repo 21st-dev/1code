@@ -1,5 +1,8 @@
-export { AnthropicOnboardingPage } from "./anthropic-onboarding-page"
-export { ApiKeyOnboardingPage } from "./api-key-onboarding-page"
-export { CodexOnboardingPage } from "./codex-onboarding-page"
-export { OnboardingProviderPage } from "./onboarding-provider-page"
-export { SelectRepoPage } from "./select-repo-page"
+export { useLegacyMigrations } from "./lib/use-legacy-migrations"
+export { useOnboardingFlow } from "./lib/use-onboarding-flow"
+export {
+  getCodexConnectionSnapshot,
+  type SetupStatus,
+  useSetupStatus,
+} from "./lib/use-setup-status"
+export { OnboardingSurface } from "./onboarding-surface"

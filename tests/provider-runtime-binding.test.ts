@@ -144,19 +144,23 @@ describe("Codex provider profile runtime binding", () => {
       join(process.cwd(), "src/main/lib/trpc/routers/claude.ts"),
       "utf-8",
     )
-    const rendererSource = readFileSync(
-      join(process.cwd(), "src/renderer/App.tsx"),
+    // The legacy custom-Claude token migration now lives in a dedicated hook.
+    const migrationsSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/renderer/features/onboarding/lib/use-legacy-migrations.ts",
+      ),
       "utf-8",
     )
 
     expect(claudeRouterSource).not.toContain("customConfig: z")
     expect(claudeRouterSource).not.toContain("input.customConfig")
     expect(claudeRouterSource).not.toContain("legacyProviderConfig")
-    expect(rendererSource).toContain(
+    expect(migrationsSource).toContain(
       'setLegacyCustomClaudeConfig({ model: "", token: "", baseUrl: "" })',
     )
-    expect(rendererSource).not.toContain(
-      "legacyProviderMigrationAttemptedRef.current = false",
+    expect(migrationsSource).not.toContain(
+      "providerConfigAttemptedRef.current = false",
     )
   })
 })

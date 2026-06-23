@@ -573,32 +573,12 @@ export const onboardingProviderModeAtom =
     { getOnInit: true },
   )
 
-// Whether user has completed Claude Code local auth during onboarding
-// Reset on logout
-export const anthropicOnboardingCompletedAtom = atomWithStorage<boolean>(
-  "onboarding:anthropic-completed",
-  false,
-  undefined,
-  { getOnInit: true },
-)
-
-// Whether user has completed API key configuration during onboarding
-// Only relevant when onboardingProviderMode is "api-key"
-export const apiKeyOnboardingCompletedAtom = atomWithStorage<boolean>(
-  "onboarding:api-key-completed",
-  false,
-  undefined,
-  { getOnInit: true },
-)
-
-// Whether user has completed Codex auth during onboarding
-// Only relevant when onboardingProviderMode is a Codex method
-export const codexOnboardingCompletedAtom = atomWithStorage<boolean>(
-  "onboarding:codex-completed",
-  false,
-  undefined,
-  { getOnInit: true },
-)
+// Provider connection / "completed" state is no longer stored here: it is
+// derived from the provider & runtime owners by `useSetupStatus`
+// (features/onboarding/lib/use-setup-status.ts). The legacy localStorage keys
+// "onboarding:anthropic-completed", "onboarding:api-key-completed",
+// "onboarding:codex-completed", and "onboarding:codex-auth-method" are now
+// orphaned and intentionally unused.
 
 // Whether the user deferred selecting a repository during first-run onboarding.
 export const repoOnboardingSkippedAtom = atomWithStorage<boolean>(
@@ -607,17 +587,6 @@ export const repoOnboardingSkippedAtom = atomWithStorage<boolean>(
   undefined,
   { getOnInit: true },
 )
-
-export type CodexOnboardingAuthMethod = "chatgpt" | "api_key"
-
-// Preferred/last successful Codex auth method
-export const codexOnboardingAuthMethodAtom =
-  atomWithStorage<CodexOnboardingAuthMethod>(
-    "onboarding:codex-auth-method",
-    "chatgpt",
-    undefined,
-    { getOnInit: true },
-  )
 
 export type UsageBudgetConfig = {
   weeklyTokenBudget: number

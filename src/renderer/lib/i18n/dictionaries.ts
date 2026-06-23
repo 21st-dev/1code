@@ -51,6 +51,34 @@ export const en = {
 
   "onboarding.billing.title": "Connect AI Provider",
   "onboarding.billing.subtitle": "Choose how you'd like to connect your provider.",
+  "onboarding.setup.heading": "Get set up",
+  "onboarding.setup.subheading":
+    "Connect an AI provider, then open a project or start a Quick chat.",
+  "onboarding.section.aiPath": "AI provider",
+  "onboarding.aiPath.subhead": "One is enough — others connect later",
+  "onboarding.section.startContext": "Project",
+  "onboarding.status.ready": "Ready",
+  "onboarding.status.needsSignIn": "Needs sign-in",
+  "onboarding.status.needsApiKey": "Needs API key",
+  "onboarding.status.runtimeMissing": "Runtime missing",
+  "onboarding.status.repairNeeded": "Repair needed",
+  "onboarding.status.optional": "Optional",
+  "onboarding.status.notStarted": "Not started",
+  "onboarding.status.checking": "Checking…",
+  "onboarding.path.claude": "Claude",
+  "onboarding.path.claudeHint":
+    "Sign in with your subscription, or use an Anthropic API key.",
+  "onboarding.path.codex": "Codex",
+  "onboarding.path.codexHint": "Sign in with ChatGPT or use an OpenAI API key.",
+  "onboarding.path.customProvider": "Custom provider",
+  "onboarding.path.customProviderHint": "Use a Claude-compatible endpoint.",
+  "onboarding.claude.tabSubscription": "Subscription",
+  "onboarding.claude.tabApiKey": "API key",
+  "onboarding.startContext.connectFirst":
+    "Connect an AI provider to continue.",
+  "onboarding.startContext.quickChat": "Start Quick chat",
+  "onboarding.startContext.quickChatHint":
+    "Skip for now and use Locus without a project.",
   "onboarding.billing.claudeProMax.title": "Claude Pro/Max",
   "onboarding.billing.claudeSubscription.title": "Claude Code OAuth",
   "onboarding.billing.claudeSubscription.subtitle":
@@ -71,6 +99,8 @@ export const en = {
   "onboarding.apiKey.title": "Enter API Key",
   "onboarding.apiKey.subtitle": "Get your API key from",
   "onboarding.apiKey.hint": "Your API key starts with sk-ant-",
+  "onboarding.apiKey.alreadyConnected":
+    "Anthropic API key profile is connected — no need to add it again.",
   "onboarding.customModel.title": "Configure Custom Model",
   "onboarding.customModel.subtitle": "Configure a Claude-compatible provider",
   "onboarding.customModel.runtimeNoticeTitle": "Claude Code runtime",
@@ -162,6 +192,9 @@ export const en = {
   "onboarding.codex.opening": "Opening...",
   "onboarding.codex.connectWithApiKey": "Connect with API key",
   "onboarding.codex.connectedSuccessfully": "Codex connected successfully",
+  "onboarding.codex.alreadyConnected": "Codex is connected — no need to sign in again.",
+  "onboarding.claude.alreadyConnected":
+    "Claude Code is connected — no need to sign in again.",
   "onboarding.codex.failedVerifyLogin":
     "Failed to verify Codex login status. Please retry.",
   "onboarding.codex.credentialsNotDetected":
@@ -453,6 +486,8 @@ export const en = {
   "settings.models.providerProfiles.customPreset": "Custom preset",
   "settings.models.providerProfiles.secretNotice":
     "API keys are stored by the main process and are not exposed to the renderer.",
+  "settings.models.providerProfiles.helperModelHint":
+    "Helper tasks (titles, commit messages) can use a cheaper model — set it in Settings → Models.",
   "settings.models.providerProfiles.empty": "No Provider Profiles yet.",
   "settings.models.providerProfiles.emptyHint":
     "Pick a preset above, enter a token if needed, then save and run diagnostics.",
@@ -2561,11 +2596,6 @@ export const en = {
   "agent.chat.toast.failedPrepareCommitRequest":
     "Failed to prepare commit request",
   "agent.chat.toast.failedStartReview": "Failed to start review",
-  "agent.onboarding.imageAlt": "Agents interface",
-  "agent.onboarding.title": "Open a Project",
-  "agent.onboarding.description":
-    "Open a Project or start a Quick chat to begin.",
-  "agent.onboarding.letsGo": "Let's go",
   "agent.viewport.desktop": "Desktop viewport",
   "agent.viewport.mobile": "Mobile viewport",
   "localBrowser.title": "Local Browser",
@@ -3494,6 +3524,30 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
 
   "onboarding.billing.title": "连接 AI 提供方",
   "onboarding.billing.subtitle": "选择要连接的提供方。",
+  "onboarding.setup.heading": "开始设置",
+  "onboarding.setup.subheading": "连接一个 AI 提供方，然后打开项目或开始快速对话。",
+  "onboarding.section.aiPath": "AI 提供方",
+  "onboarding.aiPath.subhead": "连接一个即可，其余可稍后连接",
+  "onboarding.section.startContext": "项目",
+  "onboarding.status.ready": "就绪",
+  "onboarding.status.needsSignIn": "需要登录",
+  "onboarding.status.needsApiKey": "需要 API 密钥",
+  "onboarding.status.runtimeMissing": "运行时缺失",
+  "onboarding.status.repairNeeded": "需要修复",
+  "onboarding.status.optional": "可选",
+  "onboarding.status.notStarted": "未开始",
+  "onboarding.status.checking": "正在检查…",
+  "onboarding.path.claude": "Claude",
+  "onboarding.path.claudeHint": "用订阅登录,或使用 Anthropic API 密钥。",
+  "onboarding.path.codex": "Codex",
+  "onboarding.path.codexHint": "使用 ChatGPT 登录或使用 OpenAI API 密钥。",
+  "onboarding.claude.tabSubscription": "订阅登录",
+  "onboarding.claude.tabApiKey": "API 密钥",
+  "onboarding.path.customProvider": "自定义提供方",
+  "onboarding.path.customProviderHint": "使用兼容 Claude 的接口。",
+  "onboarding.startContext.connectFirst": "请先连接一个 AI 提供方以继续。",
+  "onboarding.startContext.quickChat": "开始快速对话",
+  "onboarding.startContext.quickChatHint": "暂时跳过，不选择项目直接使用 Locus。",
   "onboarding.billing.claudeProMax.title": "Claude Pro/Max",
   "onboarding.billing.claudeSubscription.title": "Claude Code OAuth",
   "onboarding.billing.claudeSubscription.subtitle":
@@ -3514,6 +3568,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.apiKey.title": "输入 API 密钥",
   "onboarding.apiKey.subtitle": "从这里获取 API 密钥：",
   "onboarding.apiKey.hint": "API 密钥应以 sk-ant- 开头",
+  "onboarding.apiKey.alreadyConnected":
+    "Anthropic API 密钥配置已连接，无需重复添加。",
   "onboarding.customModel.title": "配置自定义模型",
   "onboarding.customModel.subtitle": "配置兼容 Claude 的提供方",
   "onboarding.customModel.runtimeNoticeTitle": "Claude Code 运行时",
@@ -3602,6 +3658,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "onboarding.codex.opening": "打开中...",
   "onboarding.codex.connectWithApiKey": "使用 API 密钥连接",
   "onboarding.codex.connectedSuccessfully": "Codex 已成功连接",
+  "onboarding.codex.alreadyConnected": "Codex 已连接，无需重复登录。",
+  "onboarding.claude.alreadyConnected": "Claude Code 已连接，无需重复登录。",
   "onboarding.codex.failedVerifyLogin":
     "验证 Codex 登录状态失败，请重试。",
   "onboarding.codex.credentialsNotDetected":
@@ -3887,6 +3945,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.providerProfiles.customPreset": "自定义预设",
   "settings.models.providerProfiles.secretNotice":
     "API 密钥只由主进程保存，不会暴露给渲染进程。",
+  "settings.models.providerProfiles.helperModelHint":
+    "辅助任务（标题、commit 信息）可在 设置 → 模型 里单独指定更便宜的模型。",
   "settings.models.providerProfiles.empty": "还没有提供方配置。",
   "settings.models.providerProfiles.emptyHint":
     "先选择上方预设，需要时输入密钥，然后保存并运行诊断。",
@@ -5978,11 +6038,6 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.chat.toast.failedPrepareCommitRequest":
     "准备提交请求失败",
   "agent.chat.toast.failedStartReview": "启动审查失败",
-  "agent.onboarding.imageAlt": "智能体界面",
-  "agent.onboarding.title": "打开项目",
-  "agent.onboarding.description":
-    "打开项目或开始快速对话即可开始。",
-  "agent.onboarding.letsGo": "开始",
   "agent.viewport.desktop": "桌面视图",
   "agent.viewport.mobile": "移动视图",
   "localBrowser.title": "本地浏览器",

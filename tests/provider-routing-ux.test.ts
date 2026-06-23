@@ -20,6 +20,15 @@ describe("provider routing UX source guards", () => {
     ),
     "utf8",
   )
+  // The provider-profile create/edit form is a shared component reused by both
+  // Settings and first-run onboarding.
+  const providerEditorSource = readFileSync(
+    join(
+      process.cwd(),
+      "src/renderer/features/agents/components/provider-profile-editor.tsx",
+    ),
+    "utf8",
+  )
   const settingsContentSource = readFileSync(
     join(process.cwd(), "src/renderer/features/settings/settings-content.tsx"),
     "utf8",
@@ -59,12 +68,12 @@ describe("provider routing UX source guards", () => {
   })
 
   test("provider presets and target runtimes are accessible chip controls", () => {
-    expect(modelsTabSource).toContain("presetHint")
-    expect(modelsTabSource).toContain("aria-pressed={selected}")
-    expect(modelsTabSource).toContain(
+    expect(providerEditorSource).toContain("presetHint")
+    expect(providerEditorSource).toContain("aria-pressed={selected}")
+    expect(providerEditorSource).toContain(
       "aria-pressed={targetRuntimes.includes(target)}",
     )
-    expect(modelsTabSource).toContain("getProviderTargetLabel(target, t)")
+    expect(providerEditorSource).toContain("getProviderTargetLabel(target, t)")
   })
 
   test("diagnostics render localized labels instead of raw status ids", () => {
@@ -81,8 +90,8 @@ describe("provider routing UX source guards", () => {
   test("profile testing and sensitive destination edits are row-specific and explicit", () => {
     expect(modelsTabSource).toContain("testingProfileId")
     expect(modelsTabSource).toContain("isTestingProfile")
-    expect(modelsTabSource).toContain("tokenRefreshRequired")
-    expect(modelsTabSource).toContain(
+    expect(providerEditorSource).toContain("tokenRefreshRequired")
+    expect(providerEditorSource).toContain(
       "settings.models.providerProfiles.tokenRefreshRequired",
     )
   })
@@ -114,18 +123,18 @@ describe("provider routing UX source guards", () => {
   })
 
   test("Provider Profile headers use key/value rows instead of raw JSON input", () => {
-    expect(modelsTabSource).toContain("providerHeaderRowsFromMetadata")
-    expect(modelsTabSource).toContain("providerHeadersFromRows")
-    expect(modelsTabSource).toContain("headerRows.map")
-    expect(modelsTabSource).toContain(
+    expect(providerEditorSource).toContain("providerHeaderRowsFromMetadata")
+    expect(providerEditorSource).toContain("providerHeadersFromRows")
+    expect(providerEditorSource).toContain("headerRows.map")
+    expect(providerEditorSource).toContain(
       "settings.models.providerProfiles.addHeader",
     )
-    expect(modelsTabSource).toContain(
+    expect(providerEditorSource).toContain(
       "settings.models.providerProfiles.savedHeaderValue",
     )
-    expect(modelsTabSource).not.toContain("headersText")
-    expect(modelsTabSource).not.toContain("JSON.parse(headers")
-    expect(modelsTabSource).not.toContain('{"HTTP-Referer"')
+    expect(providerEditorSource).not.toContain("headersText")
+    expect(providerEditorSource).not.toContain("JSON.parse(headers")
+    expect(providerEditorSource).not.toContain('{"HTTP-Referer"')
   })
 
   test("new chats persist selected provider metadata for transport routing", () => {

@@ -4,16 +4,12 @@ import { useAtom, useSetAtom } from "jotai"
 import { X } from "lucide-react"
 import { useEffect, useRef } from "react"
 import { pendingAuthRetryMessageAtom } from "../../features/agents/atoms"
-import {
-  CodexLoginContent,
-} from "../../features/agents/components/codex-login-content"
+import { CodexLoginContent } from "../../features/agents/components/codex-login-content"
 import { useCodexLoginFlow } from "../../features/agents/hooks/use-codex-login-flow"
 import {
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
   codexLoginModalOpenAtom,
-  codexOnboardingAuthMethodAtom,
-  codexOnboardingCompletedAtom,
   type SettingsTab,
 } from "../../lib/atoms"
 import { useI18n } from "../../lib/i18n"
@@ -32,8 +28,6 @@ export function CodexLoginModal({ autoStart = true }: CodexLoginModalProps) {
   const [open, setOpen] = useAtom(codexLoginModalOpenAtom)
   const setSettingsOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
-  const setCodexOnboardingCompleted = useSetAtom(codexOnboardingCompletedAtom)
-  const setCodexOnboardingAuthMethod = useSetAtom(codexOnboardingAuthMethodAtom)
   const [pendingAuthRetry, setPendingAuthRetry] = useAtom(
     pendingAuthRetryMessageAtom,
   )
@@ -118,24 +112,15 @@ export function CodexLoginModal({ autoStart = true }: CodexLoginModalProps) {
   useEffect(() => {
     if (!open || state !== "success") return
 
-    setCodexOnboardingCompleted(true)
-    setCodexOnboardingAuthMethod(method)
-
-    if (pendingAuthRetry?.provider === "codex" && !pendingAuthRetry.readyToRetry) {
+    if (
+      pendingAuthRetry?.provider === "codex" &&
+      !pendingAuthRetry.readyToRetry
+    ) {
       setPendingAuthRetry({ ...pendingAuthRetry, readyToRetry: true })
     }
 
     setOpen(false)
-  }, [
-    method,
-    open,
-    pendingAuthRetry,
-    setCodexOnboardingAuthMethod,
-    setCodexOnboardingCompleted,
-    setOpen,
-    setPendingAuthRetry,
-    state,
-  ])
+  }, [open, pendingAuthRetry, setOpen, setPendingAuthRetry, state])
 
   const handleConnect = () => {
     if (method === "api_key") {

@@ -9,21 +9,27 @@ import {
 
 describe("legacy voice API key cleanup", () => {
   test("cleans the legacy renderer key without reading or persisting it", () => {
-    const appSource = readFileSync(
-      join(process.cwd(), "src/renderer/App.tsx"),
+    // The legacy migrations live in a dedicated hook, out of the routing path.
+    const migrationsSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/renderer/features/onboarding/lib/use-legacy-migrations.ts",
+      ),
       "utf-8",
     )
-    const voiceEffectMarker =
-      "legacyVoiceApiKeyMigrationAttemptedRef.current = true"
-    const voiceEffectStart = appSource.lastIndexOf(
+    const voiceEffectMarker = "voiceKeyAttemptedRef.current = true"
+    const voiceEffectStart = migrationsSource.lastIndexOf(
       "useEffect(() =>",
-      appSource.indexOf(voiceEffectMarker),
+      migrationsSource.indexOf(voiceEffectMarker),
     )
-    const voiceEffectEnd = appSource.indexOf(
-      "\n\n  // Migrate the legacy renderer-stored custom Claude token",
+    const voiceEffectEnd = migrationsSource.indexOf(
+      "// Legacy renderer-stored custom Claude provider token",
       voiceEffectStart,
     )
-    const voiceEffectSource = appSource.slice(voiceEffectStart, voiceEffectEnd)
+    const voiceEffectSource = migrationsSource.slice(
+      voiceEffectStart,
+      voiceEffectEnd,
+    )
 
     expect(LEGACY_OPENAI_API_KEY_STORAGE_KEY).toBe("agents:openai-api-key")
     expect(OPENAI_TRANSCRIPTION_MODEL).toBe("whisper-1")
@@ -31,12 +37,14 @@ describe("legacy voice API key cleanup", () => {
     expect(voiceEffectSource).toContain("LEGACY_OPENAI_API_KEY_STORAGE_KEY")
     expect(voiceEffectSource).toContain("window.localStorage.removeItem")
     expect(voiceEffectSource).not.toContain("window.localStorage.getItem")
-    expect(appSource).not.toContain("normalizeLegacyOpenAIApiKey")
-    expect(appSource).not.toContain('purpose: "voice_transcription"')
-    expect(appSource).not.toContain("OPENAI_TRANSCRIPTION_MODEL")
-    expect(appSource).not.toContain("OPENAI_TRANSCRIPTION_BASE_URL")
-    expect(appSource).not.toContain("trpc.localApiProviderConfig.save.useMutation")
-    expect(appSource).not.toContain("trpc.voice.setOpenAIKey")
+    expect(migrationsSource).not.toContain("normalizeLegacyOpenAIApiKey")
+    expect(migrationsSource).not.toContain('purpose: "voice_transcription"')
+    expect(migrationsSource).not.toContain("OPENAI_TRANSCRIPTION_MODEL")
+    expect(migrationsSource).not.toContain("OPENAI_TRANSCRIPTION_BASE_URL")
+    expect(migrationsSource).not.toContain(
+      "trpc.localApiProviderConfig.save.useMutation",
+    )
+    expect(migrationsSource).not.toContain("trpc.voice.setOpenAIKey")
   })
 
   test("settings and atoms no longer persist voice API keys in renderer storage", () => {

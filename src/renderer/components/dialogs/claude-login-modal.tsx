@@ -10,13 +10,12 @@ import {
   agentsLoginModalOpenAtom,
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
-  anthropicOnboardingCompletedAtom,
   helperApisSetupPromptPendingAtom,
   type SettingsTab,
 } from "../../lib/atoms"
+import { useI18n } from "../../lib/i18n"
 import { appStore } from "../../lib/jotai-store"
 import { trpc } from "../../lib/trpc"
-import { useI18n } from "../../lib/i18n"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -43,9 +42,6 @@ export function ClaudeLoginModal({
   autoStartAuth = false,
 }: ClaudeLoginModalProps) {
   const [open, setOpen] = useAtom(agentsLoginModalOpenAtom)
-  const setAnthropicOnboardingCompleted = useSetAtom(
-    anthropicOnboardingCompletedAtom,
-  )
   const setHelperApisSetupPromptPending = useSetAtom(
     helperApisSetupPromptPendingAtom,
   )
@@ -72,12 +68,15 @@ export function ClaudeLoginModal({
     submitCode: submitLocalLoginCode,
   } = useClaudeCodeLoginFlow()
 
-  const importSystemTokenMutation = trpc.claudeCode.importSystemToken.useMutation()
+  const importSystemTokenMutation =
+    trpc.claudeCode.importSystemToken.useMutation()
   const systemTokenQuery = trpc.claudeCode.getSystemToken.useQuery(undefined, {
     enabled: open,
   })
   const trpcUtils = trpc.useUtils()
-  const hasLocalClaudeCredential = Boolean(systemTokenQuery.data?.hasCredentials)
+  const hasLocalClaudeCredential = Boolean(
+    systemTokenQuery.data?.hasCredentials,
+  )
 
   const formatClaudeCodeAuthError = useCallback(
     (message: string | null | undefined) => {
@@ -128,20 +127,13 @@ export function ClaudeLoginModal({
   const handleAuthSuccess = useCallback(() => {
     triggerAuthRetry()
     setHelperApisSetupPromptPending(true)
-    setAnthropicOnboardingCompleted(true)
     setOpen(false)
     void Promise.allSettled([
       trpcUtils.anthropicAccounts.list.invalidate(),
       trpcUtils.anthropicAccounts.getActive.invalidate(),
       trpcUtils.claudeCode.getIntegration.invalidate(),
     ])
-  }, [
-    setAnthropicOnboardingCompleted,
-    setHelperApisSetupPromptPending,
-    setOpen,
-    triggerAuthRetry,
-    trpcUtils,
-  ])
+  }, [setHelperApisSetupPromptPending, setOpen, triggerAuthRetry, trpcUtils])
 
   const handleImportLocalCredentials = useCallback(async () => {
     setFlowState({ step: "submitting" })
@@ -191,10 +183,7 @@ export function ClaudeLoginModal({
   }, [cancelLocalLogin, isLocalLoginRunning, open, resetLocalLogin])
 
   useEffect(() => {
-    if (
-      localLoginState !== "success" ||
-      localLoginSuccessHandledRef.current
-    ) {
+    if (localLoginState !== "success" || localLoginSuccessHandledRef.current) {
       return
     }
 

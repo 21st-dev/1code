@@ -57,16 +57,13 @@ import { WorkModeSelector } from "../components/work-mode-selector"
 import {
   agentsSettingsDialogOpenAtom,
   agentsSettingsDialogActiveTabAtom,
-  anthropicOnboardingCompletedAtom,
-  apiKeyOnboardingCompletedAtom,
-  codexOnboardingAuthMethodAtom,
-  codexOnboardingCompletedAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
 } from "../../../lib/atoms"
+import { useSetupStatus } from "../../onboarding/lib/use-setup-status"
 // Desktop uses real tRPC
 import { toast } from "sonner"
 import { trpc } from "../../../lib/trpc"
@@ -334,19 +331,14 @@ export function NewChatForm({
   const [selectedClaudeModelSource, setSelectedClaudeModelSource] = useAtom(
     lastSelectedClaudeModelSourceAtom,
   )
-  // Connection status for providers
-  const anthropicOnboardingCompleted = useAtomValue(
-    anthropicOnboardingCompletedAtom,
-  )
-  const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
-  const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
-  const { data: claudeCodeIntegration } =
-    trpc.claudeCode.getIntegration.useQuery()
+  // Connection status, derived from the provider/runtime owners.
+  const setupStatus = useSetupStatus()
+  // OAuth is only usable when a non-expired OAuth credential and the runtime are
+  // both ready — a saved Provider Profile is a separate selectable source.
   const canUseClaudeOAuth =
-    Boolean(claudeCodeIntegration?.isConnected) ||
-    anthropicOnboardingCompleted ||
-    apiKeyOnboardingCompleted
+    setupStatus.claude.oauthConnected &&
+    !setupStatus.claude.oauthExpired &&
+    setupStatus.claude.runtimeReady
   const claudeSourceNormalization = useMemo(() => {
     if (
       selectedClaudeModelSource === "custom-provider" &&
@@ -521,7 +513,7 @@ export function NewChatForm({
   const shouldUseCodexApiKeyModels =
     lastSelectedCodexModelSource === "openai-api-key" ||
     (lastSelectedCodexModelSource === "chatgpt" &&
-      codexOnboardingAuthMethod === "api_key" &&
+      setupStatus.codex.authMethod === "api_key" &&
       hasAppCodexApiKey)
   const codexUiModels = useMemo(
     () => CODEX_MODELS.filter((model) => !hiddenModels.includes(model.id)),
@@ -2196,7 +2188,7 @@ export function NewChatForm({
                           onSelectModelSource: setLastSelectedCodexModelSource,
                           selectedThinking: selectedCodexThinking,
                           onSelectThinking: setLastSelectedCodexThinking,
-                          isConnected: codexOnboardingCompleted,
+                          isConnected: setupStatus.codex.connected,
                         }}
                       />
                     </div>

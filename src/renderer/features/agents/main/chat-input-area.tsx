@@ -48,10 +48,6 @@ import {
 import {
   agentsSettingsDialogActiveTabAtom,
   agentsSettingsDialogOpenAtom,
-  anthropicOnboardingCompletedAtom,
-  apiKeyOnboardingCompletedAtom,
-  codexOnboardingAuthMethodAtom,
-  codexOnboardingCompletedAtom,
   customHotkeysAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
@@ -67,6 +63,7 @@ import { useI18n } from "../../../lib/i18n"
 import { trpc } from "../../../lib/trpc"
 import { cn } from "../../../lib/utils"
 import { VoiceInputControl } from "../../../lib/voice/voice-input-control"
+import { useSetupStatus } from "../../onboarding/lib/use-setup-status"
 import {
   type AgentMode,
   approvedGuardedRunContractsAtom,
@@ -599,25 +596,18 @@ export const ChatInputArea = memo(function ChatInputArea({
   )
   const hasAppCodexApiKey = Boolean(codexApiKeyStatus?.hasApiKey)
   const hiddenModels = useAtomValue(hiddenModelsAtom)
-  const codexOnboardingAuthMethod = useAtomValue(codexOnboardingAuthMethodAtom)
   const { data: providerProfilesData } =
     trpc.providerProfiles.listProfiles.useQuery(undefined, {
       staleTime: 30_000,
     })
   const providerProfiles = providerProfilesData?.profiles ?? []
 
-  // Connection status for providers
-  const anthropicOnboardingCompleted = useAtomValue(
-    anthropicOnboardingCompletedAtom,
-  )
-  const apiKeyOnboardingCompleted = useAtomValue(apiKeyOnboardingCompletedAtom)
-  const codexOnboardingCompleted = useAtomValue(codexOnboardingCompletedAtom)
-  const { data: claudeCodeIntegration } =
-    trpc.claudeCode.getIntegration.useQuery()
+  // Connection status, derived from the provider/runtime owners.
+  const setupStatus = useSetupStatus()
   const shouldUseCodexApiKeyModels =
     selectedSubChatCodexModelSource === "openai-api-key" ||
     (selectedSubChatCodexModelSource === "chatgpt" &&
-      codexOnboardingAuthMethod === "api_key" &&
+      setupStatus.codex.authMethod === "api_key" &&
       hasAppCodexApiKey)
   const codexUiModels = useMemo(
     () => CODEX_MODELS.filter((model) => !hiddenModels.includes(model.id)),
@@ -721,10 +711,12 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatCodexModelSource,
   ])
 
+  // OAuth is only usable when a non-expired OAuth credential and the runtime are
+  // both ready — a saved Provider Profile is a separate selectable source.
   const canUseClaudeOAuth =
-    Boolean(claudeCodeIntegration?.isConnected) ||
-    anthropicOnboardingCompleted ||
-    apiKeyOnboardingCompleted
+    setupStatus.claude.oauthConnected &&
+    !setupStatus.claude.oauthExpired &&
+    setupStatus.claude.runtimeReady
   const claudeSourceNormalization = useMemo(() => {
     if (
       selectedClaudeModelSource === "custom-provider" &&
@@ -2240,7 +2232,7 @@ export const ChatInputArea = memo(function ChatInputArea({
                           setSelectedSubChatCodexThinking(thinking)
                           setLastSelectedCodexThinking(thinking)
                         },
-                        isConnected: codexOnboardingCompleted,
+                        isConnected: setupStatus.codex.connected,
                       }}
                     />
                   </div>

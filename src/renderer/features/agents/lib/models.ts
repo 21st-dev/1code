@@ -143,7 +143,11 @@ export type ClaudeModelSourceNormalizationResult =
       ok: true
       source: string
       changed: boolean
-      reason?: "auto" | "legacy-profile" | "oauth-fallback"
+      reason?:
+        | "auto"
+        | "legacy-profile"
+        | "oauth-fallback"
+        | "provider-profile-fallback"
     }
   | {
       ok: false
@@ -165,12 +169,56 @@ export function getLegacyClaudeProviderProfile(
   )
 }
 
+/** First Claude-capable profile that has not failed its last test. */
+export function getUsableClaudeProviderProfile(
+  profiles: ClaudeSourceProviderProfile[],
+): ClaudeSourceProviderProfile | undefined {
+  return (
+    getLegacyClaudeProviderProfile(profiles) ??
+    profiles.find(
+      (profile) =>
+        profile.targetRuntimes.includes("claude") &&
+        profile.lastTestStatus?.ok !== false,
+    )
+  )
+}
+
+function providerProfileRequiredBlocker(): ClaudeModelSourceNormalizationResult {
+  return {
+    ok: false,
+    blocker: {
+      code: "provider-profile-required",
+      message: "Custom provider is now configured through Provider Profiles.",
+      hint: "Create or select a Claude-capable Provider Profile in Settings > Models.",
+    },
+  }
+}
+
 export function normalizeClaudeModelSourceForRun(input: {
   source: string | undefined | null
   providerProfiles: ClaudeSourceProviderProfile[]
   canUseClaudeOAuth?: boolean
 }): ClaudeModelSourceNormalizationResult {
   const rawSource = input.source?.trim()
+  // When OAuth is explicitly unusable, an unspecified/OAuth source must not run
+  // the (nonexistent) OAuth path — divert to a usable Provider Profile if any.
+  const oauthExplicitlyUnusable = input.canUseClaudeOAuth === false
+  if (
+    oauthExplicitlyUnusable &&
+    (!rawSource || rawSource === "auto" || rawSource === "claude-oauth")
+  ) {
+    const usableProfile = getUsableClaudeProviderProfile(input.providerProfiles)
+    if (usableProfile) {
+      return {
+        ok: true,
+        source: providerProfileSource(usableProfile.id),
+        changed: true,
+        reason: "provider-profile-fallback",
+      }
+    }
+    return providerProfileRequiredBlocker()
+  }
+
   if (!rawSource || rawSource === "auto") {
     return {
       ok: true,
@@ -207,14 +255,7 @@ export function normalizeClaudeModelSourceForRun(input: {
     }
   }
 
-  return {
-    ok: false,
-    blocker: {
-      code: "provider-profile-required",
-      message: "Custom provider is now configured through Provider Profiles.",
-      hint: "Create or select a Claude-capable Provider Profile in Settings > Models.",
-    },
-  }
+  return providerProfileRequiredBlocker()
 }
 
 export function formatCodexThinkingLabel(thinking: CodexThinkingLevel): string {

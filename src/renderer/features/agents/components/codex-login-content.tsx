@@ -7,7 +7,10 @@ import { CodexIcon, IconSpinner } from "../../../components/ui/icons"
 import { Input } from "../../../components/ui/input"
 import { Logo } from "../../../components/ui/logo"
 import { useI18n } from "../../../lib/i18n"
-import type { CodexAuthMethod, CodexLoginFlowState } from "../hooks/use-codex-login-flow"
+import type {
+  CodexAuthMethod,
+  CodexLoginFlowState,
+} from "../hooks/use-codex-login-flow"
 
 type RuntimeState = "checking" | "ready" | "missing"
 
@@ -20,6 +23,8 @@ type CodexLoginContentProps = {
   isOpeningUrl: boolean
   showConnectButton?: boolean
   isConnecting?: boolean
+  /** Hide the built-in dual-icon header (host already shows a section header). */
+  hideHeader?: boolean
   runtimeState?: RuntimeState
   runtimeHint?: string | null
   onConnect?: () => void
@@ -38,6 +43,7 @@ export function CodexLoginContent({
   isOpeningUrl,
   showConnectButton = false,
   isConnecting = false,
+  hideHeader = false,
   runtimeState,
   runtimeHint,
   onConnect,
@@ -48,30 +54,37 @@ export function CodexLoginContent({
 }: CodexLoginContentProps) {
   const { t } = useI18n()
   const isApiKeyMode = method === "api_key"
-  const showRetry = !isApiKeyMode && (state === "error" || state === "cancelled")
+  const showRetry =
+    !isApiKeyMode && (state === "error" || state === "cancelled")
   const showConnect = !isApiKeyMode && showConnectButton && state === "idle"
   const showFooter = Boolean(error) || showRetry || showConnect || isApiKeyMode
 
   return (
     <div className="space-y-8">
       <div className="text-center space-y-4">
-        <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-            <Logo className="w-5 h-5" fill="white" />
+        {!hideHeader && (
+          <div className="flex items-center justify-center gap-2 p-2 mx-auto w-max rounded-full border border-border">
+            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
+              <Logo className="w-5 h-5" fill="white" />
+            </div>
+            <div className="w-10 h-10 rounded-full bg-foreground flex items-center justify-center">
+              <CodexIcon className="w-6 h-6 text-background" />
+            </div>
           </div>
-          <div className="w-10 h-10 rounded-full bg-foreground flex items-center justify-center">
-            <CodexIcon className="w-6 h-6 text-background" />
-          </div>
-        </div>
+        )}
         <div className="space-y-1">
-          <h1 className="text-base font-semibold tracking-tight">
-            {t("onboarding.codex.title")}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isApiKeyMode
-              ? t("onboarding.codex.apiKeySubtitle")
-              : t("onboarding.codex.subscriptionSubtitle")}
-          </p>
+          {!hideHeader && (
+            <>
+              <h1 className="text-base font-semibold tracking-tight">
+                {t("onboarding.codex.title")}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {isApiKeyMode
+                  ? t("onboarding.codex.apiKeySubtitle")
+                  : t("onboarding.codex.subscriptionSubtitle")}
+              </p>
+            </>
+          )}
 
           {!isApiKeyMode && state === "running" && (
             <p className="text-xs text-muted-foreground">
@@ -160,13 +173,21 @@ export function CodexLoginContent({
           ) : (
             <>
               {showRetry && (
-                <Button variant="secondary" onClick={onRetry} className="w-full">
+                <Button
+                  variant="secondary"
+                  onClick={onRetry}
+                  className="w-full"
+                >
                   {t("common.retry")}
                 </Button>
               )}
 
               {showConnect && (
-                <Button onClick={onConnect} disabled={!onConnect || isConnecting} className="w-full">
+                <Button
+                  onClick={onConnect}
+                  disabled={!onConnect || isConnecting}
+                  className="w-full"
+                >
                   {isConnecting ? t("common.connecting") : t("common.connect")}
                 </Button>
               )}
