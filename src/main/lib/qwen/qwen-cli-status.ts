@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process"
+import { realpathSync } from "node:fs"
 import { delimiter, isAbsolute, join, relative, resolve } from "node:path"
 import { promisify } from "node:util"
 import { redactRuntimePayload } from "../agent-runtime/redaction"
@@ -112,9 +113,17 @@ function qwenExecutableStatus(
   }
 }
 
+function containmentPath(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch {
+    return resolve(path)
+  }
+}
+
 function isSameOrInside(childPath: string, parentPath: string): boolean {
-  const child = resolve(childPath)
-  const parent = resolve(parentPath)
+  const child = containmentPath(childPath)
+  const parent = containmentPath(parentPath)
   const childToParent = relative(parent, child)
   return (
     childToParent === "" ||

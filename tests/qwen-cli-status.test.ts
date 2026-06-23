@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -64,6 +65,33 @@ describe("Qwen CLI setup status", () => {
         component: "qwen-cli",
         code: "qwen-cli-missing",
       },
+    })
+    expect(probeCount).toBe(0)
+  })
+
+  test("ignores PATH candidates that symlink back into the active cwd", async () => {
+    const projectRoot = tempRoot()
+    const trustedPathDir = tempRoot()
+    const projectQwen = executableFile(projectRoot)
+    symlinkSync(projectQwen, join(trustedPathDir, "qwen"))
+    let probeCount = 0
+
+    const resolved = await resolveQwenCliSetupStatus({
+      cwd: projectRoot,
+      env: { PATH: trustedPathDir },
+      ignoreSavedOverride: true,
+      probeVersion: async () => {
+        probeCount += 1
+        return { ok: true, value: "qwen 0.18.5", error: null }
+      },
+    })
+
+    expect(resolved.executablePath).toBeNull()
+    expect(resolved.status).toMatchObject({
+      ok: false,
+      availability: "missing",
+      source: "unresolved",
+      blocker: { code: "qwen-cli-missing" },
     })
     expect(probeCount).toBe(0)
   })
