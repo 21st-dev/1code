@@ -690,17 +690,29 @@ export function getClaudePermissionMapping(
 export function getCodexAppServerPermissionMapping(
   policy: DesktopPermissionPolicy,
 ): CodexAppServerPermissionMapping {
-  if (policy.runtimeMapping.runtime !== "codex") {
-    throw new Error(`Permission policy is not for Codex: ${policy.runtimeId}`)
+  const mapping = policy.runtimeMapping
+  if (
+    mapping.runtime !== "codex" ||
+    mapping.adapterSource !== "codex-app-server"
+  ) {
+    throw new Error(
+      `Permission policy is not for Codex app-server: ${policy.runtimeId}`,
+    )
   }
-  return policy.runtimeMapping
+  return mapping
 }
 
 export function getQwenAcpClientPermissionMapping(
   policy: DesktopPermissionPolicy,
 ): QwenAcpClientPermissionMapping {
-  if (policy.runtimeMapping.runtime !== "qwen-code") {
-    throw new Error(`Permission policy is not for Qwen: ${policy.runtimeId}`)
+  const mapping = policy.runtimeMapping
+  if (
+    mapping.runtime !== "qwen-code" ||
+    mapping.adapterSource !== "qwen-acp-client"
+  ) {
+    throw new Error(
+      `Permission policy is not for Qwen ACP client: ${policy.runtimeId}`,
+    )
   }
-  return policy.runtimeMapping
+  return mapping
 }
