@@ -184,5 +184,5 @@
 ## 11. Validate
 
 - [x] 11.1 `openspec validate add-kun-http-sse-runtime --strict --no-interactive`.
-- [ ] 11.2 `bun run check` green (lint + architecture guard + ts:check + test);
+- [x] 11.2 `bun run check` green (lint + architecture guard + ts:check + test);
       flag-off behavior unchanged.
