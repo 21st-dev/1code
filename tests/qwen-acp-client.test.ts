@@ -183,6 +183,59 @@ describe("Qwen ACP client", () => {
     )
   })
 
+  test("cancels active prompt and closes transport on abort", async () => {
+    const abortController = new AbortController()
+    const calls: Array<{ method: string; params: unknown }> = []
+    let rejectPrompt: ((error: Error) => void) | null = null
+    let closeCount = 0
+    const transport: QwenAcpTransport = {
+      async request(method, params) {
+        calls.push({ method, params })
+        if (method === "initialize") {
+          return { protocolVersion: 1 }
+        }
+        if (method === "session/new") {
+          return { sessionId: "qwen-session-1" }
+        }
+        if (method === "session/prompt") {
+          const prompt = new Promise((_resolve, reject) => {
+            rejectPrompt = reject
+          })
+          queueMicrotask(() => abortController.abort())
+          return prompt
+        }
+        return {}
+      },
+      notify(method, params) {
+        calls.push({ method, params })
+      },
+      onNotification() {
+        return () => {}
+      },
+      onServerRequest() {
+        return () => {}
+      },
+      async close() {
+        closeCount += 1
+        rejectPrompt?.(new Error("transport closed"))
+      },
+    }
+    const adapter = createQwenAcpClientAdapter({
+      createTransport: () => transport,
+    })
+
+    const result = await adapter.run(
+      createDesktopRequest({ signal: abortController.signal }),
+    )
+
+    expect(result.status).toBe("canceled")
+    expect(calls).toContainEqual({
+      method: "session/cancel",
+      params: { sessionId: "qwen-session-1" },
+    })
+    expect(closeCount).toBe(1)
+  })
+
   test("stdio transport starts qwen --acp and frames JSON-RPC 2.0 requests", async () => {
     const writes: string[] = []
     const child = new EventEmitter() as EventEmitter & {

@@ -421,6 +421,13 @@ export function createQwenAcpClientAdapter({
         })
       let sequence = 0
       let sessionId: string | null = null
+      let transportClosed = false
+
+      const closeTransport = async () => {
+        if (transportClosed) return
+        transportClosed = true
+        await transport.close()
+      }
 
       const emitChunk = (chunk: Record<string, unknown>) => {
         emit?.(chunk)
@@ -450,6 +457,7 @@ export function createQwenAcpClientAdapter({
         if (sessionId) {
           transport.notify("session/cancel", { sessionId })
         }
+        void closeTransport()
       }
       request.signal.addEventListener("abort", abortHandler, { once: true })
 
@@ -552,7 +560,7 @@ export function createQwenAcpClientAdapter({
         request.signal.removeEventListener("abort", abortHandler)
         removeServerRequest()
         removeNotification()
-        await transport.close()
+        await closeTransport()
       }
     },
   }
