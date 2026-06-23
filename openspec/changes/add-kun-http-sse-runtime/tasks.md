@@ -33,12 +33,15 @@
       explicit BYO Kun config path; Locus passes `--config <path>` but does not
       read or render provider credentials, and never mutates the user's real Kun
       config/data.
-- [ ] 0.5 Provider-profile preflight: prove Kun can call the Locus profile-scoped
+- [x] 0.5 Provider-profile preflight: prove Kun can call the Locus profile-scoped
       `responses` gateway with `baseUrl=<gatewayEndpoint>`,
       `apiKey=<scoped gateway token>`, and `endpointFormat=responses`; if not
       proven, keep `providerProfiles` `degraded`. Current smoke proves Kun can
       call a Responses-format endpoint through BYO config, not the Locus
-      provider-profile gateway binding.
+      provider-profile gateway binding. Outcome: not proven; current route passes
+      a user BYO `configPath` to Kun and does not synthesize a profile-scoped Kun
+      config from Locus gateway endpoint/token, so `providerProfiles` remains
+      `degraded`.
 
 ## 1. Feature flag and experimental runtime id
 
@@ -209,11 +212,11 @@
 - [x] 10.7 Flag-off smoke/static guard: Kun does not appear when its flag is off;
       existing Claude, Codex, and Qwen flag behavior is unchanged; non-desktop
       stays Claude + Codex.
-- [ ] 10.8 Provider-profile smoke: selected Locus provider profile → scoped
+- [x] 10.8 Provider-profile smoke: selected Locus provider profile → scoped
       `responses` gateway → Kun `endpointFormat=responses` → streamed answer,
       with upstream key absent from argv/renderer/logs; if not proven, document
       `providerProfiles=degraded`. Current fake Responses smoke used BYO config
-      directly, so this remains unproven.
+      directly, so this remains unproven and the manifest stays degraded.
 - [x] 10.9 Write findings: what generalized cleanly, Kun parity gaps left
       `degraded`, and whether bundling/managed-download is worth a later change.
 
