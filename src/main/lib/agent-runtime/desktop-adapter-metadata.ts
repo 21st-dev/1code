@@ -29,3 +29,13 @@ export const QWEN_ACP_CLIENT_DESKTOP_ADAPTER_METADATA = {
   defaultDisableCondition: "LOCUS_ENABLE_QWEN_CODE_RUNTIME is not enabled",
   removalCondition: null,
 } satisfies DesktopRuntimeAdapterMetadata
+
+export const KUN_HTTP_SSE_DESKTOP_ADAPTER_METADATA = {
+  runtimeId: "kun",
+  source: "kun-http-sse",
+  label: "Kun HTTP/SSE adapter",
+  temporaryFallback: false,
+  fallbackReason: null,
+  defaultDisableCondition: "LOCUS_ENABLE_KUN_RUNTIME is not enabled",
+  removalCondition: null,
+} satisfies DesktopRuntimeAdapterMetadata

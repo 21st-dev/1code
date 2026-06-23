@@ -10,6 +10,7 @@ export type DesktopRuntimeAdapterSource =
   | "claude-agent-sdk"
   | "codex-app-server"
   | "qwen-acp-client"
+  | "kun-http-sse"
 
 export type DesktopRuntimeAdapterMetadata = {
   runtimeId: DesktopPermissionRuntime
@@ -98,7 +99,8 @@ export class DesktopRuntimeAdapterFactory {
     if (
       runtimeId !== "claude-code" &&
       runtimeId !== "codex" &&
-      runtimeId !== "qwen-code"
+      runtimeId !== "qwen-code" &&
+      runtimeId !== "kun"
     ) {
       throw new Error(`Unsupported desktop runtime adapter: ${runtimeId}`)
     }

@@ -3,6 +3,7 @@ import { observable } from "@trpc/server/observable"
 import { z } from "zod"
 import {
   AGENT_RUNTIME_CAPABILITY_IDS,
+  shouldEnableKunRuntime,
   shouldEnableQwenCodeRuntime,
 } from "../../../../shared/agent-runtime-capabilities"
 import { resolveDesktopPermissionPolicy } from "../../agent-runtime/permission-policy"
@@ -20,16 +21,27 @@ import {
   appendRunEventsToAgentJob,
   redactRendererRuntimeChunk,
 } from "../../agent-runtime/stream-event-mapper"
+import type { RunEvent } from "../../agent-runtime/runtime-events"
 import { getDatabase } from "../../db"
 import {
   completeDesktopChatAgentJobSafely,
   createAndRegisterDesktopChatAgentJob,
 } from "../../desktop-agent-jobs"
+import { createKunDesktopRunRequest } from "../../kun/desktop-run-request"
+import {
+  createKunHttpSseAdapter,
+  type KunHttpSseApproval,
+} from "../../kun/kun-http-sse-adapter"
+import {
+  resetKunExecutablePathOverride,
+  resolveKunCliSetupStatus,
+  saveKunExecutablePathOverride,
+  toRendererKunCliSetupStatus,
+} from "../../kun/kun-cli-status"
 import { createQwenDesktopRunRequest } from "../../qwen/desktop-run-request"
 import {
   createQwenAcpClientAdapter,
   type QwenAcpPermissionApproval,
-  type QwenAcpPermissionPending,
 } from "../../qwen/qwen-acp-client"
 import {
   resetQwenExecutablePathOverride,
@@ -41,8 +53,8 @@ import { publicProcedure, router } from "../index"
 
 const capabilityIdSchema = z.enum(AGENT_RUNTIME_CAPABILITY_IDS)
 
-const qwenChatInputSchema = z.object({
-  runtimeId: z.literal("qwen-code"),
+const experimentalRuntimeChatInputSchema = z.object({
+  runtimeId: z.enum(["qwen-code", "kun"]),
   subChatId: z.string().min(1),
   chatId: z.string().min(1),
   runId: z.string().optional(),
@@ -52,35 +64,73 @@ const qwenChatInputSchema = z.object({
   sessionId: z.string().optional(),
 })
 
-const qwenExecutablePathInputSchema = z.object({
+const runtimeExecutablePathInputSchema = z.object({
   executablePath: z.string().trim().min(1).max(4096),
 })
 
-const qwenToolApprovalInputSchema = z.object({
+const runtimeToolApprovalInputSchema = z.object({
   toolUseId: z.string(),
   approved: z.boolean(),
   message: z.string().optional(),
   updatedInput: z.unknown().optional(),
 })
 
-const activeQwenStreams = new Map<
+type ExperimentalRuntimeChatId = "qwen-code" | "kun"
+
+type RuntimeToolApproval = QwenAcpPermissionApproval | KunHttpSseApproval
+
+type PendingRuntimeToolApproval = {
+  runtimeId: ExperimentalRuntimeChatId
+  subChatId: string
+  resolve: (approval: RuntimeToolApproval) => void
+}
+
+const activeRuntimeStreams = new Map<
   string,
   {
+    runtimeId: ExperimentalRuntimeChatId
     runId: string
     controller: AbortController
   }
 >()
 
-const pendingQwenToolApprovals = new Map<string, QwenAcpPermissionPending>()
+const pendingRuntimeToolApprovals = new Map<string, PendingRuntimeToolApproval>()
 
-function clearPendingQwenApprovals(
+function runtimeStreamKey(
+  runtimeId: ExperimentalRuntimeChatId,
+  subChatId: string,
+): string {
+  return `${runtimeId}:${subChatId}`
+}
+
+function isExperimentalRuntimeEnabled(runtimeId: ExperimentalRuntimeChatId) {
+  switch (runtimeId) {
+    case "qwen-code":
+      return shouldEnableQwenCodeRuntime(process.env)
+    case "kun":
+      return shouldEnableKunRuntime(process.env)
+  }
+}
+
+function runtimeDisabledMessage(runtimeId: ExperimentalRuntimeChatId): string {
+  switch (runtimeId) {
+    case "qwen-code":
+      return "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable the desktop ACP spike."
+    case "kun":
+      return "Kun runtime is disabled. Set LOCUS_ENABLE_KUN_RUNTIME=1 to enable the desktop HTTP/SSE runtime."
+  }
+}
+
+function clearPendingRuntimeApprovals(
   message = "Session cancelled.",
+  runtimeId?: ExperimentalRuntimeChatId,
   subChatId?: string,
 ): void {
-  for (const [toolUseId, pending] of pendingQwenToolApprovals) {
+  for (const [toolUseId, pending] of pendingRuntimeToolApprovals) {
+    if (runtimeId && pending.runtimeId !== runtimeId) continue
     if (subChatId && pending.subChatId !== subChatId) continue
     pending.resolve({ approved: false, message })
-    pendingQwenToolApprovals.delete(toolUseId)
+    pendingRuntimeToolApprovals.delete(toolUseId)
   }
 }
 
@@ -126,7 +176,7 @@ export const agentRuntimeRouter = router({
   }),
 
   updateQwenExecutablePath: publicProcedure
-    .input(qwenExecutablePathInputSchema)
+    .input(runtimeExecutablePathInputSchema)
     .mutation(async ({ input }) => {
       if (!shouldEnableQwenCodeRuntime(process.env)) {
         throw new TRPCError({
@@ -162,19 +212,67 @@ export const agentRuntimeRouter = router({
     return toRendererQwenCliSetupStatus(resolved)
   }),
 
+  getKunCliStatus: publicProcedure.query(async () => {
+    const resolved = await resolveKunCliSetupStatus({
+      enabled: shouldEnableKunRuntime(process.env),
+    })
+    return toRendererKunCliSetupStatus(resolved)
+  }),
+
+  updateKunExecutablePath: publicProcedure
+    .input(runtimeExecutablePathInputSchema)
+    .mutation(async ({ input }) => {
+      if (!shouldEnableKunRuntime(process.env)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "Kun runtime is disabled. Enable it before changing Kun setup.",
+        })
+      }
+      const resolved = await saveKunExecutablePathOverride(input.executablePath)
+      if (!resolved.status.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            resolved.status.blocker?.message ??
+            resolved.status.executable.error ??
+            "Kun executable path is invalid.",
+        })
+      }
+      return toRendererKunCliSetupStatus(resolved)
+    }),
+
+  resetKunExecutablePath: publicProcedure.mutation(async () => {
+    if (!shouldEnableKunRuntime(process.env)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Kun runtime is disabled. Enable it before changing Kun setup.",
+      })
+    }
+    const resolved = await resetKunExecutablePathOverride()
+    return toRendererKunCliSetupStatus(resolved)
+  }),
+
   chat: publicProcedure
-    .input(qwenChatInputSchema)
+    .input(experimentalRuntimeChatInputSchema)
     .subscription(({ input }) => {
       return observable<Record<string, unknown>>((emit) => {
-        const existingStream = activeQwenStreams.get(input.subChatId)
+        const streamKey = runtimeStreamKey(input.runtimeId, input.subChatId)
+        const existingStream = activeRuntimeStreams.get(streamKey)
         if (existingStream) {
           existingStream.controller.abort()
-          clearPendingQwenApprovals("Session cancelled.", input.subChatId)
+          clearPendingRuntimeApprovals(
+            "Session cancelled.",
+            input.runtimeId,
+            input.subChatId,
+          )
         }
 
         const abortController = new AbortController()
         const runId = input.runId ?? crypto.randomUUID()
-        activeQwenStreams.set(input.subChatId, {
+        activeRuntimeStreams.set(streamKey, {
+          runtimeId: input.runtimeId,
           runId,
           controller: abortController,
         })
@@ -193,7 +291,7 @@ export const agentRuntimeRouter = router({
           try {
             emit.next(
               redactRendererRuntimeChunk({
-                runtimeId: "qwen-code",
+                runtimeId: input.runtimeId,
                 runId,
                 jobId: desktopJobId,
                 chunk,
@@ -207,17 +305,16 @@ export const agentRuntimeRouter = router({
         const complete = () => {
           if (!isActive) return
           isActive = false
-          activeQwenStreams.delete(input.subChatId)
+          activeRuntimeStreams.delete(streamKey)
           emit.complete()
         }
 
         void (async () => {
           try {
-            if (!shouldEnableQwenCodeRuntime(process.env)) {
+            if (!isExperimentalRuntimeEnabled(input.runtimeId)) {
               safeEmit({
                 type: "capability-error",
-                errorText:
-                  "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable the desktop ACP spike.",
+                errorText: runtimeDisabledMessage(input.runtimeId),
               })
               return
             }
@@ -229,26 +326,55 @@ export const agentRuntimeRouter = router({
               subChatId: input.subChatId,
               cwd: input.cwd,
             })
-            const qwenCli = await resolveQwenCliSetupStatus({
-              cwd: preflight.cwd,
-            })
-            if (!qwenCli.status.ok || !qwenCli.executablePath) {
+
+            if (input.runtimeId === "kun" && input.mode === "plan") {
               safeEmit({
                 type: "capability-error",
                 errorText:
-                  qwenCli.status.blocker?.message ??
-                  "Qwen Code CLI is not available.",
-                runtimeStatus: toRendererQwenCliSetupStatus(qwenCli),
+                  "Kun plan mode is degraded in v1 and is blocked before starting a turn.",
               })
               return
             }
+
+            let executablePath: string
+            if (input.runtimeId === "qwen-code") {
+              const qwenCli = await resolveQwenCliSetupStatus({
+                cwd: preflight.cwd,
+              })
+              if (!qwenCli.status.ok || !qwenCli.executablePath) {
+                safeEmit({
+                  type: "capability-error",
+                  errorText:
+                    qwenCli.status.blocker?.message ??
+                    "Qwen Code CLI is not available.",
+                  runtimeStatus: toRendererQwenCliSetupStatus(qwenCli),
+                })
+                return
+              }
+              executablePath = qwenCli.executablePath
+            } else {
+              const kunCli = await resolveKunCliSetupStatus({
+                cwd: preflight.cwd,
+              })
+              if (!kunCli.status.ok || !kunCli.executablePath) {
+                safeEmit({
+                  type: "capability-error",
+                  errorText:
+                    kunCli.status.blocker?.message ??
+                    "Kun CLI is not available.",
+                  runtimeStatus: toRendererKunCliSetupStatus(kunCli),
+                })
+                return
+              }
+              executablePath = kunCli.executablePath
+            }
             const permissionPolicy = resolveDesktopPermissionPolicy({
-              runtimeId: "qwen-code",
+              runtimeId: input.runtimeId,
               mode: input.mode,
               workspaceKind: preflight.kind,
             })
             const desktopJob = createAndRegisterDesktopChatAgentJob(db, {
-              runtime: "qwen-code",
+              runtime: input.runtimeId,
               mode: input.mode,
               chatId: input.chatId,
               subChatId: input.subChatId,
@@ -257,14 +383,14 @@ export const agentRuntimeRouter = router({
               runId,
               permissionPolicy,
               cancel: () => {
-                const activeStream = activeQwenStreams.get(input.subChatId)
+                const activeStream = activeRuntimeStreams.get(streamKey)
                 if (activeStream?.runId !== runId) return
                 activeStream.controller.abort()
               },
             })
             desktopJobId = desktopJob.job.id
 
-            const desktopRunRequest = createQwenDesktopRunRequest({
+            const requestInput = {
               runId,
               jobId: desktopJobId,
               mode: input.mode,
@@ -274,21 +400,47 @@ export const agentRuntimeRouter = router({
               signal: abortController.signal,
               resumeSessionId: input.sessionId ?? null,
               parentSessionId: input.sessionId ?? null,
-              emitTrace: (event) => {
+              emitTrace: (event: RunEvent) => {
                 appendRunEventsToAgentJob(db, [event])
               },
-            })
+            }
+            const desktopRunRequest =
+              input.runtimeId === "qwen-code"
+                ? createQwenDesktopRunRequest(requestInput)
+                : createKunDesktopRunRequest(requestInput)
 
-            const adapter = createQwenAcpClientAdapter({
-              executable: qwenCli.executablePath,
-              emit: safeEmit,
-              registerPendingPermission: (toolUseId, pending) => {
-                pendingQwenToolApprovals.set(toolUseId, pending)
-              },
-              unregisterPendingPermission: (toolUseId) => {
-                pendingQwenToolApprovals.delete(toolUseId)
-              },
-            })
+            const adapter =
+              input.runtimeId === "qwen-code"
+                ? createQwenAcpClientAdapter({
+                    executable: executablePath,
+                    emit: safeEmit,
+                    registerPendingPermission: (toolUseId, pending) => {
+                      pendingRuntimeToolApprovals.set(toolUseId, {
+                        runtimeId: "qwen-code",
+                        subChatId: pending.subChatId,
+                        resolve: (approval) =>
+                          pending.resolve(approval as QwenAcpPermissionApproval),
+                      })
+                    },
+                    unregisterPendingPermission: (toolUseId) => {
+                      pendingRuntimeToolApprovals.delete(toolUseId)
+                    },
+                  })
+                : createKunHttpSseAdapter({
+                    executable: executablePath,
+                    emit: safeEmit,
+                    registerPendingApproval: (toolUseId, pending) => {
+                      pendingRuntimeToolApprovals.set(toolUseId, {
+                        runtimeId: "kun",
+                        subChatId: pending.subChatId,
+                        resolve: (approval) =>
+                          pending.resolve(approval as KunHttpSseApproval),
+                      })
+                    },
+                    unregisterPendingApproval: (toolUseId) => {
+                      pendingRuntimeToolApprovals.delete(toolUseId)
+                    },
+                  })
             const result = await adapter.run(desktopRunRequest)
             desktopJobSawError = desktopJobSawError || result.status === "failed"
             desktopJobReachedNaturalFinish =
@@ -307,9 +459,13 @@ export const agentRuntimeRouter = router({
             })
           } finally {
             if (desktopJobDb) {
-              clearPendingQwenApprovals("Session cancelled.", input.subChatId)
+              clearPendingRuntimeApprovals(
+                "Session cancelled.",
+                input.runtimeId,
+                input.subChatId,
+              )
               completeDesktopChatAgentJobSafely(desktopJobDb, {
-                runtime: "qwen-code",
+                runtime: input.runtimeId,
                 jobId: desktopJobId,
                 aborted: abortController.signal.aborted,
                 reachedNaturalFinish: desktopJobReachedNaturalFinish,
@@ -322,27 +478,31 @@ export const agentRuntimeRouter = router({
 
         return () => {
           abortController.abort()
-          clearPendingQwenApprovals("Session cancelled.", input.subChatId)
-          activeQwenStreams.delete(input.subChatId)
+          clearPendingRuntimeApprovals(
+            "Session cancelled.",
+            input.runtimeId,
+            input.subChatId,
+          )
+          activeRuntimeStreams.delete(streamKey)
           isActive = false
         }
       })
     }),
 
   respondToolApproval: publicProcedure
-    .input(qwenToolApprovalInputSchema)
+    .input(runtimeToolApprovalInputSchema)
     .mutation(({ input }) => {
-      const pending = pendingQwenToolApprovals.get(input.toolUseId)
+      const pending = pendingRuntimeToolApprovals.get(input.toolUseId)
       if (!pending) {
         return { ok: false }
       }
-      const response: QwenAcpPermissionApproval = {
+      const response: RuntimeToolApproval = {
         approved: input.approved,
         message: input.message,
         updatedInput: input.updatedInput,
       }
       pending.resolve(response)
-      pendingQwenToolApprovals.delete(input.toolUseId)
+      pendingRuntimeToolApprovals.delete(input.toolUseId)
       return { ok: true }
     }),
 })

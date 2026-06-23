@@ -4,6 +4,7 @@ import {
   decideAssistantToolPermission,
   getClaudeAssistantSdkDisallowedTools,
   getCodexAppServerPermissionMapping,
+  getKunHttpSsePermissionMapping,
   getQwenAcpClientPermissionMapping,
   resolveDesktopPermissionPolicy,
 } from "../src/main/lib/agent-runtime/permission-policy"
@@ -189,6 +190,53 @@ describe("desktop runtime permission policy", () => {
     })
   })
 
+  test("maps Kun HTTP/SSE policies to hardened fail-closed approval gates", () => {
+    const planPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "kun",
+      mode: "plan",
+    })
+    const guardedPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "kun",
+      mode: "agent",
+      hasScopeContract: true,
+    })
+    const observedPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "kun",
+      mode: "agent",
+    })
+
+    expect(planPolicy.enforcement).toBe("kun-http-sse-plan-blocked")
+    expect(planPolicy.requiresPreExecutionEnforcement).toBe(true)
+    expect(planPolicy.diagnostics.join(" ")).toContain("degraded in v1")
+    expect(getKunHttpSsePermissionMapping(planPolicy)).toMatchObject({
+      runtime: "kun",
+      adapterSource: "kun-http-sse",
+      controlLevel: "plan",
+      approvalPolicy: "on-request",
+      sandboxMode: "workspace-write",
+      commandExecution: "sandbox-blocked",
+      permissionHandlerFailure: "fail-closed",
+    })
+
+    expect(guardedPolicy.enforcement).toBe(
+      "kun-http-sse-guarded-approval-gate",
+    )
+    expect(getKunHttpSsePermissionMapping(guardedPolicy)).toMatchObject({
+      controlLevel: "guarded",
+      requiresApprovalGate: true,
+    })
+
+    expect(observedPolicy.enforcement).toBe("kun-http-sse-agent-approval-gate")
+    expect(observedPolicy.requiresPreExecutionEnforcement).toBe(true)
+    expect(getKunHttpSsePermissionMapping(observedPolicy)).toMatchObject({
+      controlLevel: "observe",
+      observedToolPolicy: {
+        enabled: true,
+        degradation: "fail-closed-when-hook-unavailable",
+      },
+    })
+  })
+
   test("selects assistant control from folderless workspace kind and fails closed by tool category", () => {
     const claudePolicy = resolveDesktopPermissionPolicy({
       runtimeId: "claude-code",
@@ -204,6 +252,11 @@ describe("desktop runtime permission policy", () => {
     })
     const qwenPolicy = resolveDesktopPermissionPolicy({
       runtimeId: "qwen-code",
+      mode: "agent",
+      workspaceKind: "folderless",
+    })
+    const kunPolicy = resolveDesktopPermissionPolicy({
+      runtimeId: "kun",
       mode: "agent",
       workspaceKind: "folderless",
     })
@@ -259,6 +312,21 @@ describe("desktop runtime permission policy", () => {
       runtime: "qwen-code",
       adapterSource: "qwen-acp-client",
       controlLevel: "assistant",
+      permissionHandlerFailure: "fail-closed",
+    })
+    expect(kunPolicy).toMatchObject({
+      runtimeId: "kun",
+      controlLevel: "assistant",
+      enforcement: "kun-http-sse-assistant-approval-gate",
+      requiresPreExecutionEnforcement: true,
+    })
+    expect(getKunHttpSsePermissionMapping(kunPolicy)).toMatchObject({
+      runtime: "kun",
+      adapterSource: "kun-http-sse",
+      controlLevel: "assistant",
+      approvalPolicy: "on-request",
+      sandboxMode: "workspace-write",
+      commandExecution: "sandbox-blocked",
       permissionHandlerFailure: "fail-closed",
     })
 

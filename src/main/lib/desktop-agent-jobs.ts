@@ -17,7 +17,7 @@ import {
 
 type DesktopAgentRuntime = Extract<
   AgentRuntimeId,
-  "claude-code" | "codex" | "qwen-code"
+  "claude-code" | "codex" | "qwen-code" | "kun"
 >
 
 export type CreateDesktopAgentJobInput = {
@@ -91,7 +91,8 @@ function assertDesktopRuntime(runtime: string): asserts runtime is DesktopAgentR
   if (
     runtime !== "claude-code" &&
     runtime !== "codex" &&
-    runtime !== "qwen-code"
+    runtime !== "qwen-code" &&
+    runtime !== "kun"
   ) {
     throw new Error(`Unsupported desktop job runtime: ${runtime}`)
   }

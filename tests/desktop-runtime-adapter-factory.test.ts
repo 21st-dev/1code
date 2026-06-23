@@ -9,11 +9,12 @@ import {
 import {
   CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA,
   CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA,
+  KUN_HTTP_SSE_DESKTOP_ADAPTER_METADATA,
   QWEN_ACP_CLIENT_DESKTOP_ADAPTER_METADATA,
 } from "../src/main/lib/agent-runtime/desktop-adapter-metadata"
 
 function fakeAdapter(
-  runtimeId: "claude-code" | "codex" | "qwen-code",
+  runtimeId: "claude-code" | "codex" | "qwen-code" | "kun",
   source: DesktopRuntimeAdapterSource,
 ): DesktopRuntimeAdapter {
   return {
@@ -49,6 +50,12 @@ describe("desktop runtime adapter factory", () => {
       source: "qwen-acp-client",
       temporaryFallback: false,
       defaultDisableCondition: "LOCUS_ENABLE_QWEN_CODE_RUNTIME is not enabled",
+    })
+    expect(KUN_HTTP_SSE_DESKTOP_ADAPTER_METADATA).toMatchObject({
+      runtimeId: "kun",
+      source: "kun-http-sse",
+      temporaryFallback: false,
+      defaultDisableCondition: "LOCUS_ENABLE_KUN_RUNTIME is not enabled",
     })
   })
 
@@ -120,21 +127,25 @@ describe("desktop runtime adapter factory", () => {
     const claude = fakeAdapter("claude-code", "claude-agent-sdk")
     const codex = fakeAdapter("codex", "codex-app-server")
     const qwen = fakeAdapter("qwen-code", "qwen-acp-client")
-    const factory = new DesktopRuntimeAdapterFactory([claude, codex, qwen])
+    const kun = fakeAdapter("kun", "kun-http-sse")
+    const factory = new DesktopRuntimeAdapterFactory([claude, codex, qwen, kun])
 
     expect(factory.get({ runtimeId: "claude-code" })).toBe(claude)
     expect(factory.get({ runtimeId: "codex" })).toBe(codex)
     expect(factory.get({ runtimeId: "qwen-code" })).toBe(qwen)
+    expect(factory.get({ runtimeId: "kun" })).toBe(kun)
     expect(
       factory.get({ runtimeId: "codex", source: "codex-app-server" }),
     ).toBe(codex)
     expect(
       factory.get({ runtimeId: "qwen-code", source: "qwen-acp-client" }),
     ).toBe(qwen)
+    expect(factory.get({ runtimeId: "kun", source: "kun-http-sse" })).toBe(kun)
     expect(factory.listMetadata()).toEqual([
       claude.metadata,
       codex.metadata,
       qwen.metadata,
+      kun.metadata,
     ])
   })
 
