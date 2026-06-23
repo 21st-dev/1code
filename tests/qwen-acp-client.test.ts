@@ -236,6 +236,113 @@ describe("Qwen ACP client", () => {
     expect(closeCount).toBe(1)
   })
 
+  test("fails closed and traces Qwen ACP permission requests", async () => {
+    const chunks: Record<string, unknown>[] = []
+    const traceEvents: any[] = []
+    let serverRequestHandler:
+      | ((request: QwenAcpTransportServerRequest) => unknown | Promise<unknown>)
+      | null = null
+    let permissionResponse: unknown = null
+    const transport: QwenAcpTransport = {
+      async request(method) {
+        if (method === "initialize") {
+          return { protocolVersion: 1 }
+        }
+        if (method === "session/new") {
+          return { sessionId: "qwen-session-1" }
+        }
+        if (method === "session/prompt") {
+          if (!serverRequestHandler) {
+            throw new Error("missing permission handler")
+          }
+          permissionResponse = await serverRequestHandler({
+            id: "permission-1",
+            method: "session/request_permission",
+            params: {
+              sessionId: "qwen-session-1",
+              toolCall: {
+                sessionUpdate: "tool_call",
+                toolCallId: "tool-1",
+                title: "Write file",
+                kind: "edit",
+                status: "pending",
+              },
+              options: [
+                {
+                  optionId: "allow-once",
+                  kind: "allow_once",
+                  name: "Allow",
+                },
+                {
+                  optionId: "reject-once",
+                  kind: "reject_once",
+                  name: "Reject",
+                },
+              ],
+            },
+          })
+          return { stopReason: "end_turn" }
+        }
+        return {}
+      },
+      notify() {},
+      onNotification() {
+        return () => {}
+      },
+      onServerRequest(handler) {
+        serverRequestHandler = handler
+        return () => {
+          serverRequestHandler = null
+        }
+      },
+      async close() {},
+    }
+    const request = createDesktopRequest()
+    request.trace = { emit: (event) => traceEvents.push(event) }
+    const adapter = createQwenAcpClientAdapter({
+      createTransport: () => transport,
+      emit: (chunk) => chunks.push(chunk),
+    })
+
+    const result = await adapter.run(request)
+
+    expect(result.status).toBe("succeeded")
+    expect(permissionResponse).toEqual({
+      outcome: {
+        outcome: "selected",
+        optionId: "reject-once",
+      },
+    })
+    expect(chunks).toContainEqual(
+      expect.objectContaining({
+        type: "observed-tool-decision",
+        controlLevel: "observe",
+        decision: "deny",
+        message: expect.stringContaining("fail-closed"),
+      }),
+    )
+    expect(chunks).toContainEqual(
+      expect.objectContaining({
+        type: "runtime-status",
+        ok: false,
+        blocker: expect.objectContaining({
+          component: "permission",
+          code: "qwen-acp-permission-fail-closed",
+        }),
+      }),
+    )
+    expect(traceEvents).toContainEqual(
+      expect.objectContaining({
+        runtimeId: "qwen-code",
+        type: "permission_requested",
+        payload: expect.objectContaining({
+          decision: "deny",
+          message: expect.stringContaining("fail-closed"),
+        }),
+      }),
+    )
+  })
+
   test("stdio transport starts qwen --acp and frames JSON-RPC 2.0 requests", async () => {
     const writes: string[] = []
     const child = new EventEmitter() as EventEmitter & {

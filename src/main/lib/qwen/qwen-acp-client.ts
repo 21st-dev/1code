@@ -113,6 +113,12 @@ function stringAt(value: unknown, key: string): string | null {
   return typeof child === "string" ? child : null
 }
 
+function arrayAt(value: unknown, key: string): unknown[] {
+  if (!isRecord(value)) return []
+  const child = value[key]
+  return Array.isArray(child) ? child : []
+}
+
 function trimLongMessage(message: string): string {
   return message.length > 1000 ? `${message.slice(0, 1000)}...` : message
 }
@@ -375,6 +381,48 @@ function qwenSessionUpdateToChunk(
   }
 }
 
+function qwenRejectPermissionOptionId(params: unknown): string | null {
+  for (const option of arrayAt(params, "options")) {
+    if (!isRecord(option)) continue
+    const kind = stringAt(option, "kind")
+    const optionId = stringAt(option, "optionId")
+    if (!optionId) continue
+    if (kind === "reject_once" || kind === "reject_always") {
+      return optionId
+    }
+  }
+  return null
+}
+
+function qwenToolCallLabel(params: unknown): string {
+  const toolCall = isRecord(params) ? params.toolCall : null
+  if (!isRecord(toolCall)) return "unknown Qwen tool"
+  return (
+    stringAt(toolCall, "title") ??
+    stringAt(toolCall, "kind") ??
+    "unknown Qwen tool"
+  )
+}
+
+function qwenPermissionDeniedResponse(
+  params: unknown,
+  aborted: boolean,
+): Record<string, unknown> {
+  if (aborted) {
+    return { outcome: { outcome: "cancelled" } }
+  }
+  const optionId = qwenRejectPermissionOptionId(params)
+  if (!optionId) {
+    return { outcome: { outcome: "cancelled" } }
+  }
+  return {
+    outcome: {
+      outcome: "selected",
+      optionId,
+    },
+  }
+}
+
 function qwenStopReasonStatus(
   stopReason: string | null,
 ): DesktopRunResult["status"] {
@@ -409,7 +457,7 @@ export function createQwenAcpClientAdapter({
         request,
         QWEN_ACP_CLIENT_DESKTOP_ADAPTER_METADATA,
       )
-      assertQwenRuntimeRequest(request)
+      const permissionMapping = assertQwenRuntimeRequest(request)
 
       const transport =
         createTransport?.({ request }) ??
@@ -448,6 +496,48 @@ export function createQwenAcpClientAdapter({
         if (chunk) emitChunk(chunk)
       })
       const removeServerRequest = transport.onServerRequest((serverRequest) => {
+        if (serverRequest.method === "session/request_permission") {
+          const response = qwenPermissionDeniedResponse(
+            serverRequest.params,
+            request.signal.aborted,
+          )
+          const decision =
+            isRecord(response.outcome) &&
+            response.outcome.outcome === "selected"
+              ? "deny"
+              : "cancel"
+          const message =
+            decision === "deny"
+              ? "Qwen ACP permission request denied by Locus fail-closed spike policy."
+              : "Qwen ACP permission request cancelled by Locus fail-closed spike policy."
+          emitChunk({
+            type: "observed-tool-decision",
+            controlLevel: permissionMapping.controlLevel,
+            decision,
+            message,
+            risk: {
+              runtime: "qwen-code",
+              adapterSource: permissionMapping.adapterSource,
+              tool: qwenToolCallLabel(serverRequest.params),
+              requestId: String(serverRequest.id),
+            },
+          })
+          emitChunk({
+            type: "runtime-status",
+            ok: false,
+            blocker: {
+              component: "permission",
+              code: "qwen-acp-permission-fail-closed",
+              message,
+              hint: "Qwen permission allow UI is not wired in this spike.",
+            },
+            qwen: {
+              method: serverRequest.method,
+              outcome: response.outcome,
+            },
+          })
+          return response
+        }
         throw new Error(
           `Qwen ACP server request ${serverRequest.method} is not supported by this spike adapter.`,
         )
