@@ -59,6 +59,7 @@ import {
   agentsSettingsDialogActiveTabAtom,
   extendedThinkingEnabledAtom,
   hiddenModelsAtom,
+  modelsSettingsTargetAtom,
   showOfflineModeFeaturesAtom,
   selectedOllamaModelAtom,
   customHotkeysAtom,
@@ -287,6 +288,14 @@ export function NewChatForm({
       ) ?? false,
     [runtimeCapabilityManifests],
   )
+  const { data: qwenCliStatus } =
+    trpc.agentRuntime.getQwenCliStatus.useQuery(undefined, {
+      enabled: qwenRuntimeVisible,
+      staleTime: 15_000,
+    })
+  const qwenCliReady = qwenCliStatus?.ok === true
+  const qwenSetupRequired =
+    qwenRuntimeVisible && qwenCliStatus !== undefined && !qwenCliReady
 
   // Clear invalid project from storage without letting it drive new-chat mode.
   useEffect(() => {
@@ -406,6 +415,7 @@ export function NewChatForm({
     )
   const setSettingsDialogOpen = useSetAtom(agentsSettingsDialogOpenAtom)
   const setSettingsActiveTab = useSetAtom(agentsSettingsDialogActiveTabAtom)
+  const setModelsSettingsTarget = useSetAtom(modelsSettingsTargetAtom)
   const setJustCreatedIds = useSetAtom(justCreatedIdsAtom)
   const [createBranchDialogOpen, setCreateBranchDialogOpen] = useState(false)
 
@@ -454,10 +464,10 @@ export function NewChatForm({
     if (!match) return null
     return `${match[1]}/${match[2].replace(/\.git$/, "")}`
   }
-  const selectableAgents = useMemo(
-    () => (qwenRuntimeVisible ? [...agents, qwenAgent] : agents),
-    [qwenRuntimeVisible],
-  )
+  const selectableAgents = useMemo(() => {
+    if (!qwenRuntimeVisible) return agents
+    return [...agents, { ...qwenAgent, disabled: !qwenCliReady }]
+  }, [qwenCliReady, qwenRuntimeVisible])
   const enabledAgents = useMemo(
     () =>
       selectableAgents.filter((agent) => {
@@ -1273,6 +1283,15 @@ export function NewChatForm({
       toast.error(t("quickChat.providerUnavailable"))
       return
     }
+    if (selectedAgent.id === "qwen-code" && !qwenCliReady) {
+      toast.error(t("agent.qwenCli.setupRequired"), {
+        description: qwenCliStatus?.blocker?.hint,
+      })
+      setSettingsActiveTab("models")
+      setModelsSettingsTarget("qwen-cli")
+      setSettingsDialogOpen(true)
+      return
+    }
     if (imageAttachmentBlocked) {
       toast.error(t("agent.attachments.imagesUnsupportedTitle"), {
         description: t("agent.attachments.imagesUnsupportedOffline"),
@@ -1346,6 +1365,11 @@ export function NewChatForm({
     isFolderlessQuickChat,
     quickChatRuntimeGateLoaded,
     selectedAgentIsRuntimeAllowed,
+    qwenCliReady,
+    qwenCliStatus?.blocker?.hint,
+    setModelsSettingsTarget,
+    setSettingsActiveTab,
+    setSettingsDialogOpen,
     createChatMutation,
     hasContent,
     selectedBranch,
@@ -1930,6 +1954,26 @@ export function NewChatForm({
                 contextItems={contextItems}
               >
                 <PromptInputContextItems />
+                {qwenSetupRequired && (
+                  <div className="mb-1 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-200">
+                    <span className="min-w-0 flex-1">
+                      {t("agent.qwenCli.setupRequired")}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs text-amber-900 hover:bg-amber-500/15 dark:text-amber-100"
+                      onClick={() => {
+                        setSettingsActiveTab("models")
+                        setModelsSettingsTarget("qwen-cli")
+                        setSettingsDialogOpen(true)
+                      }}
+                    >
+                      {t("agent.qwenCli.openSetup")}
+                    </Button>
+                  </div>
+                )}
                 {imageAttachmentNotice && (
                   <div
                     className={cn(

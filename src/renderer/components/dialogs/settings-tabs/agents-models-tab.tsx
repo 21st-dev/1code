@@ -1368,6 +1368,7 @@ export function AgentsModelsTab() {
   const [isAdvancedRoutingOpen, setIsAdvancedRoutingOpen] = useState(true)
   const [confirmAction, setConfirmAction] = useState<ConfirmActionState>(null)
   const helperApisSectionRef = useRef<HTMLDivElement | null>(null)
+  const qwenCliSectionRef = useRef<HTMLDivElement | null>(null)
   const [modelsSettingsTarget, setModelsSettingsTarget] = useAtom(
     modelsSettingsTargetAtom,
   )
@@ -1382,6 +1383,19 @@ export function AgentsModelsTab() {
   const { data: codexIntegration, isLoading: isCodexLoading } =
     trpc.codex.getIntegration.useQuery()
   const { data: codexApiKeyStatus } = trpc.codex.getCodexApiKeyStatus.useQuery()
+  const { data: runtimeManifests } =
+    trpc.agentRuntime.listManifests.useQuery(undefined, {
+      staleTime: 60_000,
+    })
+  const qwenRuntimeVisible =
+    runtimeManifests?.some((manifest) => manifest.runtimeId === "qwen-code") ??
+    false
+  const { data: qwenCliStatus, isLoading: isQwenCliStatusLoading } =
+    trpc.agentRuntime.getQwenCliStatus.useQuery(undefined, {
+      enabled: qwenRuntimeVisible,
+      staleTime: 15_000,
+    })
+  const [qwenExecutablePath, setQwenExecutablePath] = useState("")
 
   // OpenAI API key state
   const [codexApiKey, setCodexApiKey] = useState("")
@@ -1393,13 +1407,23 @@ export function AgentsModelsTab() {
   const saveCodexApiKeyMutation = trpc.codex.saveCodexApiKey.useMutation()
   const removeCodexApiKeyMutation = trpc.codex.removeCodexApiKey.useMutation()
   const trpcUtils = trpc.useUtils()
+  const updateQwenExecutablePathMutation =
+    trpc.agentRuntime.updateQwenExecutablePath.useMutation()
+  const resetQwenExecutablePathMutation =
+    trpc.agentRuntime.resetQwenExecutablePath.useMutation()
 
   useEffect(() => {
-    if (modelsSettingsTarget !== "helper-apis") return
+    if (!modelsSettingsTarget) return
 
-    setIsAdvancedRoutingOpen(true)
+    if (modelsSettingsTarget === "helper-apis") {
+      setIsAdvancedRoutingOpen(true)
+    }
     const timeoutId = window.setTimeout(() => {
-      helperApisSectionRef.current?.scrollIntoView({
+      const targetRef =
+        modelsSettingsTarget === "qwen-cli"
+          ? qwenCliSectionRef
+          : helperApisSectionRef
+      targetRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       })
@@ -1408,6 +1432,59 @@ export function AgentsModelsTab() {
 
     return () => window.clearTimeout(timeoutId)
   }, [modelsSettingsTarget, setModelsSettingsTarget])
+
+  const handleRefreshQwenCliStatus = async () => {
+    await trpcUtils.agentRuntime.getQwenCliStatus.invalidate()
+  }
+
+  const handleCopyQwenInstallCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        qwenCliStatus?.guidance.installCommand ??
+          "npm install -g @qwen-code/qwen-code",
+      )
+      toast.success(t("settings.models.copied"))
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("toast.models.failedToCopyQwenInstallCommand"),
+      )
+    }
+  }
+
+  const handleSaveQwenExecutablePath = async () => {
+    const executablePath = qwenExecutablePath.trim()
+    if (!executablePath) return
+
+    try {
+      await updateQwenExecutablePathMutation.mutateAsync({ executablePath })
+      setQwenExecutablePath("")
+      await trpcUtils.agentRuntime.getQwenCliStatus.invalidate()
+      toast.success(t("toast.models.qwenExecutablePathSaved"))
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("toast.models.failedToSaveQwenExecutablePath"),
+      )
+    }
+  }
+
+  const handleResetQwenExecutablePath = async () => {
+    try {
+      await resetQwenExecutablePathMutation.mutateAsync()
+      setQwenExecutablePath("")
+      await trpcUtils.agentRuntime.getQwenCliStatus.invalidate()
+      toast.success(t("toast.models.qwenExecutablePathReset"))
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : t("toast.models.failedToResetQwenExecutablePath"),
+      )
+    }
+  }
 
   const handleClaudeCodeSetup = async () => {
     if (isLocalOnly) {
@@ -1786,6 +1863,160 @@ export function AgentsModelsTab() {
           )}
         </div>
       </div>
+
+      {qwenRuntimeVisible && (
+        <div ref={qwenCliSectionRef} className="space-y-2 scroll-mt-6">
+          <div className="pb-2 flex items-center justify-between gap-4">
+            <div>
+              <h4 className="text-sm font-medium text-foreground">
+                {t("settings.models.qwenCli.title")}
+              </h4>
+              <p className="text-xs text-muted-foreground">
+                {t("settings.models.qwenCli.description")}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void handleRefreshQwenCliStatus()}
+              disabled={isQwenCliStatusLoading}
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              {t("common.retry")}
+            </Button>
+          </div>
+
+          <div className="bg-background rounded-lg border border-border overflow-hidden divide-y divide-border">
+            <div className="flex flex-col gap-3 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {t("settings.models.qwenCli.status")}
+                    </span>
+                    {qwenCliStatus?.ok ? (
+                      <ActiveStatusBadge>{t("common.active")}</ActiveStatusBadge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-200"
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        {isQwenCliStatusLoading
+                          ? t("common.loading")
+                          : t("settings.models.qwenCli.setupRequired")}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {qwenCliStatus?.ok
+                      ? t("settings.models.qwenCli.availableHint")
+                      : t("settings.models.qwenCli.missingHint")}
+                  </p>
+                  {qwenCliStatus?.executable.path && (
+                    <p className="break-all text-xs text-muted-foreground">
+                      {t("settings.models.qwenCli.currentPath", {
+                        path: qwenCliStatus.executable.path,
+                      })}
+                    </p>
+                  )}
+                  {qwenCliStatus?.version.value && (
+                    <p className="text-xs text-muted-foreground">
+                      {t("settings.models.qwenCli.version", {
+                        version: qwenCliStatus.version.value,
+                      })}
+                    </p>
+                  )}
+                  {qwenCliStatus?.version.error && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      {t("settings.models.qwenCli.versionProbeFailed", {
+                        error: qwenCliStatus.version.error,
+                      })}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                <code className="min-w-0 overflow-x-auto rounded-md bg-muted px-2 py-1 font-mono text-[11px] text-foreground">
+                  {qwenCliStatus?.guidance.installCommand ??
+                    "npm install -g @qwen-code/qwen-code"}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleCopyQwenInstallCommand()}
+                >
+                  <Copy className="h-3 w-3 mr-1" />
+                  {t("settings.models.copyCommand")}
+                </Button>
+                <Button size="sm" variant="ghost" asChild>
+                  <a
+                    href={
+                      qwenCliStatus?.guidance.docsUrl ??
+                      "https://qwenlm.github.io/qwen-code-docs/"
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLinkIcon className="h-3 w-3 mr-1" />
+                    {t("settings.models.qwenCli.docs")}
+                  </a>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {qwenCliStatus?.guidance.authHint ??
+                  t("settings.models.qwenCli.authHint")}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 p-4">
+              <div>
+                <Label className="text-sm font-medium">
+                  {t("settings.models.qwenCli.overridePath")}
+                </Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("settings.models.qwenCli.overrideHint")}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  value={qwenExecutablePath}
+                  onChange={(event) =>
+                    setQwenExecutablePath(event.currentTarget.value)
+                  }
+                  placeholder="/opt/homebrew/bin/qwen"
+                  className="font-mono"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => void handleSaveQwenExecutablePath()}
+                    disabled={
+                      !qwenExecutablePath.trim() ||
+                      updateQwenExecutablePathMutation.isPending
+                    }
+                  >
+                    {updateQwenExecutablePathMutation.isPending
+                      ? t("common.saving")
+                      : t("common.save")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleResetQwenExecutablePath()}
+                    disabled={resetQwenExecutablePathMutation.isPending}
+                  >
+                    {t("common.reset")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Collapsible
         open={isAdvancedRoutingOpen}

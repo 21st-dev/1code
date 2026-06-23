@@ -17,6 +17,8 @@ describe("quick chat new chat form", () => {
     expect(form).toContain('capability.status === "supported"')
     expect(form).toContain("qwenRuntimeVisible")
     expect(form).toContain('manifest.runtimeId === "qwen-code"')
+    expect(form).toContain("qwenCliReady")
+    expect(form).toContain("disabled: !qwenCliReady")
     expect(form).toContain(
       "allowedProviderIds={quickChatAllowedProviderIds?.filter(",
     )

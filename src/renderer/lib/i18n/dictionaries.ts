@@ -458,6 +458,25 @@ export const en = {
     "Stored in system secure storage and takes priority over subscription",
   "settings.models.openaiApiKey.description":
     "Required for voice transcription (Whisper API)",
+  "settings.models.qwenCli.title": "Qwen Code CLI",
+  "settings.models.qwenCli.description":
+    "Use a local BYO Qwen Code CLI for the Qwen ACP runtime.",
+  "settings.models.qwenCli.status": "CLI status",
+  "settings.models.qwenCli.setupRequired": "Setup required",
+  "settings.models.qwenCli.availableHint":
+    "Locus can spawn qwen --acp. Qwen authentication and model setup still belong inside Qwen Code.",
+  "settings.models.qwenCli.missingHint":
+    "Install Qwen Code CLI or set an absolute executable path.",
+  "settings.models.qwenCli.currentPath": "Path: {path}",
+  "settings.models.qwenCli.version": "Version: {version}",
+  "settings.models.qwenCli.versionProbeFailed":
+    "Version probe failed: {error}",
+  "settings.models.qwenCli.docs": "Docs",
+  "settings.models.qwenCli.authHint":
+    "Run qwen, then use /auth inside the Qwen Code CLI.",
+  "settings.models.qwenCli.overridePath": "Executable path override",
+  "settings.models.qwenCli.overrideHint":
+    "Use an absolute path when the desktop app cannot see your shell PATH. This stores only the path, never Qwen auth files or provider secrets.",
   "settings.models.visibilityToggle": "Show {model} in model selectors",
   "settings.models.advancedRouting.title": "Provider profiles and helper APIs",
   "settings.models.advancedRouting.description":
@@ -1928,6 +1947,14 @@ export const en = {
   "toast.models.codexDisconnected": "Codex disconnected",
   "toast.models.codexApiKeySaved": "Codex API key saved",
   "toast.models.codexApiKeyRemoved": "Codex API key removed",
+  "toast.models.qwenExecutablePathSaved": "Qwen executable path saved",
+  "toast.models.qwenExecutablePathReset": "Qwen executable path reset",
+  "toast.models.failedToSaveQwenExecutablePath":
+    "Failed to save Qwen executable path",
+  "toast.models.failedToResetQwenExecutablePath":
+    "Failed to reset Qwen executable path",
+  "toast.models.failedToCopyQwenInstallCommand":
+    "Failed to copy Qwen install command",
   "toast.models.openaiApiKeySaved": "OpenAI API key saved",
   "toast.models.openaiApiKeyRemoved": "OpenAI API key removed",
   "toast.models.subChatTitleSettingsSaved": "Chat title API saved",
@@ -2682,6 +2709,8 @@ export const en = {
   "agent.transport.unexpectedCodexError":
     "An unexpected Codex error occurred.",
   "agent.transport.codexRequestFailed": "Codex request failed",
+  "agent.qwenCli.setupRequired": "Qwen Code CLI setup required.",
+  "agent.qwenCli.openSetup": "Open setup",
   "agent.todo.creatingList": "Creating to-do list...",
   "agent.todo.list": "To-do list",
   "agent.todo.todos": "To-dos",
@@ -3917,6 +3946,24 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "保存在系统安全存储中，优先级高于订阅",
   "settings.models.openaiApiKey.description":
     "语音转写需要使用（Whisper API）",
+  "settings.models.qwenCli.title": "Qwen Code CLI",
+  "settings.models.qwenCli.description":
+    "使用本地自带的 Qwen Code CLI 作为 Qwen ACP 运行时。",
+  "settings.models.qwenCli.status": "CLI 状态",
+  "settings.models.qwenCli.setupRequired": "需要设置",
+  "settings.models.qwenCli.availableHint":
+    "Locus 可以启动 qwen --acp。Qwen 登录和模型配置仍由 Qwen Code 自己管理。",
+  "settings.models.qwenCli.missingHint":
+    "安装 Qwen Code CLI，或设置一个绝对可执行文件路径。",
+  "settings.models.qwenCli.currentPath": "路径：{path}",
+  "settings.models.qwenCli.version": "版本：{version}",
+  "settings.models.qwenCli.versionProbeFailed": "版本探测失败：{error}",
+  "settings.models.qwenCli.docs": "文档",
+  "settings.models.qwenCli.authHint":
+    "运行 qwen，然后在 Qwen Code CLI 里使用 /auth。",
+  "settings.models.qwenCli.overridePath": "可执行文件路径覆盖",
+  "settings.models.qwenCli.overrideHint":
+    "当桌面应用看不到你的 shell PATH 时，填写绝对路径。这里只保存路径，不写入 Qwen auth 文件或提供方密钥。",
   "settings.models.visibilityToggle": "在模型选择器中显示 {model}",
   "settings.models.advancedRouting.title": "提供方配置与辅助 API",
   "settings.models.advancedRouting.description":
@@ -5377,6 +5424,14 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.models.codexDisconnected": "Codex 已断开连接",
   "toast.models.codexApiKeySaved": "Codex API 密钥已保存",
   "toast.models.codexApiKeyRemoved": "Codex API 密钥已移除",
+  "toast.models.qwenExecutablePathSaved": "Qwen 可执行文件路径已保存",
+  "toast.models.qwenExecutablePathReset": "Qwen 可执行文件路径已重置",
+  "toast.models.failedToSaveQwenExecutablePath":
+    "保存 Qwen 可执行文件路径失败",
+  "toast.models.failedToResetQwenExecutablePath":
+    "重置 Qwen 可执行文件路径失败",
+  "toast.models.failedToCopyQwenInstallCommand":
+    "复制 Qwen 安装命令失败",
   "toast.models.openaiApiKeySaved": "OpenAI API 密钥已保存",
   "toast.models.openaiApiKeyRemoved": "OpenAI API 密钥已移除",
   "toast.models.subChatTitleSettingsSaved": "对话标题 API 已保存",
@@ -6124,6 +6179,8 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.transport.unexpectedCodexError":
     "发生了未知 Codex 错误。",
   "agent.transport.codexRequestFailed": "Codex 请求失败",
+  "agent.qwenCli.setupRequired": "需要设置 Qwen Code CLI。",
+  "agent.qwenCli.openSetup": "打开设置",
   "agent.todo.creatingList": "正在创建待办列表...",
   "agent.todo.list": "待办列表",
   "agent.todo.todos": "待办",

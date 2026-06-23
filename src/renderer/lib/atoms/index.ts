@@ -164,7 +164,7 @@ export type SettingsTab =
   | "about"
 export const agentsSettingsDialogActiveTabAtom =
   atom<SettingsTab>("preferences")
-export type ModelsSettingsTarget = "helper-apis" | null
+export type ModelsSettingsTarget = "helper-apis" | "qwen-cli" | null
 export const modelsSettingsTargetAtom = atom<ModelsSettingsTarget>(null)
 // Derived atom: maps settings open/close to desktopView navigation
 export const agentsSettingsDialogOpenAtom = atom(
