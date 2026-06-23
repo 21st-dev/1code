@@ -2,9 +2,9 @@
 
 Provider call authorization: required
 
-Use this runbook to finish the remaining Qwen ACP spike acceptance tasks from a
-clean machine or clean profile. Do not paste raw API keys, OAuth tokens, cookies,
-or provider headers into the evidence file.
+Use this runbook to reproduce or refresh Qwen ACP spike acceptance evidence from
+a clean machine or clean profile. Do not paste raw API keys, OAuth tokens,
+cookies, or provider headers into the evidence file.
 
 ## 1. Create An Isolated Smoke Root
 
@@ -100,8 +100,8 @@ the absolute path to the isolated `qwen` binary.
 Use the isolated project folder only. Do not run these against a real worktree.
 
 1. Launch + stream: create a Qwen Code chat and ask `Reply with exactly qwen-smoke-ok and do not edit files.`
-2. File edit: create `$QWEN_SMOKE_ROOT/project/qwen-smoke.txt`, ask Qwen to edit only that file, and record whether Locus permission handling allows, denies, or blocks it.
-3. Permission request: trigger a file edit or shell command and record the prompt/decision behavior. Current spike policy may fail closed; if no allow prompt exists, keep tasks 9.2 and 9.3 unchecked.
+2. File edit: create `$QWEN_SMOKE_ROOT/project/qwen-smoke.txt`, ask Qwen to edit only that file, approve the Locus permission prompt, and record the resulting file contents.
+3. Permission request: trigger a file edit or shell command, record the prompt/decision behavior, then repeat with Deny and confirm the target file remains unchanged. If no allow prompt exists, mark the scenario failed or blocked rather than checking tasks 9.2 and 9.3.
 4. Cancel: start a long response and cancel mid-run; confirm the desktop job reaches canceled state and the Qwen process exits.
 5. Error mapping: force a bad auth/path/runtime failure and confirm Locus emits a renderer-safe error instead of hanging or crashing.
 

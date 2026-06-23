@@ -101,6 +101,13 @@ substitute for the Locus guard.
 - **WHEN** a Qwen permission request is denied or the approval hook is unavailable
 - **THEN** the action is blocked (fail-closed) and the denial is traced
 
+#### Scenario: Approved permission selects the ACP allow option
+- **WHEN** Qwen emits a permission request with an ACP allow option
+- **AND** Locus approval handling approves the request
+- **THEN** Locus responds by selecting the ACP allow option
+- **AND** records an allow decision in the runtime trace without emitting a
+  permission blocker
+
 ### Requirement: Isolated Qwen Auth and Smoke State
 
 The system SHALL keep Qwen spike auth and smoke state isolated from the user's

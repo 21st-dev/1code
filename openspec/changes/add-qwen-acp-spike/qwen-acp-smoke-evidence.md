@@ -52,28 +52,39 @@ Evidence:
 
 ## Scenario: qwen-file-edit
 
-Status: blocked
+Status: passed
 
 Evidence:
-- Current spike policy still treats Qwen permission allow as degraded/fail-closed,
-  so file-edit acceptance must remain unchecked until a real allow path is
-  observed or a follow-up implements it.
 - A live Locus adapter edit request against isolated
-  `/private/tmp/locus-qwen-acp-smoke-y29ygf/project/qwen-smoke-edit.txt`
-  produced one observed tool decision and one permission blocker. The file
-  remained `before\n`, proving fail-closed behavior but not allow/apply support.
+  `/private/tmp/locus-qwen-acp-smoke-y29ygf/project/qwen-smoke-edit-allow.txt`
+  used the Qwen approval bridge to answer the emitted `ask-user-question` chunk
+  with Allow.
+- Result: `status = succeeded`, session id present, 39 chunks, 40 trace events,
+  one permission prompt, one `ask-user-question-result = approved`, one observed
+  tool decision `allow`, zero runtime blockers, and the file changed from
+  `before\n` to `after`.
+- A separate live deny smoke against
+  `/private/tmp/locus-qwen-acp-smoke-y29ygf/project/qwen-smoke-edit-deny.txt`
+  answered the same permission path with Deny. Result: `status = succeeded`, one
+  permission prompt, one observed tool decision `deny`, one runtime blocker, and
+  the file remained `before\n`.
 
 ## Scenario: qwen-permission-request
 
-Status: blocked
+Status: passed
 
 Evidence:
-- Unit coverage proves fail-closed permission request handling and trace
-  emission.
-- A live Qwen edit request did produce one observed tool decision through the
-  Locus adapter, and the denial was honored by leaving the file unchanged.
-  However, no user approval prompt / allow UI is wired in this spike, so task
-  9.3 remains unchecked.
+- Unit coverage proves fail-closed handling when the approval bridge is missing,
+  Allow mapping to the ACP `allow_once` option, and a submitted Deny answer not
+  being treated as approval.
+- A live Qwen edit request emitted one `ask-user-question` chunk, registered one
+  pending approval, and the approval response was honored as `allow` with no
+  runtime-status blocker.
+- A live deny request emitted the same permission path and was honored as `deny`
+  with the target file unchanged.
+- Renderer/source guard coverage verifies Qwen chat chunks flow through the
+  shared `runtime-event-state.ts` AskUserQuestion owner and Qwen approval
+  responses route to `agentRuntime.respondToolApproval`, not the Claude route.
 
 ## Scenario: qwen-cancel
 

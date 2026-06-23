@@ -12,15 +12,17 @@
 - The Qwen ACP adapter launches `qwen --acp`, sends `initialize`, creates an ACP
   session, sends `session/prompt`, maps session updates, handles process errors,
   redacts stderr, and closes the transport on cancel.
-- Qwen ACP `session/request_permission` fails closed. The adapter selects a
-  reject option when Qwen provides one, otherwise returns `cancelled`, and emits
-  the existing `observed-tool-decision` trace path plus a runtime-status
-  diagnostic.
+- Qwen ACP `session/request_permission` now uses the shared AskUserQuestion
+  approval path. Allow selects Qwen's ACP allow option and traces an `allow`
+  decision; Deny, timeout, missing approval bridge, or missing allow option fail
+  closed through the existing `observed-tool-decision` trace path plus a
+  runtime-status diagnostic.
 - Renderer changes are limited to Qwen edge selection: provider metadata,
   Qwen chat transport, Qwen option in project new-chat when the manifest is
-  visible, Qwen static runtime label, and Qwen image attachment blocking.
+  visible, Qwen static runtime label, Qwen approval response routing, and Qwen
+  image attachment blocking.
 
-## Not Verified Locally
+## Verified Locally
 
 - The default local shell still does not resolve `qwen` (`command -v qwen`
   returned no path), but an isolated npm-prefix install of
@@ -45,27 +47,29 @@
   id present, 11 chunks, 12 trace events, one completed event), a mid-run cancel
   (`status = canceled`, `job_canceled`, no residual Qwen process), and a forced
   missing-auth error mapping (`status = failed`, `qwen_acp_failed`, no hang).
-- A live edit request produced a Qwen permission request and Locus fail-closed
-  denial. The target file remained unchanged. This proves conservative blocking,
-  not user-facing allow/edit support.
+- A live edit request against an isolated file produced a Qwen permission
+  request, emitted one `ask-user-question` chunk, registered one pending
+  approval, accepted Allow, traced one `allow` decision, emitted no permission
+  blocker, and changed the file from `before\n` to `after`.
+- A second live edit request answered Deny on the same permission path, traced
+  one `deny` decision, emitted one permission blocker, and left the target file
+  unchanged.
 - No Qwen auth config was written. The spike avoided mutating the user's real
   `~/.qwen` state.
 - No real Qwen MCP run was performed.
 - MCP config passthrough is implemented in the ACP `session/new` payload, but
   Qwen's accepted shape was not verified against a live Qwen runtime.
-- Permission allow/approval UI is intentionally not claimed as complete. The
-  spike proves fail-closed request handling and trace persistence; real allow
-  decisions remain degraded in the manifest.
+- The live approval smoke exercised the adapter and renderer-safe
+  AskUserQuestion chunks. It was not a manual visual click-through of the desktop
+  UI; source guard coverage verifies Qwen approval responses route to
+  `agentRuntime.respondToolApproval` and Qwen transport chunks enter the shared
+  `runtime-event-state.ts` owner.
 - When Qwen provides no reject permission option, the adapter returns ACP
-  `cancelled`. That is the conservative fail-closed fallback, but live smoke
-  must confirm whether Qwen treats it as skipping only the tool call or ending
-  the whole turn.
+  `cancelled`. That remains the conservative fail-closed fallback; no live Qwen
+  shape without a reject option was observed.
 
 ## Follow-up
 
-- Install Qwen in an isolated smoke profile, record the exact `qwen` version,
-  and verify launch, streaming, file edit, permission denial, cancel, error
-  mapping, and MCP passthrough using `qwen-acp-smoke-runbook.md`.
 - If Qwen exposes stable permission request shapes beyond
   `session/request_permission`, map them into the shared guard owner before
   promoting hard-tool-guard or plan-mode capability claims.

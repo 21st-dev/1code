@@ -2569,6 +2569,10 @@ const ChatViewInner = memo(function ChatViewInner({
         await trpcClient.codex.respondToolApproval.mutate(input)
         return
       }
+      if (provider === "qwen-code") {
+        await trpcClient.agentRuntime.respondToolApproval.mutate(input)
+        return
+      }
       await trpcClient.claude.respondToolApproval.mutate(input)
     },
     [provider],

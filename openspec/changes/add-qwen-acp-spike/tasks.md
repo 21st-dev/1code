@@ -125,9 +125,9 @@
 
 ## 9. Spike acceptance (the "did the seams hold" checklist)
 - [x] 9.1 Launch + stream: a Qwen chat starts and streams assistant output.
-- [ ] 9.2 File edit: a Qwen file edit renders and applies in an isolated
+- [x] 9.2 File edit: a Qwen file edit renders and applies in an isolated
       worktree only after Locus permission handling allows it.
-- [ ] 9.3 Permission request: an approval prompt surfaces and is honored/denied.
+- [x] 9.3 Permission request: an approval prompt surfaces and is honored/denied.
 - [x] 9.4 Cancel: mid-run cancel cleanly stops the process.
 - [x] 9.5 Error mapping: a forced failure maps to a Locus error, not a
       hang/crash.

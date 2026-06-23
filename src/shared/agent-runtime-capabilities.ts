@@ -701,8 +701,8 @@ const QWEN_CODE_RUNTIME_MANIFEST = manifest({
       status: "degraded",
       scope: "runtime-neutral",
       reason:
-        "The spike will map Qwen ACP permission requests through Locus guard decisions, but full pre-execution enforcement has not been proven yet.",
-      hint: "Keep Qwen guarded runs behind the Qwen runtime flag until permission mapping is verified.",
+        "Qwen ACP file-edit permission requests are mapped through Locus approval decisions, but shell, MCP, and out-of-scope guard parity are not fully proven yet.",
+      hint: "Keep Qwen guarded runs behind the Qwen runtime flag until broader tool classes are verified.",
     }),
     capability({
       id: "planMode",
@@ -733,8 +733,8 @@ const QWEN_CODE_RUNTIME_MANIFEST = manifest({
       status: "degraded",
       scope: "runtime-neutral",
       reason:
-        "The spike may translate ACP user-input style requests into Locus question UI events, but no Qwen flow has proven the full answer lifecycle.",
-      hint: "Do not promise Qwen question parity until pending, answer, skip, and timeout are covered.",
+        "Qwen permission approval prompts use the shared AskUserQuestion event path, but arbitrary Qwen user-input question flows are not mapped as a general runtime feature.",
+      hint: "Treat Qwen questions as permission approvals until a non-permission question flow is verified.",
     }),
     capability({
       id: "rollback",

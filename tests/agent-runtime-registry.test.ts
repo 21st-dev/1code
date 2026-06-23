@@ -165,4 +165,28 @@ describe("agent runtime registry", () => {
     )
     expect(guardedRunCard).not.toContain("isRuntimeCapabilitySupported")
   })
+
+  test("Qwen permission approval uses the runtime route and shared question state", () => {
+    const runtimeRouter = readFileSync(
+      "src/main/lib/trpc/routers/agent-runtime.ts",
+      "utf8",
+    )
+    const activeChat = readFileSync(
+      "src/renderer/features/agents/main/active-chat.tsx",
+      "utf8",
+    )
+    const qwenTransport = readFileSync(
+      "src/renderer/features/agents/lib/qwen-chat-transport.ts",
+      "utf8",
+    )
+
+    expect(runtimeRouter).toContain("pendingQwenToolApprovals")
+    expect(runtimeRouter).toContain("registerPendingPermission")
+    expect(runtimeRouter).toContain("respondToolApproval")
+    expect(qwenTransport).toContain("applyRuntimeEventStateChunk")
+    expect(activeChat).toContain('provider === "qwen-code"')
+    expect(activeChat).toContain(
+      "trpcClient.agentRuntime.respondToolApproval.mutate(input)",
+    )
+  })
 })

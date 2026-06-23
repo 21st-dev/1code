@@ -113,6 +113,31 @@ function createFakeTransport(
   }
 }
 
+function qwenPermissionRequestParams() {
+  return {
+    sessionId: "qwen-session-1",
+    toolCall: {
+      sessionUpdate: "tool_call",
+      toolCallId: "tool-1",
+      title: "Write file",
+      kind: "edit",
+      status: "pending",
+    },
+    options: [
+      {
+        optionId: "allow-once",
+        kind: "allow_once",
+        name: "Allow",
+      },
+      {
+        optionId: "reject-once",
+        kind: "reject_once",
+        name: "Reject",
+      },
+    ],
+  }
+}
+
 describe("Qwen ACP client", () => {
   test("initializes ACP, creates a session, prompts, and maps updates", async () => {
     const chunks: Record<string, unknown>[] = []
@@ -265,28 +290,7 @@ describe("Qwen ACP client", () => {
           permissionResponse = await serverRequestHandler({
             id: "permission-1",
             method: "session/request_permission",
-            params: {
-              sessionId: "qwen-session-1",
-              toolCall: {
-                sessionUpdate: "tool_call",
-                toolCallId: "tool-1",
-                title: "Write file",
-                kind: "edit",
-                status: "pending",
-              },
-              options: [
-                {
-                  optionId: "allow-once",
-                  kind: "allow_once",
-                  name: "Allow",
-                },
-                {
-                  optionId: "reject-once",
-                  kind: "reject_once",
-                  name: "Reject",
-                },
-              ],
-            },
+            params: qwenPermissionRequestParams(),
           })
           return { stopReason: "end_turn" }
         }
@@ -348,6 +352,183 @@ describe("Qwen ACP client", () => {
         }),
       }),
     )
+  })
+
+  test("routes approved Qwen ACP permission requests to the allow option", async () => {
+    const chunks: Record<string, unknown>[] = []
+    const traceEvents: unknown[] = []
+    const unregistered: string[] = []
+    let serverRequestHandler:
+      | ((request: QwenAcpTransportServerRequest) => unknown | Promise<unknown>)
+      | null = null
+    let permissionResponse: unknown = null
+    const transport: QwenAcpTransport = {
+      async request(method) {
+        if (method === "initialize") {
+          return { protocolVersion: 1 }
+        }
+        if (method === "session/new") {
+          return { sessionId: "qwen-session-1" }
+        }
+        if (method === "session/prompt") {
+          if (!serverRequestHandler) {
+            throw new Error("missing permission handler")
+          }
+          permissionResponse = await serverRequestHandler({
+            id: "permission-1",
+            method: "session/request_permission",
+            params: qwenPermissionRequestParams(),
+          })
+          return { stopReason: "end_turn" }
+        }
+        return {}
+      },
+      notify() {},
+      onNotification() {
+        return () => {}
+      },
+      onServerRequest(handler) {
+        serverRequestHandler = handler
+        return () => {
+          serverRequestHandler = null
+        }
+      },
+      async close() {},
+    }
+    const request = createDesktopRequest()
+    request.trace = { emit: (event) => traceEvents.push(event) }
+    const adapter = createQwenAcpClientAdapter({
+      createTransport: () => transport,
+      emit: (chunk) => chunks.push(chunk),
+      registerPendingPermission(_toolUseId, pending) {
+        queueMicrotask(() => {
+          pending.resolve({
+            approved: true,
+            updatedInput: {
+              answers: {
+                "Qwen requested permission for Write file.": "Allow",
+              },
+            },
+          })
+        })
+      },
+      unregisterPendingPermission(toolUseId) {
+        unregistered.push(toolUseId)
+      },
+      permissionApprovalTimeoutMs: 1000,
+    })
+
+    const result = await adapter.run(request)
+
+    expect(result.status).toBe("succeeded")
+    expect(permissionResponse).toEqual({
+      outcome: {
+        outcome: "selected",
+        optionId: "allow-once",
+      },
+    })
+    expect(chunks).toContainEqual(
+      expect.objectContaining({
+        type: "ask-user-question",
+        toolUseId: "qwen-permission-run-qwen-1-permission-1",
+      }),
+    )
+    expect(chunks).toContainEqual(
+      expect.objectContaining({
+        type: "ask-user-question-result",
+        toolUseId: "qwen-permission-run-qwen-1-permission-1",
+        result: "approved",
+      }),
+    )
+    expect(chunks).toContainEqual(
+      expect.objectContaining({
+        type: "observed-tool-decision",
+        decision: "allow",
+      }),
+    )
+    expect(chunks).not.toContainEqual(
+      expect.objectContaining({
+        type: "runtime-status",
+        ok: false,
+      }),
+    )
+    expect(unregistered).toContain("qwen-permission-run-qwen-1-permission-1")
+    expect(traceEvents).toContainEqual(
+      expect.objectContaining({
+        runtimeId: "qwen-code",
+        type: "permission_requested",
+        payload: expect.objectContaining({
+          decision: "allow",
+        }),
+      }),
+    )
+  })
+
+  test("does not treat a submitted Deny answer as Qwen approval", async () => {
+    let serverRequestHandler:
+      | ((request: QwenAcpTransportServerRequest) => unknown | Promise<unknown>)
+      | null = null
+    let permissionResponse: unknown = null
+    const transport: QwenAcpTransport = {
+      async request(method) {
+        if (method === "initialize") {
+          return { protocolVersion: 1 }
+        }
+        if (method === "session/new") {
+          return { sessionId: "qwen-session-1" }
+        }
+        if (method === "session/prompt") {
+          if (!serverRequestHandler) {
+            throw new Error("missing permission handler")
+          }
+          permissionResponse = await serverRequestHandler({
+            id: "permission-1",
+            method: "session/request_permission",
+            params: qwenPermissionRequestParams(),
+          })
+          return { stopReason: "end_turn" }
+        }
+        return {}
+      },
+      notify() {},
+      onNotification() {
+        return () => {}
+      },
+      onServerRequest(handler) {
+        serverRequestHandler = handler
+        return () => {
+          serverRequestHandler = null
+        }
+      },
+      async close() {},
+    }
+    const adapter = createQwenAcpClientAdapter({
+      createTransport: () => transport,
+      registerPendingPermission(_toolUseId, pending) {
+        queueMicrotask(() => {
+          pending.resolve({
+            approved: true,
+            updatedInput: {
+              answers: {
+                "Qwen requested permission for Write file.": "Deny",
+              },
+            },
+          })
+        })
+      },
+      unregisterPendingPermission() {},
+      permissionApprovalTimeoutMs: 1000,
+    })
+
+    const result = await adapter.run(createDesktopRequest())
+
+    expect(result.status).toBe("succeeded")
+    expect(permissionResponse).toEqual({
+      outcome: {
+        outcome: "selected",
+        optionId: "reject-once",
+      },
+    })
   })
 
   test("stdio transport starts qwen --acp and frames JSON-RPC 2.0 requests", async () => {

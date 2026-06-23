@@ -26,7 +26,11 @@ import {
   createAndRegisterDesktopChatAgentJob,
 } from "../../desktop-agent-jobs"
 import { createQwenDesktopRunRequest } from "../../qwen/desktop-run-request"
-import { createQwenAcpClientAdapter } from "../../qwen/qwen-acp-client"
+import {
+  createQwenAcpClientAdapter,
+  type QwenAcpPermissionApproval,
+  type QwenAcpPermissionPending,
+} from "../../qwen/qwen-acp-client"
 import {
   resetQwenExecutablePathOverride,
   resolveQwenCliSetupStatus,
@@ -52,6 +56,13 @@ const qwenExecutablePathInputSchema = z.object({
   executablePath: z.string().trim().min(1).max(4096),
 })
 
+const qwenToolApprovalInputSchema = z.object({
+  toolUseId: z.string(),
+  approved: z.boolean(),
+  message: z.string().optional(),
+  updatedInput: z.unknown().optional(),
+})
+
 const activeQwenStreams = new Map<
   string,
   {
@@ -59,6 +70,19 @@ const activeQwenStreams = new Map<
     controller: AbortController
   }
 >()
+
+const pendingQwenToolApprovals = new Map<string, QwenAcpPermissionPending>()
+
+function clearPendingQwenApprovals(
+  message = "Session cancelled.",
+  subChatId?: string,
+): void {
+  for (const [toolUseId, pending] of pendingQwenToolApprovals) {
+    if (subChatId && pending.subChatId !== subChatId) continue
+    pending.resolve({ approved: false, message })
+    pendingQwenToolApprovals.delete(toolUseId)
+  }
+}
 
 export const agentRuntimeRouter = router({
   listManifests: publicProcedure.query(() => {
@@ -145,6 +169,7 @@ export const agentRuntimeRouter = router({
         const existingStream = activeQwenStreams.get(input.subChatId)
         if (existingStream) {
           existingStream.controller.abort()
+          clearPendingQwenApprovals("Session cancelled.", input.subChatId)
         }
 
         const abortController = new AbortController()
@@ -257,6 +282,12 @@ export const agentRuntimeRouter = router({
             const adapter = createQwenAcpClientAdapter({
               executable: qwenCli.executablePath,
               emit: safeEmit,
+              registerPendingPermission: (toolUseId, pending) => {
+                pendingQwenToolApprovals.set(toolUseId, pending)
+              },
+              unregisterPendingPermission: (toolUseId) => {
+                pendingQwenToolApprovals.delete(toolUseId)
+              },
             })
             const result = await adapter.run(desktopRunRequest)
             desktopJobSawError = desktopJobSawError || result.status === "failed"
@@ -276,6 +307,7 @@ export const agentRuntimeRouter = router({
             })
           } finally {
             if (desktopJobDb) {
+              clearPendingQwenApprovals("Session cancelled.", input.subChatId)
               completeDesktopChatAgentJobSafely(desktopJobDb, {
                 runtime: "qwen-code",
                 jobId: desktopJobId,
@@ -290,9 +322,27 @@ export const agentRuntimeRouter = router({
 
         return () => {
           abortController.abort()
+          clearPendingQwenApprovals("Session cancelled.", input.subChatId)
           activeQwenStreams.delete(input.subChatId)
           isActive = false
         }
       })
+    }),
+
+  respondToolApproval: publicProcedure
+    .input(qwenToolApprovalInputSchema)
+    .mutation(({ input }) => {
+      const pending = pendingQwenToolApprovals.get(input.toolUseId)
+      if (!pending) {
+        return { ok: false }
+      }
+      const response: QwenAcpPermissionApproval = {
+        approved: input.approved,
+        message: input.message,
+        updatedInput: input.updatedInput,
+      }
+      pending.resolve(response)
+      pendingQwenToolApprovals.delete(input.toolUseId)
+      return { ok: true }
     }),
 })
