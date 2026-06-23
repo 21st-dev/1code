@@ -1,5 +1,5 @@
 export const CONTRACT_RUNTIME_IDS = ["claude-code", "codex"] as const
-export const EXPERIMENTAL_RUNTIME_IDS = ["qwen-code"] as const
+export const EXPERIMENTAL_RUNTIME_IDS = ["qwen-code", "kun"] as const
 export const AGENT_RUNTIME_IDS = [
   ...CONTRACT_RUNTIME_IDS,
   ...EXPERIMENTAL_RUNTIME_IDS,
@@ -8,6 +8,8 @@ export const AGENT_RUNTIME_IDS = [
 export type AgentRuntimeId = (typeof AGENT_RUNTIME_IDS)[number]
 export type AgentRuntimeContractId = (typeof CONTRACT_RUNTIME_IDS)[number]
 export type AgentRuntimeAlias = AgentRuntimeId | "claude" | "qwen"
+export type AgentRuntimeExperimentalId =
+  (typeof EXPERIMENTAL_RUNTIME_IDS)[number]
 
 export type AgentRuntimeFeatureEnv = Record<string, string | undefined>
 
@@ -18,6 +20,31 @@ export function shouldEnableQwenCodeRuntime(
 ): boolean {
   const value = env.LOCUS_ENABLE_QWEN_CODE_RUNTIME
   return TRUE_ENV_VALUES.has(value?.trim().toLowerCase() ?? "")
+}
+
+export function shouldEnableKunRuntime(
+  env: AgentRuntimeFeatureEnv = {},
+): boolean {
+  const value = env.LOCUS_ENABLE_KUN_RUNTIME
+  return TRUE_ENV_VALUES.has(value?.trim().toLowerCase() ?? "")
+}
+
+export function isExperimentalAgentRuntimeId(
+  runtimeId: AgentRuntimeId,
+): runtimeId is AgentRuntimeExperimentalId {
+  return (EXPERIMENTAL_RUNTIME_IDS as readonly string[]).includes(runtimeId)
+}
+
+export function shouldEnableExperimentalAgentRuntime(
+  runtimeId: AgentRuntimeExperimentalId,
+  env: AgentRuntimeFeatureEnv = {},
+): boolean {
+  switch (runtimeId) {
+    case "qwen-code":
+      return shouldEnableQwenCodeRuntime(env)
+    case "kun":
+      return shouldEnableKunRuntime(env)
+  }
 }
 
 export const AGENT_RUNTIME_CAPABILITY_IDS = [
@@ -219,6 +246,7 @@ export function toAgentRuntimeId(
   if (runtime === "claude" || runtime === "claude-code") return "claude-code"
   if (runtime === "codex") return "codex"
   if (runtime === "qwen" || runtime === "qwen-code") return "qwen-code"
+  if (runtime === "kun") return "kun"
   return null
 }
 
@@ -819,6 +847,135 @@ const QWEN_CODE_RUNTIME_MANIFEST = manifest({
   ],
 })
 
+const KUN_RUNTIME_MANIFEST = manifest({
+  runtimeId: "kun",
+  label: "Kun",
+  description:
+    "Flag-gated Kun HTTP/SSE runtime support. Capability claims stay conservative until each behavior is wired through Locus-owned policy and runtime adapters.",
+  capabilities: [
+    capability({
+      id: "hardToolGuard",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "Kun can expose approval requests for file changes, but shell and command-execution tools must stay sandbox-blocked rather than approval-mediated in the BYO runtime path.",
+      hint: "Keep Kun behind LOCUS_ENABLE_KUN_RUNTIME and fail closed on unrecognized approval or tool events.",
+    }),
+    capability({
+      id: "planMode",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Kun exposes create_plan events, but Locus plan-mode semantics and write-denial parity are not proven for the first BYO adapter.",
+      hint: "Expose Kun plan details as runtime output only until a separate plan-mode contract is implemented.",
+    }),
+    capability({
+      id: "quickChatAssistant",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Kun folderless and project runs need the HTTP/SSE adapter before quick-chat parity can be claimed.",
+      hint: "Keep Kun quick-chat entry points hidden unless the runtime flag is enabled and the adapter is available.",
+    }),
+    capability({
+      id: "scopeExpansion",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "Kun can reuse Locus workspace scopes only after approval requests are mapped into the shared guard owner.",
+      hint: "Treat out-of-scope Kun edits as denied until the shared guard emits a scoped approval.",
+    }),
+    capability({
+      id: "askUserQuestion",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Kun approval prompts can map to Locus approval UI, but arbitrary runtime question events are not mapped as a general user-input feature.",
+      hint: "Treat Kun questions as tool approvals until non-approval questions are verified.",
+    }),
+    capability({
+      id: "rollback",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Kun thread and turn identifiers are not mapped to durable Locus rollback or fork references.",
+      hint: "Hide rollback and fork controls for Kun.",
+    }),
+    capability({
+      id: "mcpAuth",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "Locus can preflight shared MCP auth state before a Kun run, but Kun-specific MCP auth handoff is not implemented.",
+      hint: "Authenticate MCP servers through existing Locus flows before retrying Kun runs.",
+    }),
+    capability({
+      id: "mcpConfiguration",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Kun MCP configuration parity with Locus-managed MCP settings is not implemented for the first BYO adapter.",
+      hint: "Keep Kun MCP setup attached to explicit runtime diagnostics.",
+    }),
+    capability({
+      id: "providerProfiles",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Kun can point at configurable model endpoints, but Locus provider-profile support depends on a verified responses-gateway binding and must not be assumed from generic OpenAI-compatible wording.",
+      hint: "Keep Kun provider profiles degraded until a responses gateway smoke test passes.",
+    }),
+    capability({
+      id: "attachments",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "Kun prompt input can reuse Locus attachment preflight, but HTTP/SSE prompt-part mapping for image and long-text inputs is not proven.",
+      hint: "Start Kun validation with text prompts before enabling attachment-heavy flows.",
+    }),
+    capability({
+      id: "usageMetadata",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Kun usage metadata, if emitted, has not been normalized into Locus token and context usage events.",
+      hint: "Omit missing Kun usage fields rather than reporting zero.",
+    }),
+    capability({
+      id: "runtimePlugins",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Kun runtime-native plugin execution is outside the BYO HTTP/SSE adapter.",
+      hint: "Keep runtime plugin controls hidden for Kun.",
+    }),
+    capability({
+      id: "runtimeCommands",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Kun command-guide and chat command invocation are outside the first BYO HTTP/SSE adapter.",
+      hint: "Keep runtime command controls hidden for Kun.",
+    }),
+    capability({
+      id: "runtimeWorkflows",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Kun workflow execution has no adapter or shared workflow mapping.",
+      hint: "Keep workflow controls hidden for Kun.",
+    }),
+    capability({
+      id: "appAgents",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Locus Agent prompt preparation may be reusable for Kun, but runtime-native agent execution and limitation reporting are incomplete.",
+      hint: "Do not count prompt injection alone as Kun Locus Agent parity.",
+    }),
+  ],
+})
+
 const AGENT_RUNTIME_MANIFESTS: Record<
   AgentRuntimeId,
   AgentRuntimeCapabilityManifest
@@ -826,6 +983,7 @@ const AGENT_RUNTIME_MANIFESTS: Record<
   "claude-code": CLAUDE_RUNTIME_MANIFEST,
   codex: CODEX_RUNTIME_MANIFEST,
   "qwen-code": QWEN_CODE_RUNTIME_MANIFEST,
+  kun: KUN_RUNTIME_MANIFEST,
 }
 
 export function getAgentRuntimeCapabilityManifests(input: {

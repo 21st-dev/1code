@@ -26,11 +26,14 @@ describe("agent runtime registry", () => {
     expect(JSON.stringify(manifests)).not.toContain("access_token")
   })
 
-  test("keeps Qwen Code out of contract registry lists unless desktop flag is enabled", () => {
+  test("keeps experimental runtimes out of contract registry lists unless their desktop flags are enabled", () => {
     expect(
       listRegisteredAgentRuntimeManifests({
         scope: "contract",
-        env: { LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1" },
+        env: {
+          LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1",
+          LOCUS_ENABLE_KUN_RUNTIME: "1",
+        },
       }).map((manifest) => manifest.runtimeId),
     ).toEqual(["claude-code", "codex"])
     expect(
@@ -45,6 +48,21 @@ describe("agent runtime registry", () => {
         env: { LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1" },
       }).map((manifest) => manifest.runtimeId),
     ).toEqual(["claude-code", "codex", "qwen-code"])
+    expect(
+      listRegisteredAgentRuntimeManifests({
+        scope: "desktop",
+        env: { LOCUS_ENABLE_KUN_RUNTIME: "1" },
+      }).map((manifest) => manifest.runtimeId),
+    ).toEqual(["claude-code", "codex", "kun"])
+    expect(
+      listRegisteredAgentRuntimeManifests({
+        scope: "desktop",
+        env: {
+          LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1",
+          LOCUS_ENABLE_KUN_RUNTIME: "1",
+        },
+      }).map((manifest) => manifest.runtimeId),
+    ).toEqual(["claude-code", "codex", "qwen-code", "kun"])
 
     expect(
       resolveRegisteredAgentRuntimeManifest("qwen-code", {
@@ -67,6 +85,33 @@ describe("agent runtime registry", () => {
       ok: true,
       runtimeId: "qwen-code",
     })
+    expect(
+      resolveRegisteredAgentRuntimeManifest("kun", {
+        scope: "desktop",
+        env: {},
+      }),
+    ).toMatchObject({
+      ok: false,
+      diagnostic: {
+        type: "unavailable-runtime",
+        runtimeId: "kun",
+      },
+    })
+    expect(
+      resolveRegisteredAgentRuntimeManifest("kun", {
+        scope: "desktop",
+        env: { LOCUS_ENABLE_KUN_RUNTIME: "1" },
+      }),
+    ).toMatchObject({
+      ok: true,
+      runtimeId: "kun",
+    })
+    expect(
+      getRegisteredAgentRuntimeManifest("kun", {
+        scope: "desktop",
+        env: { LOCUS_ENABLE_KUN_RUNTIME: "1" },
+      }).runtimeId,
+    ).toBe("kun")
   })
 
   test("provides reusable runtime gating for future desktop CLI job and protocol callers", () => {

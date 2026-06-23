@@ -4,6 +4,7 @@ import {
   AGENT_RUNTIME_CAPABILITY_IDS,
   AGENT_RUNTIME_IDS,
   CONTRACT_RUNTIME_IDS,
+  EXPERIMENTAL_RUNTIME_IDS,
   type AgentRuntimeCapability,
   checkAgentRuntimeCapability,
   getAgentRunRequiredCapabilityIds,
@@ -13,6 +14,8 @@ import {
   isRuntimeCapabilitySupported,
   resolveAgentRuntimeCapability,
   resolveAgentRuntimeCapabilityManifest,
+  shouldEnableExperimentalAgentRuntime,
+  shouldEnableKunRuntime,
   shouldEnableQwenCodeRuntime,
   toAgentRuntimeId,
   validateAgentRuntimeCapability,
@@ -25,8 +28,11 @@ describe("agent runtime capability manifests", () => {
       "claude-code",
       "codex",
       "qwen-code",
+      "kun",
     ])
+    expect([...EXPERIMENTAL_RUNTIME_IDS]).toEqual(["qwen-code", "kun"])
     expect([...CONTRACT_RUNTIME_IDS]).not.toContain("qwen-code")
+    expect([...CONTRACT_RUNTIME_IDS]).not.toContain("kun")
   })
 
   test("registers Claude Code and Codex manifests with the same explicit capability IDs", () => {
@@ -54,13 +60,28 @@ describe("agent runtime capability manifests", () => {
     expect(toAgentRuntimeId("codex")).toBe("codex")
     expect(toAgentRuntimeId("qwen")).toBe("qwen-code")
     expect(toAgentRuntimeId("qwen-code")).toBe("qwen-code")
+    expect(toAgentRuntimeId("kun")).toBe("kun")
     expect(toAgentRuntimeId("unknown")).toBeNull()
   })
 
-  test("keeps Qwen Code manifests flag-gated from default manifest lists", () => {
+  test("keeps experimental manifests flag-gated from default manifest lists", () => {
     expect(shouldEnableQwenCodeRuntime({})).toBe(false)
+    expect(shouldEnableKunRuntime({})).toBe(false)
     expect(
       shouldEnableQwenCodeRuntime({ LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1" }),
+    ).toBe(true)
+    expect(shouldEnableKunRuntime({ LOCUS_ENABLE_KUN_RUNTIME: "1" })).toBe(
+      true,
+    )
+    expect(
+      shouldEnableExperimentalAgentRuntime("qwen-code", {
+        LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1",
+      }),
+    ).toBe(true)
+    expect(
+      shouldEnableExperimentalAgentRuntime("kun", {
+        LOCUS_ENABLE_KUN_RUNTIME: "1",
+      }),
     ).toBe(true)
     expect(
       getAgentRuntimeCapabilityManifests().map((manifest) => manifest.runtimeId),
@@ -69,15 +90,25 @@ describe("agent runtime capability manifests", () => {
       getAgentRuntimeCapabilityManifests({ includeExperimental: true }).map(
         (manifest) => manifest.runtimeId,
       ),
-    ).toEqual(["claude-code", "codex", "qwen-code"])
+    ).toEqual(["claude-code", "codex", "qwen-code", "kun"])
     expect(getAgentRuntimeCapabilityManifest("qwen-code")).toMatchObject({
       runtimeId: "qwen-code",
       label: "Qwen Code",
     })
+    expect(getAgentRuntimeCapabilityManifest("kun")).toMatchObject({
+      runtimeId: "kun",
+      label: "Kun",
+    })
+    expect(getAgentRuntimeCapability("kun", "providerProfiles")).toMatchObject({
+      status: "degraded",
+      reason: expect.stringContaining("responses-gateway"),
+    })
   })
 
   test("requires supported claims to carry code or runtime evidence", () => {
-    for (const manifest of getAgentRuntimeCapabilityManifests()) {
+    for (const manifest of getAgentRuntimeCapabilityManifests({
+      includeExperimental: true,
+    })) {
       for (const capability of manifest.capabilities) {
         if (capability.status !== "supported") continue
         expect(capability.support?.references.length).toBeGreaterThan(0)

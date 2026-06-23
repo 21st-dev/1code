@@ -1,10 +1,12 @@
 import {
+  CONTRACT_RUNTIME_IDS,
+  EXPERIMENTAL_RUNTIME_IDS,
   checkAgentRuntimeCapability,
   getAgentRuntimeCapabilityManifest,
-  getAgentRuntimeCapabilityManifests,
+  isExperimentalAgentRuntimeId,
   resolveAgentRuntimeCapability,
   resolveAgentRuntimeCapabilityManifest,
-  shouldEnableQwenCodeRuntime,
+  shouldEnableExperimentalAgentRuntime,
   toAgentRuntimeId,
   type AgentRuntimeAlias,
   type AgentRuntimeCapabilityGate,
@@ -26,16 +28,56 @@ export type AgentRuntimeRegistryOptions = {
 function includesExperimentalRuntimes(
   options: AgentRuntimeRegistryOptions = {},
 ): boolean {
+  return (
+    (options.scope ?? "contract") === "desktop" &&
+    EXPERIMENTAL_RUNTIME_IDS.some((runtimeId) =>
+      shouldEnableExperimentalAgentRuntime(runtimeId, options.env ?? process.env),
+    )
+  )
+}
+
+function isRegisteredAgentRuntimeId(
+  runtimeId: AgentRuntimeId,
+  options: AgentRuntimeRegistryOptions = {},
+): boolean {
+  if (!isExperimentalAgentRuntimeId(runtimeId)) return true
   if ((options.scope ?? "contract") !== "desktop") return false
-  return shouldEnableQwenCodeRuntime(options.env ?? process.env)
+  return shouldEnableExperimentalAgentRuntime(
+    runtimeId,
+    options.env ?? process.env,
+  )
+}
+
+function buildUnregisteredRuntimeLookup(
+  runtimeId: AgentRuntimeId,
+): AgentRuntimeManifestLookup {
+  return {
+    ok: false,
+    runtimeId,
+    diagnostic: {
+      type: "unavailable-runtime",
+      runtimeId,
+      message: `Agent runtime ${runtimeId} is not registered.`,
+      hint: "Choose a registered runtime and retry.",
+    },
+  }
 }
 
 export function listRegisteredAgentRuntimeManifests(
   options: AgentRuntimeRegistryOptions = {},
 ): AgentRuntimeCapabilityManifest[] {
-  return getAgentRuntimeCapabilityManifests({
-    includeExperimental: includesExperimentalRuntimes(options),
-  })
+  const runtimeIds: AgentRuntimeId[] = includesExperimentalRuntimes(options)
+    ? [
+        ...CONTRACT_RUNTIME_IDS,
+        ...EXPERIMENTAL_RUNTIME_IDS.filter((runtimeId) =>
+          isRegisteredAgentRuntimeId(runtimeId, options),
+        ),
+      ]
+    : [...CONTRACT_RUNTIME_IDS]
+
+  return runtimeIds.map((runtimeId) =>
+    getAgentRuntimeCapabilityManifest(runtimeId),
+  )
 }
 
 export function getRegisteredAgentRuntimeManifest(
@@ -43,10 +85,7 @@ export function getRegisteredAgentRuntimeManifest(
   options: AgentRuntimeRegistryOptions = {},
 ): AgentRuntimeCapabilityManifest {
   const runtimeId = toAgentRuntimeId(runtime)
-  if (
-    runtimeId === "qwen-code" &&
-    !includesExperimentalRuntimes(options)
-  ) {
+  if (!runtimeId || !isRegisteredAgentRuntimeId(runtimeId, options)) {
     throw new Error(`Unknown agent runtime: ${runtime}`)
   }
   return getAgentRuntimeCapabilityManifest(runtime)
@@ -64,10 +103,7 @@ export function checkRegisteredAgentRuntimeCapability(input: {
   options?: AgentRuntimeRegistryOptions
 }): AgentRuntimeCapabilityGate {
   const runtimeId = toAgentRuntimeId(input.runtime)
-  if (
-    runtimeId === "qwen-code" &&
-    !includesExperimentalRuntimes(input.options)
-  ) {
+  if (!runtimeId || !isRegisteredAgentRuntimeId(runtimeId, input.options)) {
     throw new Error(`Unknown agent runtime: ${input.runtime}`)
   }
   return checkAgentRuntimeCapability(input)
@@ -78,20 +114,8 @@ export function resolveRegisteredAgentRuntimeManifest(
   options: AgentRuntimeRegistryOptions = {},
 ): AgentRuntimeManifestLookup {
   const runtimeId = toAgentRuntimeId(runtime)
-  if (
-    runtimeId === "qwen-code" &&
-    !includesExperimentalRuntimes(options)
-  ) {
-    return {
-      ok: false,
-      runtimeId,
-      diagnostic: {
-        type: "unavailable-runtime",
-        runtimeId,
-        message: `Agent runtime ${runtimeId} is not registered.`,
-        hint: "Choose a registered runtime and retry.",
-      },
-    }
+  if (runtimeId && !isRegisteredAgentRuntimeId(runtimeId, options)) {
+    return buildUnregisteredRuntimeLookup(runtimeId)
   }
   return resolveAgentRuntimeCapabilityManifest(runtime)
 }
@@ -102,10 +126,7 @@ export function resolveRegisteredAgentRuntimeCapability(input: {
   options?: AgentRuntimeRegistryOptions
 }): AgentRuntimeCapabilityLookup {
   const runtimeId = toAgentRuntimeId(input.runtime)
-  if (
-    runtimeId === "qwen-code" &&
-    !includesExperimentalRuntimes(input.options)
-  ) {
+  if (runtimeId && !isRegisteredAgentRuntimeId(runtimeId, input.options)) {
     return {
       ok: false,
       runtimeId,
