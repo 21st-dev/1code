@@ -4,7 +4,11 @@ import {
   supportedChatImageMediaTypes,
 } from "./chat-attachments"
 
-export type ChatAttachmentProvider = "claude-code" | "codex" | "qwen-code"
+export type ChatAttachmentProvider =
+  | "claude-code"
+  | "codex"
+  | "qwen-code"
+  | "kun"
 
 export type ChatImageAttachmentCapability = {
   supportsImages: boolean
@@ -19,7 +23,7 @@ export function getChatImageAttachmentCapability(input: {
   provider: ChatAttachmentProvider
   offlineModeEnabled?: boolean
 }): ChatImageAttachmentCapability {
-  if (input.provider === "qwen-code") {
+  if (input.provider === "qwen-code" || input.provider === "kun") {
     return {
       supportsImages: false,
       maxImages: CHAT_IMAGE_MAX_COUNT,

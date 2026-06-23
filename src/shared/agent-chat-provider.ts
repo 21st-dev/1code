@@ -1,4 +1,9 @@
-export const agentChatProviders = ["claude-code", "codex", "qwen-code"] as const
+export const agentChatProviders = [
+  "claude-code",
+  "codex",
+  "qwen-code",
+  "kun",
+] as const
 
 export type AgentChatProvider = (typeof agentChatProviders)[number]
 
@@ -14,7 +19,8 @@ export function normalizeAgentChatProvider(
 ): AgentChatProvider | null {
   return provider === "claude-code" ||
     provider === "codex" ||
-    provider === "qwen-code"
+    provider === "qwen-code" ||
+    provider === "kun"
     ? provider
     : null
 }
@@ -74,6 +80,9 @@ export function inferAgentChatProviderFromMessages(
       normalizedModel.startsWith("gpt-")
     ) {
       return "codex"
+    }
+    if (normalizedModel === "kun" || normalizedModel.includes("kun")) {
+      return "kun"
     }
   }
 

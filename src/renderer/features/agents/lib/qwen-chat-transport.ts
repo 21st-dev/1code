@@ -10,7 +10,10 @@ import {
 import { trpcClient } from "../../../lib/trpc"
 import { applyRuntimeEventStateChunk } from "./runtime-event-state"
 
+type ExperimentalRuntimeTransportId = "qwen-code" | "kun"
+
 type QwenChatTransportConfig = {
+  runtimeId?: ExperimentalRuntimeTransportId
   chatId: string
   subChatId: string
   cwd: string
@@ -21,6 +24,14 @@ type QwenTransportChunk = Record<string, any>
 
 export class QwenChatTransport implements ChatTransport<UIMessage> {
   constructor(private config: QwenChatTransportConfig) {}
+
+  get runtimeId(): ExperimentalRuntimeTransportId {
+    return this.config.runtimeId ?? "qwen-code"
+  }
+
+  private get runtimeLabel(): string {
+    return this.runtimeId === "kun" ? "Kun" : "Qwen Code"
+  }
 
   async sendMessages(options: {
     messages: UIMessage[]
@@ -51,7 +62,7 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
 
         sub = trpcClient.agentRuntime.chat.subscribe(
           {
-            runtimeId: "qwen-code",
+            runtimeId: this.runtimeId,
             subChatId: this.config.subChatId,
             chatId: this.config.chatId,
             runId,
@@ -63,9 +74,10 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
           {
             onData: (chunk: QwenTransportChunk) => {
               if (chunk.type === "error" || chunk.type === "capability-error") {
-                toast.error("Qwen Code error", {
+                toast.error(`${this.runtimeLabel} error`, {
                   description:
-                    chunk.errorText || "The Qwen runtime stream failed.",
+                    chunk.errorText ||
+                    `The ${this.runtimeLabel} runtime stream failed.`,
                 })
               }
 
@@ -84,7 +96,7 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
               }
             },
             onError: (error: Error) => {
-              toast.error("Qwen Code request failed", {
+              toast.error(`${this.runtimeLabel} request failed`, {
                 description: error.message,
               })
               controller.error(error)

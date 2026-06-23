@@ -2569,7 +2569,7 @@ const ChatViewInner = memo(function ChatViewInner({
         await trpcClient.codex.respondToolApproval.mutate(input)
         return
       }
-      if (provider === "qwen-code") {
+      if (provider === "qwen-code" || provider === "kun") {
         await trpcClient.agentRuntime.respondToolApproval.mutate(input)
         return
       }
@@ -5784,7 +5784,7 @@ Make sure to preserve all functionality from both branches when resolving confli
           (existing as any)?.transport instanceof ACPChatTransport
             ? "codex"
             : (existing as any)?.transport instanceof QwenChatTransport
-              ? "qwen-code"
+              ? (existing as any).transport.runtimeId
               : "claude-code"
         if (existingProvider === overrideProvider) return existing
 
@@ -5853,9 +5853,10 @@ Make sure to preserve all functionality from both branches when resolving confli
           mode: subChatMode,
           provider: "codex",
         })
-      } else if (chatProvider === "qwen-code") {
+      } else if (chatProvider === "qwen-code" || chatProvider === "kun") {
         console.log("[getOrCreateChat] Using QwenChatTransport", { provider: chatProvider })
         transport = new QwenChatTransport({
+          runtimeId: chatProvider,
           chatId,
           subChatId,
           cwd: runtimeCwd,
@@ -6124,9 +6125,10 @@ Make sure to preserve all functionality from both branches when resolving confli
           mode: newSubChatMode,
           provider: "codex",
         })
-      } else if (chatProvider === "qwen-code") {
+      } else if (chatProvider === "qwen-code" || chatProvider === "kun") {
         console.log("[createNewSubChat] Using QwenChatTransport", { provider: chatProvider })
         newSubChatTransport = new QwenChatTransport({
+          runtimeId: chatProvider,
           chatId,
           subChatId: newId,
           cwd: runtimeCwd,

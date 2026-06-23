@@ -351,7 +351,7 @@ export const renderableMessagePartSchema = z.union([
 export const chatMessageMetadataSchema = z
   .object({
     model: z.string().optional(),
-    provider: z.enum(["claude-code", "codex"]).optional(),
+    provider: z.enum(["claude-code", "codex", "qwen-code", "kun"]).optional(),
     modelSource: z.string().optional(),
     providerProfileId: z.string().optional(),
     sessionId: z.string().optional(),

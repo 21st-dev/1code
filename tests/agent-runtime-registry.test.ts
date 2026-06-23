@@ -237,6 +237,8 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain("respondToolApproval")
     expect(qwenTransport).toContain("applyRuntimeEventStateChunk")
     expect(activeChat).toContain('provider === "qwen-code"')
+    expect(activeChat).toContain('provider === "kun"')
+    expect(activeChat).toContain('chatProvider === "kun"')
     expect(activeChat).toContain(
       "trpcClient.agentRuntime.respondToolApproval.mutate(input)",
     )

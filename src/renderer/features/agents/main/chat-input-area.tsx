@@ -2150,12 +2150,14 @@ export const ChatInputArea = memo(function ChatInputArea({
                   </DropdownMenu>
 
                   <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
-                    {provider === "qwen-code" ? (
+                    {provider === "qwen-code" || provider === "kun" ? (
                       <div
                         className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground"
-                        title="Qwen Code"
+                        title={provider === "kun" ? "Kun" : "Qwen Code"}
                       >
-                        <span className="truncate">Qwen Code</span>
+                        <span className="truncate">
+                          {provider === "kun" ? "Kun" : "Qwen Code"}
+                        </span>
                       </div>
                     ) : (
                       <AgentModelSelector

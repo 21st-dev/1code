@@ -16,9 +16,13 @@ describe("quick chat new chat form", () => {
     expect(form).toContain('capability.id === "quickChatAssistant"')
     expect(form).toContain('capability.status === "supported"')
     expect(form).toContain("qwenRuntimeVisible")
+    expect(form).toContain("kunRuntimeVisible")
     expect(form).toContain('manifest.runtimeId === "qwen-code"')
+    expect(form).toContain('manifest.runtimeId === "kun"')
     expect(form).toContain("qwenCliReady")
+    expect(form).toContain("kunCliReady")
     expect(form).toContain("disabled: !qwenCliReady")
+    expect(form).toContain("disabled: !kunCliReady")
     expect(form).toContain(
       "allowedProviderIds={quickChatAllowedProviderIds?.filter(",
     )

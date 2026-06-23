@@ -195,13 +195,19 @@ const agents: NewChatAgent[] = [
   { id: "codex", name: "OpenAI Codex" },
 ]
 const qwenAgent: NewChatAgent = { id: "qwen-code", name: "Qwen Code" }
+const kunAgent: NewChatAgent = { id: "kun", name: "Kun" }
 
 function isAgentProviderId(id: string): id is AgentProviderId {
   return id === "claude-code" || id === "codex"
 }
 
 function isAgentChatProvider(id: string): id is AgentChatProvider {
-  return id === "claude-code" || id === "codex" || id === "qwen-code"
+  return (
+    id === "claude-code" ||
+    id === "codex" ||
+    id === "qwen-code" ||
+    id === "kun"
+  )
 }
 
 interface NewChatFormProps {
@@ -288,14 +294,29 @@ export function NewChatForm({
       ) ?? false,
     [runtimeCapabilityManifests],
   )
+  const kunRuntimeVisible = useMemo(
+    () =>
+      runtimeCapabilityManifests?.some(
+        (manifest) => manifest.runtimeId === "kun",
+      ) ?? false,
+    [runtimeCapabilityManifests],
+  )
   const { data: qwenCliStatus } =
     trpc.agentRuntime.getQwenCliStatus.useQuery(undefined, {
       enabled: qwenRuntimeVisible,
       staleTime: 15_000,
     })
+  const { data: kunCliStatus } =
+    trpc.agentRuntime.getKunCliStatus.useQuery(undefined, {
+      enabled: kunRuntimeVisible,
+      staleTime: 15_000,
+    })
   const qwenCliReady = qwenCliStatus?.ok === true
+  const kunCliReady = kunCliStatus?.ok === true
   const qwenSetupRequired =
     qwenRuntimeVisible && qwenCliStatus !== undefined && !qwenCliReady
+  const kunSetupRequired =
+    kunRuntimeVisible && kunCliStatus !== undefined && !kunCliReady
 
   // Clear invalid project from storage without letting it drive new-chat mode.
   useEffect(() => {
@@ -465,9 +486,15 @@ export function NewChatForm({
     return `${match[1]}/${match[2].replace(/\.git$/, "")}`
   }
   const selectableAgents = useMemo(() => {
-    if (!qwenRuntimeVisible) return agents
-    return [...agents, { ...qwenAgent, disabled: !qwenCliReady }]
-  }, [qwenCliReady, qwenRuntimeVisible])
+    const runtimeAgents: NewChatAgent[] = []
+    if (qwenRuntimeVisible) {
+      runtimeAgents.push({ ...qwenAgent, disabled: !qwenCliReady })
+    }
+    if (kunRuntimeVisible) {
+      runtimeAgents.push({ ...kunAgent, disabled: !kunCliReady })
+    }
+    return [...agents, ...runtimeAgents]
+  }, [kunCliReady, kunRuntimeVisible, qwenCliReady, qwenRuntimeVisible])
   const enabledAgents = useMemo(
     () =>
       selectableAgents.filter((agent) => {
@@ -632,6 +659,9 @@ export function NewChatForm({
     if (selectedAgent.id === "qwen-code") {
       return "qwen-code"
     }
+    if (selectedAgent.id === "kun") {
+      return "kun"
+    }
     if (selectedAgent.id === "codex") {
       const selectedProfileId = parseProviderProfileSource(
         lastSelectedCodexModelSource,
@@ -673,6 +703,9 @@ export function NewChatForm({
   const selectedModelLabel = useMemo(() => {
     if (selectedAgent.id === "qwen-code") {
       return "Qwen Code"
+    }
+    if (selectedAgent.id === "kun") {
+      return "Kun"
     }
     if (selectedAgent.id === "codex") {
       const selectedProfileId = parseProviderProfileSource(
@@ -1292,6 +1325,15 @@ export function NewChatForm({
       setSettingsDialogOpen(true)
       return
     }
+    if (selectedAgent.id === "kun" && !kunCliReady) {
+      toast.error("Kun setup required", {
+        description: kunCliStatus?.blocker?.hint,
+      })
+      setSettingsActiveTab("models")
+      setModelsSettingsTarget("kun-cli")
+      setSettingsDialogOpen(true)
+      return
+    }
     if (imageAttachmentBlocked) {
       toast.error(t("agent.attachments.imagesUnsupportedTitle"), {
         description: t("agent.attachments.imagesUnsupportedOffline"),
@@ -1336,13 +1378,15 @@ export function NewChatForm({
       model: selectedChatModel,
       provider: selectedRuntimeProvider,
       modelSource:
-        selectedRuntimeProvider === "qwen-code"
+        selectedRuntimeProvider === "qwen-code" ||
+        selectedRuntimeProvider === "kun"
           ? "runtime-managed"
           : selectedRuntimeProvider === "codex"
             ? lastSelectedCodexModelSource
             : effectiveClaudeModelSource,
       providerProfileId:
-        selectedRuntimeProvider === "qwen-code"
+        selectedRuntimeProvider === "qwen-code" ||
+        selectedRuntimeProvider === "kun"
           ? null
           : selectedRuntimeProvider === "codex"
             ? selectedCodexProfileId
@@ -1365,6 +1409,8 @@ export function NewChatForm({
     isFolderlessQuickChat,
     quickChatRuntimeGateLoaded,
     selectedAgentIsRuntimeAllowed,
+    kunCliReady,
+    kunCliStatus?.blocker?.hint,
     qwenCliReady,
     qwenCliStatus?.blocker?.hint,
     setModelsSettingsTarget,
@@ -1954,10 +2000,13 @@ export function NewChatForm({
                 contextItems={contextItems}
               >
                 <PromptInputContextItems />
-                {qwenSetupRequired && (
+                {((selectedAgent.id === "qwen-code" && qwenSetupRequired) ||
+                  (selectedAgent.id === "kun" && kunSetupRequired)) && (
                   <div className="mb-1 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-200">
                     <span className="min-w-0 flex-1">
-                      {t("agent.qwenCli.setupRequired")}
+                      {selectedAgent.id === "kun"
+                        ? "Kun setup required"
+                        : t("agent.qwenCli.setupRequired")}
                     </span>
                     <Button
                       type="button"
@@ -1966,11 +2015,15 @@ export function NewChatForm({
                       className="h-6 px-2 text-xs text-amber-900 hover:bg-amber-500/15 dark:text-amber-100"
                       onClick={() => {
                         setSettingsActiveTab("models")
-                        setModelsSettingsTarget("qwen-cli")
+                        setModelsSettingsTarget(
+                          selectedAgent.id === "kun" ? "kun-cli" : "qwen-cli",
+                        )
                         setSettingsDialogOpen(true)
                       }}
                     >
-                      {t("agent.qwenCli.openSetup")}
+                      {selectedAgent.id === "kun"
+                        ? "Open setup"
+                        : t("agent.qwenCli.openSetup")}
                     </Button>
                   </div>
                 )}
@@ -2198,13 +2251,18 @@ export function NewChatForm({
                     )}
 
                     <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
-                      {selectedAgent.id === "qwen-code" ? (
+                      {selectedAgent.id === "qwen-code" ||
+                      selectedAgent.id === "kun" ? (
                         <div
                           className="flex h-8 min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground"
-                          title="Qwen Code"
+                          title={
+                            selectedAgent.id === "kun" ? "Kun" : "Qwen Code"
+                          }
                         >
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">Qwen Code</span>
+                          <span className="truncate">
+                            {selectedAgent.id === "kun" ? "Kun" : "Qwen Code"}
+                          </span>
                         </div>
                       ) : (
                         <AgentModelSelector

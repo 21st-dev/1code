@@ -144,6 +144,7 @@ describe("provider routing UX source guards", () => {
     expect(newChatFormSource).toContain(
       'selectedRuntimeProvider === "qwen-code"',
     )
+    expect(newChatFormSource).toContain('selectedRuntimeProvider === "kun"')
     expect(newChatFormSource).toContain('"runtime-managed"')
     expect(newChatFormSource).toContain("modelSource:")
     expect(newChatFormSource).toContain("providerProfileId:")
