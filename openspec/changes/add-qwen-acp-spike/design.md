@@ -46,10 +46,12 @@ above seams genuinely need to generalize.
 - **Transport: local stdio ACP for this slice.** Launch `qwen --acp`, speak ACP
   over stdio, and translate to Locus run events. Qwen Code `0.19.1` reports
   OpenAI-compatible headless auth through `--auth-type=openai`, so the transport
-  may prepend only an allowlisted, non-secret `--auth-type=<type>` from
-  `LOCUS_QWEN_CODE_AUTH_TYPE`; API keys still come only from main-process runtime
-  environment and are never renderer DTOs. Name the new Qwen-facing module
-  `qwen-acp-client` (or equivalent) to avoid confusion with the existing
+  may prepend only allowlisted, non-secret `--auth-type=<type>` /
+  `--model=<id>` selectors from `LOCUS_QWEN_CODE_AUTH_TYPE` and
+  `LOCUS_QWEN_CODE_MODEL`; API keys and base URLs still come only from
+  main-process runtime environment and are never renderer DTOs. Name the new
+  Qwen-facing module `qwen-acp-client` (or equivalent) to avoid confusion with
+  the existing
   `headless/acp-stdio.ts`, where Locus acts as an ACP-like server. This transport
   is not a remote HTTP/SSE abstraction. If Qwen's `qwen serve` `/acp` path becomes
   desirable, that later change must define daemon token/session lifecycle

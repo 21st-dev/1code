@@ -56,6 +56,8 @@ selection. `OPENAI_API_KEY` alone is not enough for `session/new`.
 
 ```bash
 export LOCUS_QWEN_CODE_AUTH_TYPE="openai"
+export LOCUS_QWEN_CODE_MODEL="gpt-4o-mini"
+export OPENAI_BASE_URL="https://api.openai.com/v1"
 export OPENAI_API_KEY="$YOUR_QWEN_SMOKE_OPENAI_KEY"
 ```
 
@@ -65,7 +67,7 @@ Then verify a non-interactive ACP session without asking for a model response:
 {
   printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},"clientInfo":{"name":"locus-smoke","title":"Locus Smoke","version":"0.0.0"}}}'
   printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"'$QWEN_SMOKE_ROOT/project'","mcpServers":[]}}'
-} | qwen --auth-type=openai --acp
+} | qwen --auth-type=openai --model=gpt-4o-mini --acp
 ```
 
 Expected evidence: response `id:2` contains a `sessionId`. If it still returns
@@ -78,11 +80,13 @@ From the repo root:
 ```bash
 LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 \
 LOCUS_QWEN_CODE_AUTH_TYPE=openai \
+LOCUS_QWEN_CODE_MODEL=gpt-4o-mini \
 LOCUS_USER_DATA_DIR="$LOCUS_USER_DATA_DIR" \
 HOME="$HOME" \
 XDG_CONFIG_HOME="$XDG_CONFIG_HOME" \
 XDG_DATA_HOME="$XDG_DATA_HOME" \
 XDG_CACHE_HOME="$XDG_CACHE_HOME" \
+OPENAI_BASE_URL="$OPENAI_BASE_URL" \
 OPENAI_API_KEY="$OPENAI_API_KEY" \
 PATH="$PATH" \
 bun run dev

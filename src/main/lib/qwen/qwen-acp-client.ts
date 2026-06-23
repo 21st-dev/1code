@@ -169,9 +169,24 @@ function qwenAcpAuthTypeFromEnv(
   )
 }
 
+function qwenAcpModelFromEnv(env: NodeJS.ProcessEnv): string | null {
+  const raw = env.LOCUS_QWEN_CODE_MODEL?.trim()
+  if (!raw) return null
+  if (/^[A-Za-z0-9._:/|$+@-]{1,200}$/.test(raw)) return raw
+  const safeValue = redactQwenDiagnostic(raw, "unsupported")
+  throw new Error(
+    `Unsupported Qwen ACP model "${safeValue}". Use a model id without spaces or shell metacharacters.`,
+  )
+}
+
 function qwenAcpSpawnArgs(env: NodeJS.ProcessEnv): string[] {
   const authType = qwenAcpAuthTypeFromEnv(env)
-  return authType ? [`--auth-type=${authType}`, "--acp"] : ["--acp"]
+  const model = qwenAcpModelFromEnv(env)
+  return [
+    ...(authType ? [`--auth-type=${authType}`] : []),
+    ...(model ? [`--model=${model}`] : []),
+    "--acp",
+  ]
 }
 
 export function createQwenAcpStdioTransport({

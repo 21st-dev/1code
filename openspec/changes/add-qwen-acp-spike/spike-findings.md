@@ -36,11 +36,21 @@
   `--auth-type=openai`, Qwen advances to session creation. This is why Locus now
   supports a non-secret `LOCUS_QWEN_CODE_AUTH_TYPE=openai` environment selector
   for headless smoke.
-- No real Qwen provider API key was available in the local environment, and no
-  Qwen auth config was written. The spike avoided mutating the user's real
+- Reusing the ignored local `.env.local` `OPENAI_API_KEY`, plus
+  `OPENAI_BASE_URL=https://api.openai.com/v1`,
+  `LOCUS_QWEN_CODE_AUTH_TYPE=openai`, and
+  `LOCUS_QWEN_CODE_MODEL=gpt-4o-mini`, direct ACP completed an authenticated
+  non-interactive prompt and returned `qwen-smoke-ok`.
+- The Locus Qwen adapter completed a live stream (`status = succeeded`, session
+  id present, 11 chunks, 12 trace events, one completed event), a mid-run cancel
+  (`status = canceled`, `job_canceled`, no residual Qwen process), and a forced
+  missing-auth error mapping (`status = failed`, `qwen_acp_failed`, no hang).
+- A live edit request produced a Qwen permission request and Locus fail-closed
+  denial. The target file remained unchanged. This proves conservative blocking,
+  not user-facing allow/edit support.
+- No Qwen auth config was written. The spike avoided mutating the user's real
   `~/.qwen` state.
-- No authenticated real Qwen assistant stream, file edit, cancel, or real Qwen
-  MCP run was performed.
+- No real Qwen MCP run was performed.
 - MCP config passthrough is implemented in the ACP `session/new` payload, but
   Qwen's accepted shape was not verified against a live Qwen runtime.
 - Permission allow/approval UI is intentionally not claimed as complete. The

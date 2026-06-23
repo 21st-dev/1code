@@ -15,7 +15,7 @@
       isolated Locus userData, or perform read-only BYO status checks only. Do
       not write the user's real `~/.qwen/settings.json` without explicit
       approval.
-- [ ] 0.4 Stand up headless-friendly auth (API key / Alibaba Cloud Coding Plan)
+- [x] 0.4 Stand up headless-friendly auth (API key / Alibaba Cloud Coding Plan)
       inside the isolated config path; confirm a non-interactive session; do NOT
       use OAuth free tier. For Qwen Code `0.19.1`, OpenAI-compatible auth needs
       `LOCUS_QWEN_CODE_AUTH_TYPE=openai` plus a main-process `OPENAI_API_KEY`.
@@ -64,9 +64,10 @@
       `src/main/lib/qwen/qwen-acp-client.ts` that can launch a configured
       command/args pair and speak ACP over stdio.
 - [x] 4.2 Configure Qwen with `command: "qwen"` and default args `["--acp"]`;
-      allow only a non-secret, allowlisted `LOCUS_QWEN_CODE_AUTH_TYPE` to add
-      `--auth-type=<type>` for headless auth. Do not use `qwen serve`, HTTP
-      `/acp`, or remote HTTP+SSE in this change.
+      allow only non-secret, allowlisted main-process selectors
+      (`LOCUS_QWEN_CODE_AUTH_TYPE`, `LOCUS_QWEN_CODE_MODEL`) to add
+      `--auth-type=<type>` / `--model=<id>` for headless auth smoke. Do not use
+      `qwen serve`, HTTP `/acp`, or remote HTTP+SSE in this change.
 - [x] 4.3 Lifecycle: spawn, initialize/ready, graceful shutdown, crash/exit
       handling, stderr redaction.
 - [x] 4.4 Cancellation: Locus cancel -> ACP cancel -> terminate without orphaned
@@ -123,12 +124,12 @@
       manifest iteration work).
 
 ## 9. Spike acceptance (the "did the seams hold" checklist)
-- [ ] 9.1 Launch + stream: a Qwen chat starts and streams assistant output.
+- [x] 9.1 Launch + stream: a Qwen chat starts and streams assistant output.
 - [ ] 9.2 File edit: a Qwen file edit renders and applies in an isolated
       worktree only after Locus permission handling allows it.
 - [ ] 9.3 Permission request: an approval prompt surfaces and is honored/denied.
-- [ ] 9.4 Cancel: mid-run cancel cleanly stops the process.
-- [ ] 9.5 Error mapping: a forced failure maps to a Locus error, not a
+- [x] 9.4 Cancel: mid-run cancel cleanly stops the process.
+- [x] 9.5 Error mapping: a forced failure maps to a Locus error, not a
       hang/crash.
 - [x] 9.6 MCP config passthrough verified or explicitly documented as degraded.
 - [x] 9.7 Flag-off smoke/static guard: default desktop remains Claude Code +

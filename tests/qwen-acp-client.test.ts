@@ -60,11 +60,17 @@ function createDesktopRequest(
   }
 }
 
-function createFakeTransport(input: {
-  onPrompt?: (emit: (notification: QwenAcpTransportNotification) => void) => void
-} = {}): QwenAcpTransport & { calls: Array<{ method: string; params: unknown }> } {
+function createFakeTransport(
+  input: {
+    onPrompt?: (
+      emit: (notification: QwenAcpTransportNotification) => void,
+    ) => void
+  } = {},
+): QwenAcpTransport & { calls: Array<{ method: string; params: unknown }> } {
   const calls: Array<{ method: string; params: unknown }> = []
-  const notifications = new Set<(notification: QwenAcpTransportNotification) => void>()
+  const notifications = new Set<
+    (notification: QwenAcpTransportNotification) => void
+  >()
   const serverRequests = new Set<
     (request: QwenAcpTransportServerRequest) => unknown | Promise<unknown>
   >()
@@ -415,7 +421,7 @@ describe("Qwen ACP client", () => {
     await transport.close()
   })
 
-  test("stdio transport can pass a non-secret Qwen auth type from main env", async () => {
+  test("stdio transport can pass non-secret Qwen auth and model selectors from main env", async () => {
     const child = new EventEmitter() as EventEmitter & {
       stdin: Writable
       stdout: PassThrough
@@ -446,6 +452,7 @@ describe("Qwen ACP client", () => {
       env: {
         ...process.env,
         LOCUS_QWEN_CODE_AUTH_TYPE: "openai",
+        LOCUS_QWEN_CODE_MODEL: "gpt-4o-mini",
         OPENAI_API_KEY: "sk-redacted-test-key",
       },
       spawnProcess(executable, args) {
@@ -460,7 +467,7 @@ describe("Qwen ACP client", () => {
     expect(spawnCalls).toEqual([
       {
         executable: "/usr/local/bin/qwen",
-        args: ["--auth-type=openai", "--acp"],
+        args: ["--auth-type=openai", "--model=gpt-4o-mini", "--acp"],
       },
     ])
     await transport.close()

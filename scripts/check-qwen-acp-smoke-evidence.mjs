@@ -24,6 +24,8 @@ const requiredRunbookMarkers = [
   "Provider call authorization: required",
   "LOCUS_ENABLE_QWEN_CODE_RUNTIME=1",
   "LOCUS_QWEN_CODE_AUTH_TYPE=openai",
+  "LOCUS_QWEN_CODE_MODEL=gpt-4o-mini",
+  "OPENAI_BASE_URL",
   "LOCUS_USER_DATA_DIR",
   'OPENAI_API_KEY="$YOUR_QWEN_SMOKE_OPENAI_KEY"',
   "Do not paste raw API keys",
