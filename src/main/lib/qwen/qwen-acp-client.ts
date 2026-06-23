@@ -1,17 +1,14 @@
-import {
-  spawn,
-  type ChildProcessWithoutNullStreams,
-} from "node:child_process"
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process"
 import { createInterface } from "node:readline"
+import { QWEN_ACP_CLIENT_DESKTOP_ADAPTER_METADATA } from "../agent-runtime/desktop-adapter-metadata"
 import type {
+  DesktopRunMcpSessionServer,
   DesktopRunRequest,
   DesktopRunResult,
-  DesktopRunMcpSessionServer,
 } from "../agent-runtime/desktop-run-request"
-import { QWEN_ACP_CLIENT_DESKTOP_ADAPTER_METADATA } from "../agent-runtime/desktop-adapter-metadata"
 import {
-  emitDesktopRuntimeAdapterStarted,
   type DesktopRuntimeAdapter,
+  emitDesktopRuntimeAdapterStarted,
 } from "../agent-runtime/desktop-runner"
 import {
   getQwenAcpClientPermissionMapping,
@@ -159,6 +156,7 @@ export function createQwenAcpStdioTransport({
   const child = spawnProcess(executable, ["--acp"], {
     cwd,
     env,
+    shell: false,
     stdio: "pipe",
   }) as ChildProcessWithoutNullStreams
   let nextId = 1

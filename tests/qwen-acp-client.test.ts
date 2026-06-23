@@ -1,6 +1,7 @@
+import { describe, expect, test } from "bun:test"
+import type { ChildProcessWithoutNullStreams } from "node:child_process"
 import { EventEmitter } from "node:events"
 import { PassThrough, Writable } from "node:stream"
-import { describe, expect, test } from "bun:test"
 import type { DesktopRunRequest } from "../src/main/lib/agent-runtime/desktop-run-request"
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import {
@@ -238,7 +239,7 @@ describe("Qwen ACP client", () => {
 
   test("fails closed and traces Qwen ACP permission requests", async () => {
     const chunks: Record<string, unknown>[] = []
-    const traceEvents: any[] = []
+    const traceEvents: unknown[] = []
     let serverRequestHandler:
       | ((request: QwenAcpTransportServerRequest) => unknown | Promise<unknown>)
       | null = null
@@ -366,16 +367,21 @@ describe("Qwen ACP client", () => {
       child.emit("exit", null, "SIGTERM")
       return true
     }
-    const spawnCalls: Array<{ executable: string; args: string[] }> = []
+    const spawnCalls: Array<{
+      executable: string
+      args: string[]
+      options: Record<string, unknown>
+    }> = []
     const transport = createQwenAcpStdioTransport({
       executable: "/usr/local/bin/qwen",
       cwd: "/tmp/qwen-project",
-      spawnProcess(executable, args) {
+      spawnProcess(executable, args, options) {
         spawnCalls.push({
           executable: String(executable),
           args: [...(args ?? [])],
+          options: options as Record<string, unknown>,
         })
-        return child as any
+        return child as unknown as ChildProcessWithoutNullStreams
       },
     })
 
@@ -384,6 +390,11 @@ describe("Qwen ACP client", () => {
       {
         executable: "/usr/local/bin/qwen",
         args: ["--acp"],
+        options: expect.objectContaining({
+          cwd: "/tmp/qwen-project",
+          shell: false,
+          stdio: "pipe",
+        }),
       },
     ])
     expect(JSON.parse(writes[0] ?? "{}")).toEqual({
@@ -426,7 +437,7 @@ describe("Qwen ACP client", () => {
     }
     const transport = createQwenAcpStdioTransport({
       spawnProcess() {
-        return child as any
+        return child as unknown as ChildProcessWithoutNullStreams
       },
     })
 

@@ -127,12 +127,17 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain("getManifest")
     expect(runtimeRouter).toContain("checkCapability")
     expect(runtimeRouter).toContain("respondScopeExpansion")
+    expect(runtimeRouter).toContain("getQwenCliStatus")
+    expect(runtimeRouter).toContain("updateQwenExecutablePath")
+    expect(runtimeRouter).toContain("resetQwenExecutablePath")
     expect(runtimeRouter).toContain("chat: publicProcedure")
     expect(runtimeRouter).toContain('runtimeId: z.literal("qwen-code")')
     expect(runtimeRouter).toContain("shouldEnableQwenCodeRuntime(process.env)")
     expect(runtimeRouter).toContain("verifyDesktopRunPreflight")
+    expect(runtimeRouter).toContain("resolveQwenCliSetupStatus")
     expect(runtimeRouter).toContain("createAndRegisterDesktopChatAgentJob")
     expect(runtimeRouter).toContain("createQwenAcpClientAdapter")
+    expect(runtimeRouter).toContain("executable: qwenCli.executablePath")
   })
 
   test("renderer consumes runtime manifests through a store instead of static capability truth", () => {

@@ -1,31 +1,38 @@
+import { TRPCError } from "@trpc/server"
 import { observable } from "@trpc/server/observable"
 import { z } from "zod"
 import {
   AGENT_RUNTIME_CAPABILITY_IDS,
   shouldEnableQwenCodeRuntime,
 } from "../../../../shared/agent-runtime-capabilities"
-import {
-  completeDesktopChatAgentJobSafely,
-  createAndRegisterDesktopChatAgentJob,
-} from "../../desktop-agent-jobs"
 import { resolveDesktopPermissionPolicy } from "../../agent-runtime/permission-policy"
 import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
-import {
-  appendRunEventsToAgentJob,
-  redactRendererRuntimeChunk,
-} from "../../agent-runtime/stream-event-mapper"
 import {
   listRegisteredAgentRuntimeManifests,
   resolveRegisteredAgentRuntimeCapability,
   resolveRegisteredAgentRuntimeManifest,
 } from "../../agent-runtime/runtime-registry"
-import { getDatabase } from "../../db"
 import {
   desktopScopeExpansionResponseInputSchema,
   respondDesktopScopeExpansion,
 } from "../../agent-runtime/scope-expansion"
-import { createQwenAcpClientAdapter } from "../../qwen/qwen-acp-client"
+import {
+  appendRunEventsToAgentJob,
+  redactRendererRuntimeChunk,
+} from "../../agent-runtime/stream-event-mapper"
+import { getDatabase } from "../../db"
+import {
+  completeDesktopChatAgentJobSafely,
+  createAndRegisterDesktopChatAgentJob,
+} from "../../desktop-agent-jobs"
 import { createQwenDesktopRunRequest } from "../../qwen/desktop-run-request"
+import { createQwenAcpClientAdapter } from "../../qwen/qwen-acp-client"
+import {
+  resetQwenExecutablePathOverride,
+  resolveQwenCliSetupStatus,
+  saveQwenExecutablePathOverride,
+  toRendererQwenCliSetupStatus,
+} from "../../qwen/qwen-cli-status"
 import { publicProcedure, router } from "../index"
 
 const capabilityIdSchema = z.enum(AGENT_RUNTIME_CAPABILITY_IDS)
@@ -39,6 +46,10 @@ const qwenChatInputSchema = z.object({
   cwd: z.string(),
   mode: z.enum(["plan", "agent"]).default("agent"),
   sessionId: z.string().optional(),
+})
+
+const qwenExecutablePathInputSchema = z.object({
+  executablePath: z.string().trim().min(1).max(4096),
 })
 
 const activeQwenStreams = new Map<
@@ -82,6 +93,50 @@ export const agentRuntimeRouter = router({
     .mutation(({ input }) => {
       return respondDesktopScopeExpansion(input)
     }),
+
+  getQwenCliStatus: publicProcedure.query(async () => {
+    const resolved = await resolveQwenCliSetupStatus({
+      enabled: shouldEnableQwenCodeRuntime(process.env),
+    })
+    return toRendererQwenCliSetupStatus(resolved)
+  }),
+
+  updateQwenExecutablePath: publicProcedure
+    .input(qwenExecutablePathInputSchema)
+    .mutation(async ({ input }) => {
+      if (!shouldEnableQwenCodeRuntime(process.env)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "Qwen Code runtime is disabled. Enable it before changing Qwen setup.",
+        })
+      }
+      const resolved = await saveQwenExecutablePathOverride(
+        input.executablePath,
+      )
+      if (!resolved.status.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            resolved.status.blocker?.message ??
+            resolved.status.executable.error ??
+            "Qwen executable path is invalid.",
+        })
+      }
+      return toRendererQwenCliSetupStatus(resolved)
+    }),
+
+  resetQwenExecutablePath: publicProcedure.mutation(async () => {
+    if (!shouldEnableQwenCodeRuntime(process.env)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Qwen Code runtime is disabled. Enable it before changing Qwen setup.",
+      })
+    }
+    const resolved = await resetQwenExecutablePathOverride()
+    return toRendererQwenCliSetupStatus(resolved)
+  }),
 
   chat: publicProcedure
     .input(qwenChatInputSchema)
@@ -149,6 +204,19 @@ export const agentRuntimeRouter = router({
               subChatId: input.subChatId,
               cwd: input.cwd,
             })
+            const qwenCli = await resolveQwenCliSetupStatus({
+              cwd: preflight.cwd,
+            })
+            if (!qwenCli.status.ok || !qwenCli.executablePath) {
+              safeEmit({
+                type: "capability-error",
+                errorText:
+                  qwenCli.status.blocker?.message ??
+                  "Qwen Code CLI is not available.",
+                runtimeStatus: toRendererQwenCliSetupStatus(qwenCli),
+              })
+              return
+            }
             const permissionPolicy = resolveDesktopPermissionPolicy({
               runtimeId: "qwen-code",
               mode: input.mode,
@@ -186,7 +254,10 @@ export const agentRuntimeRouter = router({
               },
             })
 
-            const adapter = createQwenAcpClientAdapter({ emit: safeEmit })
+            const adapter = createQwenAcpClientAdapter({
+              executable: qwenCli.executablePath,
+              emit: safeEmit,
+            })
             const result = await adapter.run(desktopRunRequest)
             desktopJobSawError = desktopJobSawError || result.status === "failed"
             desktopJobReachedNaturalFinish =
