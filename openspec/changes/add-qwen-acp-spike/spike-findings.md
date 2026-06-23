@@ -32,6 +32,10 @@
 - Permission allow/approval UI is intentionally not claimed as complete. The
   spike proves fail-closed request handling and trace persistence; real allow
   decisions remain degraded in the manifest.
+- When Qwen provides no reject permission option, the adapter returns ACP
+  `cancelled`. That is the conservative fail-closed fallback, but live smoke
+  must confirm whether Qwen treats it as skipping only the tool call or ending
+  the whole turn.
 
 ## Follow-up
 
