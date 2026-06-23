@@ -10,6 +10,11 @@ The lightest product follow-up is not managed download. It is a setup/readiness
 surface that tells users what is missing and lets them correct executable path
 resolution from inside Locus.
 
+For the maintainer's immediate smoke blocker, this change is not required:
+installing Qwen Code CLI manually and running the existing Qwen ACP spike is the
+smallest path. This proposal should remain a productization follow-up for BYO
+users after the ACP spike is accepted or explicitly kept as a stacked branch.
+
 ## Goals / Non-Goals
 
 - Goals:
@@ -18,6 +23,8 @@ resolution from inside Locus.
   - Allow a user-provided executable path to fix GUI app `PATH` mismatches.
   - Ensure Qwen runs use the resolved executable path and fail before startup
     when it is missing or invalid.
+  - Prevent executable override from becoming a remote or project-controlled
+    code-execution primitive.
   - Return only renderer-safe status and remediation metadata.
 - Non-Goals:
   - Downloading, installing, updating, signing, or checksumming Qwen binaries.
@@ -36,6 +43,19 @@ resolution from inside Locus.
   path is allowed, but renderer/status payloads must avoid raw env dumps and must
   not expose secret-bearing command output. Invalid paths are reported with
   bounded, renderer-safe messages.
+- **Override source is local Settings only.** The executable path may be changed
+  only by a local Settings action whose input is revalidated in the main
+  process. It must not be accepted from Local Job API requests, ACP/protocol
+  messages, deep links, project/worktree configuration, imported files, or
+  renderer-provided runtime payloads.
+- **Absolute-path and PATH-shadowing guard.** Saved overrides must be absolute
+  local file paths. PATH auto-discovery must not consult the active project cwd,
+  repository directories, empty PATH entries, or `.`. A repository-local
+  executable such as `./qwen` must never be preferred over system/user install
+  paths.
+- **Spawn contract stays non-shell.** Qwen startup must call the resolved
+  executable as one path with fixed args `["--acp"]`, no `shell`, no command
+  string, no argument splitting, and no user-configurable ACP args.
 - **No install actions.** The UI may show commands/documentation links, but it
   must not execute install commands or write `~/.qwen`.
 - **Status is not auth readiness.** A valid CLI path means only that Locus can
@@ -43,6 +63,9 @@ resolution from inside Locus.
   Profile binding or live-smoke change proves more.
 - **Qwen option stays flag-gated.** This guidance appears only when the Qwen
   runtime flag exposes Qwen surfaces.
+- **TOCTOU is bounded, not eliminated.** Validation-to-spawn races remain
+  possible on a local machine, so spawn failures must still be handled safely.
+  This proposal does not attempt binary attestation or managed download.
 
 ## References
 

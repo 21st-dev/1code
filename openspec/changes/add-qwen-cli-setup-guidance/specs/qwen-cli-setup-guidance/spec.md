@@ -28,6 +28,10 @@ provider credentials, API keys, or Qwen settings contents.
 The system SHALL let the user provide an explicit Qwen executable path to fix
 desktop app `PATH` differences. The override SHALL be validated in the main
 process before saving and SHALL be used for Qwen ACP startup only when valid.
+The override SHALL be accepted only from a local Settings action and SHALL NOT be
+accepted from Local Job API inputs, ACP/protocol messages, deep links, project or
+worktree configuration, imported files, or unverified renderer runtime payloads.
+The override SHALL be an absolute local file path.
 
 #### Scenario: User saves a valid path
 - **WHEN** the user saves a path to an executable Qwen CLI
@@ -35,8 +39,16 @@ process before saving and SHALL be used for Qwen ACP startup only when valid.
 - **AND** subsequent Qwen status checks and Qwen ACP startup use that path before
   PATH auto-detection
 
+#### Scenario: Non-Settings source attempts to set executable path
+- **WHEN** a Local Job API request, ACP/protocol message, deep link, project
+  configuration file, imported file, or runtime request payload includes a Qwen
+  executable path
+- **THEN** Locus ignores or rejects that path before persistence or spawn
+- **AND** the active Qwen executable configuration remains unchanged
+
 #### Scenario: User saves an invalid path
-- **WHEN** the user provides a missing, directory, or non-executable path
+- **WHEN** the user provides a relative, missing, directory, shell command
+  string, or non-executable path
 - **THEN** Locus rejects the update with a renderer-safe message
 - **AND** the previous active path remains unchanged
 - **AND** no process is spawned from the invalid path
@@ -44,6 +56,29 @@ process before saving and SHALL be used for Qwen ACP startup only when valid.
 #### Scenario: User resets the override
 - **WHEN** the user resets Qwen executable configuration
 - **THEN** Locus removes the override and returns to PATH auto-detection
+
+### Requirement: Safe Qwen PATH Discovery And Spawn
+
+The system SHALL discover and spawn Qwen CLI without allowing workspace-controlled
+executables or shell command injection. PATH discovery SHALL NOT select
+executables from the active project cwd, repository directories, empty PATH
+entries, or `.`. Qwen ACP startup SHALL spawn the resolved executable directly as
+a single path with fixed args `["--acp"]`, no shell, no command-string parsing,
+and no user-configurable ACP args.
+
+#### Scenario: Repository contains a qwen executable
+- **WHEN** a selected project or worktree contains `./qwen`
+- **AND** Qwen auto-detection runs for that project
+- **THEN** Locus does not select the repository-local executable
+- **AND** Qwen remains unavailable unless an allowed system/user install path or
+  valid Settings override exists
+
+#### Scenario: Override contains shell syntax
+- **WHEN** a user or untrusted input provides a value such as
+  `qwen --acp`, `qwen; rm -rf /`, or another command string
+- **THEN** Locus rejects the value as an executable path
+- **AND** startup never invokes a shell or splits that string into command
+  arguments
 
 ### Requirement: Passive Qwen Setup Guidance
 
