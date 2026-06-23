@@ -1,21 +1,27 @@
 import { describe, expect, test } from "bun:test"
+import { EventEmitter } from "node:events"
+import { createServer } from "node:http"
 import { setTimeout as sleep } from "node:timers/promises"
+import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import { createKunDesktopRunRequest } from "../src/main/lib/kun/desktop-run-request"
 import { createKunHttpSseAdapter } from "../src/main/lib/kun/kun-http-sse-adapter"
-import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
+import type { KunServeHandle } from "../src/main/lib/kun/kun-serve-launcher"
+
+type KunDesktopRunRequestInput = Parameters<typeof createKunDesktopRunRequest>[0]
 
 function fakeKunRequest(signal = new AbortController().signal) {
+  const preflight: KunDesktopRunRequestInput["preflight"] = {
+    kind: "project",
+    cwd: "/repo",
+    chat: { id: "chat-1" },
+    subChat: { id: "sub-1" },
+    project: { id: "project-1" },
+  }
   return createKunDesktopRunRequest({
     runId: "run-1",
     jobId: "job-1",
     mode: "agent",
-    preflight: {
-      kind: "project",
-      cwd: "/repo",
-      chat: { id: "chat-1" },
-      subChat: { id: "sub-1" },
-      project: { id: "project-1" },
-    } as any,
+    preflight,
     prompt: "hello",
     permissionPolicy: resolveDesktopPermissionPolicy({
       runtimeId: "kun",
@@ -104,7 +110,11 @@ describe("Kun HTTP/SSE adapter", () => {
 
   test("denies command_execution approvals and reports unknown events once", async () => {
     const emitted: Record<string, unknown>[] = []
-    const decisions: Array<{ approvalId: string; decision: string; reason?: string | null }> = []
+    const decisions: Array<{
+      approvalId: string
+      decision: string
+      reason?: string | null
+    }> = []
     const adapter = createKunHttpSseAdapter({
       emit: (chunk) => emitted.push(chunk),
       createTransport: async () => ({
@@ -159,17 +169,26 @@ describe("Kun HTTP/SSE adapter", () => {
       }),
     ])
     expect(
-      emitted.filter(
-        (chunk) =>
+      emitted.filter((chunk) => {
+        const blocker = chunk.blocker
+        return (
           chunk.type === "runtime-status" &&
-          (chunk.blocker as any)?.code === "kun-unsupported-event",
-      ),
+          typeof blocker === "object" &&
+          blocker !== null &&
+          "code" in blocker &&
+          blocker.code === "kun-unsupported-event"
+        )
+      }),
     ).toHaveLength(1)
   })
 
   test("denies file_change when approval is denied by the UI bridge", async () => {
     const emitted: Record<string, unknown>[] = []
-    const decisions: Array<{ approvalId: string; decision: string; reason?: string | null }> = []
+    const decisions: Array<{
+      approvalId: string
+      decision: string
+      reason?: string | null
+    }> = []
     const adapter = createKunHttpSseAdapter({
       emit: (chunk) => emitted.push(chunk),
       registerPendingApproval: (_toolUseId, pending) => {
@@ -232,7 +251,11 @@ describe("Kun HTTP/SSE adapter", () => {
   })
 
   test("missing approval bridge fails closed by timeout", async () => {
-    const decisions: Array<{ approvalId: string; decision: string; reason?: string | null }> = []
+    const decisions: Array<{
+      approvalId: string
+      decision: string
+      reason?: string | null
+    }> = []
     const adapter = createKunHttpSseAdapter({
       approvalTimeoutMs: 1,
       createTransport: async () => ({
@@ -391,5 +414,80 @@ describe("Kun HTTP/SSE adapter", () => {
         delta: "partial text",
       }),
     )
+  })
+
+  test("fails the current run when a launched Kun serve exits unexpectedly", async () => {
+    const child = new EventEmitter() as unknown as KunServeHandle["child"]
+    const server = createServer((request, response) => {
+      if (request.method === "POST" && request.url === "/v1/threads") {
+        response.writeHead(200, { "content-type": "application/json" })
+        response.end(JSON.stringify({ id: "thread-exit" }))
+        return
+      }
+      if (
+        request.method === "POST" &&
+        request.url === "/v1/threads/thread-exit/turns"
+      ) {
+        response.writeHead(200, { "content-type": "application/json" })
+        response.end(
+          JSON.stringify({ threadId: "thread-exit", turnId: "turn-exit" }),
+        )
+        setImmediate(() => child.emit("exit", 1, null))
+        return
+      }
+      if (
+        request.method === "GET" &&
+        request.url?.startsWith("/v1/threads/thread-exit/events")
+      ) {
+        response.writeHead(200, {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache",
+        })
+        request.on("close", () => response.end())
+        return
+      }
+      response.writeHead(404)
+      response.end()
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("test server did not bind to a TCP port")
+    }
+    try {
+      const adapter = createKunHttpSseAdapter({
+        executable: "/usr/local/bin/kun",
+        launchServe: async () => ({
+          baseUrl: `http://127.0.0.1:${address.port}`,
+          runtimeToken: "test-runtime-token",
+          ready: {
+            service: "kun",
+            mode: "serve",
+            host: "127.0.0.1",
+            port: address.port,
+            approvalPolicy: "on-request",
+            sandboxMode: "workspace-write",
+            insecure: false,
+          },
+          child,
+          close: async () => {
+            await new Promise<void>((resolve) => server.close(() => resolve()))
+          },
+        }),
+      })
+
+      const result = await adapter.run(fakeKunRequest())
+
+      expect(result).toMatchObject({
+        status: "failed",
+        error: {
+          message: "Kun serve exited unexpectedly: code=1 signal=null.",
+        },
+      })
+    } finally {
+      if (server.listening) {
+        await new Promise<void>((resolve) => server.close(() => resolve()))
+      }
+    }
   })
 })

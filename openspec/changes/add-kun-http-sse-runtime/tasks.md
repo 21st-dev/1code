@@ -12,12 +12,23 @@
       (`DeepSeek-GUI/kun` commit `8602476`; `npm run build`/`typecheck`
       currently fail on upstream missing `electron` typings, but
       `dist/cli/serve-entry.js` emits and handshakes).
-- [ ] 0.3 Capture the reference `KUN_READY`, REST, `RuntimeEvent`, and turn-item
+- [x] 0.3 Capture the reference `KUN_READY`, REST, `RuntimeEvent`, and turn-item
       shapes (`approval_requested`, `tool_call` `toolKind`) for the mapper;
       verify and record the v1 invariant
       `approval_requested.approvalId === appr_${tool_call.callId}`; record the
       per-tool approval `policy` for every `command_execution`/`file_change` tool
-      (input for the 4.4 approval-exemption check).
+      (input for the 4.4 approval-exemption check). Evidence: `KUN_READY`
+      includes `configPath`, isolated `dataDir`, `approvalPolicy=on-request`,
+      `sandboxMode=workspace-write`, `insecure=false`; sampled runtime events
+      include `thread_created`, `turn_started`, `item_created`,
+      `pipeline_stage`, `assistant_text_delta`, `error`, `turn_failed`, and
+      `turn_completed`; file-change smoke observed
+      `approval_requested.approvalId=appr_call_write_*` for the matching
+      `tool_call.callId=call_write_*` and `toolKind=file_change`. Source truth:
+      `write`/`edit` are `file_change` + `on-request`; `bash`/`computer_use`
+      are `command_execution` + `on-request`; `create_plan` is `file_change` +
+      `auto` and is plan/GUI-plan scoped. `/v1/runtime/tools` exposes provider
+      inventory, not per-tool policy.
 - [x] 0.4 Define smoke isolation: isolated `dataDir` under Locus userData and an
       explicit BYO Kun config path; Locus passes `--config <path>` but does not
       read or render provider credentials, and never mutates the user's real Kun
@@ -84,7 +95,7 @@
 - [x] 4.3 Parse the `KUN_READY` handshake; **verify echoed host is loopback,
       `insecure===false`, approval policy is `on-request`, sandbox mode is
       `workspace-write` — fail closed (no turn) on any drift.**
-- [ ] 4.4 Verify v1 side-effect behavior for the pinned Kun version: enumerate
+- [x] 4.4 Verify v1 side-effect behavior for the pinned Kun version: enumerate
       `file_change` and `command_execution` tools from the reference tool
       definitions captured in 0.3 (`/v1/runtime/tools` does NOT expose per-tool
       `policy`). Assert via smoke that supported `file_change` tools emit
@@ -92,7 +103,12 @@
       supported or is sandbox-blocked under `workspace-write` before approval.
       Fail closed + diagnostic if any supported `file_change` skips approval, or
       if shell is treated as approval-mediated. Do not treat `create_plan` as a
-      supported exception in v1; `planMode` remains degraded.
+      supported exception in v1; `planMode` remains degraded. Evidence:
+      fake-Responses real Kun smoke forced `write`; deny left the file absent,
+      allow wrote only inside the isolated workspace, and both decisions emitted
+      `observed-tool-decision` with `toolKind=file_change`. Forced `bash` under
+      `workspace-write` produced no Locus approval chunk and did not create the
+      marker file.
 - [x] 4.5 Supervision: if Kun exits unexpectedly during an active turn, resolve
       the current Locus run as failed/canceled (no restart-and-continue claim);
       bounded retry/backoff may start a fresh daemon only for later runs; SIGTERM
@@ -179,18 +195,18 @@
       (`createKunHttpSseAdapter` + actual `kun serve` + BYO config pointing at a
       fake Responses endpoint returned `succeeded`, emitted `text-delta`, and
       reported zero unsupported events).
-- [ ] 10.2 File edit: applies in an isolated worktree only after Locus permission
+- [x] 10.2 File edit: applies in an isolated worktree only after Locus permission
       handling allows it.
-- [ ] 10.3 Permission: a file-change approval surfaces, is classified from
+- [x] 10.3 Permission: a file-change approval surfaces, is classified from
       `toolKind`, and is honored/denied; deny leaves the file unchanged.
-- [ ] 10.4 Shell smoke: a shell/`command_execution` attempt is not advertised as
+- [x] 10.4 Shell smoke: a shell/`command_execution` attempt is not advertised as
       supported or is sandbox-blocked under `workspace-write`; no Locus approval is
       expected for shell in v1.
-- [ ] 10.5 Cancel: mid-run cancel stops the turn and leaves no Kun process.
-- [ ] 10.6 Error mapping: a forced failure, unexpected child exit, and
+- [x] 10.5 Cancel: mid-run cancel stops the turn and leaves no Kun process.
+- [x] 10.6 Error mapping: a forced failure, unexpected child exit, and
       hardened-flag drift map to a Locus error/canceled run, not a hang/crash or
       restart-and-continue claim.
-- [ ] 10.7 Flag-off smoke/static guard: Kun does not appear when its flag is off;
+- [x] 10.7 Flag-off smoke/static guard: Kun does not appear when its flag is off;
       existing Claude, Codex, and Qwen flag behavior is unchanged; non-desktop
       stays Claude + Codex.
 - [ ] 10.8 Provider-profile smoke: selected Locus provider profile → scoped
@@ -198,8 +214,27 @@
       with upstream key absent from argv/renderer/logs; if not proven, document
       `providerProfiles=degraded`. Current fake Responses smoke used BYO config
       directly, so this remains unproven.
-- [ ] 10.9 Write findings: what generalized cleanly, Kun parity gaps left
+- [x] 10.9 Write findings: what generalized cleanly, Kun parity gaps left
       `degraded`, and whether bundling/managed-download is worth a later change.
+
+Findings:
+
+- The shared experimental desktop chat route generalized cleanly: Qwen keeps its
+  ACP adapter, Kun uses `kun-http-sse`, and the route remains an envelope owner.
+- Kun can stream through a Responses-format endpoint when the user supplies a BYO
+  Kun config file. This is not the same as Locus provider-profile support; the
+  Locus profile-scoped gateway binding remains unproven, so `providerProfiles`
+  stays `degraded`.
+- `write`/`edit` file changes are approval-mediated and can be allowed/denied by
+  Locus. `bash`/`command_execution` is sandbox-blocked under `workspace-write`
+  before any Locus user approval. `create_plan` remains out of supported v1 scope
+  because it is `file_change` + `auto` and plan/GUI-plan scoped.
+- Cancel smoke returned `canceled` and left no `serve-entry`/`kun serve` process.
+  Error mapping is covered by real 401/turn_failed behavior, hardened handshake
+  drift tests, and an adapter test for active-run child exit.
+- Bundling/managed download should remain a later change even with the commercial
+  license available, because BYO keeps update, notarization, and upstream version
+  pinning separate from the runtime seam.
 
 ## 11. Validate
 
