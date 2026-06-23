@@ -176,10 +176,12 @@ guard bridge is unavailable, or the decision times out.
 The system SHALL keep the Locus→Kun transport `runtimeToken` distinct from any
 Kun→upstream provider credential. The `runtimeToken` is a local bearer secret and
 SHALL NOT appear in the Kun process `argv`; it SHALL be passed through
-`KUN_RUNTIME_TOKEN` environment or a restricted config file. Upstream provider API
-keys and provider gateway tokens SHALL NOT appear in the Kun process `argv` or in
-renderer payloads, and the `runtimeToken` and provider credentials SHALL be
-excluded from logs, traces, manifests, and renderer-safe metadata.
+`KUN_RUNTIME_TOKEN` environment. Upstream provider API keys and provider gateway
+tokens SHALL NOT appear in the Kun process `argv` or in renderer payloads. In v1,
+provider credentials MAY live in an explicit user-selected Kun config file, but
+Locus SHALL pass only the config file path to Kun and SHALL NOT read or render the
+credential values. The `runtimeToken` and provider credentials SHALL be excluded
+from logs, traces, manifests, and renderer-safe metadata.
 
 #### Scenario: Transport token stays out of argv and never carries provider secrets
 - **WHEN** Locus authenticates to Kun
@@ -188,6 +190,11 @@ excluded from logs, traces, manifests, and renderer-safe metadata.
 - **AND** upstream provider API keys and provider gateway tokens are not placed in
   `argv` or sent to the renderer
 
+#### Scenario: Provider credentials stay inside the BYO Kun config file
+- **WHEN** Locus launches Kun with a configured provider
+- **THEN** it passes only `--config <path>` to Kun
+- **AND** it does not read, log, trace, or render the provider credential values
+
 #### Scenario: Secrets are excluded from observable surfaces
 - **WHEN** Kun runtime metadata, diagnostics, traces, or manifest are produced
 - **THEN** they contain no `runtimeToken`, provider API keys, gateway tokens, or
@@ -195,18 +202,27 @@ excluded from logs, traces, manifests, and renderer-safe metadata.
 
 ### Requirement: BYO Kun executable resolution
 
-The system SHALL resolve the Kun executable as a bring-your-own binary without
-bundling or auto-downloading it. Resolution SHALL accept a persisted absolute
-path override stored with restricted permissions, SHALL exclude the working
-directory and project/repo directories from PATH discovery, and SHALL probe the
-binary without a shell. When Kun is unavailable, the system SHALL block the run
-and surface passive setup guidance.
+The system SHALL resolve the Kun executable and Kun config file as bring-your-own
+inputs without bundling or auto-downloading Kun. Resolution SHALL accept
+persisted absolute path overrides stored with restricted permissions, SHALL
+exclude the working directory and project/repo directories from executable PATH
+discovery, and SHALL probe the binary without a shell. Current Kun builds that do
+not expose `--version` MAY be accepted only after a bounded `help` probe succeeds.
+When either Kun executable or config file is unavailable, the system SHALL block
+the run and surface passive setup guidance.
 
 #### Scenario: Missing Kun blocks with guidance
 - **WHEN** no Kun executable resolves
 - **THEN** Locus blocks the Kun run before spawning and surfaces passive setup
   guidance
 - **AND** it does not download or bundle Kun
+
+#### Scenario: Missing Kun config blocks with guidance
+- **WHEN** no absolute Kun config file path resolves
+- **THEN** Locus blocks the Kun run before spawning and surfaces passive setup
+  guidance
+- **AND** it does not infer provider credentials from renderer state, project
+  files, or provider-profile settings
 
 #### Scenario: Discovery excludes shadowing paths
 - **WHEN** Locus discovers the Kun executable on PATH
@@ -218,7 +234,8 @@ and surface passive setup guidance.
 
 The system SHALL run Kun against an isolated `dataDir` under Locus-managed storage
 and SHALL NOT mutate the user's real Kun configuration or data without explicit
-approval.
+approval. The system MAY pass an explicit user-selected Kun config file path, but
+it SHALL NOT write that file as part of a run.
 
 #### Scenario: Kun runs against isolated state
 - **WHEN** Locus launches Kun

@@ -59,19 +59,21 @@ own license evidence path in that future proposal.
   and cannot be gated by Locus approval; Locus plan artifact ownership is deferred
   to a later change.
 - **Token separation**: Locus→Kun `runtimeToken` (transport auth) is distinct from
-  any Kun→Locus provider gateway token (profile-scoped). The local bearer
-  `runtimeToken` MUST NOT enter CLI argv; pass it through `KUN_RUNTIME_TOKEN` env
-  or a restricted config file. Upstream provider API keys never appear in `argv`
-  or the renderer; Kun reads them from its isolated config or the Locus
-  profile-scoped `responses` gateway.
+  any Kun→upstream provider credential. The local bearer `runtimeToken` MUST NOT
+  enter CLI argv; pass it through `KUN_RUNTIME_TOKEN` env. Upstream provider API
+  keys never appear in `argv` or the renderer. In v1, Kun reads them from an
+  explicit user-selected BYO config file; Locus passes only `--config <path>` and
+  does not read or render provider credential values. Locus provider-profile
+  gateway binding remains a separate proof.
 - `providerProfiles` remains `degraded` unless this change proves Kun can run
   against the Locus profile-scoped `responses` gateway by setting
   `baseUrl=<gatewayEndpoint>`, `apiKey=<scoped gateway token>`, and
   `endpointFormat=responses`; once that smoke/test evidence exists, the first
   manifest may mark provider profiles `supported`.
-- BYO Kun executable resolution + passive setup guidance, mirroring the shipped
-  `qwen-cli-status` pattern (absolute-path override, cwd/PATH-shadow exclusion, no
-  shell, `--version` probe). **No bundling / auto-download in this change.**
+- BYO Kun executable and config path resolution + passive setup guidance,
+  mirroring the shipped `qwen-cli-status` pattern (absolute-path override,
+  cwd/PATH-shadow exclusion, no shell, `--version` probe with `help` fallback).
+  **No bundling / auto-download in this change.**
 - Minimal renderer edge: Kun runtime/provider metadata, a flag-gated Kun option in
   new-chat, and Kun routed through the (now shared) experimental desktop chat
   transport.

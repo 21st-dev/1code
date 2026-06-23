@@ -7,20 +7,27 @@
 ## 0. Pre-flight
 
 - [x] 0.1 Branch `add-kun-http-sse-runtime` off clean `main`.
-- [ ] 0.2 Discover/build the BYO `kun` binary; confirm `kun serve` emits a
-      `KUN_READY {json}` handshake; record the reference `kun` version/commit.
+- [x] 0.2 Discover/build the BYO `kun` binary; confirm `kun serve` emits a
+      `KUN_READY {json}` handshake; record the reference `kun` version/commit
+      (`DeepSeek-GUI/kun` commit `8602476`; `npm run build`/`typecheck`
+      currently fail on upstream missing `electron` typings, but
+      `dist/cli/serve-entry.js` emits and handshakes).
 - [ ] 0.3 Capture the reference `KUN_READY`, REST, `RuntimeEvent`, and turn-item
       shapes (`approval_requested`, `tool_call` `toolKind`) for the mapper;
       verify and record the v1 invariant
       `approval_requested.approvalId === appr_${tool_call.callId}`; record the
       per-tool approval `policy` for every `command_execution`/`file_change` tool
       (input for the 4.4 approval-exemption check).
-- [ ] 0.4 Define smoke isolation: isolated `dataDir` under Locus userData and an
-      isolated provider config; never mutate the user's real Kun state.
+- [x] 0.4 Define smoke isolation: isolated `dataDir` under Locus userData and an
+      explicit BYO Kun config path; Locus passes `--config <path>` but does not
+      read or render provider credentials, and never mutates the user's real Kun
+      config/data.
 - [ ] 0.5 Provider-profile preflight: prove Kun can call the Locus profile-scoped
       `responses` gateway with `baseUrl=<gatewayEndpoint>`,
       `apiKey=<scoped gateway token>`, and `endpointFormat=responses`; if not
-      proven, keep `providerProfiles` `degraded`.
+      proven, keep `providerProfiles` `degraded`. Current smoke proves Kun can
+      call a Responses-format endpoint through BYO config, not the Locus
+      provider-profile gateway binding.
 
 ## 1. Feature flag and experimental runtime id
 
@@ -125,18 +132,24 @@
 
 - [x] 7.1 `kun` CLI status owner (mirror `qwen/qwen-cli-status.ts`): persisted
       absolute-path override (`0o600`), PATH discovery excluding cwd/repo dirs,
-      `execFile --version` with `shell:false` + timeout + redaction.
+      `execFile --version` with `shell:false` + timeout + redaction, and
+      `help` fallback for current Kun builds that lack `--version`.
 - [x] 7.2 Spawn-block + passive Settings guidance when Kun is missing; never
       bundle/auto-download.
 - [x] 7.3 Security tests: override never sourced from Local Job API/ACP/deep-link/
       project; `./kun` cannot shadow; no shell.
+- [x] 7.4 Persist and validate an absolute Kun config file path separately from
+      the executable path; Settings can save/reset both paths independently, and
+      Kun runs only after both are ready.
 
 ## 8. Token separation and secret hygiene
 
 - [x] 8.1 Ensure `runtimeToken`, upstream provider API keys, and provider gateway
       tokens never enter CLI argv or renderer; Kun receives `runtimeToken` via
       `KUN_RUNTIME_TOKEN` env; launcher does not inherit provider/gateway secret
-      env. Provider-profile gateway proof remains gated by 0.5/10.8.
+      env. Provider credentials may live in the user-selected Kun config file,
+      but Locus passes only `--config <path>`. Provider-profile gateway proof
+      remains gated by 0.5/10.8.
 - [x] 8.2 Redact `runtimeToken`, provider keys, gateway tokens, and raw headers
       from stderr, traces, manifest, diagnostics, and renderer-safe metadata.
 - [x] 8.3 Tests assert spawn argv contains no `runtimeToken`, provider API key,
@@ -162,7 +175,10 @@
 
 ## 10. Acceptance (the "did the seams hold" checklist)
 
-- [ ] 10.1 Launch + stream: a Kun chat starts and streams assistant output.
+- [x] 10.1 Launch + stream: a Kun chat starts and streams assistant output
+      (`createKunHttpSseAdapter` + actual `kun serve` + BYO config pointing at a
+      fake Responses endpoint returned `succeeded`, emitted `text-delta`, and
+      reported zero unsupported events).
 - [ ] 10.2 File edit: applies in an isolated worktree only after Locus permission
       handling allows it.
 - [ ] 10.3 Permission: a file-change approval surfaces, is classified from
@@ -180,7 +196,8 @@
 - [ ] 10.8 Provider-profile smoke: selected Locus provider profile → scoped
       `responses` gateway → Kun `endpointFormat=responses` → streamed answer,
       with upstream key absent from argv/renderer/logs; if not proven, document
-      `providerProfiles=degraded`.
+      `providerProfiles=degraded`. Current fake Responses smoke used BYO config
+      directly, so this remains unproven.
 - [ ] 10.9 Write findings: what generalized cleanly, Kun parity gaps left
       `degraded`, and whether bundling/managed-download is worth a later change.
 

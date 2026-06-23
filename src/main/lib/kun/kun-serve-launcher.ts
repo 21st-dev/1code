@@ -32,6 +32,7 @@ export type KunServeLaunchInput = {
   executable: string
   runId: string
   cwd: string
+  configPath?: string | null
   env?: NodeJS.ProcessEnv
   userDataPath?: string
   spawnProcess?: (
@@ -206,6 +207,7 @@ export async function launchKunServe(
   })
   const args = [
     "serve",
+    ...(input.configPath ? ["--config", input.configPath] : []),
     "--host",
     "127.0.0.1",
     "--port",

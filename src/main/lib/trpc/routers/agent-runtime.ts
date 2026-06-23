@@ -8,6 +8,7 @@ import {
 } from "../../../../shared/agent-runtime-capabilities"
 import { resolveDesktopPermissionPolicy } from "../../agent-runtime/permission-policy"
 import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
+import type { RunEvent } from "../../agent-runtime/runtime-events"
 import {
   listRegisteredAgentRuntimeManifests,
   resolveRegisteredAgentRuntimeCapability,
@@ -21,7 +22,6 @@ import {
   appendRunEventsToAgentJob,
   redactRendererRuntimeChunk,
 } from "../../agent-runtime/stream-event-mapper"
-import type { RunEvent } from "../../agent-runtime/runtime-events"
 import { getDatabase } from "../../db"
 import {
   completeDesktopChatAgentJobSafely,
@@ -29,15 +29,17 @@ import {
 } from "../../desktop-agent-jobs"
 import { createKunDesktopRunRequest } from "../../kun/desktop-run-request"
 import {
-  createKunHttpSseAdapter,
-  type KunHttpSseApproval,
-} from "../../kun/kun-http-sse-adapter"
-import {
+  resetKunConfigPathOverride,
   resetKunExecutablePathOverride,
   resolveKunCliSetupStatus,
+  saveKunConfigPathOverride,
   saveKunExecutablePathOverride,
   toRendererKunCliSetupStatus,
 } from "../../kun/kun-cli-status"
+import {
+  createKunHttpSseAdapter,
+  type KunHttpSseApproval,
+} from "../../kun/kun-http-sse-adapter"
 import { createQwenDesktopRunRequest } from "../../qwen/desktop-run-request"
 import {
   createQwenAcpClientAdapter,
@@ -68,6 +70,10 @@ const runtimeExecutablePathInputSchema = z.object({
   executablePath: z.string().trim().min(1).max(4096),
 })
 
+const runtimeConfigPathInputSchema = z.object({
+  configPath: z.string().trim().min(1).max(4096),
+})
+
 const runtimeToolApprovalInputSchema = z.object({
   toolUseId: z.string(),
   approved: z.boolean(),
@@ -94,7 +100,10 @@ const activeRuntimeStreams = new Map<
   }
 >()
 
-const pendingRuntimeToolApprovals = new Map<string, PendingRuntimeToolApproval>()
+const pendingRuntimeToolApprovals = new Map<
+  string,
+  PendingRuntimeToolApproval
+>()
 
 function runtimeStreamKey(
   runtimeId: ExperimentalRuntimeChatId,
@@ -230,7 +239,7 @@ export const agentRuntimeRouter = router({
         })
       }
       const resolved = await saveKunExecutablePathOverride(input.executablePath)
-      if (!resolved.status.ok) {
+      if (!resolved.executablePath || !resolved.status.executable.ok) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:
@@ -251,6 +260,41 @@ export const agentRuntimeRouter = router({
       })
     }
     const resolved = await resetKunExecutablePathOverride()
+    return toRendererKunCliSetupStatus(resolved)
+  }),
+
+  updateKunConfigPath: publicProcedure
+    .input(runtimeConfigPathInputSchema)
+    .mutation(async ({ input }) => {
+      if (!shouldEnableKunRuntime(process.env)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "Kun runtime is disabled. Enable it before changing Kun setup.",
+        })
+      }
+      const resolved = await saveKunConfigPathOverride(input.configPath)
+      if (!resolved.status.config.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            resolved.status.config.error ??
+            resolved.status.blocker?.message ??
+            "Kun config path is invalid.",
+        })
+      }
+      return toRendererKunCliSetupStatus(resolved)
+    }),
+
+  resetKunConfigPath: publicProcedure.mutation(async () => {
+    if (!shouldEnableKunRuntime(process.env)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Kun runtime is disabled. Enable it before changing Kun setup.",
+      })
+    }
+    const resolved = await resetKunConfigPathOverride()
     return toRendererKunCliSetupStatus(resolved)
   }),
 
@@ -337,6 +381,7 @@ export const agentRuntimeRouter = router({
             }
 
             let executablePath: string
+            let kunConfigPath: string | null = null
             if (input.runtimeId === "qwen-code") {
               const qwenCli = await resolveQwenCliSetupStatus({
                 cwd: preflight.cwd,
@@ -356,7 +401,11 @@ export const agentRuntimeRouter = router({
               const kunCli = await resolveKunCliSetupStatus({
                 cwd: preflight.cwd,
               })
-              if (!kunCli.status.ok || !kunCli.executablePath) {
+              if (
+                !kunCli.status.ok ||
+                !kunCli.executablePath ||
+                !kunCli.configPath
+              ) {
                 safeEmit({
                   type: "capability-error",
                   errorText:
@@ -367,6 +416,7 @@ export const agentRuntimeRouter = router({
                 return
               }
               executablePath = kunCli.executablePath
+              kunConfigPath = kunCli.configPath
             }
             const permissionPolicy = resolveDesktopPermissionPolicy({
               runtimeId: input.runtimeId,
@@ -419,7 +469,9 @@ export const agentRuntimeRouter = router({
                         runtimeId: "qwen-code",
                         subChatId: pending.subChatId,
                         resolve: (approval) =>
-                          pending.resolve(approval as QwenAcpPermissionApproval),
+                          pending.resolve(
+                            approval as QwenAcpPermissionApproval,
+                          ),
                       })
                     },
                     unregisterPendingPermission: (toolUseId) => {
@@ -428,6 +480,7 @@ export const agentRuntimeRouter = router({
                   })
                 : createKunHttpSseAdapter({
                     executable: executablePath,
+                    configPath: kunConfigPath,
                     emit: safeEmit,
                     registerPendingApproval: (toolUseId, pending) => {
                       pendingRuntimeToolApprovals.set(toolUseId, {
@@ -442,7 +495,8 @@ export const agentRuntimeRouter = router({
                     },
                   })
             const result = await adapter.run(desktopRunRequest)
-            desktopJobSawError = desktopJobSawError || result.status === "failed"
+            desktopJobSawError =
+              desktopJobSawError || result.status === "failed"
             desktopJobReachedNaturalFinish =
               result.status === "succeeded" && !desktopJobSawError
             if (result.status === "failed" && result.error?.message) {

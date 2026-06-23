@@ -123,18 +123,20 @@ defaults are **fail-open**:
   unavailable, or the decision times out — deny by default, trace the reason.
 - **Token separation.** `runtimeToken` (Locus→Kun, bearer on `/v1/*`) is a random
   per-run secret never logged/redacted-out and never placed in CLI argv. It is
-  distinct from any Kun→Locus provider gateway token (profile-scoped), which Kun
-  reads from its isolated config or the Locus profile-scoped `responses` gateway.
-  Upstream provider API keys never enter `argv` or renderer payloads. Kun is
+  distinct from any Kun→upstream provider credential. In v1, provider
+  credentials live in an explicit user-selected Kun config file; Locus passes
+  only `--config <path>` and does not read or render the file contents. Kun is
   DeepSeek-oriented by default, but its configurable `baseUrl`/`apiKey`/
   `endpointFormat` means provider profiles can be `supported` only after a smoke
-  proves `endpointFormat=responses` works against Locus's gateway; otherwise
-  provider profiles stay `degraded` in v1.
+  proves `endpointFormat=responses` works against Locus's profile-scoped
+  gateway; otherwise provider profiles stay `degraded` in v1.
 - **BYO executable, reuse the Qwen CLI status pattern.** Resolve `kun` like
   `qwen/qwen-cli-status.ts`: persisted absolute-path override (`0o600`),
   PATH-discovery excluding cwd/repo dirs (no `./kun` RCE), `execFile --version`
-  with `shell:false` + timeout + redaction, spawn-block + passive Settings
-  guidance when missing. No bundle/auto-download.
+  with `shell:false` + timeout + redaction, `help` fallback for current Kun
+  builds without `--version`, plus a separately persisted absolute Kun config
+  path. Spawn-block + passive Settings guidance when either path is missing. No
+  bundle/auto-download.
 - **Honest manifest, flag-gated everywhere.** `kun` manifest is mostly
   `degraded`/`unsupported`; only wired capabilities `supported`. The flag
   `LOCUS_ENABLE_KUN_RUNTIME` gates manifest exposure, route admission, factory

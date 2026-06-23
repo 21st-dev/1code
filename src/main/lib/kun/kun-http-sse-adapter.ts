@@ -25,6 +25,26 @@ import {
 } from "./kun-serve-launcher"
 
 const DEFAULT_KUN_APPROVAL_TIMEOUT_MS = 120_000
+const KNOWN_KUN_NOOP_EVENTS = new Set([
+  "thread_created",
+  "thread_updated",
+  "turn_started",
+  "item_created",
+  "item_updated",
+  "item_completed",
+  "tool_call_ready",
+  "tool_result_upload_wait",
+  "tool_storm_suppressed",
+  "tool_catalog_changed",
+  "tool_call_started",
+  "tool_call_finished",
+  "pipeline_stage",
+  "error",
+  "assistant_text_delta",
+  "assistant_reasoning_delta",
+  "usage",
+  "heartbeat",
+])
 
 export type KunHttpSseApproval = {
   approved: boolean
@@ -72,6 +92,7 @@ export type KunHttpSseTransportLike = {
 
 export type CreateKunHttpSseAdapterInput = {
   executable?: string
+  configPath?: string | null
   emit?: (chunk: Record<string, unknown>) => void
   registerPendingApproval?: (
     toolUseId: string,
@@ -276,6 +297,7 @@ function reasoningDeltaFromEvent(
 
 export function createKunHttpSseAdapter({
   executable,
+  configPath,
   emit,
   registerPendingApproval,
   unregisterPendingApproval,
@@ -473,25 +495,9 @@ export function createKunHttpSseAdapter({
           return
         }
 
-        const knownNoopEvents = new Set([
-          "thread_created",
-          "thread_updated",
-          "turn_started",
-          "item_created",
-          "item_updated",
-          "item_completed",
-          "tool_call_ready",
-          "tool_result_upload_wait",
-          "tool_storm_suppressed",
-          "tool_catalog_changed",
-          "tool_call_started",
-          "tool_call_finished",
-          "usage",
-          "heartbeat",
-        ])
         if (
           typeof event.kind === "string" &&
-          !knownNoopEvents.has(event.kind) &&
+          !KNOWN_KUN_NOOP_EVENTS.has(event.kind) &&
           !unsupportedEventReported
         ) {
           unsupportedEventReported = true
@@ -528,6 +534,7 @@ export function createKunHttpSseAdapter({
           }
           serveHandle = await launchServeOverride({
             executable,
+            configPath,
             runId: request.identity.runId,
             cwd: request.context.cwd,
           })

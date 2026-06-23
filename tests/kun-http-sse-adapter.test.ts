@@ -318,4 +318,78 @@ describe("Kun HTTP/SSE adapter", () => {
       }),
     )
   })
+
+  test("treats sampled Kun pipeline and error events as known before turn_failed", async () => {
+    const emitted: Record<string, unknown>[] = []
+    const adapter = createKunHttpSseAdapter({
+      emit: (chunk) => emitted.push(chunk),
+      createTransport: async () => ({
+        transport: {
+          async createThread() {
+            return { id: "thread-1" }
+          },
+          async startTurn() {
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval() {},
+          async streamEvents(input) {
+            input.onEvent({ kind: "thread_created", seq: 1 })
+            input.onEvent({ kind: "turn_started", seq: 2 })
+            input.onEvent({
+              kind: "pipeline_stage",
+              seq: 3,
+              stage: "pre_send",
+              details: {
+                endpointFormat: "chat_completions",
+              },
+            })
+            input.onEvent({
+              kind: "error",
+              seq: 4,
+              message: "model request failed with status 401",
+              code: "http_401",
+            })
+            input.onEvent({
+              kind: "assistant_text_delta",
+              seq: 5,
+              itemId: "item_text_1",
+              text: "partial text",
+            })
+            input.onEvent({
+              kind: "turn_failed",
+              seq: 6,
+              message: "model request failed with status 401",
+              code: "http_401",
+            })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(fakeKunRequest())
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { message: "model request failed with status 401" },
+    })
+    expect(
+      emitted.filter((chunk) => {
+        const blocker = chunk.blocker
+        return (
+          chunk.type === "runtime-status" &&
+          typeof blocker === "object" &&
+          blocker !== null &&
+          "code" in blocker &&
+          blocker.code === "kun-unsupported-event"
+        )
+      }),
+    ).toHaveLength(0)
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        type: "text-delta",
+        delta: "partial text",
+      }),
+    )
+  })
 })

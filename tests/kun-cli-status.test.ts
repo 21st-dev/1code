@@ -13,6 +13,7 @@ import { delimiter, join } from "node:path"
 import { getKunCliSettingsPath } from "../src/main/lib/kun/kun-cli-settings"
 import {
   resolveKunCliSetupStatus,
+  saveKunConfigPathOverride,
   saveKunExecutablePathOverride,
 } from "../src/main/lib/kun/kun-cli-status"
 
@@ -28,6 +29,45 @@ function executableFile(root: string, name = "kun"): string {
   const filePath = join(root, name)
   writeFileSync(filePath, "#!/bin/sh\necho kun\n", "utf8")
   chmodSync(filePath, 0o755)
+  return filePath
+}
+
+function kunWithoutVersionFile(root: string): string {
+  const filePath = join(root, "kun")
+  writeFileSync(
+    filePath,
+    [
+      "#!/bin/sh",
+      "if [ \"$1\" = \"help\" ]; then",
+      "  echo 'kun <command> [options]'",
+      "  exit 0",
+      "fi",
+      "echo 'kun serve: invalid serve options' >&2",
+      "exit 78",
+      "",
+    ].join("\n"),
+    "utf8",
+  )
+  chmodSync(filePath, 0o755)
+  return filePath
+}
+
+function configFile(root: string, name = "config.json"): string {
+  const filePath = join(root, name)
+  writeFileSync(
+    filePath,
+    JSON.stringify({
+      models: [
+        {
+          provider: "fake",
+          baseUrl: "http://127.0.0.1:12345/v1",
+          apiKey: "sk-provider-secret-value-123456",
+          endpointFormat: "responses",
+        },
+      ],
+    }),
+    "utf8",
+  )
   return filePath
 }
 
@@ -98,10 +138,11 @@ describe("Kun CLI setup status", () => {
     })
   })
 
-  test("saves a valid absolute override without leaking secret-like text", async () => {
+  test("saves valid absolute executable and config overrides without leaking secret-like text", async () => {
     const userDataPath = tempRoot()
     const installRoot = tempRoot()
     const overridePath = executableFile(installRoot)
+    const configPath = configFile(installRoot)
 
     const saved = await saveKunExecutablePathOverride(overridePath, {
       userDataPath,
@@ -114,17 +155,62 @@ describe("Kun CLI setup status", () => {
 
     expect(saved.executablePath).toBe(overridePath)
     expect(saved.status).toMatchObject({
+      ok: false,
+      availability: "config-missing",
+      source: "override",
+      executable: { path: overridePath },
+      blocker: { code: "kun-config-missing" },
+    })
+
+    const configured = await saveKunConfigPathOverride(configPath, {
+      userDataPath,
+      probeVersion: async (filePath) => ({
+        ok: true,
+        value: `kun version from ${filePath}`,
+        error: null,
+      }),
+    })
+
+    expect(configured.executablePath).toBe(overridePath)
+    expect(configured.configPath).toBe(configPath)
+    expect(configured.status).toMatchObject({
       ok: true,
       availability: "available",
       source: "override",
       executable: { path: overridePath },
+      config: { path: configPath, ok: true },
     })
 
     const settingsPath = getKunCliSettingsPath({ userDataPath })
     expect(existsSync(settingsPath)).toBe(true)
     const settings = readFileSync(settingsPath, "utf8")
     expect(settings).toContain(overridePath)
+    expect(settings).toContain(configPath)
     expect(settings).not.toMatch(/API_KEY|access_token|sk-[A-Za-z0-9_-]{20,}/)
+  })
+
+  test("falls back to help when the Kun binary does not expose --version", async () => {
+    const installRoot = tempRoot()
+    const overridePath = kunWithoutVersionFile(installRoot)
+    const configPath = configFile(installRoot)
+
+    const resolved = await resolveKunCliSetupStatus({
+      overridePath,
+      configPathOverride: configPath,
+      ignoreSavedOverride: true,
+    })
+
+    expect(resolved.executablePath).toBe(overridePath)
+    expect(resolved.status).toMatchObject({
+      ok: true,
+      availability: "available",
+      source: "override",
+      version: {
+        ok: true,
+        value: "Kun CLI detected (version unavailable)",
+        error: null,
+      },
+    })
   })
 
   test("rejects unsafe override strings before probing", async () => {

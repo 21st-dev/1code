@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { realpathSync } from "node:fs"
+import { existsSync, realpathSync, statSync } from "node:fs"
 import { delimiter, isAbsolute, join, relative, resolve } from "node:path"
 import { promisify } from "node:util"
 import { redactRuntimePayload } from "../agent-runtime/redaction"
@@ -17,10 +17,12 @@ const execFileAsync = promisify(execFile)
 
 const KUN_INSTALL_HINT =
   "Install the bring-your-own Kun CLI, then set the absolute Kun executable path in Settings."
+const KUN_CONFIG_HINT =
+  "Set an absolute Kun config.json path that contains the provider credentials for the isolated BYO runtime."
 const KUN_DOCS_URL = "https://github.com/DeepSeek-GUI/DeepSeek-GUI"
 const KUN_INSTALL_COMMAND = "Install Kun from the upstream project."
 const KUN_AUTH_HINT =
-  "Configure Kun with an isolated provider profile before enabling runs."
+  "Configure Kun with a BYO config file or keep provider profiles degraded until the Locus responses gateway is wired."
 
 type KunCliSource = "override" | "path" | "unresolved"
 
@@ -29,6 +31,8 @@ type KunCliAvailability =
   | "invalid-path"
   | "non-executable"
   | "version-probe-failed"
+  | "config-missing"
+  | "config-invalid"
   | "available"
   | "disabled"
 
@@ -37,11 +41,23 @@ type KunCliBlockerCode =
   | "kun-cli-missing"
   | "kun-cli-invalid-path"
   | "kun-cli-not-executable"
+  | "kun-config-missing"
+  | "kun-config-invalid-path"
+  | "kun-config-not-file"
 
 export type KunCliVersionStatus = {
   ok: boolean
   value: string | null
   error: string | null
+}
+
+export type KunConfigFileStatus = {
+  ok: boolean
+  path: string | null
+  exists: boolean
+  isFile: boolean
+  error: string | null
+  hint: string
 }
 
 export type KunCliSetupStatus = {
@@ -51,6 +67,7 @@ export type KunCliSetupStatus = {
   availability: KunCliAvailability
   source: KunCliSource
   executable: RuntimeExecutableStatus
+  config: KunConfigFileStatus
   version: KunCliVersionStatus
   blocker: {
     component: "kun-cli"
@@ -68,12 +85,14 @@ export type KunCliSetupStatus = {
 export type ResolvedKunCliSetupStatus = {
   status: KunCliSetupStatus
   executablePath: string | null
+  configPath: string | null
 }
 
 type KunCliStatusOptions = KunCliSettingsOptions & {
   env?: NodeJS.ProcessEnv
   cwd?: string | null
   overridePath?: string | null
+  configPathOverride?: string | null
   ignoreSavedOverride?: boolean
   enabled?: boolean
   probeVersion?: (filePath: string) => Promise<KunCliVersionStatus>
@@ -112,6 +131,94 @@ function kunExecutableStatus(filePath: string | null): RuntimeExecutableStatus {
   }
 }
 
+function missingConfigStatus(): KunConfigFileStatus {
+  return {
+    ok: false,
+    path: null,
+    exists: false,
+    isFile: false,
+    error: "Kun config path is not configured.",
+    hint: KUN_CONFIG_HINT,
+  }
+}
+
+function kunConfigFileStatus(filePath: string | null): KunConfigFileStatus {
+  const configPath = filePath?.trim() || null
+  if (!configPath) return missingConfigStatus()
+  if (!isAbsolute(configPath)) {
+    return {
+      ok: false,
+      path: sanitizeForRenderer(configPath),
+      exists: false,
+      isFile: false,
+      error: "Kun config path must be an absolute local file path.",
+      hint: KUN_CONFIG_HINT,
+    }
+  }
+  if (looksLikeCommandString(configPath)) {
+    return {
+      ok: false,
+      path: null,
+      exists: false,
+      isFile: false,
+      error: "Kun config path must be a file path, not a shell command.",
+      hint: KUN_CONFIG_HINT,
+    }
+  }
+  if (containsSecretLikeText(configPath)) {
+    return {
+      ok: false,
+      path: null,
+      exists: false,
+      isFile: false,
+      error: "Kun config path contains secret-like text and was rejected.",
+      hint: KUN_CONFIG_HINT,
+    }
+  }
+  if (!existsSync(configPath)) {
+    return {
+      ok: false,
+      path: sanitizeForRenderer(configPath),
+      exists: false,
+      isFile: false,
+      error: "Kun config file was not found.",
+      hint: KUN_CONFIG_HINT,
+    }
+  }
+  try {
+    const stats = statSync(configPath)
+    if (!stats.isFile()) {
+      return {
+        ok: false,
+        path: sanitizeForRenderer(configPath),
+        exists: true,
+        isFile: false,
+        error: "Kun config path exists but is not a file.",
+        hint: KUN_CONFIG_HINT,
+      }
+    }
+    return {
+      ok: true,
+      path: sanitizeForRenderer(configPath),
+      exists: true,
+      isFile: true,
+      error: null,
+      hint: KUN_CONFIG_HINT,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      path: sanitizeForRenderer(configPath),
+      exists: true,
+      isFile: false,
+      error:
+        sanitizeForRenderer(error instanceof Error ? error.message : String(error)) ??
+        "Kun config file is not readable.",
+      hint: KUN_CONFIG_HINT,
+    }
+  }
+}
+
 function containmentPath(path: string): string {
   try {
     return realpathSync(path)
@@ -141,9 +248,11 @@ function invalidStatus(
   source: KunCliSource,
   code: KunCliBlockerCode,
   availability: KunCliAvailability,
+  config: KunConfigFileStatus = missingConfigStatus(),
 ): ResolvedKunCliSetupStatus {
   return {
     executablePath: null,
+    configPath: null,
     status: {
       runtimeId: "kun",
       label: "Kun",
@@ -158,6 +267,7 @@ function invalidStatus(
         error: sanitizeForRenderer(message),
         hint: KUN_INSTALL_HINT,
       },
+      config,
       version: {
         ok: false,
         value: null,
@@ -271,12 +381,27 @@ async function defaultProbeKunVersion(
       error: null,
     }
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Kun version probe failed."
-    return {
-      ok: false,
-      value: null,
-      error: sanitizeForRenderer(message) ?? "Kun version probe failed.",
+    try {
+      await execFileAsync(filePath, ["help"], {
+        encoding: "utf8",
+        timeout: 3000,
+        maxBuffer: 8192,
+        shell: false,
+        windowsHide: true,
+      })
+      return {
+        ok: true,
+        value: "Kun CLI detected (version unavailable)",
+        error: null,
+      }
+    } catch {
+      const message =
+        error instanceof Error ? error.message : "Kun version probe failed."
+      return {
+        ok: false,
+        value: null,
+        error: sanitizeForRenderer(message) ?? "Kun version probe failed.",
+      }
     }
   }
 }
@@ -284,13 +409,16 @@ async function defaultProbeKunVersion(
 async function statusForCandidate(
   candidate: KunPathCandidate | null,
   options: KunCliStatusOptions,
+  configPath: string | null,
 ): Promise<ResolvedKunCliSetupStatus> {
+  const config = kunConfigFileStatus(configPath)
   if (!candidate) {
     return invalidStatus(
       "Kun CLI was not found on PATH.",
       "unresolved",
       "kun-cli-missing",
       "missing",
+      config,
     )
   }
 
@@ -299,6 +427,7 @@ async function statusForCandidate(
   if (!rawStatus.ok) {
     return {
       executablePath: null,
+      configPath: config.ok ? configPath : null,
       status: {
         runtimeId: "kun",
         label: "Kun",
@@ -306,6 +435,7 @@ async function statusForCandidate(
         availability: rawStatus.exists ? "non-executable" : "invalid-path",
         source: candidate.source,
         executable,
+        config,
         version: {
           ok: false,
           value: null,
@@ -333,21 +463,47 @@ async function statusForCandidate(
   const version = await (options.probeVersion ?? defaultProbeKunVersion)(
     candidate.path,
   )
+  const ok = config.ok
+  const blocker: KunCliSetupStatus["blocker"] =
+    config.ok
+      ? null
+      : {
+          component: "kun-cli" as const,
+          code: config.exists
+            ? config.isFile
+              ? "kun-config-invalid-path"
+              : "kun-config-not-file"
+            : config.path
+              ? "kun-config-invalid-path"
+              : "kun-config-missing",
+          message:
+            config.error ??
+            "Kun config path must be configured before Kun runs.",
+          hint: KUN_CONFIG_HINT,
+        }
   return {
     executablePath: candidate.path,
+    configPath: config.ok ? configPath : null,
     status: {
       runtimeId: "kun",
       label: "Kun",
-      ok: true,
-      availability: version.ok ? "available" : "version-probe-failed",
+      ok,
+      availability: !version.ok
+        ? "version-probe-failed"
+        : config.ok
+          ? "available"
+          : config.path
+            ? "config-invalid"
+            : "config-missing",
       source: candidate.source,
       executable,
+      config,
       version: {
         ok: version.ok,
         value: sanitizeForRenderer(version.value),
         error: sanitizeForRenderer(version.error),
       },
-      blocker: null,
+      blocker,
       guidance: {
         installCommand: KUN_INSTALL_COMMAND,
         authHint: KUN_AUTH_HINT,
@@ -364,15 +520,17 @@ export async function resolveKunCliSetupStatus(
     return disabledStatus()
   }
 
+  const savedSettings = options.ignoreSavedOverride
+    ? { executablePath: null, configPath: null }
+    : readKunCliSettings(options)
   const explicitOverride = options.overridePath ?? null
-  const savedOverride = options.ignoreSavedOverride
-    ? null
-    : readKunCliSettings(options).executablePath
+  const savedOverride = savedSettings.executablePath
+  const configPath = options.configPathOverride ?? savedSettings.configPath
   const override = pathOverrideCandidate(explicitOverride ?? savedOverride)
   if (override && "status" in override) return override
   const candidate =
     override ?? discoverKunOnPath(options.env ?? process.env, options.cwd)
-  return statusForCandidate(candidate, options)
+  return statusForCandidate(candidate, options, configPath)
 }
 
 export function toRendererKunCliSetupStatus(
@@ -391,18 +549,72 @@ export async function saveKunExecutablePathOverride(
     ignoreSavedOverride: true,
   })
   if (!resolved.status.ok || !resolved.executablePath) {
-    return resolved
+    if (!resolved.executablePath) return resolved
   }
-  writeKunCliSettings({ executablePath: resolved.executablePath }, options)
-  return resolved
+  if (resolved.executablePath) {
+    const current = readKunCliSettings(options)
+    writeKunCliSettings(
+      {
+        executablePath: resolved.executablePath,
+        configPath: current.configPath,
+      },
+      options,
+    )
+  }
+  return resolveKunCliSetupStatus(options)
+}
+
+export async function saveKunConfigPathOverride(
+  configPath: string,
+  options: KunCliStatusOptions = {},
+): Promise<ResolvedKunCliSetupStatus> {
+  const config = kunConfigFileStatus(configPath)
+  if (!config.ok || !config.path) {
+    const current = await resolveKunCliSetupStatus({
+      ...options,
+      configPathOverride: configPath,
+    })
+    return current
+  }
+  const current = readKunCliSettings(options)
+  writeKunCliSettings(
+    {
+      executablePath: current.executablePath,
+      configPath,
+    },
+    options,
+  )
+  return resolveKunCliSetupStatus(options)
+}
+
+export async function resetKunConfigPathOverride(
+  options: KunCliStatusOptions = {},
+): Promise<ResolvedKunCliSetupStatus> {
+  const current = readKunCliSettings(options)
+  writeKunCliSettings(
+    {
+      executablePath: current.executablePath,
+      configPath: null,
+    },
+    options,
+  )
+  return resolveKunCliSetupStatus(options)
 }
 
 export async function resetKunExecutablePathOverride(
   options: KunCliStatusOptions = {},
 ): Promise<ResolvedKunCliSetupStatus> {
-  writeKunCliSettings({ executablePath: null }, options)
+  const current = readKunCliSettings(options)
+  writeKunCliSettings(
+    {
+      executablePath: null,
+      configPath: current.configPath,
+    },
+    options,
+  )
   return resolveKunCliSetupStatus({
     ...options,
     ignoreSavedOverride: true,
+    configPathOverride: current.configPath,
   })
 }

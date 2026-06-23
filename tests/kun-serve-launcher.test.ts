@@ -120,6 +120,65 @@ describe("Kun serve launcher", () => {
     }
   })
 
+  test("passes the BYO config path to Kun without exposing runtime secrets", async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), "locus-kun-serve-"))
+    const configPath = join(userDataPath, "config.json")
+    const captured: {
+      args?: string[]
+      env?: NodeJS.ProcessEnv
+    } = {}
+    try {
+      const handle = await launchKunServe({
+        executable: "/usr/local/bin/kun",
+        configPath,
+        runId: "run-config",
+        cwd: "/repo",
+        env: {
+          PATH: "/usr/local/bin",
+          KUN_RUNTIME_TOKEN: "attacker-controlled-token",
+          OPENAI_API_KEY: "sk-provider-secret-value-123456",
+        },
+        userDataPath,
+        spawnProcess: (_command, args, options) => {
+          captured.args = args
+          captured.env = options.env as NodeJS.ProcessEnv
+          const child = fakeChild()
+          setImmediate(() => {
+            child.stdout.emit(
+              "data",
+              Buffer.from(
+                `${KUN_SERVE_TEST_ONLY.KUN_READY_PREFIX}${JSON.stringify({
+                  service: "kun",
+                  mode: "serve",
+                  host: "127.0.0.1",
+                  port: 34568,
+                  dataDir: join(userDataPath, "kun-sessions", "run-config"),
+                  approvalPolicy: "on-request",
+                  sandboxMode: "workspace-write",
+                  insecure: false,
+                  pid: 456,
+                })}\n`,
+              ),
+            )
+          })
+          return child
+        },
+      })
+
+      expect(captured.args).toEqual(
+        expect.arrayContaining(["serve", "--config", configPath]),
+      )
+      expect(captured.args?.join(" ")).not.toContain(
+        captured.env?.KUN_RUNTIME_TOKEN ?? "missing-token",
+      )
+      expect(captured.args?.join(" ")).not.toContain("sk-provider-secret")
+      expect(captured.env).not.toHaveProperty("OPENAI_API_KEY")
+      await handle.close()
+    } finally {
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  })
+
   test("rejects hardened handshake drift", () => {
     expect(() =>
       verifyKunReadyInfo({

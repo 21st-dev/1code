@@ -1405,6 +1405,7 @@ export function AgentsModelsTab() {
     })
   const [qwenExecutablePath, setQwenExecutablePath] = useState("")
   const [kunExecutablePath, setKunExecutablePath] = useState("")
+  const [kunConfigPath, setKunConfigPath] = useState("")
 
   // OpenAI API key state
   const [codexApiKey, setCodexApiKey] = useState("")
@@ -1424,6 +1425,10 @@ export function AgentsModelsTab() {
     trpc.agentRuntime.updateKunExecutablePath.useMutation()
   const resetKunExecutablePathMutation =
     trpc.agentRuntime.resetKunExecutablePath.useMutation()
+  const updateKunConfigPathMutation =
+    trpc.agentRuntime.updateKunConfigPath.useMutation()
+  const resetKunConfigPathMutation =
+    trpc.agentRuntime.resetKunConfigPath.useMutation()
 
   useEffect(() => {
     if (!modelsSettingsTarget) return
@@ -1524,6 +1529,22 @@ export function AgentsModelsTab() {
     }
   }
 
+  const handleSaveKunConfigPath = async () => {
+    const configPath = kunConfigPath.trim()
+    if (!configPath) return
+
+    try {
+      await updateKunConfigPathMutation.mutateAsync({ configPath })
+      setKunConfigPath("")
+      await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
+      toast.success("Kun config path saved")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save Kun config path",
+      )
+    }
+  }
+
   const handleResetQwenExecutablePath = async () => {
     try {
       await resetQwenExecutablePathMutation.mutateAsync()
@@ -1550,6 +1571,21 @@ export function AgentsModelsTab() {
         error instanceof Error
           ? error.message
           : "Failed to reset Kun executable path",
+      )
+    }
+  }
+
+  const handleResetKunConfigPath = async () => {
+    try {
+      await resetKunConfigPathMutation.mutateAsync()
+      setKunConfigPath("")
+      await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
+      toast.success("Kun config path reset")
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to reset Kun config path",
       )
     }
   }
@@ -2131,11 +2167,26 @@ export function AgentsModelsTab() {
                   <p className="text-xs text-muted-foreground">
                     {kunCliStatus?.ok
                       ? "Kun is available for flag-gated desktop runs."
-                      : "Set an absolute Kun executable path or install Kun on PATH outside the active project."}
+                      : "Set a Kun executable and a Kun config.json with provider credentials before running."}
                   </p>
                   {kunCliStatus?.executable.path && (
                     <p className="break-all text-xs text-muted-foreground">
-                      Current path: {kunCliStatus.executable.path}
+                      Executable: {kunCliStatus.executable.path}
+                    </p>
+                  )}
+                  {kunCliStatus?.config.path && (
+                    <p className="break-all text-xs text-muted-foreground">
+                      Config: {kunCliStatus.config.path}
+                    </p>
+                  )}
+                  {kunCliStatus?.blocker?.message && !kunCliStatus.ok && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      {kunCliStatus.blocker.message}
+                    </p>
+                  )}
+                  {kunCliStatus?.config.error && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Config: {kunCliStatus.config.error}
                     </p>
                   )}
                   {kunCliStatus?.version.value && (
@@ -2180,7 +2231,7 @@ export function AgentsModelsTab() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {kunCliStatus?.guidance.authHint ??
-                  "Configure Kun with an isolated provider profile before running it from Locus."}
+                  "Configure Kun with a BYO config file before running it from Locus."}
               </p>
             </div>
 
@@ -2223,6 +2274,52 @@ export function AgentsModelsTab() {
                     variant="outline"
                     onClick={() => void handleResetKunExecutablePath()}
                     disabled={resetKunExecutablePathMutation.isPending}
+                  >
+                    {t("common.reset")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 p-4">
+              <div>
+                <Label className="text-sm font-medium">
+                  Config path override
+                </Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Use an absolute Kun config.json path. Locus passes the path to
+                  Kun but does not read or render provider credentials.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  value={kunConfigPath}
+                  onChange={(event) =>
+                    setKunConfigPath(event.currentTarget.value)
+                  }
+                  placeholder="/Users/me/.kun/config.json"
+                  className="font-mono"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => void handleSaveKunConfigPath()}
+                    disabled={
+                      !kunConfigPath.trim() ||
+                      updateKunConfigPathMutation.isPending
+                    }
+                  >
+                    {updateKunConfigPathMutation.isPending
+                      ? t("common.saving")
+                      : t("common.save")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleResetKunConfigPath()}
+                    disabled={resetKunConfigPathMutation.isPending}
                   >
                     {t("common.reset")}
                   </Button>

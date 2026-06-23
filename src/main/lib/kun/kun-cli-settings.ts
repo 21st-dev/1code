@@ -6,10 +6,12 @@ const KUN_CLI_SETTINGS_FILE = "kun-cli-settings.json"
 
 export type KunCliSettings = {
   executablePath: string | null
+  configPath: string | null
 }
 
 const DEFAULT_KUN_CLI_SETTINGS: KunCliSettings = {
   executablePath: null,
+  configPath: null,
 }
 
 export type KunCliSettingsOptions = {
@@ -34,6 +36,10 @@ function parseKunCliSettingsContent(content: string): KunCliSettings {
         typeof parsed.executablePath === "string" &&
         parsed.executablePath.trim()
           ? parsed.executablePath
+          : null,
+      configPath:
+        typeof parsed.configPath === "string" && parsed.configPath.trim()
+          ? parsed.configPath
           : null,
     }
   } catch {
@@ -60,6 +66,7 @@ export function writeKunCliSettings(
     `${JSON.stringify(
       {
         executablePath: settings.executablePath?.trim() || null,
+        configPath: settings.configPath?.trim() || null,
       },
       null,
       2,
