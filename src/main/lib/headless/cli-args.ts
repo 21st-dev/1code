@@ -7,9 +7,9 @@ import {
   type AgentJobSource,
 } from "../../../shared/agent-jobs"
 import {
-  AGENT_RUNTIME_IDS,
+  CONTRACT_RUNTIME_IDS,
   toAgentRuntimeId,
-  type AgentRuntimeId,
+  type AgentRuntimeContractId,
 } from "../../../shared/agent-runtime-capabilities"
 import {
   AGENT_SCHEDULE_STATUSES,
@@ -29,7 +29,7 @@ export type HeadlessCliCommand =
   | {
       kind: "run"
       cwd: string
-      runtime: AgentRuntimeId
+      runtime: AgentRuntimeContractId
       mode: AgentJobMode
       prompt: string
       stdin: boolean
@@ -123,7 +123,7 @@ export type HeadlessCliCommand =
       kind: "schedules-create"
       name: string
       cwd: string
-      runtime: AgentRuntimeId
+      runtime: AgentRuntimeContractId
       mode: AgentJobMode
       prompt: string
       intervalSeconds: number
@@ -194,12 +194,12 @@ function parseMode(value: string | null, fallback: AgentJobMode = "agent"): Agen
   return mode as AgentJobMode
 }
 
-function parseRuntime(value: string | null): AgentRuntimeId {
+function parseRuntime(value: string | null): AgentRuntimeContractId {
   const runtime = toAgentRuntimeId(value ?? "claude-code")
-  if (!runtime || !(AGENT_RUNTIME_IDS as readonly string[]).includes(runtime)) {
+  if (!runtime || !(CONTRACT_RUNTIME_IDS as readonly string[]).includes(runtime)) {
     throw new Error("Unsupported --runtime")
   }
-  return runtime
+  return runtime as AgentRuntimeContractId
 }
 
 function parseJobSource(value: string | null): HeadlessJobSourceFilter {

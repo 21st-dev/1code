@@ -5,7 +5,7 @@ import {
   type AgentRuntimeCapabilityDiagnostic,
   type AgentRuntimeCapabilityId,
   type AgentRuntimeCapabilityManifest,
-  type AgentRuntimeId,
+  type AgentRuntimeContractId,
 } from "../../../shared/agent-runtime-capabilities"
 import type {
   AgentRuntimeExecutionProfile,
@@ -31,7 +31,7 @@ export type AgentRuntimeAdapterPreferenceSourceId =
   | "codex-interactive"
 
 export type AgentRuntimeAdapter = {
-  id: AgentRuntimeId
+  id: AgentRuntimeContractId
   sourceId: AgentRuntimeAdapterSourceId
   executionProfile: AgentRuntimeExecutionProfile
   label: string
@@ -55,7 +55,7 @@ export type AgentRuntimePolicyGrantScopeBinding =
 export type AgentRuntimeSelectionDiagnostic = {
   type: "adapter-selected" | "adapter-refused" | "unsupported-capability"
   status: "selected" | "refused"
-  runtime: AgentRuntimeId
+  runtime: AgentRuntimeContractId
   source: AgentRuntimeRunContextBase["source"]
   executionProfile: AgentRuntimeExecutionProfile
   adapterSource?: AgentRuntimeAdapterSourceId | null
@@ -80,7 +80,7 @@ export type AgentRuntimeAdapterSelection =
       result: AgentRuntimeRunResult
     }
 
-const batchAdapters: Record<AgentRuntimeId, AgentRuntimeAdapter> = {
+const batchAdapters: Record<AgentRuntimeContractId, AgentRuntimeAdapter> = {
   "claude-code": {
     id: "claude-code",
     sourceId: "claude-code-batch",
@@ -258,7 +258,7 @@ function unsupportedPreExecutionPolicyEnforcementResult(input: {
 }
 
 export function getAgentRuntimeAdapter(
-  runtime: AgentRuntimeId,
+  runtime: AgentRuntimeContractId,
 ): AgentRuntimeAdapter {
   return batchAdapters[runtime]
 }

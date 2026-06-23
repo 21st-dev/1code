@@ -12,7 +12,7 @@ import {
   type AgentJobStatus,
   isTerminalAgentJobStatus,
 } from "../../../shared/agent-jobs"
-import { AGENT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
+import { CONTRACT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
 import { createAgentJobRunEvent } from "../agent-runtime/job-event-bridge"
 import type * as schema from "../db/schema"
 import {
@@ -262,7 +262,7 @@ export function createAgentJob(
   input: CreateAgentJobInput,
 ): AgentJob {
   assertOneOf(AGENT_JOB_SOURCES, input.source, "job source")
-  assertOneOf(AGENT_RUNTIME_IDS, input.runtime, "job runtime")
+  assertOneOf(CONTRACT_RUNTIME_IDS, input.runtime, "job runtime")
   assertOneOf(AGENT_JOB_MODES, input.mode, "job mode")
 
   const id = input.id ?? createId()

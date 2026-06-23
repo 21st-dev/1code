@@ -1,6 +1,8 @@
-export const AGENT_RUNTIME_IDS = ["claude-code", "codex"] as const
+export const CONTRACT_RUNTIME_IDS = ["claude-code", "codex"] as const
+export const AGENT_RUNTIME_IDS = CONTRACT_RUNTIME_IDS
 
 export type AgentRuntimeId = (typeof AGENT_RUNTIME_IDS)[number]
+export type AgentRuntimeContractId = (typeof CONTRACT_RUNTIME_IDS)[number]
 export type AgentRuntimeAlias = AgentRuntimeId | "claude"
 
 export const AGENT_RUNTIME_CAPABILITY_IDS = [

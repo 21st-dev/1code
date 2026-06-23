@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import {
   AGENT_RUNTIME_CAPABILITY_IDS,
+  CONTRACT_RUNTIME_IDS,
   type AgentRuntimeCapability,
   checkAgentRuntimeCapability,
   getAgentRunRequiredCapabilityIds,
@@ -16,6 +17,11 @@ import {
 } from "../src/shared/agent-runtime-capabilities"
 
 describe("agent runtime capability manifests", () => {
+  test("keeps non-desktop contract runtimes explicit", () => {
+    expect([...CONTRACT_RUNTIME_IDS]).toEqual(["claude-code", "codex"])
+    expect([...CONTRACT_RUNTIME_IDS]).not.toContain("qwen-code")
+  })
+
   test("registers Claude Code and Codex manifests with the same explicit capability IDs", () => {
     const manifests = getAgentRuntimeCapabilityManifests()
 

@@ -7,7 +7,7 @@ import type {
 } from "../../../shared/agent-jobs"
 import {
   getAgentRunRequiredCapabilityIds,
-  type AgentRuntimeId,
+  type AgentRuntimeContractId,
 } from "../../../shared/agent-runtime-capabilities"
 import type {
   AgentRuntimePermissionPolicySummary,
@@ -37,7 +37,7 @@ export type AgentRuntimeRunIdentity = AgentRuntimeRunIdentityBase & {
 }
 
 export type AgentRuntimeRunContext = AgentRuntimeRunContextBase & {
-  runtimeId: AgentRuntimeId
+  runtimeId: AgentRuntimeContractId
   mode: AgentJobMode
   source: AgentJobSource
   executionProfile: AgentRuntimeExecutionProfile
@@ -70,7 +70,7 @@ export type AgentRuntimeRunResult = AgentRuntimeRunResultBase<
 
 export type CreateAgentRuntimeRunRequestInput = {
   jobId: string
-  runtime: AgentRuntimeId
+  runtime: AgentRuntimeContractId
   cwd: string
   mode: AgentJobMode
   source: AgentJobSource

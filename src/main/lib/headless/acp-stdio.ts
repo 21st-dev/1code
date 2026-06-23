@@ -4,7 +4,7 @@ import {
   AGENT_JOB_MODES,
   type AgentJobRuntime,
 } from "../../../shared/agent-jobs"
-import { AGENT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
+import { CONTRACT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
 import {
   createAgentJob,
   listAgentJobEvents,
@@ -55,7 +55,7 @@ const requestSchema = z.object({
 }).strict()
 
 const jobRunParamsSchema = z.object({
-  runtime: z.enum(AGENT_RUNTIME_IDS),
+  runtime: z.enum(CONTRACT_RUNTIME_IDS),
   mode: z.enum(AGENT_JOB_MODES).default("agent"),
   cwd: z.string().min(1),
   prompt: z.string().min(1),

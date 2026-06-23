@@ -4,10 +4,10 @@ import {
 } from "./agent-jobs"
 import {
   AGENT_RUNTIME_CAPABILITY_IDS,
-  AGENT_RUNTIME_IDS,
+  CONTRACT_RUNTIME_IDS,
   toAgentRuntimeId,
   type AgentRuntimeCapabilityId,
-  type AgentRuntimeId,
+  type AgentRuntimeContractId,
 } from "./agent-runtime-capabilities"
 
 export const LOCAL_JOB_API_VERSION = "locus.local-job.v1" as const
@@ -67,7 +67,7 @@ export type LocalJobApiCreateRequest = {
     projectId?: string | null
   }
   runtime: {
-    id: AgentRuntimeId | "claude"
+    id: AgentRuntimeContractId | "claude"
     requiredCapabilities?: AgentRuntimeCapabilityId[]
     executionProfile?: LocalJobApiExecutionProfile
     policyGrant?: LocalJobApiPolicyGrant | null
@@ -91,7 +91,7 @@ export type NormalizedLocalJobApiCreateRequest = {
     projectId: string | null
   }
   runtime: {
-    id: AgentRuntimeId
+    id: AgentRuntimeContractId
     requiredCapabilities: AgentRuntimeCapabilityId[]
     executionProfile: LocalJobApiExecutionProfile
     policyGrant: LocalJobApiPolicyGrant | null
@@ -371,7 +371,10 @@ export function validateLocalJobApiCreateRequest(
   const runtimeId = toAgentRuntimeId(
     typeof runtimeInput?.id === "string" ? runtimeInput.id : null,
   )
-  if (!runtimeId || !(AGENT_RUNTIME_IDS as readonly string[]).includes(runtimeId)) {
+  if (
+    !runtimeId ||
+    !(CONTRACT_RUNTIME_IDS as readonly string[]).includes(runtimeId)
+  ) {
     errors.push("Unsupported runtime.id")
   }
   const requiredCapabilities = normalizeRequiredCapabilities(
@@ -435,6 +438,7 @@ export function validateLocalJobApiCreateRequest(
   if (errors.length > 0 || !runtimeId || !input || !artifacts || !writePolicy) {
     return { ok: false, errors }
   }
+  const contractRuntimeId = runtimeId as AgentRuntimeContractId
 
   return {
     ok: true,
@@ -449,7 +453,7 @@ export function validateLocalJobApiCreateRequest(
         projectId: projectId || null,
       },
       runtime: {
-        id: runtimeId,
+        id: contractRuntimeId,
         requiredCapabilities,
         executionProfile,
         policyGrant,

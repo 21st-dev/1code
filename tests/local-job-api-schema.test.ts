@@ -13,7 +13,7 @@ import {
 } from "../src/shared/agent-jobs"
 import {
   AGENT_RUNTIME_CAPABILITY_IDS,
-  AGENT_RUNTIME_IDS,
+  CONTRACT_RUNTIME_IDS,
 } from "../src/shared/agent-runtime-capabilities"
 import {
   LOCAL_JOB_API_EVENT_TYPES,
@@ -101,12 +101,13 @@ describe("Local Job API v1 JSON Schema", () => {
     expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema")
     expect(def(schema, "apiVersion").const).toBe(LOCAL_JOB_API_VERSION)
     expect(schemaEnum(def(schema, "runtimeId"))).toEqual([
-      ...AGENT_RUNTIME_IDS,
+      ...CONTRACT_RUNTIME_IDS,
     ])
     expect(schemaEnum(def(schema, "runtimeIdInput"))).toEqual([
-      ...AGENT_RUNTIME_IDS,
+      ...CONTRACT_RUNTIME_IDS,
       "claude",
     ])
+    expect(schemaEnum(def(schema, "runtimeId"))).not.toContain("qwen-code")
     expect(schemaEnum(def(schema, "runtimeCapabilityId"))).toEqual([
       ...AGENT_RUNTIME_CAPABILITY_IDS,
     ])

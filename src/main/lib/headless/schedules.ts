@@ -15,7 +15,7 @@ import {
   type AgentJobMode,
   type AgentJobRuntime,
 } from "../../../shared/agent-jobs"
-import { AGENT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
+import { CONTRACT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
 import {
   AGENT_SCHEDULE_STATUSES,
   AGENT_SCHEDULE_TRIGGERS,
@@ -363,7 +363,7 @@ function fireAgentSchedule(
   now: Date,
 ): FiredAgentSchedule | null {
   assertScheduleTrigger(trigger)
-  assertOneOf(AGENT_RUNTIME_IDS, schedule.runtime, "job runtime")
+  assertOneOf(CONTRACT_RUNTIME_IDS, schedule.runtime, "job runtime")
   assertOneOf(AGENT_JOB_MODES, schedule.mode, "job mode")
   findRegisteredProjectForCwd(db, schedule.cwd, schedule.projectId)
 
@@ -402,7 +402,7 @@ export function createAgentSchedule(
   db: AgentJobDatabase,
   input: CreateAgentScheduleInput,
 ): AgentSchedule {
-  assertOneOf(AGENT_RUNTIME_IDS, input.runtime, "job runtime")
+  assertOneOf(CONTRACT_RUNTIME_IDS, input.runtime, "job runtime")
   assertOneOf(AGENT_JOB_MODES, input.mode, "job mode")
   assertScheduleInterval(input.intervalSeconds)
 
