@@ -116,6 +116,22 @@ describe("Local Job API v1 shared contract", () => {
     }
   })
 
+  test("rejects Qwen Code from the non-desktop Local Job API contract", () => {
+    const request = validateLocalJobApiCreateRequest({
+      apiVersion: LOCAL_JOB_API_VERSION,
+      consumer: { id: "docs-workbench" },
+      project: { cwd: process.cwd() },
+      runtime: { id: "qwen-code" },
+      mode: "agent",
+      prompt: { text: "Run Qwen through the Local Job API." },
+    })
+
+    expect(request.ok).toBe(false)
+    if (!request.ok) {
+      expect(request.errors).toContain("Unsupported runtime.id")
+    }
+  })
+
   test("rejects secret-like request fields and values", () => {
     const request = validateLocalJobApiCreateRequest({
       apiVersion: LOCAL_JOB_API_VERSION,

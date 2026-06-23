@@ -1,7 +1,7 @@
 import type { AgentJob, AgentJobEvent } from "../db/schema"
 import type {
+  AgentJobContractRuntime,
   AgentJobMode,
-  AgentJobRuntime,
   AgentJobSource,
   AgentJobStatus,
 } from "../../../shared/agent-jobs"
@@ -220,7 +220,7 @@ export async function runPersistedAgentJob(
           const runnerPromise = runner(
             createAgentRuntimeRunRequest({
               jobId: job.id,
-              runtime: job.runtime as AgentJobRuntime,
+              runtime: job.runtime as AgentJobContractRuntime,
               cwd: job.cwd,
               mode: job.mode as AgentJobMode,
               source: job.source as AgentJobSource,

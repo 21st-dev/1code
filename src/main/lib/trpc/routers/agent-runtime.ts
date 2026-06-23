@@ -17,13 +17,15 @@ const capabilityIdSchema = z.enum(AGENT_RUNTIME_CAPABILITY_IDS)
 
 export const agentRuntimeRouter = router({
   listManifests: publicProcedure.query(() => {
-    return listRegisteredAgentRuntimeManifests()
+    return listRegisteredAgentRuntimeManifests({ scope: "desktop" })
   }),
 
   getManifest: publicProcedure
     .input(z.object({ runtimeId: z.string().min(1) }))
     .query(({ input }) => {
-      return resolveRegisteredAgentRuntimeManifest(input.runtimeId)
+      return resolveRegisteredAgentRuntimeManifest(input.runtimeId, {
+        scope: "desktop",
+      })
     }),
 
   checkCapability: publicProcedure
@@ -37,6 +39,7 @@ export const agentRuntimeRouter = router({
       return resolveRegisteredAgentRuntimeCapability({
         runtime: input.runtimeId,
         capabilityId: input.capabilityId,
+        options: { scope: "desktop" },
       })
     }),
 

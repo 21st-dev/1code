@@ -12,7 +12,10 @@ import {
   type AgentJobStatus,
   isTerminalAgentJobStatus,
 } from "../../../shared/agent-jobs"
-import { CONTRACT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
+import {
+  AGENT_RUNTIME_IDS,
+  CONTRACT_RUNTIME_IDS,
+} from "../../../shared/agent-runtime-capabilities"
 import { createAgentJobRunEvent } from "../agent-runtime/job-event-bridge"
 import type * as schema from "../db/schema"
 import {
@@ -102,6 +105,12 @@ function assertOneOf<T extends readonly string[]>(
   if (!(values as readonly string[]).includes(value)) {
     throw new Error(`Unsupported ${label}: ${value}`)
   }
+}
+
+function assertCreateAgentJobRuntime(input: CreateAgentJobInput): void {
+  const values =
+    input.source === "desktop" ? AGENT_RUNTIME_IDS : CONTRACT_RUNTIME_IDS
+  assertOneOf(values, input.runtime, "job runtime")
 }
 
 function redactSecretText(value: string): string {
@@ -262,7 +271,7 @@ export function createAgentJob(
   input: CreateAgentJobInput,
 ): AgentJob {
   assertOneOf(AGENT_JOB_SOURCES, input.source, "job source")
-  assertOneOf(CONTRACT_RUNTIME_IDS, input.runtime, "job runtime")
+  assertCreateAgentJobRuntime(input)
   assertOneOf(AGENT_JOB_MODES, input.mode, "job mode")
 
   const id = input.id ?? createId()

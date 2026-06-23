@@ -9,10 +9,11 @@ import {
 import {
   CLAUDE_AGENT_SDK_DESKTOP_ADAPTER_METADATA,
   CODEX_APP_SERVER_DESKTOP_ADAPTER_METADATA,
+  QWEN_ACP_CLIENT_DESKTOP_ADAPTER_METADATA,
 } from "../src/main/lib/agent-runtime/desktop-adapter-metadata"
 
 function fakeAdapter(
-  runtimeId: "claude-code" | "codex",
+  runtimeId: "claude-code" | "codex" | "qwen-code",
   source: DesktopRuntimeAdapterSource,
 ): DesktopRuntimeAdapter {
   return {
@@ -42,6 +43,12 @@ describe("desktop runtime adapter factory", () => {
       fallbackReason: null,
       defaultDisableCondition: null,
       removalCondition: null,
+    })
+    expect(QWEN_ACP_CLIENT_DESKTOP_ADAPTER_METADATA).toMatchObject({
+      runtimeId: "qwen-code",
+      source: "qwen-acp-client",
+      temporaryFallback: false,
+      defaultDisableCondition: "LOCUS_ENABLE_QWEN_CODE_RUNTIME is not enabled",
     })
   })
 
@@ -112,14 +119,23 @@ describe("desktop runtime adapter factory", () => {
   test("registers and resolves adapters by runtime and source", () => {
     const claude = fakeAdapter("claude-code", "claude-agent-sdk")
     const codex = fakeAdapter("codex", "codex-app-server")
-    const factory = new DesktopRuntimeAdapterFactory([claude, codex])
+    const qwen = fakeAdapter("qwen-code", "qwen-acp-client")
+    const factory = new DesktopRuntimeAdapterFactory([claude, codex, qwen])
 
     expect(factory.get({ runtimeId: "claude-code" })).toBe(claude)
     expect(factory.get({ runtimeId: "codex" })).toBe(codex)
+    expect(factory.get({ runtimeId: "qwen-code" })).toBe(qwen)
     expect(
       factory.get({ runtimeId: "codex", source: "codex-app-server" }),
     ).toBe(codex)
-    expect(factory.listMetadata()).toEqual([claude.metadata, codex.metadata])
+    expect(
+      factory.get({ runtimeId: "qwen-code", source: "qwen-acp-client" }),
+    ).toBe(qwen)
+    expect(factory.listMetadata()).toEqual([
+      claude.metadata,
+      codex.metadata,
+      qwen.metadata,
+    ])
   })
 
   test("rejects duplicate and unsupported adapter lookups", () => {

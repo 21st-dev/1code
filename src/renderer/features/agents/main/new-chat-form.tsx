@@ -192,6 +192,10 @@ const agents: Array<{
   { id: "codex", name: "OpenAI Codex" },
 ]
 
+function isAgentProviderId(id: string): id is AgentProviderId {
+  return id === "claude-code" || id === "codex"
+}
+
 interface NewChatFormProps {
   isMobileFullscreen?: boolean
   onBackToChats?: () => void
@@ -265,6 +269,7 @@ export function NewChatForm({
         ),
       )
       .map((manifest) => manifest.runtimeId)
+      .filter(isAgentProviderId)
   }, [isFolderlessQuickChat, runtimeCapabilityManifests])
   const quickChatRuntimeGateLoaded =
     !isFolderlessQuickChat || runtimeCapabilityManifests !== undefined

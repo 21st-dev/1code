@@ -258,7 +258,7 @@ export function toLocalJobApiJobEnvelope(job: AgentJob): LocalJobApiJobEnvelope 
 export function toLocalJobApiRuntimeManifestEnvelope(): LocalJobApiRuntimeManifestEnvelope {
   return {
     apiVersion: LOCAL_JOB_API_VERSION,
-    runtimes: listRegisteredAgentRuntimeManifests(),
+    runtimes: listRegisteredAgentRuntimeManifests({ scope: "contract" }),
   }
 }
 

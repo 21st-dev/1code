@@ -15,7 +15,10 @@ import {
   startAgentJob,
 } from "./headless/job-store"
 
-type DesktopAgentRuntime = Extract<AgentRuntimeId, "claude-code" | "codex">
+type DesktopAgentRuntime = Extract<
+  AgentRuntimeId,
+  "claude-code" | "codex" | "qwen-code"
+>
 
 export type CreateDesktopAgentJobInput = {
   runtime: DesktopAgentRuntime
@@ -85,7 +88,11 @@ type ActiveCancelRegistration = CancelRegistration & {
 const activeDesktopJobCancellations = new Map<string, ActiveCancelRegistration>()
 
 function assertDesktopRuntime(runtime: string): asserts runtime is DesktopAgentRuntime {
-  if (runtime !== "claude-code" && runtime !== "codex") {
+  if (
+    runtime !== "claude-code" &&
+    runtime !== "codex" &&
+    runtime !== "qwen-code"
+  ) {
     throw new Error(`Unsupported desktop job runtime: ${runtime}`)
   }
 }
@@ -229,8 +236,12 @@ export function requestCancelDesktopAgentJob(
   }
 }
 
-function desktopRuntimeLabel(runtime: DesktopAgentRuntime): "Claude" | "Codex" {
-  return runtime === "claude-code" ? "Claude" : "Codex"
+function desktopRuntimeLabel(
+  runtime: DesktopAgentRuntime,
+): "Claude" | "Codex" | "Qwen" {
+  if (runtime === "claude-code") return "Claude"
+  if (runtime === "codex") return "Codex"
+  return "Qwen"
 }
 
 export function resolveDesktopChatJobCompletion({

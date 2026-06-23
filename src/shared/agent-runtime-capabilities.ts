@@ -1,9 +1,24 @@
 export const CONTRACT_RUNTIME_IDS = ["claude-code", "codex"] as const
-export const AGENT_RUNTIME_IDS = CONTRACT_RUNTIME_IDS
+export const EXPERIMENTAL_RUNTIME_IDS = ["qwen-code"] as const
+export const AGENT_RUNTIME_IDS = [
+  ...CONTRACT_RUNTIME_IDS,
+  ...EXPERIMENTAL_RUNTIME_IDS,
+] as const
 
 export type AgentRuntimeId = (typeof AGENT_RUNTIME_IDS)[number]
 export type AgentRuntimeContractId = (typeof CONTRACT_RUNTIME_IDS)[number]
-export type AgentRuntimeAlias = AgentRuntimeId | "claude"
+export type AgentRuntimeAlias = AgentRuntimeId | "claude" | "qwen"
+
+export type AgentRuntimeFeatureEnv = Record<string, string | undefined>
+
+const TRUE_ENV_VALUES = new Set(["1", "true", "yes", "on"])
+
+export function shouldEnableQwenCodeRuntime(
+  env: AgentRuntimeFeatureEnv = {},
+): boolean {
+  const value = env.LOCUS_ENABLE_QWEN_CODE_RUNTIME
+  return TRUE_ENV_VALUES.has(value?.trim().toLowerCase() ?? "")
+}
 
 export const AGENT_RUNTIME_CAPABILITY_IDS = [
   "hardToolGuard",
@@ -203,6 +218,7 @@ export function toAgentRuntimeId(
 ): AgentRuntimeId | null {
   if (runtime === "claude" || runtime === "claude-code") return "claude-code"
   if (runtime === "codex") return "codex"
+  if (runtime === "qwen" || runtime === "qwen-code") return "qwen-code"
   return null
 }
 
@@ -674,16 +690,151 @@ const CODEX_RUNTIME_MANIFEST = manifest({
   ],
 })
 
+const QWEN_CODE_RUNTIME_MANIFEST = manifest({
+  runtimeId: "qwen-code",
+  label: "Qwen Code",
+  description:
+    "Qwen Code ACP spike support through a flag-gated local ACP client adapter. Capability claims stay conservative until the adapter is proven end to end.",
+  capabilities: [
+    capability({
+      id: "hardToolGuard",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "The spike will map Qwen ACP permission requests through Locus guard decisions, but full pre-execution enforcement has not been proven yet.",
+      hint: "Keep Qwen guarded runs behind the Qwen runtime flag until permission mapping is verified.",
+    }),
+    capability({
+      id: "planMode",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "Qwen plan mode can receive Locus read-only policy intent, but ACP-side write denial behavior still needs adapter proof.",
+      hint: "Do not expose Qwen plan mode as parity until write and shell denial are observed.",
+    }),
+    capability({
+      id: "quickChatAssistant",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "Folderless Qwen runs can use desktop preflight policy, but the ACP permission path has not yet proven quick-chat tool denial parity.",
+      hint: "Keep folderless Qwen runs limited to the spike path.",
+    }),
+    capability({
+      id: "scopeExpansion",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "Qwen can reuse Locus guarded scope expansion state only after ACP permission requests are mapped into the shared guard owner.",
+      hint: "Treat Qwen scope expansion as incomplete until denied out-of-scope writes produce the shared event flow.",
+    }),
+    capability({
+      id: "askUserQuestion",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "The spike may translate ACP user-input style requests into Locus question UI events, but no Qwen flow has proven the full answer lifecycle.",
+      hint: "Do not promise Qwen question parity until pending, answer, skip, and timeout are covered.",
+    }),
+    capability({
+      id: "rollback",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Qwen ACP session identifiers are not mapped to durable Locus rollback or fork references.",
+      hint: "Hide rollback and fork controls for Qwen.",
+    }),
+    capability({
+      id: "mcpAuth",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "Locus can preflight shared MCP auth state before a Qwen run, but Qwen-specific MCP auth handoff is not proven.",
+      hint: "Authenticate MCP servers through existing Locus flows before retrying Qwen runs.",
+    }),
+    capability({
+      id: "mcpConfiguration",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Qwen MCP configuration passing is limited to the ACP spike and does not yet cover shared configuration editing parity.",
+      hint: "Keep Qwen MCP setup attached to explicit spike diagnostics.",
+    }),
+    capability({
+      id: "providerProfiles",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Qwen authentication is expected to come from local Qwen config or main-process environment, not shared provider profile execution parity.",
+      hint: "Do not send provider secrets to the renderer or treat Qwen as provider-profile ready.",
+    }),
+    capability({
+      id: "attachments",
+      status: "degraded",
+      scope: "runtime-neutral",
+      reason:
+        "The spike can reuse Locus attachment preflight, but ACP prompt part mapping for Qwen has not been proven across image and long-text inputs.",
+      hint: "Start Qwen validation with text prompts before enabling attachment-heavy flows.",
+    }),
+    capability({
+      id: "usageMetadata",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Qwen ACP usage metadata, if emitted, has not been normalized into Locus token and context usage events.",
+      hint: "Omit missing Qwen usage fields rather than reporting zero.",
+    }),
+    capability({
+      id: "runtimePlugins",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Qwen runtime-native plugin execution is outside the ACP spike.",
+      hint: "Keep runtime plugin controls hidden for Qwen.",
+    }),
+    capability({
+      id: "runtimeCommands",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Qwen runtime command invocation is outside the ACP spike.",
+      hint: "Keep runtime command controls hidden for Qwen.",
+    }),
+    capability({
+      id: "runtimeWorkflows",
+      status: "unsupported",
+      scope: "unavailable",
+      reason:
+        "Qwen workflow execution has no adapter or shared workflow mapping.",
+      hint: "Keep workflow controls hidden for Qwen.",
+    }),
+    capability({
+      id: "appAgents",
+      status: "degraded",
+      scope: "runtime-specific",
+      reason:
+        "Locus Agent prompt preparation may be reusable for Qwen, but runtime-native agent execution and limitation reporting are incomplete.",
+      hint: "Do not count prompt injection alone as Qwen Locus Agent parity.",
+    }),
+  ],
+})
+
 const AGENT_RUNTIME_MANIFESTS: Record<
   AgentRuntimeId,
   AgentRuntimeCapabilityManifest
 > = {
   "claude-code": CLAUDE_RUNTIME_MANIFEST,
   codex: CODEX_RUNTIME_MANIFEST,
+  "qwen-code": QWEN_CODE_RUNTIME_MANIFEST,
 }
 
-export function getAgentRuntimeCapabilityManifests(): AgentRuntimeCapabilityManifest[] {
-  return AGENT_RUNTIME_IDS.map((runtimeId) =>
+export function getAgentRuntimeCapabilityManifests(input: {
+  includeExperimental?: boolean
+} = {}): AgentRuntimeCapabilityManifest[] {
+  const runtimeIds = input.includeExperimental
+    ? AGENT_RUNTIME_IDS
+    : CONTRACT_RUNTIME_IDS
+  return runtimeIds.map((runtimeId) =>
     cloneManifest(AGENT_RUNTIME_MANIFESTS[runtimeId]),
   )
 }

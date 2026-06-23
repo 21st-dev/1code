@@ -2,7 +2,7 @@ import type { Readable } from "stream"
 import { z } from "zod"
 import {
   AGENT_JOB_MODES,
-  type AgentJobRuntime,
+  type AgentJobContractRuntime,
 } from "../../../shared/agent-jobs"
 import { CONTRACT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
 import {
@@ -262,7 +262,7 @@ function handleJobRun(
   )
   const job = createAgentJob(options.db, {
     source: "protocol",
-    runtime: params.runtime as AgentJobRuntime,
+    runtime: params.runtime as AgentJobContractRuntime,
     mode: params.mode,
     cwd,
     prompt: params.prompt,

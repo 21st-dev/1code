@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import {
   AGENT_RUNTIME_CAPABILITY_IDS,
+  AGENT_RUNTIME_IDS,
   CONTRACT_RUNTIME_IDS,
   type AgentRuntimeCapability,
   checkAgentRuntimeCapability,
@@ -12,6 +13,7 @@ import {
   isRuntimeCapabilitySupported,
   resolveAgentRuntimeCapability,
   resolveAgentRuntimeCapabilityManifest,
+  shouldEnableQwenCodeRuntime,
   toAgentRuntimeId,
   validateAgentRuntimeCapability,
 } from "../src/shared/agent-runtime-capabilities"
@@ -19,6 +21,11 @@ import {
 describe("agent runtime capability manifests", () => {
   test("keeps non-desktop contract runtimes explicit", () => {
     expect([...CONTRACT_RUNTIME_IDS]).toEqual(["claude-code", "codex"])
+    expect([...AGENT_RUNTIME_IDS]).toEqual([
+      "claude-code",
+      "codex",
+      "qwen-code",
+    ])
     expect([...CONTRACT_RUNTIME_IDS]).not.toContain("qwen-code")
   })
 
@@ -45,7 +52,28 @@ describe("agent runtime capability manifests", () => {
     expect(toAgentRuntimeId("claude")).toBe("claude-code")
     expect(toAgentRuntimeId("claude-code")).toBe("claude-code")
     expect(toAgentRuntimeId("codex")).toBe("codex")
+    expect(toAgentRuntimeId("qwen")).toBe("qwen-code")
+    expect(toAgentRuntimeId("qwen-code")).toBe("qwen-code")
     expect(toAgentRuntimeId("unknown")).toBeNull()
+  })
+
+  test("keeps Qwen Code manifests flag-gated from default manifest lists", () => {
+    expect(shouldEnableQwenCodeRuntime({})).toBe(false)
+    expect(
+      shouldEnableQwenCodeRuntime({ LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1" }),
+    ).toBe(true)
+    expect(
+      getAgentRuntimeCapabilityManifests().map((manifest) => manifest.runtimeId),
+    ).toEqual(["claude-code", "codex"])
+    expect(
+      getAgentRuntimeCapabilityManifests({ includeExperimental: true }).map(
+        (manifest) => manifest.runtimeId,
+      ),
+    ).toEqual(["claude-code", "codex", "qwen-code"])
+    expect(getAgentRuntimeCapabilityManifest("qwen-code")).toMatchObject({
+      runtimeId: "qwen-code",
+      label: "Qwen Code",
+    })
   })
 
   test("requires supported claims to carry code or runtime evidence", () => {

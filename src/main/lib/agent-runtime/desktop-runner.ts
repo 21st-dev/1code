@@ -9,6 +9,7 @@ import { createRunEvent } from "./runtime-events"
 export type DesktopRuntimeAdapterSource =
   | "claude-agent-sdk"
   | "codex-app-server"
+  | "qwen-acp-client"
 
 export type DesktopRuntimeAdapterMetadata = {
   runtimeId: DesktopPermissionRuntime
@@ -94,7 +95,11 @@ export class DesktopRuntimeAdapterFactory {
   }
 
   get({ runtimeId, source }: DesktopRuntimeAdapterLookup): DesktopRuntimeAdapter {
-    if (runtimeId !== "claude-code" && runtimeId !== "codex") {
+    if (
+      runtimeId !== "claude-code" &&
+      runtimeId !== "codex" &&
+      runtimeId !== "qwen-code"
+    ) {
       throw new Error(`Unsupported desktop runtime adapter: ${runtimeId}`)
     }
 

@@ -1,4 +1,7 @@
-import type { AgentRuntimeContractId } from "./agent-runtime-capabilities"
+import type {
+  AgentRuntimeContractId,
+  AgentRuntimeId,
+} from "./agent-runtime-capabilities"
 
 export const AGENT_JOB_SOURCES = [
   "desktop",
@@ -52,7 +55,8 @@ export const AGENT_JOB_EVENT_TYPES = [
 
 export type AgentJobEventType = (typeof AGENT_JOB_EVENT_TYPES)[number]
 
-export type AgentJobRuntime = AgentRuntimeContractId
+export type AgentJobRuntime = AgentRuntimeId
+export type AgentJobContractRuntime = AgentRuntimeContractId
 
 export function isTerminalAgentJobStatus(status: AgentJobStatus): boolean {
   return (

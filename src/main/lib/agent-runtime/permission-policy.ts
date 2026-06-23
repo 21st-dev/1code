@@ -8,7 +8,7 @@ import type {
 
 export type DesktopPermissionRuntime = Extract<
   AgentRuntimeId,
-  "claude-code" | "codex"
+  "claude-code" | "codex" | "qwen-code"
 >
 
 export type PermissionPolicySideEffect =
@@ -65,6 +65,18 @@ export type CodexAppServerPermissionMapping = {
 
 export type CodexPermissionMapping = CodexAppServerPermissionMapping
 
+export type QwenAcpClientPermissionMapping = {
+  runtime: "qwen-code"
+  adapterSource: "qwen-acp-client"
+  controlLevel: ResolvedDesktopRuntimeControlLevel
+  acpPermissionPolicy: "ask"
+  observedToolPolicy: ObservedToolPolicy
+  requiresApprovalGate: true
+  permissionHandlerFailure: "fail-closed"
+}
+
+export type QwenPermissionMapping = QwenAcpClientPermissionMapping
+
 export type DesktopPermissionPolicy = {
   runtimeId: DesktopPermissionRuntime
   mode: AgentJobMode
@@ -84,7 +96,14 @@ export type DesktopPermissionPolicy = {
     | "codex-app-server-plan-approval-gate"
     | "codex-app-server-guarded-approval-gate"
     | "codex-app-server-agent-approval-gate"
-  runtimeMapping: ClaudePermissionMapping | CodexPermissionMapping
+    | "qwen-acp-client-assistant-permission-gate"
+    | "qwen-acp-client-plan-permission-gate"
+    | "qwen-acp-client-guarded-permission-gate"
+    | "qwen-acp-client-agent-permission-gate"
+  runtimeMapping:
+    | ClaudePermissionMapping
+    | CodexPermissionMapping
+    | QwenPermissionMapping
   diagnostics: string[]
 }
 
@@ -435,6 +454,24 @@ function createCodexAppServerPermissionMapping({
   }
 }
 
+function createQwenAcpClientPermissionMapping({
+  controlLevel,
+  observedToolPolicy,
+}: {
+  controlLevel: ResolvedDesktopRuntimeControlLevel
+  observedToolPolicy: ObservedToolPolicy
+}): QwenAcpClientPermissionMapping {
+  return {
+    runtime: "qwen-code",
+    adapterSource: "qwen-acp-client",
+    controlLevel,
+    acpPermissionPolicy: "ask",
+    observedToolPolicy,
+    requiresApprovalGate: true,
+    permissionHandlerFailure: "fail-closed",
+  }
+}
+
 export function resolveDesktopPermissionPolicy({
   runtimeId,
   mode,
@@ -455,7 +492,9 @@ export function resolveDesktopPermissionPolicy({
       enforcement:
         runtimeId === "claude-code"
           ? "locus-assistant-tool-policy"
-          : "codex-app-server-assistant-approval-gate",
+          : runtimeId === "codex"
+            ? "codex-app-server-assistant-approval-gate"
+            : "qwen-acp-client-assistant-permission-gate",
       runtimeMapping:
         runtimeId === "claude-code"
           ? {
@@ -466,14 +505,21 @@ export function resolveDesktopPermissionPolicy({
               sdkDisallowedTools: getClaudeAssistantSdkDisallowedTools(),
               bypassReason: null,
             }
-          : createCodexAppServerPermissionMapping({
-              controlLevel: "assistant",
-              observedToolPolicy: DISABLED_OBSERVATION,
-            }),
+          : runtimeId === "codex"
+            ? createCodexAppServerPermissionMapping({
+                controlLevel: "assistant",
+                observedToolPolicy: DISABLED_OBSERVATION,
+              })
+            : createQwenAcpClientPermissionMapping({
+                controlLevel: "assistant",
+                observedToolPolicy: DISABLED_OBSERVATION,
+              }),
       diagnostics: [
         runtimeId === "codex"
           ? "Assistant quick chat allows only web search/fetch tools; Codex app-server must fail closed for file, shell, MCP, runtime, and unknown approval requests."
-          : "Assistant quick chat allows only web search/fetch tools and Locus-owned persistence; file, shell, terminal, MCP, runtime mutation, and unknown tools fail closed.",
+          : runtimeId === "qwen-code"
+            ? "Assistant quick chat allows only web search/fetch tools; Qwen ACP permission handling must fail closed for file, shell, MCP, runtime, and unknown requests."
+            : "Assistant quick chat allows only web search/fetch tools and Locus-owned persistence; file, shell, terminal, MCP, runtime mutation, and unknown tools fail closed.",
       ],
     }
   }
@@ -492,7 +538,9 @@ export function resolveDesktopPermissionPolicy({
       enforcement:
         runtimeId === "claude-code"
           ? "native-plan-read-only"
-          : "codex-app-server-plan-approval-gate",
+          : runtimeId === "codex"
+            ? "codex-app-server-plan-approval-gate"
+            : "qwen-acp-client-plan-permission-gate",
       runtimeMapping:
         runtimeId === "claude-code"
           ? {
@@ -502,14 +550,21 @@ export function resolveDesktopPermissionPolicy({
               requiresToolPolicy: true,
               bypassReason: null,
             }
-          : createCodexAppServerPermissionMapping({
-              controlLevel: "plan",
-              observedToolPolicy: DISABLED_OBSERVATION,
-            }),
+          : runtimeId === "codex"
+            ? createCodexAppServerPermissionMapping({
+                controlLevel: "plan",
+                observedToolPolicy: DISABLED_OBSERVATION,
+              })
+            : createQwenAcpClientPermissionMapping({
+                controlLevel: "plan",
+                observedToolPolicy: DISABLED_OBSERVATION,
+              }),
       diagnostics: [
         runtimeId === "codex"
           ? "Plan mode denies project/workspace side effects; Codex app-server must install its approval gate before provider or tool work starts."
-          : "Plan mode denies project/workspace side effects; Locus may still persist local app state.",
+          : runtimeId === "qwen-code"
+            ? "Plan mode denies project/workspace side effects; Qwen ACP permission handling must be ready before provider or tool work starts."
+            : "Plan mode denies project/workspace side effects; Locus may still persist local app state.",
       ],
     }
   }
@@ -528,7 +583,9 @@ export function resolveDesktopPermissionPolicy({
       enforcement:
         runtimeId === "claude-code"
           ? "locus-guarded-tool-policy"
-          : "codex-app-server-guarded-approval-gate",
+          : runtimeId === "codex"
+            ? "codex-app-server-guarded-approval-gate"
+            : "qwen-acp-client-guarded-permission-gate",
       runtimeMapping:
         runtimeId === "claude-code"
           ? {
@@ -539,14 +596,21 @@ export function resolveDesktopPermissionPolicy({
               bypassReason:
                 "Claude agent mode currently uses SDK permission bypass only with Locus guarded tool policy installed before runtime startup.",
             }
-          : createCodexAppServerPermissionMapping({
-              controlLevel: "guarded",
-              observedToolPolicy: DISABLED_OBSERVATION,
-            }),
+          : runtimeId === "codex"
+            ? createCodexAppServerPermissionMapping({
+                controlLevel: "guarded",
+                observedToolPolicy: DISABLED_OBSERVATION,
+              })
+            : createQwenAcpClientPermissionMapping({
+                controlLevel: "guarded",
+                observedToolPolicy: DISABLED_OBSERVATION,
+              }),
       diagnostics: [
         runtimeId === "codex"
           ? "Guarded agent mode requires Codex app-server approval gate enforcement before side effects."
-          : "Guarded agent mode requires pre-execution tool policy enforcement before side effects.",
+          : runtimeId === "qwen-code"
+            ? "Guarded agent mode requires Qwen ACP permission gate enforcement before side effects."
+            : "Guarded agent mode requires pre-execution tool policy enforcement before side effects.",
       ],
     }
   }
@@ -559,20 +623,22 @@ export function resolveDesktopPermissionPolicy({
     planWorkspaceSideEffects: "not-applicable",
     allowedLocusPersistence: true,
     blockedSideEffects: [],
-    requiresPreExecutionEnforcement: runtimeId === "codex",
+    requiresPreExecutionEnforcement: runtimeId !== "claude-code",
     observedToolPolicy: {
       enabled: true,
       blocksCatastrophicActions: true,
       catastrophicActions: OBSERVED_CATASTROPHIC_ACTIONS,
       degradation:
-        runtimeId === "codex"
+        runtimeId !== "claude-code"
           ? "fail-closed-when-hook-unavailable"
           : "not-applicable",
     },
     enforcement:
       runtimeId === "claude-code"
         ? "locus-agent-observed"
-        : "codex-app-server-agent-approval-gate",
+        : runtimeId === "codex"
+          ? "codex-app-server-agent-approval-gate"
+          : "qwen-acp-client-agent-permission-gate",
     runtimeMapping:
       runtimeId === "claude-code"
         ? {
@@ -583,19 +649,31 @@ export function resolveDesktopPermissionPolicy({
             bypassReason:
               "Claude observed agent mode uses SDK permission bypass with Locus observation and catastrophic-action policy installed before runtime startup.",
           }
-        : createCodexAppServerPermissionMapping({
-            controlLevel: "observe",
-            observedToolPolicy: {
-              enabled: true,
-              blocksCatastrophicActions: true,
-              catastrophicActions: OBSERVED_CATASTROPHIC_ACTIONS,
-              degradation: "fail-closed-when-hook-unavailable",
-            },
-          }),
+        : runtimeId === "codex"
+          ? createCodexAppServerPermissionMapping({
+              controlLevel: "observe",
+              observedToolPolicy: {
+                enabled: true,
+                blocksCatastrophicActions: true,
+                catastrophicActions: OBSERVED_CATASTROPHIC_ACTIONS,
+                degradation: "fail-closed-when-hook-unavailable",
+              },
+            })
+          : createQwenAcpClientPermissionMapping({
+              controlLevel: "observe",
+              observedToolPolicy: {
+                enabled: true,
+                blocksCatastrophicActions: true,
+                catastrophicActions: OBSERVED_CATASTROPHIC_ACTIONS,
+                degradation: "fail-closed-when-hook-unavailable",
+              },
+            }),
     diagnostics: [
       runtimeId === "codex"
         ? "Observed agent mode permits ordinary runtime actions, but Codex app-server must install its approval gate before side-effecting server requests."
-        : "Observed agent mode permits ordinary runtime actions, records tool decisions, and blocks catastrophic actions when runtime hooks are available.",
+        : runtimeId === "qwen-code"
+          ? "Observed agent mode permits ordinary runtime actions only after Qwen ACP permission handling is attached; missing hooks fail closed."
+          : "Observed agent mode permits ordinary runtime actions, records tool decisions, and blocks catastrophic actions when runtime hooks are available.",
     ],
   }
 }
@@ -615,10 +693,14 @@ export function getCodexAppServerPermissionMapping(
   if (policy.runtimeMapping.runtime !== "codex") {
     throw new Error(`Permission policy is not for Codex: ${policy.runtimeId}`)
   }
-  if (policy.runtimeMapping.adapterSource !== "codex-app-server") {
-    throw new Error(
-      `Permission policy is not for Codex app-server: ${policy.runtimeMapping.adapterSource}`,
-    )
+  return policy.runtimeMapping
+}
+
+export function getQwenAcpClientPermissionMapping(
+  policy: DesktopPermissionPolicy,
+): QwenAcpClientPermissionMapping {
+  if (policy.runtimeMapping.runtime !== "qwen-code") {
+    throw new Error(`Permission policy is not for Qwen: ${policy.runtimeId}`)
   }
   return policy.runtimeMapping
 }

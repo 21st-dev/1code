@@ -13,7 +13,6 @@ import { createId } from "../db/utils"
 import {
   AGENT_JOB_MODES,
   type AgentJobMode,
-  type AgentJobRuntime,
 } from "../../../shared/agent-jobs"
 import { CONTRACT_RUNTIME_IDS } from "../../../shared/agent-runtime-capabilities"
 import {
@@ -22,6 +21,7 @@ import {
   MAX_AGENT_SCHEDULE_INTERVAL_SECONDS,
   MIN_AGENT_SCHEDULE_INTERVAL_SECONDS,
   type AgentScheduleStatus,
+  type AgentScheduleRuntime,
   type AgentScheduleTrigger,
 } from "../../../shared/agent-schedules"
 import {
@@ -31,7 +31,7 @@ import { getRegisteredProjectForCwdOrThrow } from "../projects/registry"
 
 export type CreateAgentScheduleInput = {
   name: string
-  runtime: AgentJobRuntime
+  runtime: AgentScheduleRuntime
   mode: AgentJobMode
   cwd: string
   prompt: string

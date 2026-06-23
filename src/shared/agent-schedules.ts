@@ -1,4 +1,5 @@
-import type { AgentJobMode, AgentJobRuntime } from "./agent-jobs"
+import type { AgentJobMode } from "./agent-jobs"
+import type { AgentRuntimeContractId } from "./agent-runtime-capabilities"
 
 export const AGENT_SCHEDULE_STATUSES = [
   "enabled",
@@ -11,6 +12,7 @@ export type AgentScheduleStatus = (typeof AGENT_SCHEDULE_STATUSES)[number]
 export const AGENT_SCHEDULE_TRIGGERS = ["manual", "due"] as const
 
 export type AgentScheduleTrigger = (typeof AGENT_SCHEDULE_TRIGGERS)[number]
+export type AgentScheduleRuntime = AgentRuntimeContractId
 
 export const MIN_AGENT_SCHEDULE_INTERVAL_SECONDS = 1
 export const MAX_AGENT_SCHEDULE_INTERVAL_SECONDS = 365 * 24 * 60 * 60
@@ -19,7 +21,7 @@ export type AgentScheduleDefinition = {
   id: string
   name: string
   status: AgentScheduleStatus
-  runtime: AgentJobRuntime
+  runtime: AgentScheduleRuntime
   mode: AgentJobMode
   cwd: string
   projectId: string | null

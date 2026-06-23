@@ -26,6 +26,49 @@ describe("agent runtime registry", () => {
     expect(JSON.stringify(manifests)).not.toContain("access_token")
   })
 
+  test("keeps Qwen Code out of contract registry lists unless desktop flag is enabled", () => {
+    expect(
+      listRegisteredAgentRuntimeManifests({
+        scope: "contract",
+        env: { LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1" },
+      }).map((manifest) => manifest.runtimeId),
+    ).toEqual(["claude-code", "codex"])
+    expect(
+      listRegisteredAgentRuntimeManifests({
+        scope: "desktop",
+        env: {},
+      }).map((manifest) => manifest.runtimeId),
+    ).toEqual(["claude-code", "codex"])
+    expect(
+      listRegisteredAgentRuntimeManifests({
+        scope: "desktop",
+        env: { LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1" },
+      }).map((manifest) => manifest.runtimeId),
+    ).toEqual(["claude-code", "codex", "qwen-code"])
+
+    expect(
+      resolveRegisteredAgentRuntimeManifest("qwen-code", {
+        scope: "desktop",
+        env: {},
+      }),
+    ).toMatchObject({
+      ok: false,
+      diagnostic: {
+        type: "unavailable-runtime",
+        runtimeId: "qwen-code",
+      },
+    })
+    expect(
+      resolveRegisteredAgentRuntimeManifest("qwen-code", {
+        scope: "desktop",
+        env: { LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1" },
+      }),
+    ).toMatchObject({
+      ok: true,
+      runtimeId: "qwen-code",
+    })
+  })
+
   test("provides reusable runtime gating for future desktop CLI job and protocol callers", () => {
     expect(
       checkRegisteredAgentRuntimeCapability({
