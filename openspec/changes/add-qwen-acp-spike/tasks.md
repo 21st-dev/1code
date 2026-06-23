@@ -8,15 +8,17 @@
 ## 0. Pre-flight
 - [x] 0.1 Land/stash `refactor-first-run-onboarding`; branch
       `codex/add-qwen-acp-spike` off clean `main`.
-- [ ] 0.2 Install/discover `qwen` CLI (`npm i -g @qwen-code/qwen-code`);
-      confirm `qwen --acp` launches; record reference version.
+- [x] 0.2 Install/discover `qwen` CLI in an isolated npm prefix; confirmed
+      `qwen --acp` initialize handshake with Qwen Code `0.19.1` and recorded
+      reference evidence in `spike-findings.md`.
 - [x] 0.3 Define smoke isolation before auth: use isolated HOME/Qwen config and
       isolated Locus userData, or perform read-only BYO status checks only. Do
       not write the user's real `~/.qwen/settings.json` without explicit
       approval.
 - [ ] 0.4 Stand up headless-friendly auth (API key / Alibaba Cloud Coding Plan)
       inside the isolated config path; confirm a non-interactive session; do NOT
-      use OAuth free tier.
+      use OAuth free tier. For Qwen Code `0.19.1`, OpenAI-compatible auth needs
+      `LOCUS_QWEN_CODE_AUTH_TYPE=openai` plus a main-process `OPENAI_API_KEY`.
 
 ## 1. Feature flag and static runtime contract split
 - [x] 1.1 Add a shared `qwen-code` runtime feature flag (off by default)
@@ -61,8 +63,10 @@
 - [x] 4.1 New local ACP client transport module in
       `src/main/lib/qwen/qwen-acp-client.ts` that can launch a configured
       command/args pair and speak ACP over stdio.
-- [x] 4.2 Configure Qwen with `command: "qwen"`, `args: ["--acp"]`; do not use
-      `qwen serve`, HTTP `/acp`, or remote HTTP+SSE in this change.
+- [x] 4.2 Configure Qwen with `command: "qwen"` and default args `["--acp"]`;
+      allow only a non-secret, allowlisted `LOCUS_QWEN_CODE_AUTH_TYPE` to add
+      `--auth-type=<type>` for headless auth. Do not use `qwen serve`, HTTP
+      `/acp`, or remote HTTP+SSE in this change.
 - [x] 4.3 Lifecycle: spawn, initialize/ready, graceful shutdown, crash/exit
       handling, stderr redaction.
 - [x] 4.4 Cancellation: Locus cancel -> ACP cancel -> terminate without orphaned

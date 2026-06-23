@@ -415,6 +415,57 @@ describe("Qwen ACP client", () => {
     await transport.close()
   })
 
+  test("stdio transport can pass a non-secret Qwen auth type from main env", async () => {
+    const child = new EventEmitter() as EventEmitter & {
+      stdin: Writable
+      stdout: PassThrough
+      stderr: PassThrough
+      killed: boolean
+      kill: () => boolean
+    }
+    child.stdin = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback()
+      },
+    })
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.killed = false
+    child.kill = () => {
+      child.killed = true
+      child.emit("exit", null, "SIGTERM")
+      return true
+    }
+    const spawnCalls: Array<{
+      executable: string
+      args: string[]
+    }> = []
+
+    const transport = createQwenAcpStdioTransport({
+      executable: "/usr/local/bin/qwen",
+      env: {
+        ...process.env,
+        LOCUS_QWEN_CODE_AUTH_TYPE: "openai",
+        OPENAI_API_KEY: "sk-redacted-test-key",
+      },
+      spawnProcess(executable, args) {
+        spawnCalls.push({
+          executable: String(executable),
+          args: [...(args ?? [])],
+        })
+        return child as unknown as ChildProcessWithoutNullStreams
+      },
+    })
+
+    expect(spawnCalls).toEqual([
+      {
+        executable: "/usr/local/bin/qwen",
+        args: ["--auth-type=openai", "--acp"],
+      },
+    ])
+    await transport.close()
+  })
+
   test("stdio transport redacts process stderr before rejecting pending requests", async () => {
     const child = new EventEmitter() as EventEmitter & {
       stdin: Writable

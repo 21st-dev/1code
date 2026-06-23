@@ -44,7 +44,11 @@ above seams genuinely need to generalize.
   (`src/main/lib/codex/app-server-adapter.ts:326 createCodexAppServerAdapter`) in a
   new `src/main/lib/qwen/` module returning a `DesktopRuntimeAdapter`.
 - **Transport: local stdio ACP for this slice.** Launch `qwen --acp`, speak ACP
-  over stdio, and translate to Locus run events. Name the new Qwen-facing module
+  over stdio, and translate to Locus run events. Qwen Code `0.19.1` reports
+  OpenAI-compatible headless auth through `--auth-type=openai`, so the transport
+  may prepend only an allowlisted, non-secret `--auth-type=<type>` from
+  `LOCUS_QWEN_CODE_AUTH_TYPE`; API keys still come only from main-process runtime
+  environment and are never renderer DTOs. Name the new Qwen-facing module
   `qwen-acp-client` (or equivalent) to avoid confusion with the existing
   `headless/acp-stdio.ts`, where Locus acts as an ACP-like server. This transport
   is not a remote HTTP/SSE abstraction. If Qwen's `qwen serve` `/acp` path becomes
@@ -78,9 +82,12 @@ above seams genuinely need to generalize.
   approval gate required, `fail-closed` when the hook is unavailable. Qwen's own
   approvals do not substitute for Locus guard/trace.
 - **Auth: API key / Alibaba Cloud Coding Plan** (headless-friendly). OAuth free
-  tier is deprecated (2026-04-15) and excluded. Spike smoke must isolate
-  Qwen config/HOME/userData or remain read-only against existing BYO status; no
-  task may write the user's real `~/.qwen` without explicit approval.
+  tier is deprecated (2026-04-15) and excluded. For Qwen Code `0.19.1`,
+  direct ACP probing showed that `OPENAI_API_KEY` alone is not sufficient for a
+  fresh HOME; `--auth-type=openai` is required before `session/new` accepts the
+  runtime-managed OpenAI-compatible auth path. Spike smoke must isolate Qwen
+  config/HOME/userData or remain read-only against existing BYO status; no task
+  may write the user's real `~/.qwen` without explicit approval.
 - **Feature flag.** A shared flag gates Qwen manifest exposure, desktop route
   admission, adapter factory admission, permission-policy resolution, chat
   provider selection, and the renderer option. Non-desktop contract surfaces stay
@@ -110,5 +117,4 @@ archived as "explored, not adopted" and the gates revert.
 
 ## Open Questions
 
-- Which exact `qwen` CLI version is the reference for ACP event shapes?
 - Minimum MCP config passthrough Qwen accepts vs. Locus's project MCP model.

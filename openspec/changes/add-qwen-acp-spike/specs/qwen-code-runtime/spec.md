@@ -27,7 +27,10 @@ Codex in this spike, independent of the Qwen desktop feature flag.
 The system SHALL launch the Qwen Code runtime via `qwen --acp` over local stdio.
 This change SHALL NOT implement `qwen serve`, HTTP `/acp`, or remote HTTP+SSE
 daemon transport semantics. The stdio transport SHALL support spawn, ready,
-graceful shutdown, crash handling, stderr redaction, and cancellation.
+graceful shutdown, crash handling, stderr redaction, and cancellation. The
+transport MAY add only an allowlisted, non-secret `--auth-type=<type>` argument
+from main-process configuration; it SHALL NOT accept arbitrary shell arguments
+or receive provider secrets from renderer state.
 
 #### Scenario: ACP initialize handshake completes
 - **WHEN** a `qwen-code` run starts with the flag on
@@ -39,6 +42,12 @@ graceful shutdown, crash handling, stderr redaction, and cancellation.
 - **WHEN** a `qwen-code` run starts with the flag on
 - **THEN** the transport launches `qwen --acp` and streams assistant output as
   Locus run events
+
+#### Scenario: Headless auth type is explicit and non-secret
+- **WHEN** the main process configures `LOCUS_QWEN_CODE_AUTH_TYPE=openai`
+- **THEN** the transport launches Qwen with `--auth-type=openai --acp`
+- **AND** the auth type is validated against an allowlist
+- **AND** API keys or provider tokens are never sent from renderer state
 
 #### Scenario: Cancellation terminates the process
 - **WHEN** a user cancels an in-flight `qwen-code` run

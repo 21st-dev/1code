@@ -46,6 +46,7 @@
     "runtime-control:smoke:job": "node scripts/inspect-runtime-control-smoke-job.mjs",
     "mcp-registry:proof:evidence": "node scripts/check-mcp-registry-proof-evidence.mjs",
     "settings-ia:smoke:evidence": "node scripts/check-settings-ia-smoke-evidence.mjs",
+    "qwen-acp:smoke:evidence": "node scripts/check-qwen-acp-smoke-evidence.mjs",
     "check": "bun run lint && bun run architecture:check && bun run ts:check && bun run test",
     "ts:check": "tsc --noEmit",
     "native:check": "node scripts/ensure-electron-native-modules.mjs --check-only",

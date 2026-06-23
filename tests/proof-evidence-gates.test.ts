@@ -25,6 +25,9 @@ describe("OpenSpec proof evidence gates", () => {
     expect(packageJson.scripts["mcp-registry:proof:evidence"]).toBe(
       "node scripts/check-mcp-registry-proof-evidence.mjs",
     )
+    expect(packageJson.scripts["qwen-acp:smoke:evidence"]).toBe(
+      "node scripts/check-qwen-acp-smoke-evidence.mjs",
+    )
     expect(packageJson.scripts.test).toBe("bun test --isolate tests")
     expect(packageJson.scripts.check).toContain("bun run test")
   })
@@ -76,6 +79,32 @@ describe("OpenSpec proof evidence gates", () => {
     expect(source).toContain("taskIsChecked(tasks, taskId)")
     expect(source).toContain('checkedStatuses: ["passed", "deferred"]')
     expect(source).toContain("statusAllowsCheckedTask")
+    expect(source).toContain("checked && !statusAllowsCheckedTask")
+    expect(source).toContain("!checked && statusAllowsCheckedTask")
+  })
+
+  test("Qwen ACP smoke evidence gate stays enforced", () => {
+    const result = runEvidenceGate("scripts/check-qwen-acp-smoke-evidence.mjs")
+
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe("")
+    expect(result.stdout).toContain("[qwen-acp-smoke] evidence status:")
+    expect(result.stdout).toContain("qwen-cli-acp-initialize")
+    expect(result.stdout).toContain("qwen-error-mapping")
+  })
+
+  test("Qwen ACP gate keeps runbook, secret, and task-state safeguards", () => {
+    const source = read("scripts/check-qwen-acp-smoke-evidence.mjs")
+
+    expect(source).toContain('join(changeDir, "qwen-acp-smoke-runbook.md")')
+    expect(source).toContain("requiredRunbookMarkers")
+    expect(source).toContain("assertNoSecretLikeValues(evidencePath, evidence)")
+    expect(source).toContain("assertNoSecretLikeValues(runbookPath, runbook)")
+    expect(source).toContain("taskIsChecked(tasks, taskId)")
+    expect(source).toContain('"qwen-cli-acp-initialize"')
+    expect(source).toContain('taskIds: ["0.2"]')
+    expect(source).toContain('"qwen-error-mapping"')
+    expect(source).toContain('taskIds: ["9.5"]')
     expect(source).toContain("checked && !statusAllowsCheckedTask")
     expect(source).toContain("!checked && statusAllowsCheckedTask")
   })

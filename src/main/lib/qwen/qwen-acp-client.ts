@@ -76,9 +76,7 @@ export type CreateQwenAcpStdioTransportInput = {
 }
 
 export type CreateQwenAcpClientAdapterInput = {
-  createTransport?: (input: {
-    request: DesktopRunRequest
-  }) => QwenAcpTransport
+  createTransport?: (input: { request: DesktopRunRequest }) => QwenAcpTransport
   executable?: string
   env?: NodeJS.ProcessEnv
   spawnProcess?: typeof spawn
@@ -89,6 +87,16 @@ type PendingRequest = {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
 }
+
+const QWEN_ACP_AUTH_TYPES = [
+  "openai",
+  "anthropic",
+  "qwen-oauth",
+  "gemini",
+  "vertex-ai",
+] as const
+
+type QwenAcpAuthType = (typeof QWEN_ACP_AUTH_TYPES)[number]
 
 type QwenAcpSessionUpdate = {
   sessionUpdate?: unknown
@@ -147,15 +155,35 @@ function writeJsonLine(
   child.stdin.write(`${JSON.stringify(message)}\n`)
 }
 
+function qwenAcpAuthTypeFromEnv(
+  env: NodeJS.ProcessEnv,
+): QwenAcpAuthType | null {
+  const raw = env.LOCUS_QWEN_CODE_AUTH_TYPE?.trim()
+  if (!raw) return null
+  if ((QWEN_ACP_AUTH_TYPES as readonly string[]).includes(raw)) {
+    return raw as QwenAcpAuthType
+  }
+  const safeValue = redactQwenDiagnostic(raw, "unsupported")
+  throw new Error(
+    `Unsupported Qwen ACP auth type "${safeValue}". Expected one of: ${QWEN_ACP_AUTH_TYPES.join(", ")}.`,
+  )
+}
+
+function qwenAcpSpawnArgs(env: NodeJS.ProcessEnv): string[] {
+  const authType = qwenAcpAuthTypeFromEnv(env)
+  return authType ? [`--auth-type=${authType}`, "--acp"] : ["--acp"]
+}
+
 export function createQwenAcpStdioTransport({
   executable = "qwen",
   env,
   cwd,
   spawnProcess = spawn,
 }: CreateQwenAcpStdioTransportInput = {}): QwenAcpTransport {
-  const child = spawnProcess(executable, ["--acp"], {
+  const runtimeEnv = env ?? process.env
+  const child = spawnProcess(executable, qwenAcpSpawnArgs(runtimeEnv), {
     cwd,
-    env,
+    env: runtimeEnv,
     shell: false,
     stdio: "pipe",
   }) as ChildProcessWithoutNullStreams
@@ -209,7 +237,9 @@ export function createQwenAcpStdioTransport({
         .then(async () => {
           const [handler] = [...serverRequestHandlers]
           if (!handler) {
-            throw new Error(`No Qwen ACP handler installed for ${request.method}.`)
+            throw new Error(
+              `No Qwen ACP handler installed for ${request.method}.`,
+            )
           }
           return handler(request)
         })
@@ -301,7 +331,9 @@ export function createQwenAcpStdioTransport({
   }
 }
 
-function qwenMcpServer(server: DesktopRunMcpSessionServer): Record<string, unknown> {
+function qwenMcpServer(
+  server: DesktopRunMcpSessionServer,
+): Record<string, unknown> {
   if (server.type === "stdio") {
     return {
       name: server.name,

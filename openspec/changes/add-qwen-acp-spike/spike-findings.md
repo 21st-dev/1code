@@ -22,11 +22,25 @@
 
 ## Not Verified Locally
 
-- The local shell does not currently resolve `qwen` (`command -v qwen` returned
-  no path), so no real `qwen --acp` launch, auth, file edit, or real Qwen MCP
-  run was performed.
-- No Qwen auth config was written. The spike stayed on the read-only BYO status
-  path to avoid mutating the user's real `~/.qwen` state.
+- The default local shell still does not resolve `qwen` (`command -v qwen`
+  returned no path), but an isolated npm-prefix install of
+  `@qwen-code/qwen-code` launched Qwen Code `0.19.1`.
+- `qwen --acp` initialize was verified with an isolated HOME. The response
+  included `agentInfo.name = qwen-code`, `agentInfo.version = 0.19.1`,
+  `protocolVersion = 1`, and auth method `openai` with required
+  `--auth-type=openai` args.
+- Direct ACP `session/new` with a fresh HOME and no real auth returns a
+  structured `Authentication required` protocol error instead of hanging.
+- Direct ACP `session/new` with placeholder `OPENAI_API_KEY` but without
+  `--auth-type=openai` still returns `Authentication required`; with
+  `--auth-type=openai`, Qwen advances to session creation. This is why Locus now
+  supports a non-secret `LOCUS_QWEN_CODE_AUTH_TYPE=openai` environment selector
+  for headless smoke.
+- No real Qwen provider API key was available in the local environment, and no
+  Qwen auth config was written. The spike avoided mutating the user's real
+  `~/.qwen` state.
+- No authenticated real Qwen assistant stream, file edit, cancel, or real Qwen
+  MCP run was performed.
 - MCP config passthrough is implemented in the ACP `session/new` payload, but
   Qwen's accepted shape was not verified against a live Qwen runtime.
 - Permission allow/approval UI is intentionally not claimed as complete. The
@@ -41,7 +55,7 @@
 
 - Install Qwen in an isolated smoke profile, record the exact `qwen` version,
   and verify launch, streaming, file edit, permission denial, cancel, error
-  mapping, and MCP passthrough.
+  mapping, and MCP passthrough using `qwen-acp-smoke-runbook.md`.
 - If Qwen exposes stable permission request shapes beyond
   `session/request_permission`, map them into the shared guard owner before
   promoting hard-tool-guard or plan-mode capability claims.

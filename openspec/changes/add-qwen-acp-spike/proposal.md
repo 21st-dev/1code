@@ -33,9 +33,11 @@ measured by proving the seams work end to end - not by feature parity.
   - the shared runtime manifest/id owner without making non-desktop schemas
     accept `qwen-code`
 - Build a local stdio ACP client path (`qwen-acp-client`) that launches
-  `qwen --acp` and bridges Agent Client Protocol events. `qwen serve` /
-  HTTP `/acp` / remote HTTP+SSE is explicitly deferred to a later transport
-  proposal.
+  `qwen --acp` and bridges Agent Client Protocol events. A non-secret,
+  allowlisted `LOCUS_QWEN_CODE_AUTH_TYPE` may add Qwen's documented
+  `--auth-type=<type>` for headless auth; provider secrets remain in the main
+  process environment and are not renderer DTOs. `qwen serve` / HTTP `/acp` /
+  remote HTTP+SSE is explicitly deferred to a later transport proposal.
 - Add a narrow runtime-neutral desktop chat subscription route for Qwen's first
   entry. The route owns only the tRPC envelope; preflight, permission policy,
   provider binding, event normalization, and redaction remain in their canonical
