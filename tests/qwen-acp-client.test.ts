@@ -1,0 +1,281 @@
+import { EventEmitter } from "node:events"
+import { PassThrough, Writable } from "node:stream"
+import { describe, expect, test } from "bun:test"
+import type { DesktopRunRequest } from "../src/main/lib/agent-runtime/desktop-run-request"
+import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
+import {
+  createQwenAcpClientAdapter,
+  createQwenAcpStdioTransport,
+  type QwenAcpTransport,
+  type QwenAcpTransportNotification,
+  type QwenAcpTransportServerRequest,
+} from "../src/main/lib/qwen/qwen-acp-client"
+
+function createDesktopRequest(
+  overrides: Partial<DesktopRunRequest> = {},
+): DesktopRunRequest {
+  const abortController = new AbortController()
+  const traceEvents: unknown[] = []
+  return {
+    identity: {
+      runId: "run-qwen-1",
+      jobId: "job-qwen-1",
+    },
+    context: {
+      runtimeId: "qwen-code",
+      mode: "agent",
+      source: "desktop",
+      executionProfile: "interactive",
+      workspaceKind: "project",
+      projectId: "project-1",
+      chatId: "chat-1",
+      subChatId: "sub-1",
+      cwd: "/tmp/qwen-project",
+    },
+    prompt: "Review this file.",
+    signal: abortController.signal,
+    requestedCapabilities: [],
+    permissionPolicy: resolveDesktopPermissionPolicy({
+      runtimeId: "qwen-code",
+      mode: "agent",
+    }),
+    providerBinding: {
+      authMode: "runtime-managed",
+      diagnostics: [],
+    },
+    mcp: {
+      status: "ready",
+      serverNames: [],
+      blockers: [],
+    },
+    attachments: [],
+    trace: {
+      emit(event) {
+        traceEvents.push(event)
+      },
+    },
+    session: {},
+    ...overrides,
+  }
+}
+
+function createFakeTransport(input: {
+  onPrompt?: (emit: (notification: QwenAcpTransportNotification) => void) => void
+} = {}): QwenAcpTransport & { calls: Array<{ method: string; params: unknown }> } {
+  const calls: Array<{ method: string; params: unknown }> = []
+  const notifications = new Set<(notification: QwenAcpTransportNotification) => void>()
+  const serverRequests = new Set<
+    (request: QwenAcpTransportServerRequest) => unknown | Promise<unknown>
+  >()
+
+  return {
+    calls,
+    async request(method, params) {
+      calls.push({ method, params })
+      if (method === "initialize") {
+        return {
+          protocolVersion: 1,
+          agentCapabilities: {
+            sessionCapabilities: {},
+          },
+        }
+      }
+      if (method === "session/new") {
+        return { sessionId: "qwen-session-1" }
+      }
+      if (method === "session/prompt") {
+        input.onPrompt?.((notification) => {
+          for (const handler of notifications) handler(notification)
+        })
+        return { stopReason: "end_turn" }
+      }
+      return {}
+    },
+    notify(method, params) {
+      calls.push({ method, params })
+    },
+    onNotification(handler) {
+      notifications.add(handler)
+      return () => notifications.delete(handler)
+    },
+    onServerRequest(handler) {
+      serverRequests.add(handler)
+      return () => serverRequests.delete(handler)
+    },
+    async close() {},
+  }
+}
+
+describe("Qwen ACP client", () => {
+  test("initializes ACP, creates a session, prompts, and maps updates", async () => {
+    const chunks: Record<string, unknown>[] = []
+    const transport = createFakeTransport({
+      onPrompt(emit) {
+        emit({
+          method: "session/update",
+          params: {
+            sessionId: "qwen-session-1",
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              messageId: "msg-1",
+              content: {
+                type: "text",
+                text: "Reviewed.",
+              },
+            },
+          },
+        })
+      },
+    })
+    const request = createDesktopRequest()
+    const traceEvents: unknown[] = []
+    request.trace = { emit: (event) => traceEvents.push(event) }
+
+    const adapter = createQwenAcpClientAdapter({
+      createTransport: () => transport,
+      emit: (chunk) => chunks.push(chunk),
+    })
+    const result = await adapter.run(request)
+
+    expect(result).toMatchObject({
+      status: "succeeded",
+      sessionId: "qwen-session-1",
+    })
+    expect(transport.calls.map((call) => call.method)).toEqual([
+      "initialize",
+      "session/new",
+      "session/prompt",
+    ])
+    expect(transport.calls[0]?.params).toMatchObject({
+      protocolVersion: 1,
+      clientCapabilities: {
+        fs: {
+          readTextFile: false,
+          writeTextFile: false,
+        },
+        terminal: false,
+      },
+    })
+    expect(transport.calls[2]?.params).toMatchObject({
+      sessionId: "qwen-session-1",
+      prompt: [{ type: "text", text: "Review this file." }],
+    })
+    expect(chunks).toContainEqual({
+      type: "text-delta",
+      id: "msg-1",
+      delta: "Reviewed.",
+    })
+    expect(traceEvents).toContainEqual(
+      expect.objectContaining({
+        runtimeId: "qwen-code",
+        type: "assistant_delta",
+        payload: {
+          id: "msg-1",
+          delta: "Reviewed.",
+        },
+      }),
+    )
+    expect(traceEvents).toContainEqual(
+      expect.objectContaining({
+        runtimeId: "qwen-code",
+        type: "completed",
+      }),
+    )
+  })
+
+  test("stdio transport starts qwen --acp and frames JSON-RPC 2.0 requests", async () => {
+    const writes: string[] = []
+    const child = new EventEmitter() as EventEmitter & {
+      stdin: Writable
+      stdout: PassThrough
+      stderr: PassThrough
+      killed: boolean
+      kill: () => boolean
+    }
+    child.stdin = new Writable({
+      write(chunk, _encoding, callback) {
+        writes.push(String(chunk))
+        callback()
+      },
+    })
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.killed = false
+    child.kill = () => {
+      child.killed = true
+      child.emit("exit", null, "SIGTERM")
+      return true
+    }
+    const spawnCalls: Array<{ executable: string; args: string[] }> = []
+    const transport = createQwenAcpStdioTransport({
+      executable: "/usr/local/bin/qwen",
+      cwd: "/tmp/qwen-project",
+      spawnProcess(executable, args) {
+        spawnCalls.push({
+          executable: String(executable),
+          args: [...(args ?? [])],
+        })
+        return child as any
+      },
+    })
+
+    const response = transport.request("initialize", { protocolVersion: 1 })
+    expect(spawnCalls).toEqual([
+      {
+        executable: "/usr/local/bin/qwen",
+        args: ["--acp"],
+      },
+    ])
+    expect(JSON.parse(writes[0] ?? "{}")).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: 1 },
+    })
+
+    child.stdout.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        result: { protocolVersion: 1 },
+      })}\n`,
+    )
+    await expect(response).resolves.toEqual({ protocolVersion: 1 })
+    await transport.close()
+  })
+
+  test("stdio transport redacts process stderr before rejecting pending requests", async () => {
+    const child = new EventEmitter() as EventEmitter & {
+      stdin: Writable
+      stdout: PassThrough
+      stderr: PassThrough
+      killed: boolean
+      kill: () => boolean
+    }
+    child.stdin = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback()
+      },
+    })
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.killed = false
+    child.kill = () => {
+      child.killed = true
+      return true
+    }
+    const transport = createQwenAcpStdioTransport({
+      spawnProcess() {
+        return child as any
+      },
+    })
+
+    const pending = transport.request("initialize", {})
+    child.stderr.write("auth failed with sk-abcdefghijklmnopqrstuvwxyz123456")
+    child.emit("exit", 1, null)
+
+    await expect(pending).rejects.toThrow("<redacted>")
+    await expect(pending).rejects.not.toThrow("sk-abcdefghijklmnopqrstuvwxyz")
+    await transport.close()
+  })
+})
