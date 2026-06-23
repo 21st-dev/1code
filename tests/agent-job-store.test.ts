@@ -15,32 +15,34 @@ import {
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
 
 describe("agent job store", () => {
-  test("admits Qwen Code only for desktop job persistence", () => {
+  test("admits experimental runtimes only for desktop job persistence", () => {
     const db = createAgentJobTestDb()
 
-    expect(() =>
-      createAgentJob(db, {
-        source: "api",
-        runtime: "qwen-code",
+    for (const runtime of ["qwen-code", "kun"] as const) {
+      expect(() =>
+        createAgentJob(db, {
+          source: "api",
+          runtime,
+          mode: "agent",
+          cwd: "/tmp/project",
+          prompt: "Run through non-desktop API.",
+        }),
+      ).toThrow(`Unsupported job runtime: ${runtime}`)
+
+      const desktopJob = createAgentJob(db, {
+        source: "desktop",
+        runtime,
         mode: "agent",
         cwd: "/tmp/project",
-        prompt: "Run through non-desktop API.",
-      }),
-    ).toThrow("Unsupported job runtime: qwen-code")
+        prompt: `Run through desktop ${runtime}.`,
+      })
 
-    const desktopJob = createAgentJob(db, {
-      source: "desktop",
-      runtime: "qwen-code",
-      mode: "agent",
-      cwd: "/tmp/project",
-      prompt: "Run through desktop Qwen.",
-    })
-
-    expect(desktopJob).toMatchObject({
-      source: "desktop",
-      runtime: "qwen-code",
-      status: "queued",
-    })
+      expect(desktopJob).toMatchObject({
+        source: "desktop",
+        runtime,
+        status: "queued",
+      })
+    }
   })
 
   test("creates, starts, appends events, and completes a job", () => {

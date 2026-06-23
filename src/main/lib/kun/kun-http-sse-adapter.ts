@@ -517,6 +517,13 @@ export function createKunHttpSseAdapter({
             runId: request.identity.runId,
             cwd: request.context.cwd,
           })
+          serveHandle.child.once("exit", (code, signal) => {
+            if (terminal || request.signal.aborted) return
+            setTerminal({
+              status: "failed",
+              message: `Kun serve exited unexpectedly: code=${code ?? "null"} signal=${signal ?? "null"}.`,
+            })
+          })
           transport = new KunHttpSseTransport({
             baseUrl: serveHandle.baseUrl,
             runtimeToken: serveHandle.runtimeToken,

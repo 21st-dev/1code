@@ -116,19 +116,21 @@ describe("Local Job API v1 shared contract", () => {
     }
   })
 
-  test("rejects Qwen Code from the non-desktop Local Job API contract", () => {
-    const request = validateLocalJobApiCreateRequest({
-      apiVersion: LOCAL_JOB_API_VERSION,
-      consumer: { id: "docs-workbench" },
-      project: { cwd: process.cwd() },
-      runtime: { id: "qwen-code" },
-      mode: "agent",
-      prompt: { text: "Run Qwen through the Local Job API." },
-    })
+  test("rejects experimental runtimes from the non-desktop Local Job API contract", () => {
+    for (const runtimeId of ["qwen-code", "kun"]) {
+      const request = validateLocalJobApiCreateRequest({
+        apiVersion: LOCAL_JOB_API_VERSION,
+        consumer: { id: "docs-workbench" },
+        project: { cwd: process.cwd() },
+        runtime: { id: runtimeId },
+        mode: "agent",
+        prompt: { text: `Run ${runtimeId} through the Local Job API.` },
+      })
 
-    expect(request.ok).toBe(false)
-    if (!request.ok) {
-      expect(request.errors).toContain("Unsupported runtime.id")
+      expect(request.ok).toBe(false)
+      if (!request.ok) {
+        expect(request.errors).toContain("Unsupported runtime.id")
+      }
     }
   })
 

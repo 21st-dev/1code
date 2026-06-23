@@ -108,6 +108,7 @@ describe("Local Job API v1 JSON Schema", () => {
       "claude",
     ])
     expect(schemaEnum(def(schema, "runtimeId"))).not.toContain("qwen-code")
+    expect(schemaEnum(def(schema, "runtimeId"))).not.toContain("kun")
     expect(schemaEnum(def(schema, "runtimeCapabilityId"))).toEqual([
       ...AGENT_RUNTIME_CAPABILITY_IDS,
     ])
