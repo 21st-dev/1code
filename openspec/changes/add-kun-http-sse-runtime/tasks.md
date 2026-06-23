@@ -45,19 +45,21 @@
       execution / event normalization / redaction to canonical owners.
 - [x] 2.4 Regression gate: Qwen streaming, cancel, permission, and error behavior
       unchanged; existing Qwen route tests pass against the dispatch route.
-- [ ] 2.5 Route tests: disabled-runtime rejection, per-runtime state isolation
+- [x] 2.5 Route tests: disabled-runtime rejection, per-runtime state isolation
       (cancel/approve one run does not affect another).
 
 ## 3. Open desktop gates for Kun
 
 - [x] 3.1 Extend `DesktopRuntimeAdapterSource` with `"kun-http-sse"`; add
       `KUN_HTTP_SSE_DESKTOP_ADAPTER_METADATA`.
-- [ ] 3.2 Extend the factory admit check to accept `kun` only when the flag is on;
-      register `kun:kun-http-sse`.
-- [ ] 3.3 Extend `DesktopPermissionRuntime` to include `"kun"` via flag-aware
-      policy resolution.
-- [ ] 3.4 Unit tests: flag off ⇒ factory + permission layer reject `kun`; flag on
-      ⇒ desktop-only Kun admission works.
+- [x] 3.2 Register `kun:kun-http-sse`; keep flag admission in the canonical
+      registry/tRPC/UI exposure owners (the low-level adapter factory remains a
+      lookup table for already-registered adapters).
+- [x] 3.3 Extend `DesktopPermissionRuntime` to include `"kun"`; resolve Kun
+      policy only from desktop runtime callers after registry/tRPC flag checks.
+- [x] 3.4 Unit tests/source guards: flag off ⇒ registry/tRPC/UI do not expose
+      Kun; flag on ⇒ desktop-only Kun admission works; permission layer maps
+      Kun fail-closed after the exposure gate.
 
 ## 4. Supervised `kun serve` lifecycle and hardened launch
 
@@ -84,7 +86,7 @@
       Fail closed + diagnostic if any supported `file_change` skips approval, or
       if shell is treated as approval-mediated. Do not treat `create_plan` as a
       supported exception in v1; `planMode` remains degraded.
-- [ ] 4.5 Supervision: if Kun exits unexpectedly during an active turn, resolve
+- [x] 4.5 Supervision: if Kun exits unexpectedly during an active turn, resolve
       the current Locus run as failed/canceled (no restart-and-continue claim);
       bounded retry/backoff may start a fresh daemon only for later runs; SIGTERM
       graceful close; no orphan on cancel.
@@ -115,8 +117,9 @@
       Kun plan/GUI-plan turns or rely on approval-deny for `create_plan`
       (`policy:auto`, emits no approval); defer plan artifact ownership to a later
       change.
-- [ ] 6.4 Tests: denied side effect posts deny + records blocker + no mutation;
-      missing guard bridge fails closed before side effects.
+- [x] 6.4 Tests: denied side effect posts deny + records blocker/no allow
+      decision; missing guard bridge fails closed by deny/timeout. Real
+      filesystem no-mutation proof remains in 10.2/10.3.
 
 ## 7. BYO Kun executable resolution
 
@@ -125,18 +128,18 @@
       `execFile --version` with `shell:false` + timeout + redaction.
 - [x] 7.2 Spawn-block + passive Settings guidance when Kun is missing; never
       bundle/auto-download.
-- [ ] 7.3 Security tests: override never sourced from Local Job API/ACP/deep-link/
+- [x] 7.3 Security tests: override never sourced from Local Job API/ACP/deep-link/
       project; `./kun` cannot shadow; no shell.
 
 ## 8. Token separation and secret hygiene
 
-- [ ] 8.1 Ensure `runtimeToken`, upstream provider API keys, and provider gateway
+- [x] 8.1 Ensure `runtimeToken`, upstream provider API keys, and provider gateway
       tokens never enter CLI argv or renderer; Kun receives `runtimeToken` via
-      `KUN_RUNTIME_TOKEN` env or restricted config and reads provider creds from
-      isolated config / Locus profile-scoped `responses` gateway.
-- [ ] 8.2 Redact `runtimeToken`, provider keys, gateway tokens, and raw headers
+      `KUN_RUNTIME_TOKEN` env; launcher does not inherit provider/gateway secret
+      env. Provider-profile gateway proof remains gated by 0.5/10.8.
+- [x] 8.2 Redact `runtimeToken`, provider keys, gateway tokens, and raw headers
       from stderr, traces, manifest, diagnostics, and renderer-safe metadata.
-- [ ] 8.3 Tests assert spawn argv contains no `runtimeToken`, provider API key,
+- [x] 8.3 Tests assert spawn argv contains no `runtimeToken`, provider API key,
       provider gateway token, raw authorization header, or bearer token.
 
 ## 9. Honest manifest and renderer edge

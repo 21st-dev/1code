@@ -8,6 +8,7 @@ const SECRET_TEXT_PATTERNS = [
   /bearer\s+[A-Za-z0-9._-]+/gi,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization)=([A-Za-z0-9._~+/-]+)/gi,
 ]
+const MIN_SECRET_HINT_LENGTH = 8
 
 export type RuntimeRedactionResult = {
   payload: JsonValue
@@ -18,8 +19,27 @@ function isJsonObject(value: JsonValue): value is { [key: string]: JsonValue } {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-function redactString(value: string, appliedRules: Set<string>): string {
+function uniqueSecretHints(secretHints: readonly string[] | undefined): string[] {
+  return [
+    ...new Set(
+      (secretHints ?? [])
+        .map((hint) => hint.trim())
+        .filter((hint) => hint.length >= MIN_SECRET_HINT_LENGTH),
+    ),
+  ]
+}
+
+function redactString(
+  value: string,
+  appliedRules: Set<string>,
+  secretHints: readonly string[],
+): string {
   let redacted = value
+  for (const hint of secretHints) {
+    if (!redacted.includes(hint)) continue
+    appliedRules.add("secret-hint")
+    redacted = redacted.split(hint).join("<redacted>")
+  }
   for (const pattern of SECRET_TEXT_PATTERNS) {
     if (pattern.test(redacted)) {
       appliedRules.add("secret-text")
@@ -36,10 +56,16 @@ function redactString(value: string, appliedRules: Set<string>): string {
   return redacted
 }
 
-function redactValue(value: JsonValue, appliedRules: Set<string>): JsonValue {
-  if (typeof value === "string") return redactString(value, appliedRules)
+function redactValue(
+  value: JsonValue,
+  appliedRules: Set<string>,
+  secretHints: readonly string[],
+): JsonValue {
+  if (typeof value === "string") {
+    return redactString(value, appliedRules, secretHints)
+  }
   if (Array.isArray(value)) {
-    return value.map((item) => redactValue(item, appliedRules))
+    return value.map((item) => redactValue(item, appliedRules, secretHints))
   }
   if (!isJsonObject(value)) return value
 
@@ -50,18 +76,19 @@ function redactValue(value: JsonValue, appliedRules: Set<string>): JsonValue {
       output[key] = "<redacted>"
       continue
     }
-    output[key] = redactValue(child, appliedRules)
+    output[key] = redactValue(child, appliedRules, secretHints)
   }
   return output
 }
 
 export function redactRuntimePayload(
   payload: JsonValue,
-  _context: RunEventRedactionContext,
+  context: RunEventRedactionContext,
 ): RuntimeRedactionResult {
   const appliedRules = new Set<string>()
+  const secretHints = uniqueSecretHints(context.secretHints)
   return {
-    payload: redactValue(payload, appliedRules),
+    payload: redactValue(payload, appliedRules, secretHints),
     appliedRules: [...appliedRules].sort(),
   }
 }

@@ -6,6 +6,7 @@ import {
 import { randomBytes } from "node:crypto"
 import { mkdirSync } from "node:fs"
 import { join } from "node:path"
+import { redactRuntimePayload } from "../agent-runtime/redaction"
 import { getElectronUserDataPath } from "../electron-app"
 
 const KUN_READY_PREFIX = "KUN_READY "
@@ -113,6 +114,54 @@ function createKunRuntimeToken(): string {
   return randomBytes(32).toString("hex")
 }
 
+const KUN_SAFE_ENV_KEYS = new Set([
+  "COMSPEC",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "PATH",
+  "PATHEXT",
+  "SystemRoot",
+  "TEMP",
+  "TMP",
+  "TMPDIR",
+  "USER",
+])
+
+function isSafeKunEnvKey(key: string): boolean {
+  if (key.startsWith("KUN_")) return false
+  return KUN_SAFE_ENV_KEYS.has(key)
+}
+
+function createKunServeEnv(input: {
+  sourceEnv: NodeJS.ProcessEnv
+  runtimeToken: string
+  dataDir: string
+}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const [key, value] of Object.entries(input.sourceEnv)) {
+    if (value === undefined || !isSafeKunEnvKey(key)) continue
+    env[key] = value
+  }
+  env.KUN_RUNTIME_TOKEN = input.runtimeToken
+  env.KUN_DATA_DIR = input.dataDir
+  return env
+}
+
+function redactKunServeDiagnostic(
+  value: string,
+  secretHints: readonly string[],
+): string {
+  const redacted = redactRuntimePayload(value, {
+    runtimeId: "kun",
+    runId: "kun-serve-launch",
+    source: "runtime-diagnostic",
+    secretHints,
+  }).payload
+  return typeof redacted === "string" ? redacted : "Kun serve failed."
+}
+
 function createKunDataDir(input: {
   userDataPath?: string
   runId: string
@@ -170,12 +219,11 @@ export async function launchKunServe(
     "--insecure",
     "false",
   ]
-  const env = {
-    ...process.env,
-    ...(input.env ?? {}),
-    KUN_RUNTIME_TOKEN: runtimeToken,
-    KUN_DATA_DIR: dataDir,
-  }
+  const env = createKunServeEnv({
+    sourceEnv: input.env ?? process.env,
+    runtimeToken,
+    dataDir,
+  })
   const spawnProcess: NonNullable<KunServeLaunchInput["spawnProcess"]> =
     input.spawnProcess ??
     ((command, args, options) =>
@@ -235,9 +283,18 @@ export async function launchKunServe(
     }
     const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
       cleanup()
+      const stderr = redactKunServeDiagnostic(stderrTail.trim(), [
+        runtimeToken,
+        ...(Object.values(env).filter(
+          (value): value is string =>
+            typeof value === "string" &&
+            value.length >= 8 &&
+            (value.startsWith("sk-") || value.includes("token")),
+        ) ?? []),
+      ])
       reject(
         new Error(
-          `Kun serve exited before ready: code=${code ?? "null"} signal=${signal ?? "null"} ${stderrTail.trim()}`,
+          `Kun serve exited before ready: code=${code ?? "null"} signal=${signal ?? "null"} ${stderr}`,
         ),
       )
     }
@@ -263,4 +320,5 @@ export async function launchKunServe(
 export const KUN_SERVE_TEST_ONLY = {
   KUN_READY_PREFIX,
   parseKunReadyLine,
+  createKunServeEnv,
 }

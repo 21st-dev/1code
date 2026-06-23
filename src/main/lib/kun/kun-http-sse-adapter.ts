@@ -9,8 +9,11 @@ import {
   emitDesktopRuntimeAdapterStarted,
 } from "../agent-runtime/desktop-runner"
 import { getKunHttpSsePermissionMapping } from "../agent-runtime/permission-policy"
-import { mapDesktopStreamChunkToRunEvents } from "../agent-runtime/stream-event-mapper"
 import type { RunEvent } from "../agent-runtime/runtime-events"
+import {
+  mapDesktopStreamChunkToRunEvents,
+  redactRendererRuntimeChunk,
+} from "../agent-runtime/stream-event-mapper"
 import {
   KunHttpSseTransport,
   type KunRuntimeEvent,
@@ -314,19 +317,29 @@ export function createKunHttpSseAdapter({
       let unsupportedEventReported = false
       let serveHandle: KunServeHandle | null = null
       let closeTransport: (() => Promise<void>) | undefined
+      let secretHints: readonly string[] = []
       const toolCallsByCallId = new Map<string, KunToolCallRecord>()
       let threadId: string | null = null
       let turnId: string | null = null
 
       const emitChunk = (chunk: Record<string, unknown>) => {
-        emit?.(chunk)
+        emit?.(
+          redactRendererRuntimeChunk({
+            runtimeId: "kun",
+            runId: request.identity.runId,
+            jobId: request.identity.jobId,
+            source: "runtime-diagnostic",
+            chunk,
+            secretHints,
+          }) as Record<string, unknown>,
+        )
         const events = mapDesktopStreamChunkToRunEvents({
           runtimeId: "kun",
           runId: request.identity.runId,
           jobId: request.identity.jobId,
           sequence: ++sequence,
           chunk,
-          secretHints: serveHandle ? [serveHandle.runtimeToken] : [],
+          secretHints,
         })
         for (const event of events) {
           request.trace.emit(event)
@@ -508,6 +521,7 @@ export function createKunHttpSseAdapter({
         if (created) {
           transport = created.transport
           closeTransport = created.close
+          secretHints = created.secretHints ?? []
         } else {
           if (!executable) {
             throw new Error("Kun executable path is required.")
@@ -529,6 +543,7 @@ export function createKunHttpSseAdapter({
             runtimeToken: serveHandle.runtimeToken,
           })
           closeTransport = serveHandle.close
+          secretHints = [serveHandle.runtimeToken]
         }
 
         const thread = await transport.createThread({

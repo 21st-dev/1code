@@ -1,3 +1,5 @@
+import { redactRuntimePayload } from "../agent-runtime/redaction"
+
 export type KunRuntimeEvent = Record<string, unknown> & {
   kind?: string
   seq?: number
@@ -136,7 +138,7 @@ export class KunHttpSseTransport {
     )
     if (!response.ok) {
       throw new Error(
-        `Kun event stream failed: HTTP ${response.status} ${await safeResponseText(response)}`,
+        `Kun event stream failed: HTTP ${response.status} ${await safeResponseText(response, [this.runtimeToken])}`,
       )
     }
     if (!response.body) {
@@ -188,7 +190,7 @@ export class KunHttpSseTransport {
     })
     if (!response.ok) {
       throw new Error(
-        `Kun HTTP request failed: ${input.method} ${path} HTTP ${response.status} ${await safeResponseText(response)}`,
+        `Kun HTTP request failed: ${input.method} ${path} HTTP ${response.status} ${await safeResponseText(response, [this.runtimeToken])}`,
       )
     }
     const text = await response.text()
@@ -228,9 +230,18 @@ function getString(
   return typeof value === "string" ? value : undefined
 }
 
-async function safeResponseText(response: Response): Promise<string> {
+async function safeResponseText(
+  response: Response,
+  secretHints: readonly string[],
+): Promise<string> {
   try {
-    return (await response.text()).slice(0, 500)
+    const redacted = redactRuntimePayload((await response.text()).slice(0, 500), {
+      runtimeId: "kun",
+      runId: "kun-http-sse-transport",
+      source: "runtime-diagnostic",
+      secretHints,
+    }).payload
+    return typeof redacted === "string" ? redacted : ""
   } catch {
     return ""
   }
@@ -238,4 +249,5 @@ async function safeResponseText(response: Response): Promise<string> {
 
 export const KUN_HTTP_SSE_TRANSPORT_TEST_ONLY = {
   parseSseFrame,
+  safeResponseText,
 }

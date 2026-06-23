@@ -49,6 +49,34 @@ describe("runtime trace redaction", () => {
     expect(result.appliedRules).toEqual(["secret-text"])
   })
 
+  test("redacts exact secret hints even when the text has no secret prefix", () => {
+    const runtimeToken =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    const result = redactRuntimePayload(
+      {
+        message: `Kun stderr echoed token ${runtimeToken}`,
+        nested: {
+          header: `Authorization: Bearer ${runtimeToken}`,
+        },
+      },
+      {
+        runtimeId: "kun",
+        runId: "run-1",
+        source: "desktop-adapter",
+        secretHints: [runtimeToken],
+      },
+    )
+
+    expect(JSON.stringify(result.payload)).not.toContain(runtimeToken)
+    expect(result.payload).toEqual({
+      message: "Kun stderr echoed token <redacted>",
+      nested: {
+        header: "Authorization: Bearer <redacted>",
+      },
+    })
+    expect(result.appliedRules).toEqual(["secret-hint"])
+  })
+
   test("redacts renderer runtime chunks beyond diagnostic chunk types", () => {
     const chunk = redactRendererRuntimeChunk({
       runtimeId: "codex",
@@ -63,6 +91,31 @@ describe("runtime trace redaction", () => {
     expect(chunk).toEqual({
       type: "ask-user-answer",
       delta: "provider returned <redacted> with api_key=<redacted>",
+    })
+  })
+
+  test("redacts secret hints from renderer runtime chunks", () => {
+    const gatewayToken = "gateway-token-secret-value"
+    const chunk = redactRendererRuntimeChunk({
+      runtimeId: "kun",
+      runId: "run-1",
+      source: "runtime-diagnostic",
+      secretHints: [gatewayToken],
+      chunk: {
+        type: "runtime-status",
+        ok: false,
+        blocker: {
+          message: `profile gateway rejected ${gatewayToken}`,
+        },
+      },
+    })
+
+    expect(JSON.stringify(chunk)).not.toContain(gatewayToken)
+    expect(chunk).toMatchObject({
+      type: "runtime-status",
+      blocker: {
+        message: "profile gateway rejected <redacted>",
+      },
     })
   })
 })

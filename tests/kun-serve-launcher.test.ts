@@ -40,6 +40,14 @@ describe("Kun serve launcher", () => {
         executable: "/usr/local/bin/kun",
         runId: "run-1",
         cwd: "/repo",
+        env: {
+          PATH: "/usr/local/bin",
+          HOME: "/Users/test",
+          OPENAI_API_KEY: "sk-provider-secret-value-123456",
+          LOCUS_PROVIDER_GATEWAY_TOKEN: "gateway-token-secret",
+          Authorization: "Bearer raw-header-secret",
+          KUN_RUNTIME_TOKEN: "attacker-controlled-token",
+        },
         userDataPath,
         spawnProcess: (command, args, options) => {
           captured.command = command
@@ -88,9 +96,23 @@ describe("Kun serve launcher", () => {
         "false",
       ])
       expect(captured.env?.KUN_RUNTIME_TOKEN).toMatch(/^[a-f0-9]{64}$/)
+      expect(captured.env?.KUN_RUNTIME_TOKEN).not.toBe(
+        "attacker-controlled-token",
+      )
+      expect(captured.env?.KUN_DATA_DIR).toBe(
+        join(userDataPath, "kun-sessions", "run-1"),
+      )
+      expect(captured.env?.PATH).toBe("/usr/local/bin")
+      expect(captured.env?.HOME).toBe("/Users/test")
+      expect(captured.env).not.toHaveProperty("OPENAI_API_KEY")
+      expect(captured.env).not.toHaveProperty("LOCUS_PROVIDER_GATEWAY_TOKEN")
+      expect(captured.env).not.toHaveProperty("Authorization")
       expect(captured.args?.join(" ")).not.toContain(
         captured.env?.KUN_RUNTIME_TOKEN ?? "missing-token",
       )
+      expect(captured.args?.join(" ")).not.toContain("sk-provider-secret")
+      expect(captured.args?.join(" ")).not.toContain("gateway-token-secret")
+      expect(captured.args?.join(" ")).not.toContain("Bearer")
       expect(handle.baseUrl).toBe("http://127.0.0.1:34567")
       await handle.close()
     } finally {
@@ -132,5 +154,36 @@ describe("Kun serve launcher", () => {
         insecure: false,
       }),
     ).toThrow("sandboxMode=danger-full-access")
+  })
+
+  test("redacts runtime token and provider-looking stderr when serve exits before ready", async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), "locus-kun-serve-"))
+    try {
+      await expect(
+        launchKunServe({
+          executable: "/usr/local/bin/kun",
+          runId: "run-fail",
+          cwd: "/repo",
+          userDataPath,
+          spawnProcess: (_command, _args, options) => {
+            const child = fakeChild()
+            setImmediate(() => {
+              const runtimeToken = (options.env as NodeJS.ProcessEnv)
+                .KUN_RUNTIME_TOKEN
+              child.stderr.emit(
+                "data",
+                Buffer.from(
+                  `stderr token=${runtimeToken} api_key=sk-provider-secret-value-123456`,
+                ),
+              )
+              child.emit("exit", 1, null)
+            })
+            return child
+          },
+        }),
+      ).rejects.toThrow("token=<redacted> api_key=<redacted>")
+    } finally {
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
   })
 })

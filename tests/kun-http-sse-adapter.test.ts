@@ -166,4 +166,156 @@ describe("Kun HTTP/SSE adapter", () => {
       ),
     ).toHaveLength(1)
   })
+
+  test("denies file_change when approval is denied by the UI bridge", async () => {
+    const emitted: Record<string, unknown>[] = []
+    const decisions: Array<{ approvalId: string; decision: string; reason?: string | null }> = []
+    const adapter = createKunHttpSseAdapter({
+      emit: (chunk) => emitted.push(chunk),
+      registerPendingApproval: (_toolUseId, pending) => {
+        pending.resolve({ approved: false, message: "user denied" })
+      },
+      createTransport: async () => ({
+        transport: {
+          async createThread() {
+            return { id: "thread-1" }
+          },
+          async startTurn() {
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval(input) {
+            decisions.push({
+              approvalId: input.approvalId,
+              decision: input.decision,
+              reason: input.reason,
+            })
+          },
+          async streamEvents(input) {
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_3",
+                toolName: "edit",
+                toolKind: "file_change",
+                summary: "Edit a file",
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_3",
+              toolName: "edit",
+              status: "pending",
+            })
+            await waitFor(() => decisions.length === 1)
+            input.onEvent({ kind: "turn_completed" })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(fakeKunRequest())
+
+    expect(result.status).toBe("succeeded")
+    expect(decisions).toEqual([
+      { approvalId: "appr_call_3", decision: "deny", reason: "user denied" },
+    ])
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        type: "observed-tool-decision",
+        decision: "deny",
+        message: "user denied",
+      }),
+    )
+    expect(JSON.stringify(emitted)).not.toContain('"decision":"allow"')
+  })
+
+  test("missing approval bridge fails closed by timeout", async () => {
+    const decisions: Array<{ approvalId: string; decision: string; reason?: string | null }> = []
+    const adapter = createKunHttpSseAdapter({
+      approvalTimeoutMs: 1,
+      createTransport: async () => ({
+        transport: {
+          async createThread() {
+            return { id: "thread-1" }
+          },
+          async startTurn() {
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval(input) {
+            decisions.push({
+              approvalId: input.approvalId,
+              decision: input.decision,
+              reason: input.reason,
+            })
+          },
+          async streamEvents(input) {
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_4",
+                toolName: "edit",
+                toolKind: "file_change",
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_4",
+              toolName: "edit",
+              status: "pending",
+            })
+            await waitFor(() => decisions.length === 1)
+            input.onEvent({ kind: "turn_completed" })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(fakeKunRequest())
+
+    expect(result.status).toBe("succeeded")
+    expect(decisions).toEqual([
+      {
+        approvalId: "appr_call_4",
+        decision: "deny",
+        reason: "Kun approval request timed out.",
+      },
+    ])
+  })
+
+  test("redacts transport secret hints before emitting renderer chunks", async () => {
+    const emitted: Record<string, unknown>[] = []
+    const token = "runtime-token-secret-value"
+    const adapter = createKunHttpSseAdapter({
+      emit: (chunk) => emitted.push(chunk),
+      createTransport: async () => ({
+        secretHints: [token],
+        transport: {
+          async createThread() {
+            throw new Error(`Kun failed with ${token}`)
+          },
+          async startTurn() {
+            throw new Error("should not start turn")
+          },
+          async interruptTurn() {},
+          async decideApproval() {},
+          async streamEvents() {},
+        },
+      }),
+    })
+
+    const result = await adapter.run(fakeKunRequest())
+
+    expect(result.status).toBe("failed")
+    expect(JSON.stringify(emitted)).not.toContain(token)
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        type: "error",
+        errorText: "Kun failed with <redacted>",
+      }),
+    )
+  })
 })

@@ -180,8 +180,18 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain("resetKunExecutablePath")
     expect(runtimeRouter).toContain("chat: publicProcedure")
     expect(runtimeRouter).toContain('runtimeId: z.enum(["qwen-code", "kun"])')
+    expect(runtimeRouter).toContain("function runtimeStreamKey(")
+    expect(runtimeRouter).toContain(
+      "return `" + "$" + "{runtimeId}:" + "$" + "{subChatId}`",
+    )
+    expect(runtimeRouter).toContain("const existingStream = activeRuntimeStreams.get(streamKey)")
+    expect(runtimeRouter).toContain("clearPendingRuntimeApprovals(")
+    expect(runtimeRouter).toContain("pending.runtimeId !== runtimeId")
+    expect(runtimeRouter).toContain("pending.subChatId !== subChatId")
     expect(runtimeRouter).toContain("shouldEnableQwenCodeRuntime(process.env)")
     expect(runtimeRouter).toContain("shouldEnableKunRuntime(process.env)")
+    expect(runtimeRouter).toContain("runtimeDisabledMessage(input.runtimeId)")
+    expect(runtimeRouter).toContain('type: "capability-error"')
     expect(runtimeRouter).toContain("verifyDesktopRunPreflight")
     expect(runtimeRouter).toContain("resolveQwenCliSetupStatus")
     expect(runtimeRouter).toContain("resolveKunCliSetupStatus")

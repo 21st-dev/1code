@@ -126,4 +126,27 @@ describe("Kun CLI setup status", () => {
     expect(settings).toContain(overridePath)
     expect(settings).not.toMatch(/API_KEY|access_token|sk-[A-Za-z0-9_-]{20,}/)
   })
+
+  test("rejects unsafe override strings before probing", async () => {
+    const unsafeInputs = [
+      "kun",
+      "/usr/local/bin/kun; echo pwned",
+      "/tmp/sk-provider-secret-value-123456/kun",
+    ]
+
+    for (const executablePath of unsafeInputs) {
+      const resolved = await resolveKunCliSetupStatus({
+        overridePath: executablePath,
+        ignoreSavedOverride: true,
+        probeVersion: async () => {
+          throw new Error("unsafe override should not be probed")
+        },
+      })
+
+      expect(resolved.executablePath).toBeNull()
+      expect(resolved.status.ok).toBe(false)
+      expect(resolved.status.availability).toBe("invalid-path")
+      expect(resolved.status.blocker?.code).toBe("kun-cli-invalid-path")
+    }
+  })
 })
