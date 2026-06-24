@@ -40,6 +40,7 @@ import {
   getProviderTargetLabel,
   ProviderProfileEditor,
 } from "../../../features/agents/components/provider-profile-editor"
+import { runtimeCapabilityManifestsAtom } from "../../../features/agents/lib/runtime-manifest-store"
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
@@ -1373,6 +1374,9 @@ export function AgentsModelsTab() {
   const [modelsSettingsTarget, setModelsSettingsTarget] = useAtom(
     modelsSettingsTargetAtom,
   )
+  const setRuntimeCapabilityManifests = useSetAtom(
+    runtimeCapabilityManifestsAtom,
+  )
   const setClaudeLoginModalConfig = useSetAtom(claudeLoginModalConfigAtom)
   const setClaudeLoginModalOpen = useSetAtom(agentsLoginModalOpenAtom)
   const setCodexLoginModalOpen = useSetAtom(codexLoginModalOpenAtom)
@@ -1390,11 +1394,21 @@ export function AgentsModelsTab() {
       staleTime: 60_000,
     },
   )
+  const { data: runtimeFeatureSettings } =
+    trpc.agentRuntime.getRuntimeFeatureSettings.useQuery(undefined, {
+      staleTime: 15_000,
+    })
+  const kunSettingEnabled =
+    runtimeFeatureSettings?.settings.kunRuntimeEnabled ?? false
+  const kunResolvedEnabled =
+    runtimeFeatureSettings?.resolved.kunRuntimeEnabled ?? false
   const qwenRuntimeVisible =
     runtimeManifests?.some((manifest) => manifest.runtimeId === "qwen-code") ??
     false
   const kunRuntimeVisible =
-    runtimeManifests?.some((manifest) => manifest.runtimeId === "kun") ?? false
+    kunResolvedEnabled &&
+    (runtimeManifests?.some((manifest) => manifest.runtimeId === "kun") ??
+      false)
   const { data: qwenCliStatus, isLoading: isQwenCliStatusLoading } =
     trpc.agentRuntime.getQwenCliStatus.useQuery(undefined, {
       enabled: qwenRuntimeVisible,
@@ -1439,9 +1453,51 @@ export function AgentsModelsTab() {
     trpc.agentRuntime.approveKunShellExecutableHash.useMutation()
   const resetKunShellExecutableHashMutation =
     trpc.agentRuntime.resetKunShellExecutableHash.useMutation()
+  const setKunRuntimeEnabledMutation =
+    trpc.agentRuntime.setKunRuntimeEnabled.useMutation()
   const isKunManagedInstallPending =
     installKunManagedBuildMutation.isPending ||
     updateKunManagedBuildMutation.isPending
+
+  const invalidateKunRuntimeSurfaces = async () => {
+    await Promise.all([
+      trpcUtils.agentRuntime.getRuntimeFeatureSettings.invalidate(),
+      trpcUtils.agentRuntime.listManifests.invalidate(),
+      trpcUtils.agentRuntime.getManifest.invalidate(),
+      trpcUtils.agentRuntime.getKunCliStatus.invalidate(),
+      trpcUtils.providerProfiles.listPresets.invalidate(),
+      trpcUtils.providerProfiles.listProfiles.invalidate(),
+    ])
+  }
+
+  const handleSetKunRuntimeEnabled = async (enabled: boolean) => {
+    try {
+      const snapshot = await setKunRuntimeEnabledMutation.mutateAsync({
+        enabled,
+      })
+      trpcUtils.agentRuntime.getRuntimeFeatureSettings.setData(
+        undefined,
+        snapshot,
+      )
+      if (!snapshot.resolved.kunRuntimeEnabled) {
+        setRuntimeCapabilityManifests((current) => {
+          const next = new Map(current)
+          next.delete("kun")
+          return next
+        })
+      }
+      await invalidateKunRuntimeSurfaces()
+      toast.success(
+        enabled ? "Kun runtime enabled" : "Kun runtime disabled",
+      )
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to update Kun runtime setting",
+      )
+    }
+  }
 
   useEffect(() => {
     if (!modelsSettingsTarget) return
@@ -2190,6 +2246,27 @@ export function AgentsModelsTab() {
           </div>
         </div>
       )}
+
+      <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h4 className="text-sm font-medium text-foreground">
+              Experimental
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Enable Kun runtime
+            </p>
+          </div>
+          <Switch
+            checked={kunSettingEnabled}
+            disabled={setKunRuntimeEnabledMutation.isPending}
+            onCheckedChange={(checked) =>
+              void handleSetKunRuntimeEnabled(checked)
+            }
+            aria-label="Enable Kun runtime"
+          />
+        </div>
+      </div>
 
       {kunRuntimeVisible && (
         <div ref={kunCliSectionRef} className="space-y-2 scroll-mt-6">

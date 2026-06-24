@@ -137,6 +137,7 @@ export type ProviderProfileEditorProps = {
   /** Compact mode for narrow hosts (onboarding): preset shown as a dropdown
    * instead of a chip wall. Fields stay container-responsive either way. */
   dense?: boolean
+  kunRuntimeEnabled?: boolean
   className?: string
 }
 
@@ -150,6 +151,7 @@ export function ProviderProfileEditor({
   onSaved,
   onReset,
   dense = false,
+  kunRuntimeEnabled,
   className,
 }: ProviderProfileEditorProps) {
   const { t } = useI18n()
@@ -159,8 +161,19 @@ export function ProviderProfileEditor({
     "grid gap-3 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]"
   const trpcUtils = trpc.useUtils()
   const { data: presetsData } = trpc.providerProfiles.listPresets.useQuery()
+  const { data: runtimeFeatureSettings } =
+    trpc.agentRuntime.getRuntimeFeatureSettings.useQuery(undefined, {
+      enabled: kunRuntimeEnabled === undefined,
+      staleTime: 15_000,
+    })
   const saveProfileMutation = trpc.providerProfiles.saveProfile.useMutation()
   const presets = presetsData?.presets ?? []
+  const resolvedKunRuntimeEnabled =
+    kunRuntimeEnabled ??
+    runtimeFeatureSettings?.resolved.kunRuntimeEnabled ??
+    false
+  const kunRuntimeGateKnown =
+    kunRuntimeEnabled !== undefined || runtimeFeatureSettings !== undefined
 
   const editingId = editingProfile?.id
   const [presetId, setPresetId] = useState(editingProfile?.presetId ?? "")
@@ -189,6 +202,34 @@ export function ProviderProfileEditor({
   const selectedPreset = useMemo(
     () => presets.find((preset) => preset.id === presetId),
     [presetId, presets],
+  )
+  const normalizeTargetsForKunGate = useCallback(
+    (targets: ProviderProfileTarget[]): ProviderProfileTarget[] => {
+      const uniqueTargets = [...new Set(targets)]
+      if (resolvedKunRuntimeEnabled) return uniqueTargets
+      const withoutKun: ProviderProfileTarget[] = uniqueTargets.filter(
+        (target) => target !== "kun",
+      )
+      if (editingProfile?.targetRuntimes.includes("kun")) {
+        withoutKun.push("kun")
+      }
+      return withoutKun
+    },
+    [editingProfile?.targetRuntimes, resolvedKunRuntimeEnabled],
+  )
+  const savableTargetRuntimes = useMemo(
+    () => normalizeTargetsForKunGate(targetRuntimes),
+    [normalizeTargetsForKunGate, targetRuntimes],
+  )
+  const visibleProviderProfileTargets = useMemo(
+    () =>
+      providerProfileTargets.filter(
+        (target) =>
+          target !== "kun" ||
+          resolvedKunRuntimeEnabled ||
+          targetRuntimes.includes("kun"),
+      ),
+    [resolvedKunRuntimeEnabled, targetRuntimes],
   )
   const formIdPrefix = editingId
     ? `provider-profile-${editingId}`
@@ -219,17 +260,18 @@ export function ProviderProfileEditor({
       setToken("")
       setHeaderRows([])
       setHeadersDirty(false)
-      setTargetRuntimes([...preset.targetRuntimes])
+      setTargetRuntimes(normalizeTargetsForKunGate([...preset.targetRuntimes]))
     },
-    [presets],
+    [normalizeTargetsForKunGate, presets],
   )
 
   // Default-select the first preset for a fresh (non-editing) form.
   useEffect(() => {
+    if (!kunRuntimeGateKnown) return
     if (editingProfile || presetId) return
     const firstPreset = presets[0]
     if (firstPreset) applyPreset(firstPreset.id)
-  }, [applyPreset, editingProfile, presetId, presets])
+  }, [applyPreset, editingProfile, kunRuntimeGateKnown, presetId, presets])
 
   const addHeaderRow = () => {
     setHeadersDirty(true)
@@ -255,6 +297,7 @@ export function ProviderProfileEditor({
   }
 
   const toggleTarget = (target: ProviderProfileTarget) => {
+    if (target === "kun" && !resolvedKunRuntimeEnabled) return
     setTargetRuntimes((current) =>
       current.includes(target)
         ? current.filter((item) => item !== target)
@@ -276,7 +319,7 @@ export function ProviderProfileEditor({
     name.trim() &&
       baseUrl.trim() &&
       defaultModel.trim() &&
-      targetRuntimes.length > 0 &&
+      savableTargetRuntimes.length > 0 &&
       (authMode === "none" || token.trim() || editingProfile?.hasToken) &&
       !tokenRefreshRequired,
   )
@@ -308,16 +351,16 @@ export function ProviderProfileEditor({
         authMode,
         ...(token.trim() ? { token: token.trim() } : {}),
         ...(headers !== undefined ? { headers } : {}),
-        targetRuntimes,
+        targetRuntimes: savableTargetRuntimes,
         capabilities: {
           ...(selectedPreset?.capabilities ??
             editingProfile?.capabilities ??
             {}),
-          claude: targetRuntimes.includes("claude"),
-          codex: targetRuntimes.includes("codex"),
-          helpers: targetRuntimes.includes("helpers"),
-          kun: targetRuntimes.includes("kun"),
-          local: targetRuntimes.includes("local"),
+          claude: savableTargetRuntimes.includes("claude"),
+          codex: savableTargetRuntimes.includes("codex"),
+          helpers: savableTargetRuntimes.includes("helpers"),
+          kun: savableTargetRuntimes.includes("kun"),
+          local: savableTargetRuntimes.includes("local"),
         },
       },
       {
@@ -546,23 +589,32 @@ export function ProviderProfileEditor({
           {t("settings.models.providerProfiles.targets")}
         </Label>
         <div className="flex flex-wrap gap-2">
-          {providerProfileTargets.map((target) => (
-            <button
-              key={target}
-              type="button"
-              onClick={() => toggleTarget(target)}
-              aria-pressed={targetRuntimes.includes(target)}
-              className={cn(
-                "min-h-8 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
-                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/70",
-                targetRuntimes.includes(target)
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {getProviderTargetLabel(target, t)}
-            </button>
-          ))}
+          {visibleProviderProfileTargets.map((target) => {
+            const selected = targetRuntimes.includes(target)
+            const disabledKunTarget =
+              target === "kun" && !resolvedKunRuntimeEnabled
+            return (
+              <button
+                key={target}
+                type="button"
+                onClick={() => toggleTarget(target)}
+                aria-pressed={selected}
+                aria-disabled={disabledKunTarget}
+                disabled={disabledKunTarget}
+                className={cn(
+                  "min-h-8 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/70",
+                  selected && !disabledKunTarget
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : selected && disabledKunTarget
+                      ? "border-border bg-muted text-muted-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {getProviderTargetLabel(target, t)}
+              </button>
+            )
+          })}
         </div>
         {dense && targetRuntimes.includes("helpers") && (
           <p className="text-xs text-muted-foreground">
