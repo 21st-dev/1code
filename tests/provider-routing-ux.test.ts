@@ -122,7 +122,7 @@ describe("provider routing UX source guards", () => {
     expect(providerEditorSource).toContain("presetHint")
     expect(providerEditorSource).toContain("aria-pressed={selected}")
     expect(providerEditorSource).toContain(
-      "aria-pressed={targetRuntimes.includes(target)}",
+      "const selected = targetRuntimes.includes(target)",
     )
     expect(providerEditorSource).toContain("getProviderTargetLabel(target, t)")
   })
