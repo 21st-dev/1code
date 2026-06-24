@@ -855,11 +855,21 @@ const KUN_RUNTIME_MANIFEST = manifest({
   capabilities: [
     capability({
       id: "hardToolGuard",
-      status: "degraded",
+      status: "supported",
       scope: "runtime-neutral",
       reason:
-        "Kun guarded shell is implemented only for a current run whose resolved executable SHA-256 matches a user-approved shell hash; no bless or hash mismatch falls back to file-only workspace-write.",
-      hint: "Keep Kun behind LOCUS_ENABLE_KUN_RUNTIME and require guarded-shell smoke evidence before marking hardToolGuard supported.",
+        "Kun command_execution and file_change approval requests are normalized into the shared guard owner for hash-approved guarded runs; no bless or hash mismatch falls back to file-only workspace-write with shell unavailable.",
+      hint: "Approve the current Kun executable hash and run with a guarded scope before using Kun shell.",
+      support: {
+        kind: "locus-shared-layer",
+        references: [
+          "src/main/lib/kun/kun-http-sse-adapter.ts",
+          "src/main/lib/kun/kun-cli-status.ts",
+          "src/main/lib/agent-guard/decision.ts",
+          "tests/kun-http-sse-adapter.test.ts",
+          "tests/agent-guard-runtime-pipeline.test.ts",
+        ],
+      },
     }),
     capability({
       id: "planMode",
@@ -919,11 +929,22 @@ const KUN_RUNTIME_MANIFEST = manifest({
     }),
     capability({
       id: "providerProfiles",
-      status: "degraded",
-      scope: "runtime-specific",
+      status: "supported",
+      scope: "runtime-neutral",
       reason:
-        "Kun can point at configurable model endpoints, but Locus provider-profile support depends on a verified responses-gateway binding and must not be assumed from generic OpenAI-compatible wording.",
-      hint: "Keep Kun provider profiles degraded until a responses gateway smoke test passes.",
+        "Kun provider-profile runs synthesize a scoped Locus responses-gateway config, stream through the selected profile, and clean up the config and token at run end.",
+      hint: "Use a Kun-target provider profile; BYO config remains the fallback when no profile is selected.",
+      support: {
+        kind: "locus-shared-layer",
+        references: [
+          "src/main/lib/kun/kun-provider-config.ts",
+          "src/main/lib/provider-profiles/gateway.ts",
+          "src/main/lib/trpc/routers/agent-runtime.ts",
+          "tests/kun-provider-config.test.ts",
+          "tests/provider-gateway-scope.test.ts",
+          "tests/provider-routing-ux.test.ts",
+        ],
+      },
     }),
     capability({
       id: "attachments",

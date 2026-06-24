@@ -6,9 +6,9 @@
 > `main`. Keep Kun flag OFF until the guarded-shell + sensitive-path smokes pass.
 
 ## 0. Pre-flight
-- [ ] 0.1 Branch off clean `main`; pin the reference `kun` build by resolved
+- [x] 0.1 Branch off clean `main`; pin the reference `kun` build by resolved
       executable SHA-256 hash.
-- [ ] 0.2 Under `danger-full-access`, enumerate the verified Kun tool registry;
+- [x] 0.2 Under `danger-full-access`, enumerate the verified Kun tool registry;
       confirm the only `auto` side-effecting tool is plan-scoped `create_plan`;
       record the executable SHA-256 hash used to bind the build.
 
@@ -92,16 +92,16 @@
       active shell state.
 
 ## 6. Acceptance (HIGH-RISK — real smoke required)
-- [ ] 6.1 Guarded shell smoke: a Kun `command_execution` surfaces an approval, the
+- [x] 6.1 Guarded shell smoke: a Kun `command_execution` surfaces an approval, the
       guard owner allow runs it, deny blocks it (no execution); cancel mid-command
       leaves no process.
-- [ ] 6.2 Sensitive-path / high-risk shell: an out-of-scope or sensitive-path
+- [x] 6.2 Sensitive-path / high-risk shell: an out-of-scope or sensitive-path
       shell/edit is denied by the scope + high-risk policy, not merely surfaced.
 - [x] 6.3 Backstop test: an injected unguarded side-effecting `tool_call` fails the
       run closed.
 - [x] 6.4 Regression: file_change allow/deny still works; `workspace-write` echo
       fails closed; flag-off unchanged; Claude/Codex/Qwen unaffected.
-- [ ] 6.5 Degraded-state smoke: remove or change the blessed hash and verify Kun
+- [x] 6.5 Degraded-state smoke: remove or change the blessed hash and verify Kun
       falls back to `workspace-write`, shell is unavailable/degraded in runtime
       diagnostics/UI, and the run does not claim active `danger-full-access`.
 - [x] 6.6 Record evidence in `kun-shell-evidence.md`; note which capabilities

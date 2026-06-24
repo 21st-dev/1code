@@ -6,9 +6,9 @@
 > `workspace-write` and does not touch sandbox posture.
 
 ## 0. Pre-flight
-- [ ] 0.1 Branch off clean `main`; pin the reference `kun` version for the gateway
+- [x] 0.1 Branch off clean `main`; pin the reference `kun` version for the gateway
       smoke.
-- [ ] 0.2 Gateway preflight: prove a bound Locus profile (DeepSeek) drives Kun via
+- [x] 0.2 Gateway preflight: prove a bound Locus profile (DeepSeek) drives Kun via
       `baseUrl=<gateway responses endpoint>`, `apiKey=<scoped token>`,
       `endpointFormat=responses` → streamed answer. If unproven, stop and keep
       `providerProfiles` `degraded`.
@@ -51,10 +51,10 @@
       reason (governed by the existing honest-manifest requirement).
 
 ## 5. Acceptance
-- [ ] 5.1 Provider smoke: select a DeepSeek (or other) Kun-target profile →
+- [x] 5.1 Provider smoke: select a DeepSeek (or other) Kun-target profile →
       synthesized config → streamed answer; upstream key absent from
       argv/renderer/logs; token revoked + config deleted at run end.
-- [ ] 5.2 Regression: BYO config still works with no profile bound; flag-off
+- [x] 5.2 Regression: BYO config still works with no profile bound; flag-off
       unchanged; Claude/Codex/Qwen unaffected.
 - [x] 5.3 Record evidence in `kun-provider-evidence.md`.
 

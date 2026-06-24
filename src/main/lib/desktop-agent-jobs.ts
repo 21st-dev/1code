@@ -239,9 +239,10 @@ export function requestCancelDesktopAgentJob(
 
 function desktopRuntimeLabel(
   runtime: DesktopAgentRuntime,
-): "Claude" | "Codex" | "Qwen" {
+): "Claude" | "Codex" | "Qwen" | "Kun" {
   if (runtime === "claude-code") return "Claude"
   if (runtime === "codex") return "Codex"
+  if (runtime === "kun") return "Kun"
   return "Qwen"
 }
 

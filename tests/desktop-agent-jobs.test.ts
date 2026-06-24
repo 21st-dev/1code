@@ -401,5 +401,19 @@ describe("desktop agent jobs", () => {
       errorCode: "desktop_chat_canceled",
       errorMessage: "Desktop Codex chat stream was canceled.",
     })
+
+    expect(
+      resolveDesktopChatJobCompletion({
+        runtime: "kun",
+        aborted: false,
+        reachedNaturalFinish: false,
+        sawError: true,
+      }),
+    ).toEqual({
+      status: "failed",
+      exitCode: 1,
+      errorCode: "desktop_chat_failed",
+      errorMessage: "Desktop Kun chat stream failed.",
+    })
   })
 })

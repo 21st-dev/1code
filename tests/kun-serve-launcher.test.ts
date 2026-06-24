@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
+import { spawn } from "node:child_process"
 import { EventEmitter } from "node:events"
-import { mkdtempSync, rmSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PassThrough } from "node:stream"
@@ -27,6 +28,26 @@ function fakeChild() {
   return child
 }
 
+async function waitForProcessExit(pid: number): Promise<boolean> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    try {
+      process.kill(pid, 0)
+    } catch {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  return false
+}
+
+async function waitForFile(path: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (existsSync(path)) return true
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  return false
+}
+
 describe("Kun serve launcher", () => {
   test("passes runtimeToken via env and never argv", async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), "locus-kun-serve-"))
@@ -35,6 +56,7 @@ describe("Kun serve launcher", () => {
       args?: string[]
       env?: NodeJS.ProcessEnv
       shell?: unknown
+      detached?: unknown
     } = {}
     try {
       const handlePromise = launchKunServe({
@@ -55,6 +77,7 @@ describe("Kun serve launcher", () => {
           captured.args = args
           captured.env = options.env as NodeJS.ProcessEnv
           captured.shell = options.shell
+          captured.detached = options.detached
           const child = fakeChild()
           setImmediate(() => {
             child.stdout.emit(
@@ -81,6 +104,7 @@ describe("Kun serve launcher", () => {
 
       expect(captured.command).toBe("/usr/local/bin/kun")
       expect(captured.shell).toBe(false)
+      expect(captured.detached).toBe(process.platform !== "win32")
       expect(captured.args).toEqual([
         "serve",
         "--host",
@@ -219,6 +243,62 @@ describe("Kun serve launcher", () => {
         expect.arrayContaining(["--sandbox-mode", "danger-full-access"]),
       )
       await handle.close()
+    } finally {
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  })
+
+  test("closes detached descendant processes when Kun serve is closed", async () => {
+    if (process.platform === "win32") return
+
+    const userDataPath = mkdtempSync(join(tmpdir(), "locus-kun-serve-"))
+    const scriptPath = join(userDataPath, "fake-kun-serve.sh")
+    const markerPath = join(userDataPath, "grandchild.pid")
+    const readyLine = `${KUN_SERVE_TEST_ONLY.KUN_READY_PREFIX}${JSON.stringify(
+      {
+        service: "kun",
+        mode: "serve",
+        host: "127.0.0.1",
+        port: 34570,
+        approvalPolicy: "on-request",
+        sandboxMode: "workspace-write",
+        insecure: false,
+      },
+    )}`
+    writeFileSync(
+      scriptPath,
+      `#!/bin/sh
+/usr/bin/perl -MPOSIX=setsid -e 'my $pid = fork(); die "fork failed" unless defined $pid; if ($pid == 0) { setsid(); exec "/bin/sleep", "60"; } open my $fh, ">", $ENV{"KUN_TEST_GRANDCHILD_PID_FILE"} or die $!; print $fh "$pid\\n"; close $fh; sleep 60;' &
+perl_parent=$!
+printf '%s\\n' '${readyLine}'
+wait "$perl_parent"
+`,
+      "utf8",
+    )
+
+    try {
+      const handle = await launchKunServe({
+        executable: "/usr/local/bin/kun",
+        runId: "run-descendant",
+        cwd: userDataPath,
+        userDataPath,
+        spawnProcess: (_command, _args, options) =>
+          spawn("/bin/sh", [scriptPath], {
+            ...options,
+            env: {
+              ...(options.env as NodeJS.ProcessEnv),
+              KUN_TEST_GRANDCHILD_PID_FILE: markerPath,
+            },
+          }),
+      })
+      expect(await waitForFile(markerPath)).toBe(true)
+      const grandchildPid = Number(readFileSync(markerPath, "utf8"))
+      expect(Number.isInteger(grandchildPid)).toBe(true)
+      expect(grandchildPid).toBeGreaterThan(0)
+
+      await handle.close()
+
+      expect(await waitForProcessExit(grandchildPid)).toBe(true)
     } finally {
       rmSync(userDataPath, { recursive: true, force: true })
     }

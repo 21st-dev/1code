@@ -99,8 +99,14 @@ describe("agent runtime capability manifests", () => {
       runtimeId: "kun",
       label: "Kun",
     })
+    expect(getAgentRuntimeCapability("kun", "hardToolGuard")).toMatchObject({
+      status: "supported",
+      scope: "runtime-neutral",
+      reason: expect.stringContaining("shared guard owner"),
+    })
     expect(getAgentRuntimeCapability("kun", "providerProfiles")).toMatchObject({
-      status: "degraded",
+      status: "supported",
+      scope: "runtime-neutral",
       reason: expect.stringContaining("responses-gateway"),
     })
   })

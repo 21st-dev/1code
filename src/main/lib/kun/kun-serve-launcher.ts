@@ -2,6 +2,7 @@ import {
   type ChildProcessWithoutNullStreams,
   type SpawnOptions,
   spawn,
+  spawnSync,
 } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { mkdirSync } from "node:fs"
@@ -189,26 +190,99 @@ async function closeChild(
   child: ChildProcessWithoutNullStreams,
 ): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return
+  const signaledPids = new Set<number>()
+  const collectDescendantPids = (rootPid: number): number[] => {
+    if (process.platform === "win32") return []
+    const result = spawnSync("ps", ["-axo", "pid=,ppid="], {
+      encoding: "utf8",
+    })
+    if (result.error || typeof result.stdout !== "string") return []
+
+    const childrenByParent = new Map<number, number[]>()
+    for (const line of result.stdout.split("\n")) {
+      const [pidText, ppidText] = line.trim().split(/\s+/)
+      const pid = Number(pidText)
+      const ppid = Number(ppidText)
+      if (!Number.isInteger(pid) || !Number.isInteger(ppid)) continue
+      const children = childrenByParent.get(ppid) ?? []
+      children.push(pid)
+      childrenByParent.set(ppid, children)
+    }
+
+    const descendants: number[] = []
+    const stack = [...(childrenByParent.get(rootPid) ?? [])]
+    while (stack.length > 0) {
+      const pid = stack.pop()
+      if (!pid || descendants.includes(pid)) continue
+      descendants.push(pid)
+      stack.push(...(childrenByParent.get(pid) ?? []))
+    }
+    return descendants
+  }
+  const signalPidOrGroup = (pid: number, signal: NodeJS.Signals) => {
+    signaledPids.add(pid)
+    if (process.platform !== "win32") {
+      try {
+        process.kill(-pid, signal)
+        return
+      } catch {
+        // Fall back to signaling the direct process below.
+      }
+    }
+    try {
+      process.kill(pid, signal)
+    } catch {
+      // ignore
+    }
+  }
+  const isPidAlive = (pid: number): boolean => {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+  const waitForSignaledPidsToExit = async (timeoutMs: number) => {
+    const deadline = Date.now() + timeoutMs
+    const pids = [...signaledPids]
+    while (Date.now() < deadline) {
+      if (pids.every((pid) => !isPidAlive(pid))) return true
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    return pids.every((pid) => !isPidAlive(pid))
+  }
+  const signalChild = (signal: NodeJS.Signals) => {
+    if (child.pid) {
+      for (const pid of collectDescendantPids(child.pid).reverse()) {
+        signalPidOrGroup(pid, signal)
+      }
+      signalPidOrGroup(child.pid, signal)
+      return
+    }
+    try {
+      child.kill(signal)
+    } catch {
+      // ignore
+    }
+  }
   await new Promise<void>((resolve) => {
     const timer = setTimeout(() => {
-      try {
-        child.kill("SIGKILL")
-      } catch {
-        // ignore
-      }
+      signalChild("SIGKILL")
       resolve()
     }, 3000)
     child.once("exit", () => {
       clearTimeout(timer)
       resolve()
     })
-    try {
-      child.kill("SIGTERM")
-    } catch {
-      clearTimeout(timer)
-      resolve()
-    }
+    signalChild("SIGTERM")
   })
+  if (!(await waitForSignaledPidsToExit(1000))) {
+    for (const pid of signaledPids) {
+      if (isPidAlive(pid)) signalPidOrGroup(pid, "SIGKILL")
+    }
+    await waitForSignaledPidsToExit(1000)
+  }
 }
 
 export async function launchKunServe(
@@ -248,6 +322,7 @@ export async function launchKunServe(
   const child = spawnProcess(input.executable, args, {
     cwd: input.cwd,
     env,
+    detached: process.platform !== "win32",
     shell: false,
     windowsHide: true,
     stdio: "pipe",
