@@ -52,6 +52,7 @@ import {
   createKunHttpSseAdapter,
   type KunHttpSseApproval,
 } from "../../kun/kun-http-sse-adapter"
+import { installKunManagedBuild } from "../../kun/kun-managed-install"
 import {
   type SynthesizedKunProviderConfig,
   synthesizeKunProviderConfig,
@@ -254,6 +255,54 @@ export const agentRuntimeRouter = router({
   }),
 
   getKunCliStatus: publicProcedure.query(async () => {
+    const resolved = await resolveKunCliSetupStatus({
+      enabled: shouldEnableKunRuntime(process.env),
+    })
+    return toRendererKunCliSetupStatus(resolved)
+  }),
+
+  installKunManagedBuild: publicProcedure.mutation(async () => {
+    if (!shouldEnableKunRuntime(process.env)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Kun runtime is disabled. Enable it before installing managed Kun.",
+      })
+    }
+    try {
+      await installKunManagedBuild()
+    } catch (error) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Kun managed install failed.",
+      })
+    }
+    const resolved = await resolveKunCliSetupStatus({
+      enabled: shouldEnableKunRuntime(process.env),
+    })
+    return toRendererKunCliSetupStatus(resolved)
+  }),
+
+  updateKunManagedBuild: publicProcedure.mutation(async () => {
+    if (!shouldEnableKunRuntime(process.env)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Kun runtime is disabled. Enable it before updating managed Kun.",
+      })
+    }
+    try {
+      await installKunManagedBuild()
+    } catch (error) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          error instanceof Error ? error.message : "Kun managed update failed.",
+      })
+    }
     const resolved = await resolveKunCliSetupStatus({
       enabled: shouldEnableKunRuntime(process.env),
     })

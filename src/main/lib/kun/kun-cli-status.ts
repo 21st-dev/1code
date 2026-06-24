@@ -13,6 +13,11 @@ import {
   readKunCliSettings,
   writeKunCliSettings,
 } from "./kun-cli-settings"
+import {
+  isKunManagedExecutablePath,
+  type KunManagedInstallStatus,
+  resolveKunManagedInstallStatus,
+} from "./kun-managed-install"
 
 const execFileAsync = promisify(execFile)
 
@@ -25,7 +30,7 @@ const KUN_INSTALL_COMMAND = "Install Kun from the upstream project."
 const KUN_AUTH_HINT =
   "Configure Kun with a BYO config file or keep provider profiles degraded until the Locus responses gateway is wired."
 
-type KunCliSource = "override" | "path" | "unresolved"
+type KunCliSource = "managed" | "override" | "path" | "unresolved"
 
 type KunCliAvailability =
   | "missing"
@@ -82,6 +87,7 @@ export type KunCliSetupStatus = {
   availability: KunCliAvailability
   source: KunCliSource
   executable: RuntimeExecutableStatus
+  managedInstall: KunManagedInstallStatus
   config: KunConfigFileStatus
   version: KunCliVersionStatus
   shell: KunShellApprovalStatus
@@ -299,8 +305,9 @@ function kunConfigFileStatus(filePath: string | null): KunConfigFileStatus {
       exists: true,
       isFile: false,
       error:
-        sanitizeForRenderer(error instanceof Error ? error.message : String(error)) ??
-        "Kun config file is not readable.",
+        sanitizeForRenderer(
+          error instanceof Error ? error.message : String(error),
+        ) ?? "Kun config file is not readable.",
       hint: KUN_CONFIG_HINT,
     }
   }
@@ -336,6 +343,7 @@ function invalidStatus(
   code: KunCliBlockerCode,
   availability: KunCliAvailability,
   config: KunConfigFileStatus = missingConfigStatus(),
+  managedInstall: KunManagedInstallStatus = resolveKunManagedInstallStatus(),
 ): ResolvedKunCliSetupStatus {
   return {
     executablePath: null,
@@ -354,6 +362,7 @@ function invalidStatus(
         error: sanitizeForRenderer(message),
         hint: KUN_INSTALL_HINT,
       },
+      managedInstall,
       config,
       version: {
         ok: false,
@@ -378,17 +387,22 @@ function invalidStatus(
   }
 }
 
-function disabledStatus(): ResolvedKunCliSetupStatus {
+function disabledStatus(
+  managedInstall: KunManagedInstallStatus,
+): ResolvedKunCliSetupStatus {
   return invalidStatus(
     "Kun runtime is disabled. Set LOCUS_ENABLE_KUN_RUNTIME=1 to enable Kun setup.",
     "unresolved",
     "kun-runtime-disabled",
     "disabled",
+    missingConfigStatus(),
+    managedInstall,
   )
 }
 
 function pathOverrideCandidate(
   rawPath: string | null,
+  source: Exclude<KunCliSource, "path" | "unresolved"> = "override",
 ): ResolvedKunCliSetupStatus | KunPathCandidate | null {
   if (!rawPath) return null
   const executablePath = rawPath.trim()
@@ -396,7 +410,7 @@ function pathOverrideCandidate(
   if (!isAbsolute(executablePath)) {
     return invalidStatus(
       "Kun executable path must be an absolute local file path.",
-      "override",
+      source,
       "kun-cli-invalid-path",
       "invalid-path",
     )
@@ -404,7 +418,7 @@ function pathOverrideCandidate(
   if (looksLikeCommandString(executablePath)) {
     return invalidStatus(
       "Kun executable path must be a file path, not a shell command.",
-      "override",
+      source,
       "kun-cli-invalid-path",
       "invalid-path",
     )
@@ -412,13 +426,13 @@ function pathOverrideCandidate(
   if (containsSecretLikeText(executablePath)) {
     return invalidStatus(
       "Kun executable path contains secret-like text and was rejected.",
-      "override",
+      source,
       "kun-cli-invalid-path",
       "invalid-path",
     )
   }
   return {
-    source: "override",
+    source,
     path: executablePath,
   }
 }
@@ -502,6 +516,7 @@ async function statusForCandidate(
   configPath: string | null,
   approvedShellHash: string | null,
 ): Promise<ResolvedKunCliSetupStatus> {
+  const managedInstall = resolveKunManagedInstallStatus(options)
   const config = kunConfigFileStatus(configPath)
   if (!candidate) {
     return invalidStatus(
@@ -510,6 +525,7 @@ async function statusForCandidate(
       "kun-cli-missing",
       "missing",
       config,
+      managedInstall,
     )
   }
 
@@ -533,6 +549,7 @@ async function statusForCandidate(
         availability: rawStatus.exists ? "non-executable" : "invalid-path",
         source: candidate.source,
         executable,
+        managedInstall,
         config,
         version: {
           ok: false,
@@ -563,23 +580,21 @@ async function statusForCandidate(
     candidate.path,
   )
   const ok = config.ok
-  const blocker: KunCliSetupStatus["blocker"] =
-    config.ok
-      ? null
-      : {
-          component: "kun-cli" as const,
-          code: config.exists
-            ? config.isFile
-              ? "kun-config-invalid-path"
-              : "kun-config-not-file"
-            : config.path
-              ? "kun-config-invalid-path"
-              : "kun-config-missing",
-          message:
-            config.error ??
-            "Kun config path must be configured before Kun runs.",
-          hint: KUN_CONFIG_HINT,
-        }
+  const blocker: KunCliSetupStatus["blocker"] = config.ok
+    ? null
+    : {
+        component: "kun-cli" as const,
+        code: config.exists
+          ? config.isFile
+            ? "kun-config-invalid-path"
+            : "kun-config-not-file"
+          : config.path
+            ? "kun-config-invalid-path"
+            : "kun-config-missing",
+        message:
+          config.error ?? "Kun config path must be configured before Kun runs.",
+        hint: KUN_CONFIG_HINT,
+      }
   return {
     executablePath: candidate.path,
     configPath: config.ok ? configPath : null,
@@ -596,6 +611,7 @@ async function statusForCandidate(
             : "config-missing",
       source: candidate.source,
       executable,
+      managedInstall,
       config,
       version: {
         ok: version.ok,
@@ -616,17 +632,29 @@ async function statusForCandidate(
 export async function resolveKunCliSetupStatus(
   options: KunCliStatusOptions = {},
 ): Promise<ResolvedKunCliSetupStatus> {
+  const managedInstall = resolveKunManagedInstallStatus(options)
   if (options.enabled === false) {
-    return disabledStatus()
+    return disabledStatus(managedInstall)
   }
 
   const savedSettings = options.ignoreSavedOverride
-    ? { executablePath: null, configPath: null, shellApprovedExecutableHash: null }
+    ? {
+        executablePath: null,
+        configPath: null,
+        shellApprovedExecutableHash: null,
+      }
     : readKunCliSettings(options)
   const explicitOverride = options.overridePath ?? null
   const savedOverride = savedSettings.executablePath
   const configPath = options.configPathOverride ?? savedSettings.configPath
-  const override = pathOverrideCandidate(explicitOverride ?? savedOverride)
+  const override = explicitOverride
+    ? pathOverrideCandidate(explicitOverride, "override")
+    : pathOverrideCandidate(
+        savedOverride,
+        isKunManagedExecutablePath(savedOverride, options)
+          ? "managed"
+          : "override",
+      )
   if (override && "status" in override) return override
   const candidate =
     override ?? discoverKunOnPath(options.env ?? process.env, options.cwd)

@@ -1384,10 +1384,12 @@ export function AgentsModelsTab() {
   const { data: codexIntegration, isLoading: isCodexLoading } =
     trpc.codex.getIntegration.useQuery()
   const { data: codexApiKeyStatus } = trpc.codex.getCodexApiKeyStatus.useQuery()
-  const { data: runtimeManifests } =
-    trpc.agentRuntime.listManifests.useQuery(undefined, {
+  const { data: runtimeManifests } = trpc.agentRuntime.listManifests.useQuery(
+    undefined,
+    {
       staleTime: 60_000,
-    })
+    },
+  )
   const qwenRuntimeVisible =
     runtimeManifests?.some((manifest) => manifest.runtimeId === "qwen-code") ??
     false
@@ -1425,6 +1427,10 @@ export function AgentsModelsTab() {
     trpc.agentRuntime.updateKunExecutablePath.useMutation()
   const resetKunExecutablePathMutation =
     trpc.agentRuntime.resetKunExecutablePath.useMutation()
+  const installKunManagedBuildMutation =
+    trpc.agentRuntime.installKunManagedBuild.useMutation()
+  const updateKunManagedBuildMutation =
+    trpc.agentRuntime.updateKunManagedBuild.useMutation()
   const updateKunConfigPathMutation =
     trpc.agentRuntime.updateKunConfigPath.useMutation()
   const resetKunConfigPathMutation =
@@ -1433,6 +1439,9 @@ export function AgentsModelsTab() {
     trpc.agentRuntime.approveKunShellExecutableHash.useMutation()
   const resetKunShellExecutableHashMutation =
     trpc.agentRuntime.resetKunShellExecutableHash.useMutation()
+  const isKunManagedInstallPending =
+    installKunManagedBuildMutation.isPending ||
+    updateKunManagedBuildMutation.isPending
 
   useEffect(() => {
     if (!modelsSettingsTarget) return
@@ -1497,6 +1506,30 @@ export function AgentsModelsTab() {
     }
   }
 
+  const handleInstallKunManagedBuild = async () => {
+    try {
+      await installKunManagedBuildMutation.mutateAsync()
+      await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
+      toast.success("Kun installed")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to install Kun",
+      )
+    }
+  }
+
+  const handleUpdateKunManagedBuild = async () => {
+    try {
+      await updateKunManagedBuildMutation.mutateAsync()
+      await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
+      toast.success("Kun updated")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update Kun",
+      )
+    }
+  }
+
   const handleSaveQwenExecutablePath = async () => {
     const executablePath = qwenExecutablePath.trim()
     if (!executablePath) return
@@ -1544,7 +1577,9 @@ export function AgentsModelsTab() {
       toast.success("Kun config path saved")
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to save Kun config path",
+        error instanceof Error
+          ? error.message
+          : "Failed to save Kun config path",
       )
     }
   }
@@ -2031,7 +2066,9 @@ export function AgentsModelsTab() {
                       {t("settings.models.qwenCli.status")}
                     </span>
                     {qwenCliStatus?.ok ? (
-                      <ActiveStatusBadge>{t("common.active")}</ActiveStatusBadge>
+                      <ActiveStatusBadge>
+                        {t("common.active")}
+                      </ActiveStatusBadge>
                     ) : (
                       <Badge
                         variant="outline"
@@ -2158,11 +2195,10 @@ export function AgentsModelsTab() {
         <div ref={kunCliSectionRef} className="space-y-2 scroll-mt-6">
           <div className="pb-2 flex items-center justify-between gap-4">
             <div>
-              <h4 className="text-sm font-medium text-foreground">
-                Kun CLI
-              </h4>
+              <h4 className="text-sm font-medium text-foreground">Kun CLI</h4>
               <p className="text-xs text-muted-foreground">
-                Bring your own Kun executable for the local HTTP/SSE runtime.
+                Install a pinned Kun build through Locus or bring your own
+                executable for the local HTTP/SSE runtime.
               </p>
             </div>
             <Button
@@ -2183,7 +2219,9 @@ export function AgentsModelsTab() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">Status</span>
                     {kunCliStatus?.ok ? (
-                      <ActiveStatusBadge>{t("common.active")}</ActiveStatusBadge>
+                      <ActiveStatusBadge>
+                        {t("common.active")}
+                      </ActiveStatusBadge>
                     ) : (
                       <Badge
                         variant="outline"
@@ -2195,11 +2233,40 @@ export function AgentsModelsTab() {
                           : "Setup required"}
                       </Badge>
                     )}
+                    {kunCliStatus?.executable.ok && !kunCliStatus.config.ok && (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-200"
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        Config needed
+                      </Badge>
+                    )}
+                    {kunCliStatus?.config.ok && (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-xs font-medium text-emerald-700 dark:text-emerald-200"
+                      >
+                        <Check className="h-3 w-3" />
+                        Config ready
+                      </Badge>
+                    )}
+                    {kunCliStatus?.shell.reason === "hash-mismatch" && (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-200"
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        Hash mismatch
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {kunCliStatus?.ok
-                      ? "Kun is available for flag-gated desktop runs."
-                      : "Set a Kun executable and a Kun config.json with provider credentials before running."}
+                      ? "Kun executable and config are ready for flag-gated desktop runs."
+                      : kunCliStatus?.executable.ok
+                        ? "Kun executable is ready. Add a config.json or select a Kun provider profile before running."
+                        : "Install Kun through Locus or set a BYO executable before running."}
                   </p>
                   {kunCliStatus?.executable.path && (
                     <p className="break-all text-xs text-muted-foreground">
@@ -2230,6 +2297,89 @@ export function AgentsModelsTab() {
                     <p className="text-xs text-amber-700 dark:text-amber-300">
                       Version probe failed: {kunCliStatus.version.error}
                     </p>
+                  )}
+                  {kunCliStatus?.managedInstall && (
+                    <div className="mt-2 space-y-1 rounded-md border border-border bg-muted/40 p-2 text-xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-foreground">
+                          Managed install
+                        </span>
+                        {kunCliStatus.managedInstall.state === "installed" ? (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-xs font-medium text-emerald-700 dark:text-emerald-200"
+                          >
+                            <Check className="h-3 w-3" />
+                            Installed
+                          </Badge>
+                        ) : kunCliStatus.managedInstall.state ===
+                          "update-available" ? (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-200"
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                            Update available
+                          </Badge>
+                        ) : kunCliStatus.managedInstall.state ===
+                          "available" ? (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-blue-500/30 bg-blue-500/10 text-xs font-medium text-blue-700 dark:text-blue-200"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Available
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-muted-foreground/30 bg-muted text-xs font-medium text-muted-foreground"
+                          >
+                            Unavailable
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-muted-foreground">
+                        {kunCliStatus.managedInstall.state === "installed"
+                          ? `Kun ${kunCliStatus.managedInstall.installedVersion ?? ""} is installed in app-managed storage.`
+                          : (kunCliStatus.managedInstall.reason ??
+                            kunCliStatus.managedInstall.hint)}
+                      </p>
+                      {kunCliStatus.managedInstall.installPath && (
+                        <p className="break-all font-mono text-[11px] text-muted-foreground">
+                          {kunCliStatus.managedInstall.installPath}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {kunCliStatus.managedInstall.state === "available" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleInstallKunManagedBuild()}
+                            disabled={isKunManagedInstallPending}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            {installKunManagedBuildMutation.isPending
+                              ? t("common.saving")
+                              : "Install Kun"}
+                          </Button>
+                        )}
+                        {kunCliStatus.managedInstall.state ===
+                          "update-available" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleUpdateKunManagedBuild()}
+                            disabled={isKunManagedInstallPending}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            {updateKunManagedBuildMutation.isPending
+                              ? t("common.saving")
+                              : "Update Kun"}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   )}
                   {kunCliStatus?.shell && (
                     <div className="mt-2 space-y-1 rounded-md border border-border bg-muted/40 p-2 text-xs">
@@ -2298,7 +2448,9 @@ export function AgentsModelsTab() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => void handleResetKunShellExecutableHash()}
+                          onClick={() =>
+                            void handleResetKunShellExecutableHash()
+                          }
                           disabled={
                             !kunCliStatus.shell.approvedHash ||
                             resetKunShellExecutableHashMutation.isPending

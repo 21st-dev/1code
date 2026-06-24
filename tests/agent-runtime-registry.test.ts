@@ -158,10 +158,7 @@ describe("agent runtime registry", () => {
   })
 
   test("is exposed through a runtime-neutral tRPC router", () => {
-    const appRouter = readFileSync(
-      "src/main/lib/trpc/routers/index.ts",
-      "utf8",
-    )
+    const appRouter = readFileSync("src/main/lib/trpc/routers/index.ts", "utf8")
     const runtimeRouter = readFileSync(
       "src/main/lib/trpc/routers/agent-runtime.ts",
       "utf8",
@@ -176,6 +173,8 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain("updateQwenExecutablePath")
     expect(runtimeRouter).toContain("resetQwenExecutablePath")
     expect(runtimeRouter).toContain("getKunCliStatus")
+    expect(runtimeRouter).toContain("installKunManagedBuild")
+    expect(runtimeRouter).toContain("updateKunManagedBuild")
     expect(runtimeRouter).toContain("updateKunExecutablePath")
     expect(runtimeRouter).toContain("resetKunExecutablePath")
     expect(runtimeRouter).toContain("updateKunConfigPath")
@@ -191,7 +190,9 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain(
       "return `" + "$" + "{runtimeId}:" + "$" + "{subChatId}`",
     )
-    expect(runtimeRouter).toContain("const existingStream = activeRuntimeStreams.get(streamKey)")
+    expect(runtimeRouter).toContain(
+      "const existingStream = activeRuntimeStreams.get(streamKey)",
+    )
     expect(runtimeRouter).toContain("clearPendingRuntimeApprovals(")
     expect(runtimeRouter).toContain("pending.runtimeId !== runtimeId")
     expect(runtimeRouter).toContain("pending.subChatId !== subChatId")
@@ -232,7 +233,7 @@ describe("agent runtime registry", () => {
     expect(activeChat).toContain("useRuntimeCapabilitySupported")
     expect(activeChat).toContain('"rollback"')
     expect(activeChat).not.toContain(
-      "isRuntimeCapabilitySupported } from \"../../../../shared/agent-runtime-capabilities\"",
+      'isRuntimeCapabilitySupported } from "../../../../shared/agent-runtime-capabilities"',
     )
     expect(guardedRunCard).not.toContain("isRuntimeCapabilitySupported")
   })
