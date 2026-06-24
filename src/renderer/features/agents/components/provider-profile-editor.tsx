@@ -33,6 +33,7 @@ const PROVIDER_TARGET_LABEL_KEYS: Record<
   claude: "settings.models.providerProfiles.targetClaude",
   codex: "settings.models.providerProfiles.targetCodex",
   helpers: "settings.models.providerProfiles.targetHelpers",
+  kun: "settings.models.providerProfiles.targetKun",
   local: "settings.models.providerProfiles.targetLocal",
 }
 
@@ -315,6 +316,7 @@ export function ProviderProfileEditor({
           claude: targetRuntimes.includes("claude"),
           codex: targetRuntimes.includes("codex"),
           helpers: targetRuntimes.includes("helpers"),
+          kun: targetRuntimes.includes("kun"),
           local: targetRuntimes.includes("local"),
         },
       },

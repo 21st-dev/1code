@@ -1,7 +1,7 @@
 import {
-  spawn,
   type ChildProcessWithoutNullStreams,
   type SpawnOptions,
+  spawn,
 } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { mkdirSync } from "node:fs"
@@ -33,6 +33,7 @@ export type KunServeLaunchInput = {
   runId: string
   cwd: string
   configPath?: string | null
+  secretHints?: readonly string[]
   env?: NodeJS.ProcessEnv
   userDataPath?: string
   spawnProcess?: (
@@ -173,7 +174,9 @@ function createKunDataDir(input: {
   return dataDir
 }
 
-async function closeChild(child: ChildProcessWithoutNullStreams): Promise<void> {
+async function closeChild(
+  child: ChildProcessWithoutNullStreams,
+): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return
   await new Promise<void>((resolve) => {
     const timer = setTimeout(() => {
@@ -287,6 +290,7 @@ export async function launchKunServe(
       cleanup()
       const stderr = redactKunServeDiagnostic(stderrTail.trim(), [
         runtimeToken,
+        ...(input.secretHints ?? []),
         ...(Object.values(env).filter(
           (value): value is string =>
             typeof value === "string" &&

@@ -66,7 +66,10 @@ import { normalizeChatImageAttachmentPart } from "../../../../shared/chat-attach
 import { normalizePersistedChatMessages } from "../../../../shared/chat-message-normalizer"
 import type { FileStatus } from "../../../../shared/changes-types"
 import { normalizeLongTextAttachmentPart } from "../../../../shared/long-text-attachments"
-import { isProviderProfileSource } from "../../../../shared/provider-profile-types"
+import {
+  isProviderProfileSource,
+  parseProviderProfileSource,
+} from "../../../../shared/provider-profile-types"
 import { getQueryClient } from "../../../contexts/TRPCProvider"
 import { trackMessageSent } from "../../../lib/analytics"
 import {
@@ -147,6 +150,7 @@ import {
   subChatCodexModelSourceAtomFamily,
   subChatCodexThinkingAtomFamily,
   subChatClaudeModelSourceAtomFamily,
+  subChatKunModelSourceAtomFamily,
   subChatModelIdAtomFamily,
   subChatModeAtomFamily,
   suppressInputFocusAtom,
@@ -3177,6 +3181,10 @@ const ChatViewInner = memo(function ChatViewInner({
           appStore.get(subChatCodexModelSourceAtomFamily(subChatId)),
         )
         appStore.set(
+          subChatKunModelSourceAtomFamily(newSubChat.id),
+          appStore.get(subChatKunModelSourceAtomFamily(subChatId)),
+        )
+        appStore.set(
           subChatCodexThinkingAtomFamily(newSubChat.id),
           appStore.get(subChatCodexThinkingAtomFamily(subChatId)),
         )
@@ -4053,6 +4061,10 @@ const ChatViewInner = memo(function ChatViewInner({
               isProviderProfileSource(inheritedCodexModelSource)
               ? "chatgpt"
               : inheritedCodexModelSource),
+        )
+        appStore.set(
+          subChatKunModelSourceAtomFamily(newId),
+          appStore.get(subChatKunModelSourceAtomFamily(subChatId)),
         )
         appStore.set(
           subChatCodexThinkingAtomFamily(newId),
@@ -5855,12 +5867,22 @@ Make sure to preserve all functionality from both branches when resolving confli
         })
       } else if (chatProvider === "qwen-code" || chatProvider === "kun") {
         console.log("[getOrCreateChat] Using QwenChatTransport", { provider: chatProvider })
+        const kunModelSource =
+          chatProvider === "kun"
+            ? appStore.get(subChatKunModelSourceAtomFamily(subChatId))
+            : null
         transport = new QwenChatTransport({
           runtimeId: chatProvider,
           chatId,
           subChatId,
           cwd: runtimeCwd,
           mode: subChatMode,
+          ...(kunModelSource
+            ? {
+                modelSource: kunModelSource,
+                providerProfileId: parseProviderProfileSource(kunModelSource),
+              }
+            : {}),
         })
       } else {
         transport = new IPCChatTransport({
@@ -6089,6 +6111,10 @@ Make sure to preserve all functionality from both branches when resolving confli
       appStore.get(subChatCodexModelSourceAtomFamily(sourceSubChatId)),
     )
     appStore.set(
+      subChatKunModelSourceAtomFamily(newId),
+      appStore.get(subChatKunModelSourceAtomFamily(sourceSubChatId)),
+    )
+    appStore.set(
       subChatCodexThinkingAtomFamily(newId),
       appStore.get(subChatCodexThinkingAtomFamily(sourceSubChatId)),
     )
@@ -6127,12 +6153,22 @@ Make sure to preserve all functionality from both branches when resolving confli
         })
       } else if (chatProvider === "qwen-code" || chatProvider === "kun") {
         console.log("[createNewSubChat] Using QwenChatTransport", { provider: chatProvider })
+        const kunModelSource =
+          chatProvider === "kun"
+            ? appStore.get(subChatKunModelSourceAtomFamily(newId))
+            : null
         newSubChatTransport = new QwenChatTransport({
           runtimeId: chatProvider,
           chatId,
           subChatId: newId,
           cwd: runtimeCwd,
           mode: newSubChatMode,
+          ...(kunModelSource
+            ? {
+                modelSource: kunModelSource,
+                providerProfileId: parseProviderProfileSource(kunModelSource),
+              }
+            : {}),
         })
       } else {
         // Local worktree chat: use IPC transport

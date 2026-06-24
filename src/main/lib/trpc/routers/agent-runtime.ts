@@ -6,6 +6,11 @@ import {
   shouldEnableKunRuntime,
   shouldEnableQwenCodeRuntime,
 } from "../../../../shared/agent-runtime-capabilities"
+import {
+  parseProviderProfileSource,
+  providerProfileSource,
+} from "../../../../shared/provider-profile-types"
+import type { DesktopRunProviderBinding } from "../../agent-runtime/desktop-run-request"
 import { resolveDesktopPermissionPolicy } from "../../agent-runtime/permission-policy"
 import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
 import type { RunEvent } from "../../agent-runtime/runtime-events"
@@ -40,6 +45,11 @@ import {
   createKunHttpSseAdapter,
   type KunHttpSseApproval,
 } from "../../kun/kun-http-sse-adapter"
+import {
+  type SynthesizedKunProviderConfig,
+  synthesizeKunProviderConfig,
+} from "../../kun/kun-provider-config"
+import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
 import { createQwenDesktopRunRequest } from "../../qwen/desktop-run-request"
 import {
   createQwenAcpClientAdapter,
@@ -64,6 +74,8 @@ const experimentalRuntimeChatInputSchema = z.object({
   cwd: z.string(),
   mode: z.enum(["plan", "agent"]).default("agent"),
   sessionId: z.string().optional(),
+  modelSource: z.string().optional(),
+  providerProfileId: z.string().trim().max(512).nullable().optional(),
 })
 
 const runtimeExecutablePathInputSchema = z.object({
@@ -119,6 +131,14 @@ function isExperimentalRuntimeEnabled(runtimeId: ExperimentalRuntimeChatId) {
     case "kun":
       return shouldEnableKunRuntime(process.env)
   }
+}
+
+function runtimeProviderProfileId(input: {
+  modelSource?: string | null
+  providerProfileId?: string | null
+}): string | null {
+  const providerProfileId = input.providerProfileId?.trim()
+  return providerProfileId || parseProviderProfileSource(input.modelSource)
 }
 
 function runtimeDisabledMessage(runtimeId: ExperimentalRuntimeChatId): string {
@@ -326,6 +346,7 @@ export const agentRuntimeRouter = router({
         let desktopJobSawError = false
         let desktopJobReachedNaturalFinish = false
         let desktopJobDb: ReturnType<typeof getDatabase> | null = null
+        let kunProviderConfig: SynthesizedKunProviderConfig | null = null
 
         const safeEmit = (chunk: Record<string, unknown>) => {
           if (!isActive) return
@@ -382,6 +403,9 @@ export const agentRuntimeRouter = router({
 
             let executablePath: string
             let kunConfigPath: string | null = null
+            let kunProviderBinding:
+              | Omit<DesktopRunProviderBinding, "diagnostics">
+              | undefined
             if (input.runtimeId === "qwen-code") {
               const qwenCli = await resolveQwenCliSetupStatus({
                 cwd: preflight.cwd,
@@ -398,14 +422,14 @@ export const agentRuntimeRouter = router({
               }
               executablePath = qwenCli.executablePath
             } else {
+              const selectedKunProviderProfileId = runtimeProviderProfileId({
+                modelSource: input.modelSource,
+                providerProfileId: input.providerProfileId,
+              })
               const kunCli = await resolveKunCliSetupStatus({
                 cwd: preflight.cwd,
               })
-              if (
-                !kunCli.status.ok ||
-                !kunCli.executablePath ||
-                !kunCli.configPath
-              ) {
+              if (!kunCli.status.executable.ok || !kunCli.executablePath) {
                 safeEmit({
                   type: "capability-error",
                   errorText:
@@ -415,8 +439,60 @@ export const agentRuntimeRouter = router({
                 })
                 return
               }
+
+              if (selectedKunProviderProfileId) {
+                let profile: ReturnType<typeof getProviderProfileRuntimeConfig>
+                try {
+                  profile = getProviderProfileRuntimeConfig(
+                    selectedKunProviderProfileId,
+                  )
+                } catch (error) {
+                  safeEmit({
+                    type: "capability-error",
+                    errorText:
+                      error instanceof Error ? error.message : String(error),
+                  })
+                  return
+                }
+                if (!profile) {
+                  safeEmit({
+                    type: "capability-error",
+                    errorText: "Selected Kun provider profile was not found.",
+                  })
+                  return
+                }
+                if (!profile.targetRuntimes.includes("kun")) {
+                  safeEmit({
+                    type: "capability-error",
+                    errorText:
+                      "Selected provider profile is not enabled for Kun.",
+                  })
+                  return
+                }
+                kunProviderConfig = await synthesizeKunProviderConfig({
+                  runId,
+                  profile,
+                })
+                kunProviderBinding = {
+                  model: profile.defaultModel,
+                  modelSource: providerProfileSource(profile.id),
+                  providerProfileId: profile.id,
+                  gatewayEndpoint: kunProviderConfig.gatewayBaseUrl,
+                  authMode: "provider-profile",
+                }
+              } else if (!kunCli.status.ok || !kunCli.configPath) {
+                safeEmit({
+                  type: "capability-error",
+                  errorText:
+                    kunCli.status.blocker?.message ??
+                    "Kun CLI config is not available.",
+                  runtimeStatus: toRendererKunCliSetupStatus(kunCli),
+                })
+                return
+              }
+
               executablePath = kunCli.executablePath
-              kunConfigPath = kunCli.configPath
+              kunConfigPath = kunProviderConfig?.configPath ?? kunCli.configPath
             }
             const permissionPolicy = resolveDesktopPermissionPolicy({
               runtimeId: input.runtimeId,
@@ -447,6 +523,8 @@ export const agentRuntimeRouter = router({
               preflight,
               prompt: input.prompt,
               permissionPolicy,
+              providerBinding:
+                input.runtimeId === "kun" ? kunProviderBinding : undefined,
               signal: abortController.signal,
               resumeSessionId: input.sessionId ?? null,
               parentSessionId: input.sessionId ?? null,
@@ -481,6 +559,7 @@ export const agentRuntimeRouter = router({
                 : createKunHttpSseAdapter({
                     executable: executablePath,
                     configPath: kunConfigPath,
+                    configSecretHints: kunProviderConfig?.secretHints ?? [],
                     emit: safeEmit,
                     registerPendingApproval: (toolUseId, pending) => {
                       pendingRuntimeToolApprovals.set(toolUseId, {
@@ -512,6 +591,7 @@ export const agentRuntimeRouter = router({
               errorText: error instanceof Error ? error.message : String(error),
             })
           } finally {
+            kunProviderConfig?.cleanup()
             if (desktopJobDb) {
               clearPendingRuntimeApprovals(
                 "Session cancelled.",

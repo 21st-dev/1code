@@ -14,6 +14,7 @@ export const providerProfileTargets = [
   "claude",
   "codex",
   "helpers",
+  "kun",
   "local",
 ] as const
 export type ProviderProfileTarget = (typeof providerProfileTargets)[number]
@@ -31,6 +32,7 @@ export type ProviderProfileCapabilities = {
   claude?: boolean
   codex?: boolean
   helpers?: boolean
+  kun?: boolean
   local?: boolean
   streaming?: boolean
   tools?: boolean
@@ -126,14 +128,16 @@ export function providerProfileSource(profileId: string): string {
   return `${PROVIDER_PROFILE_SOURCE_PREFIX}${profileId}`
 }
 
-export function parseProviderProfileSource(source: string | undefined | null):
-  | string
-  | null {
+export function parseProviderProfileSource(
+  source: string | undefined | null,
+): string | null {
   if (!source?.startsWith(PROVIDER_PROFILE_SOURCE_PREFIX)) return null
   const id = source.slice(PROVIDER_PROFILE_SOURCE_PREFIX.length).trim()
   return id || null
 }
 
-export function isProviderProfileSource(source: string | undefined | null): boolean {
+export function isProviderProfileSource(
+  source: string | undefined | null,
+): boolean {
   return Boolean(parseProviderProfileSource(source))
 }

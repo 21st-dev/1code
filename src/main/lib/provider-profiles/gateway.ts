@@ -40,6 +40,8 @@ type GatewayEndpoint = {
 type GatewayTokenScope = {
   providerId: string
   kind: GatewayEndpointKind
+  expiresAt: number
+  ttlMs: number
 }
 
 type GatewayToolTracePhase = "incoming" | "forwarded"
@@ -64,6 +66,8 @@ const CODEX_LEGACY_GATEWAY_MODEL_IDS = new Set([
   "gpt-5.3-codex",
   "gpt-5.2",
 ])
+
+const DEFAULT_PROVIDER_GATEWAY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000
 
 let serverState:
   | {
@@ -352,7 +356,16 @@ function hasScopedGatewayAuth(params: {
   const token = readGatewayAuthToken(params.req)
   if (!token) return false
   const scope = params.tokens.get(token)
-  return scope?.providerId === params.providerId && scope.kind === params.kind
+  if (!scope) return false
+  if (scope.expiresAt <= Date.now()) {
+    params.tokens.delete(token)
+    return false
+  }
+  if (scope.providerId !== params.providerId || scope.kind !== params.kind) {
+    return false
+  }
+  scope.expiresAt = Date.now() + scope.ttlMs
+  return true
 }
 
 function appendPath(baseUrl: string, path: string): string {
@@ -631,6 +644,7 @@ function inferredCapabilities(profile: ProviderProfileRuntimeConfig): ProviderPr
     claude: profile.targetRuntimes.includes("claude"),
     codex: profile.targetRuntimes.includes("codex"),
     helpers: profile.targetRuntimes.includes("helpers"),
+    kun: profile.targetRuntimes.includes("kun"),
     local: profile.targetRuntimes.includes("local"),
     streaming: profile.capabilities.streaming ?? true,
     tools: profile.capabilities.tools,
@@ -1473,15 +1487,29 @@ async function ensureProviderGateway() {
 export async function getProviderGatewayEndpoint(
   providerId: string,
   kind: GatewayEndpointKind,
+  options: { ttlMs?: number } = {},
 ): Promise<GatewayEndpoint> {
   const gateway = await ensureProviderGateway()
   const token = randomBytes(32).toString("hex")
-  gateway.tokens.set(token, { providerId, kind })
+  const ttlMs = Math.max(
+    1,
+    options.ttlMs ?? DEFAULT_PROVIDER_GATEWAY_TOKEN_TTL_MS,
+  )
+  gateway.tokens.set(token, {
+    providerId,
+    kind,
+    ttlMs,
+    expiresAt: Date.now() + ttlMs,
+  })
   return {
     baseUrl: `${gateway.origin}/profile/${encodeURIComponent(providerId)}/${kind}/v1`,
     token,
     providerId,
   }
+}
+
+export function revokeProviderGatewayToken(token: string): boolean {
+  return serverState?.tokens.delete(token) ?? false
 }
 
 export async function runProviderProfileDiagnostics(
@@ -1550,7 +1578,11 @@ export async function runProviderProfileDiagnostics(
           ),
     )
 
-    if (profile.targetRuntimes.some((target) => target === "claude" || target === "codex")) {
+    if (
+      profile.targetRuntimes.some(
+        (target) => target === "claude" || target === "codex" || target === "kun",
+      )
+    ) {
       const gateway = await ensureProviderGateway()
       checks.push(
         providerDiagnosticCheck(
@@ -1564,7 +1596,7 @@ export async function runProviderProfileDiagnostics(
         providerDiagnosticCheck(
           "gateway",
           "skipped",
-          "Gateway check skipped because no Claude or Codex runtime target is selected.",
+          "Gateway check skipped because no Claude, Codex, or Kun runtime target is selected.",
         ),
       )
     }

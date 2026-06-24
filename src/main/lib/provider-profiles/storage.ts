@@ -61,6 +61,7 @@ export const providerProfileCapabilitiesSchema = z.object({
   claude: z.boolean().optional(),
   codex: z.boolean().optional(),
   helpers: z.boolean().optional(),
+  kun: z.boolean().optional(),
   local: z.boolean().optional(),
   streaming: z.boolean().optional(),
   tools: z.boolean().optional(),

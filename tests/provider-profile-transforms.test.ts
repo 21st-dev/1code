@@ -38,8 +38,19 @@ describe("provider profile presets", () => {
       baseUrl: "https://api.deepseek.com",
       defaultModel: "deepseek-v4-flash",
       authMode: "bearer",
-      targetRuntimes: ["claude", "codex", "helpers"],
+      targetRuntimes: ["claude", "codex", "helpers", "kun"],
     })
+  })
+
+  test("keeps Anthropic-only presets out of Kun profile targets", () => {
+    const preset = PROVIDER_PROFILE_PRESETS.find(
+      (item) => item.id === "generic-anthropic",
+    )
+
+    expect(preset).toBeDefined()
+    if (!preset) throw new Error("generic-anthropic preset is missing")
+    expect(preset.targetRuntimes).toEqual(["claude", "helpers"])
+    expect(preset.targetRuntimes).not.toContain("kun")
   })
 })
 

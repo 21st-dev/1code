@@ -5,8 +5,8 @@ import { ChevronDown, RefreshCw } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
-import type { AgentScopeContract } from "../../../../shared/agent-scope-contracts"
 import type { AgentChatProvider } from "../../../../shared/agent-chat-provider"
+import type { AgentScopeContract } from "../../../../shared/agent-scope-contracts"
 import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
 import type { ChatImageAttachmentSource } from "../../../../shared/chat-attachments"
 import {
@@ -70,10 +70,12 @@ import {
   approvedGuardedRunContractsAtom,
   type ClaudeModelSource,
   getNextMode,
+  type KunModelSource,
   lastSelectedClaudeModelSourceAtom,
   lastSelectedCodexModelIdAtom,
   lastSelectedCodexModelSourceAtom,
   lastSelectedCodexThinkingAtom,
+  lastSelectedKunModelSourceAtom,
   lastSelectedModelIdAtom,
   pendingScopeExpansionRequestsAtom,
   type SubChatFileChange,
@@ -81,6 +83,7 @@ import {
   subChatCodexModelIdAtomFamily,
   subChatCodexModelSourceAtomFamily,
   subChatCodexThinkingAtomFamily,
+  subChatKunModelSourceAtomFamily,
   subChatModeAtomFamily,
   subChatModelIdAtomFamily,
 } from "../atoms"
@@ -91,6 +94,7 @@ import {
   type ContinueWithProviderSelection,
 } from "../components/agent-model-selector"
 import { AgentSendButton } from "../components/agent-send-button"
+import { KunProviderProfileSelector } from "../components/kun-provider-profile-selector"
 import type {
   UploadedFile,
   UploadedImage,
@@ -539,6 +543,12 @@ export const ChatInputArea = memo(function ChatInputArea({
   )
   const [selectedSubChatCodexModelSource, setSelectedSubChatCodexModelSource] =
     useAtom(subChatCodexModelSourceAtom)
+  const subChatKunModelSourceAtom = useMemo(
+    () => subChatKunModelSourceAtomFamily(subChatId),
+    [subChatId],
+  )
+  const [selectedSubChatKunModelSource, setSelectedSubChatKunModelSource] =
+    useAtom(subChatKunModelSourceAtom)
   const subChatCodexThinkingAtom = useMemo(
     () => subChatCodexThinkingAtomFamily(subChatId),
     [subChatId],
@@ -559,6 +569,9 @@ export const ChatInputArea = memo(function ChatInputArea({
   const setLastSelectedCodexModelId = useSetAtom(lastSelectedCodexModelIdAtom)
   const setLastSelectedCodexModelSource = useSetAtom(
     lastSelectedCodexModelSourceAtom,
+  )
+  const setLastSelectedKunModelSource = useSetAtom(
+    lastSelectedKunModelSourceAtom,
   )
   const setLastSelectedCodexThinking = useSetAtom(lastSelectedCodexThinkingAtom)
   const [selectedOllamaModel, setSelectedOllamaModel] = useAtom(
@@ -712,6 +725,36 @@ export const ChatInputArea = memo(function ChatInputArea({
     setSelectedSubChatCodexModelSource,
   ])
 
+  const selectedKunProfileId = parseProviderProfileSource(
+    selectedSubChatKunModelSource,
+  )
+  const selectedKunProviderProfile = selectedKunProfileId
+    ? providerProfiles.find(
+        (profile) =>
+          profile.id === selectedKunProfileId &&
+          profile.targetRuntimes.includes("kun"),
+      )
+    : undefined
+  const selectedKunProfileIsPending =
+    Boolean(selectedKunProfileId) && !providerProfilesData
+
+  useEffect(() => {
+    if (
+      selectedKunProfileId &&
+      !selectedKunProviderProfile &&
+      !selectedKunProfileIsPending
+    ) {
+      setSelectedSubChatKunModelSource("runtime-managed")
+      setLastSelectedKunModelSource("runtime-managed")
+    }
+  }, [
+    selectedKunProfileId,
+    selectedKunProviderProfile,
+    selectedKunProfileIsPending,
+    setLastSelectedKunModelSource,
+    setSelectedSubChatKunModelSource,
+  ])
+
   // OAuth is only usable when a non-expired OAuth credential and the runtime are
   // both ready — a saved Provider Profile is a separate selectable source.
   const canUseClaudeOAuth =
@@ -811,6 +854,11 @@ export const ChatInputArea = memo(function ChatInputArea({
   )
 
   const selectedModelLabel = useMemo(() => {
+    if (provider === "kun") {
+      return selectedKunProviderProfile
+        ? `${selectedKunProviderProfile.name} · ${selectedKunProviderProfile.defaultModel}`
+        : "Kun"
+    }
     if (provider === "codex") {
       const selectedProfileId = parseProviderProfileSource(
         selectedSubChatCodexModelSource,
@@ -845,6 +893,7 @@ export const ChatInputArea = memo(function ChatInputArea({
     availableModels.hasOllama,
     currentOllamaModel,
     selectedClaudeProviderProfile,
+    selectedKunProviderProfile,
     selectedModel,
   ])
   const readyImageCount = images.filter(
@@ -2150,15 +2199,29 @@ export const ChatInputArea = memo(function ChatInputArea({
                   </DropdownMenu>
 
                   <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
-                    {provider === "qwen-code" || provider === "kun" ? (
+                    {provider === "qwen-code" ? (
                       <div
                         className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm text-muted-foreground"
-                        title={provider === "kun" ? "Kun" : "Qwen Code"}
+                        title="Qwen Code"
                       >
-                        <span className="truncate">
-                          {provider === "kun" ? "Kun" : "Qwen Code"}
-                        </span>
+                        <span className="truncate">Qwen Code</span>
                       </div>
+                    ) : provider === "kun" ? (
+                      <KunProviderProfileSelector
+                        providerProfiles={providerProfiles}
+                        selectedModelSource={
+                          selectedSubChatKunModelSource as KunModelSource
+                        }
+                        onSelectModelSource={(source) => {
+                          setSelectedSubChatKunModelSource(source)
+                          setLastSelectedKunModelSource(source)
+                        }}
+                        onOpenModelsSettings={() => {
+                          setSettingsTab("models")
+                          setSettingsOpen(true)
+                        }}
+                        className="max-w-full"
+                      />
                     ) : (
                       <AgentModelSelector
                         open={isModelDropdownOpen}
@@ -2171,7 +2234,9 @@ export const ChatInputArea = memo(function ChatInputArea({
                         }}
                         allowProviderSwitch={canSwitchProvider}
                         onContinueWithProvider={
-                          !canSwitchProvider ? onContinueWithProvider : undefined
+                          !canSwitchProvider
+                            ? onContinueWithProvider
+                            : undefined
                         }
                         selectedModelLabel={selectedModelLabel}
                         triggerClassName="min-w-0 max-w-full"

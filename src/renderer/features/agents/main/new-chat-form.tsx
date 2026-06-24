@@ -37,6 +37,7 @@ import {
   lastSelectedCodexModelSourceAtom,
   lastSelectedCodexThinkingAtom,
   lastSelectedClaudeModelSourceAtom,
+  lastSelectedKunModelSourceAtom,
   lastSelectedBranchesAtom,
   lastSelectedModelIdAtom,
   lastSelectedWorkModeAtom,
@@ -46,9 +47,11 @@ import {
   getNextMode,
   type AgentMode,
   type ClaudeModelSource,
+  type KunModelSource,
   type SelectedProject,
   subChatClaudeModelSourceAtomFamily,
   subChatCodexModelSourceAtomFamily,
+  subChatKunModelSourceAtomFamily,
 } from "../atoms"
 import { defaultAgentModeAtom } from "../../../lib/atoms"
 import { appStore } from "../../../lib/jotai-store"
@@ -107,6 +110,7 @@ import {
   AgentModelSelector,
   type AgentProviderId,
 } from "../components/agent-model-selector"
+import { KunProviderProfileSelector } from "../components/kun-provider-profile-selector"
 import {
   isProviderProfileSource,
   parseProviderProfileSource,
@@ -203,10 +207,7 @@ function isAgentProviderId(id: string): id is AgentProviderId {
 
 function isAgentChatProvider(id: string): id is AgentChatProvider {
   return (
-    id === "claude-code" ||
-    id === "codex" ||
-    id === "qwen-code" ||
-    id === "kun"
+    id === "claude-code" || id === "codex" || id === "qwen-code" || id === "kun"
   )
 }
 
@@ -301,16 +302,20 @@ export function NewChatForm({
       ) ?? false,
     [runtimeCapabilityManifests],
   )
-  const { data: qwenCliStatus } =
-    trpc.agentRuntime.getQwenCliStatus.useQuery(undefined, {
+  const { data: qwenCliStatus } = trpc.agentRuntime.getQwenCliStatus.useQuery(
+    undefined,
+    {
       enabled: qwenRuntimeVisible,
       staleTime: 15_000,
-    })
-  const { data: kunCliStatus } =
-    trpc.agentRuntime.getKunCliStatus.useQuery(undefined, {
+    },
+  )
+  const { data: kunCliStatus } = trpc.agentRuntime.getKunCliStatus.useQuery(
+    undefined,
+    {
       enabled: kunRuntimeVisible,
       staleTime: 15_000,
-    })
+    },
+  )
   const qwenCliReady = qwenCliStatus?.ok === true
   const kunCliReady = kunCliStatus?.ok === true
   const qwenSetupRequired =
@@ -538,6 +543,9 @@ export function NewChatForm({
   )
   const [lastSelectedCodexModelSource, setLastSelectedCodexModelSource] =
     useAtom(lastSelectedCodexModelSourceAtom)
+  const [lastSelectedKunModelSource, setLastSelectedKunModelSource] = useAtom(
+    lastSelectedKunModelSourceAtom,
+  )
   const [lastSelectedCodexThinking, setLastSelectedCodexThinking] = useAtom(
     lastSelectedCodexThinkingAtom,
   )
@@ -655,12 +663,40 @@ export function NewChatForm({
     setLastSelectedCodexModelSource,
   ])
 
+  const selectedKunProfileId = parseProviderProfileSource(
+    lastSelectedKunModelSource,
+  )
+  const selectedKunProviderProfile = selectedKunProfileId
+    ? providerProfiles.find(
+        (profile) =>
+          profile.id === selectedKunProfileId &&
+          profile.targetRuntimes.includes("kun"),
+      )
+    : undefined
+  const selectedKunProfileIsPending =
+    Boolean(selectedKunProfileId) && !providerProfilesData
+
+  useEffect(() => {
+    if (
+      selectedKunProfileId &&
+      !selectedKunProviderProfile &&
+      !selectedKunProfileIsPending
+    ) {
+      setLastSelectedKunModelSource("runtime-managed")
+    }
+  }, [
+    selectedKunProfileId,
+    selectedKunProviderProfile,
+    selectedKunProfileIsPending,
+    setLastSelectedKunModelSource,
+  ])
+
   const selectedChatModel = useMemo(() => {
     if (selectedAgent.id === "qwen-code") {
       return "qwen-code"
     }
     if (selectedAgent.id === "kun") {
-      return "kun"
+      return selectedKunProviderProfile?.defaultModel ?? "kun"
     }
     if (selectedAgent.id === "codex") {
       const selectedProfileId = parseProviderProfileSource(
@@ -685,6 +721,7 @@ export function NewChatForm({
     selectedClaudeProviderProfile,
     selectedCodexModel.id,
     selectedCodexThinking,
+    selectedKunProviderProfile,
     selectedModel?.id,
   ])
   const selectedRuntimeProvider: AgentChatProvider = isAgentChatProvider(
@@ -705,7 +742,9 @@ export function NewChatForm({
       return "Qwen Code"
     }
     if (selectedAgent.id === "kun") {
-      return "Kun"
+      return selectedKunProviderProfile
+        ? `${selectedKunProviderProfile.name} · ${selectedKunProviderProfile.defaultModel}`
+        : "Kun"
     }
     if (selectedAgent.id === "codex") {
       const selectedProfileId = parseProviderProfileSource(
@@ -737,6 +776,7 @@ export function NewChatForm({
     selectedAgent.id,
     providerProfiles,
     selectedCodexModel.name,
+    selectedKunProviderProfile,
     availableModels.isOffline,
     availableModels.hasOllama,
     currentOllamaModel,
@@ -1281,6 +1321,10 @@ export function NewChatForm({
           subChatCodexModelSourceAtomFamily(firstSubChatId),
           lastSelectedCodexModelSource,
         )
+        appStore.set(
+          subChatKunModelSourceAtomFamily(firstSubChatId),
+          lastSelectedKunModelSource,
+        )
       }
       setJustCreatedIds((prev) => new Set([...prev, ...ids]))
     },
@@ -1334,6 +1378,23 @@ export function NewChatForm({
       setSettingsDialogOpen(true)
       return
     }
+    if (
+      selectedAgent.id === "kun" &&
+      selectedKunProfileId &&
+      selectedKunProfileIsPending
+    ) {
+      toast.error("Provider Profiles are still loading.")
+      return
+    }
+    if (
+      selectedAgent.id === "kun" &&
+      selectedKunProfileId &&
+      !selectedKunProviderProfile
+    ) {
+      toast.error("Selected Kun provider profile is unavailable.")
+      setLastSelectedKunModelSource("runtime-managed")
+      return
+    }
     if (imageAttachmentBlocked) {
       toast.error(t("agent.attachments.imagesUnsupportedTitle"), {
         description: t("agent.attachments.imagesUnsupportedOffline"),
@@ -1378,19 +1439,21 @@ export function NewChatForm({
       model: selectedChatModel,
       provider: selectedRuntimeProvider,
       modelSource:
-        selectedRuntimeProvider === "qwen-code" ||
-        selectedRuntimeProvider === "kun"
+        selectedRuntimeProvider === "qwen-code"
           ? "runtime-managed"
-          : selectedRuntimeProvider === "codex"
-            ? lastSelectedCodexModelSource
-            : effectiveClaudeModelSource,
+          : selectedRuntimeProvider === "kun"
+            ? lastSelectedKunModelSource
+            : selectedRuntimeProvider === "codex"
+              ? lastSelectedCodexModelSource
+              : effectiveClaudeModelSource,
       providerProfileId:
-        selectedRuntimeProvider === "qwen-code" ||
-        selectedRuntimeProvider === "kun"
+        selectedRuntimeProvider === "qwen-code"
           ? null
-          : selectedRuntimeProvider === "codex"
-            ? selectedCodexProfileId
-            : selectedClaudeProfileId,
+          : selectedRuntimeProvider === "kun"
+            ? selectedKunProfileId
+            : selectedRuntimeProvider === "codex"
+              ? selectedCodexProfileId
+              : selectedClaudeProfileId,
       initialMessageParts: parts.length > 0 ? parts : undefined,
       baseBranch:
         projectForChat && workMode === "worktree"
@@ -1428,10 +1491,15 @@ export function NewChatForm({
     selectedAgent.id,
     selectedRuntimeProvider,
     lastSelectedCodexModelSource,
+    lastSelectedKunModelSource,
     effectiveClaudeModelSource,
     claudeSourceNormalization,
     selectedClaudeModelSource,
     selectedCodexProfileId,
+    selectedKunProfileId,
+    selectedKunProfileIsPending,
+    selectedKunProviderProfile,
+    setLastSelectedKunModelSource,
     selectedClaudeProfileId,
     effectiveMode,
     imageAttachmentBlocked,
@@ -2251,19 +2319,27 @@ export function NewChatForm({
                     )}
 
                     <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
-                      {selectedAgent.id === "qwen-code" ||
-                      selectedAgent.id === "kun" ? (
+                      {selectedAgent.id === "qwen-code" ? (
                         <div
                           className="flex h-8 min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground"
-                          title={
-                            selectedAgent.id === "kun" ? "Kun" : "Qwen Code"
-                          }
+                          title="Qwen Code"
                         >
                           <AgentIcon className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">
-                            {selectedAgent.id === "kun" ? "Kun" : "Qwen Code"}
-                          </span>
+                          <span className="truncate">Qwen Code</span>
                         </div>
+                      ) : selectedAgent.id === "kun" ? (
+                        <KunProviderProfileSelector
+                          providerProfiles={providerProfiles}
+                          selectedModelSource={
+                            lastSelectedKunModelSource as KunModelSource
+                          }
+                          onSelectModelSource={setLastSelectedKunModelSource}
+                          onOpenModelsSettings={() => {
+                            setSettingsActiveTab("models")
+                            setSettingsDialogOpen(true)
+                          }}
+                          className="max-w-full"
+                        />
                       ) : (
                         <AgentModelSelector
                           open={isModelDropdownOpen}

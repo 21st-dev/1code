@@ -1,5 +1,6 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
+import { trpcClient } from "../../../lib/trpc"
 import {
   type AiSdkTransportChunk,
   getCanonicalMessageParts,
@@ -7,7 +8,6 @@ import {
   isTextMessagePart,
   toAiSdkTransportChunk,
 } from "./chat-message-ui-adapter"
-import { trpcClient } from "../../../lib/trpc"
 import { applyRuntimeEventStateChunk } from "./runtime-event-state"
 
 type ExperimentalRuntimeTransportId = "qwen-code" | "kun"
@@ -18,6 +18,8 @@ type QwenChatTransportConfig = {
   subChatId: string
   cwd: string
   mode: "plan" | "agent"
+  modelSource?: string | null
+  providerProfileId?: string | null
 }
 
 type QwenTransportChunk = Record<string, any>
@@ -69,6 +71,12 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
             prompt,
             cwd: this.config.cwd,
             mode: this.config.mode,
+            ...(this.config.modelSource
+              ? { modelSource: this.config.modelSource }
+              : {}),
+            ...(this.config.providerProfileId
+              ? { providerProfileId: this.config.providerProfileId }
+              : {}),
             ...(metadata?.sessionId ? { sessionId: metadata.sessionId } : {}),
           },
           {

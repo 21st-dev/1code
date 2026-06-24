@@ -169,6 +169,7 @@ export type CodexModelSource =
   | "chatgpt"
   | "openai-api-key"
   | ProviderProfileSource
+export type KunModelSource = "runtime-managed" | ProviderProfileSource
 
 export const lastSelectedClaudeModelSourceAtom =
   atomWithStorage<ClaudeModelSource>(
@@ -182,6 +183,14 @@ export const lastSelectedCodexModelSourceAtom =
   atomWithStorage<CodexModelSource>(
     "agents:lastSelectedCodexModelSource",
     "chatgpt",
+    undefined,
+    { getOnInit: true },
+  )
+
+export const lastSelectedKunModelSourceAtom =
+  atomWithStorage<KunModelSource>(
+    "agents:lastSelectedKunModelSource",
+    "runtime-managed",
     undefined,
     { getOnInit: true },
   )
@@ -288,6 +297,39 @@ export const subChatCodexModelSourceAtomFamily = atomFamily((subChatId: string) 
       const current = get(subChatCodexModelSourcesStorageAtom)
       if (current[subChatId] === newModelSource) return
       set(subChatCodexModelSourcesStorageAtom, {
+        ...current,
+        [subChatId]: newModelSource,
+      })
+    },
+  ),
+)
+
+const subChatKunModelSourcesStorageAtom = atomWithStorage<
+  Record<string, KunModelSource>
+>(
+  "agents:subChatKunModelSources",
+  {},
+  undefined,
+  { getOnInit: true },
+)
+
+export const subChatKunModelSourceAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      if (!subChatId) return get(lastSelectedKunModelSourceAtom)
+      return (
+        get(subChatKunModelSourcesStorageAtom)[subChatId] ??
+        get(lastSelectedKunModelSourceAtom)
+      )
+    },
+    (get, set, newModelSource: KunModelSource) => {
+      if (!subChatId) {
+        set(lastSelectedKunModelSourceAtom, newModelSource)
+        return
+      }
+      const current = get(subChatKunModelSourcesStorageAtom)
+      if (current[subChatId] === newModelSource) return
+      set(subChatKunModelSourcesStorageAtom, {
         ...current,
         [subChatId]: newModelSource,
       })

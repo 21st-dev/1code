@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test"
-import { createServer, type IncomingMessage } from "node:http"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { createServer, type IncomingMessage } from "node:http"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -151,6 +151,50 @@ mock.module("../src/main/lib/provider-profiles/storage", () => ({
 const gatewayModule = await import("../src/main/lib/provider-profiles/gateway")
 
 describe("provider profile gateway token scope", () => {
+  test("revokes scoped gateway tokens explicitly", async () => {
+    const endpoint = await gatewayModule.getProviderGatewayEndpoint(
+      "profile_gateway_b",
+      "responses",
+    )
+
+    const authorizedResponse = await fetch(`${endpoint.baseUrl}/models`, {
+      headers: { authorization: `Bearer ${endpoint.token}` },
+    })
+    const revoked = gatewayModule.revokeProviderGatewayToken(endpoint.token)
+    const revokedResponse = await fetch(`${endpoint.baseUrl}/models`, {
+      headers: { authorization: `Bearer ${endpoint.token}` },
+    })
+
+    expect(authorizedResponse.status).toBe(200)
+    expect(revoked).toBe(true)
+    expect(revokedResponse.status).toBe(401)
+  })
+
+  test("expires gateway tokens by TTL while refreshing active tokens", async () => {
+    const endpoint = await gatewayModule.getProviderGatewayEndpoint(
+      "profile_gateway_b",
+      "responses",
+      { ttlMs: 100 },
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    const refreshedResponse = await fetch(`${endpoint.baseUrl}/models`, {
+      headers: { authorization: `Bearer ${endpoint.token}` },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    const stillActiveResponse = await fetch(`${endpoint.baseUrl}/models`, {
+      headers: { authorization: `Bearer ${endpoint.token}` },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 130))
+    const expiredResponse = await fetch(`${endpoint.baseUrl}/models`, {
+      headers: { authorization: `Bearer ${endpoint.token}` },
+    })
+
+    expect(refreshedResponse.status).toBe(200)
+    expect(stillActiveResponse.status).toBe(200)
+    expect(expiredResponse.status).toBe(401)
+  })
+
   test("scopes gateway tokens to one profile and endpoint kind", async () => {
     const endpointA = await gatewayModule.getProviderGatewayEndpoint(
       "profile_gateway_a",
@@ -222,16 +266,22 @@ describe("provider profile gateway token scope", () => {
         "responses",
       )
 
-      const anthropicResponse = await fetch(`${anthropicEndpoint.baseUrl}/messages`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${anthropicEndpoint.token}` },
-        body: JSON.stringify({ model: "model-secret", messages: [] }),
-      })
-      const responsesResponse = await fetch(`${responsesEndpoint.baseUrl}/responses`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${responsesEndpoint.token}` },
-        body: JSON.stringify({ model: "model-secret", input: "hello" }),
-      })
+      const anthropicResponse = await fetch(
+        `${anthropicEndpoint.baseUrl}/messages`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${anthropicEndpoint.token}` },
+          body: JSON.stringify({ model: "model-secret", messages: [] }),
+        },
+      )
+      const responsesResponse = await fetch(
+        `${responsesEndpoint.baseUrl}/responses`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${responsesEndpoint.token}` },
+          body: JSON.stringify({ model: "model-secret", input: "hello" }),
+        },
+      )
 
       const anthropicBody = await anthropicResponse.text()
       const responsesBody = await responsesResponse.text()
@@ -344,7 +394,9 @@ describe("provider profile gateway token scope", () => {
 
   test("traces incoming and forwarded tool payload summaries without prompt or secrets", async () => {
     const upstream = await createUpstreamCaptureServer()
-    const traceDir = mkdtempSync(join(tmpdir(), "locus-provider-gateway-trace-"))
+    const traceDir = mkdtempSync(
+      join(tmpdir(), "locus-provider-gateway-trace-"),
+    )
     const tracePath = join(traceDir, "trace.jsonl")
     const profileId = "profile_gateway_tool_trace"
     try {

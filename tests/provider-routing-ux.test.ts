@@ -37,6 +37,29 @@ describe("provider routing UX source guards", () => {
     join(process.cwd(), "src/renderer/features/agents/main/new-chat-form.tsx"),
     "utf8",
   )
+  const chatInputAreaSource = readFileSync(
+    join(process.cwd(), "src/renderer/features/agents/main/chat-input-area.tsx"),
+    "utf8",
+  )
+  const activeChatSource = readFileSync(
+    join(process.cwd(), "src/renderer/features/agents/main/active-chat.tsx"),
+    "utf8",
+  )
+  const kunProviderSelectorSource = readFileSync(
+    join(
+      process.cwd(),
+      "src/renderer/features/agents/components/kun-provider-profile-selector.tsx",
+    ),
+    "utf8",
+  )
+  const providerGatewaySource = readFileSync(
+    join(process.cwd(), "src/main/lib/provider-profiles/gateway.ts"),
+    "utf8",
+  )
+  const agentRuntimeRouterSource = readFileSync(
+    join(process.cwd(), "src/main/lib/trpc/routers/agent-runtime.ts"),
+    "utf8",
+  )
   const chatsRouterSource = readChatsRouterSource()
   const acpChatTransportSource = readFileSync(
     join(
@@ -159,5 +182,27 @@ describe("provider routing UX source guards", () => {
     expect(codexAppServerAdapterSource).toContain("providerBinding.model")
     expect(newChatFormSource).toContain("normalizeClaudeModelSourceForRun")
     expect(ipcChatTransportSource).toContain("normalizeClaudeModelSourceForRun")
+  })
+
+  test("Kun provider profiles use a dedicated target through UI and runtime routing", () => {
+    expect(providerEditorSource).toContain(
+      'kun: "settings.models.providerProfiles.targetKun"',
+    )
+    expect(kunProviderSelectorSource).toContain(
+      'profile.targetRuntimes.includes("kun")',
+    )
+    expect(newChatFormSource).toContain("lastSelectedKunModelSourceAtom")
+    expect(newChatFormSource).toContain(
+      'selectedRuntimeProvider === "kun"',
+    )
+    expect(chatInputAreaSource).toContain("subChatKunModelSourceAtomFamily")
+    expect(activeChatSource).toContain("subChatKunModelSourceAtomFamily")
+    expect(activeChatSource).toContain("parseProviderProfileSource(kunModelSource)")
+    expect(providerGatewaySource).toContain('target === "kun"')
+    expect(agentRuntimeRouterSource).toContain("synthesizeKunProviderConfig")
+    expect(agentRuntimeRouterSource).toContain("kunProviderConfig?.cleanup()")
+    expect(kunProviderSelectorSource).not.toContain(
+      'targetRuntimes.includes("local")',
+    )
   })
 })

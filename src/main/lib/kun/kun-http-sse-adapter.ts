@@ -19,9 +19,9 @@ import {
   type KunRuntimeEvent,
 } from "./kun-http-sse-transport"
 import {
-  launchKunServe,
   type KunServeHandle,
   type KunServeLaunchInput,
+  launchKunServe,
 } from "./kun-serve-launcher"
 
 const DEFAULT_KUN_APPROVAL_TIMEOUT_MS = 120_000
@@ -93,6 +93,7 @@ export type KunHttpSseTransportLike = {
 export type CreateKunHttpSseAdapterInput = {
   executable?: string
   configPath?: string | null
+  configSecretHints?: readonly string[]
   emit?: (chunk: Record<string, unknown>) => void
   registerPendingApproval?: (
     toolUseId: string,
@@ -145,8 +146,7 @@ function emitQuestion(input: {
         header: "Kun",
         id: "approval",
         question:
-          input.summary ||
-          `Kun requests approval to run ${input.toolLabel}.`,
+          input.summary || `Kun requests approval to run ${input.toolLabel}.`,
         options: [
           {
             label: "Approve",
@@ -214,7 +214,9 @@ async function waitForKunApproval(input: {
 }
 
 function deriveCallIdFromApprovalId(approvalId: string): string | null {
-  return approvalId.startsWith("appr_") ? approvalId.slice("appr_".length) : null
+  return approvalId.startsWith("appr_")
+    ? approvalId.slice("appr_".length)
+    : null
 }
 
 function kunTerminalFromEvent(event: KunRuntimeEvent): KunRunTerminal | null {
@@ -222,7 +224,10 @@ function kunTerminalFromEvent(event: KunRuntimeEvent): KunRunTerminal | null {
     case "turn_completed":
       return { status: "succeeded" }
     case "turn_aborted":
-      return { status: "canceled", message: stringValue(event.message) ?? undefined }
+      return {
+        status: "canceled",
+        message: stringValue(event.message) ?? undefined,
+      }
     case "turn_failed":
       return {
         status: "failed",
@@ -269,7 +274,9 @@ function toolCallRecordFromEvent(
   }
 }
 
-function textDeltaFromEvent(event: KunRuntimeEvent): Record<string, unknown> | null {
+function textDeltaFromEvent(
+  event: KunRuntimeEvent,
+): Record<string, unknown> | null {
   if (event.kind !== "assistant_text_delta") return null
   const item = isRecord(event.item) ? event.item : null
   const delta = item ? stringValue(item.text) : stringValue(event.text)
@@ -298,6 +305,7 @@ function reasoningDeltaFromEvent(
 export function createKunHttpSseAdapter({
   executable,
   configPath,
+  configSecretHints = [],
   emit,
   registerPendingApproval,
   unregisterPendingApproval,
@@ -446,7 +454,9 @@ export function createKunHttpSseAdapter({
         emitChunk({
           type: "ask-user-question-result",
           toolUseId,
-          result: approval.approved ? "approved" : (approval.message ?? "denied"),
+          result: approval.approved
+            ? "approved"
+            : (approval.message ?? "denied"),
         })
         emitChunk({
           type: "observed-tool-decision",
@@ -535,6 +545,7 @@ export function createKunHttpSseAdapter({
           serveHandle = await launchServeOverride({
             executable,
             configPath,
+            secretHints: configSecretHints,
             runId: request.identity.runId,
             cwd: request.context.cwd,
           })
@@ -550,7 +561,7 @@ export function createKunHttpSseAdapter({
             runtimeToken: serveHandle.runtimeToken,
           })
           closeTransport = serveHandle.close
-          secretHints = [serveHandle.runtimeToken]
+          secretHints = [serveHandle.runtimeToken, ...configSecretHints]
         }
 
         const thread = await transport.createThread({
