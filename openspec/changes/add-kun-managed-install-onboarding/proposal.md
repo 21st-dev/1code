@@ -18,6 +18,9 @@ shell changes. This change is independent from flipping shell/hardToolGuard to
   allowlist/manifest with version, platform, asset URL, SHA-256, size, archive
   kind, and executable path. Renderer inputs can request install/update but cannot
   provide URLs, shell commands, checksums, or archive paths.
+- Keep the production allowlist empty for current upstream release archives:
+  the published `Kun-*.zip` assets are Electron GUI app bundles, while Locus
+  needs a verified headless HTTP/SSE runtime launch target.
 - Download assets into a temporary app-managed staging path, verify SHA-256 before
   extraction/installation, reject checksum mismatches fail-closed, reject archive
   path traversal, chmod the resolved executable `0755`, install under

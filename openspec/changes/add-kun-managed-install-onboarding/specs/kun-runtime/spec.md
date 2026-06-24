@@ -13,6 +13,11 @@ checksums, shell commands, archive entry paths, executable paths, destination
 paths, or package-manager commands for managed install/update. When no
 allowlisted build exists for the current platform and architecture, managed
 install SHALL be unavailable and the BYO setup path SHALL remain available.
+Allowlisted builds SHALL identify a verified headless Kun runtime launch target.
+Published GUI application archives SHALL NOT be allowlisted as direct runtime
+executables unless Locus also owns the embedded runtime launch descriptor and has
+live-smoke evidence that the installed asset emits the expected `KUN_READY`
+handshake.
 
 The installer SHALL download to an app-managed temporary directory, verify the
 downloaded bytes against the allowlisted SHA-256 before extraction or
@@ -28,6 +33,12 @@ shell profiles, or trust project/worktree files.
 - **THEN** the request does not accept a URL, checksum, command, archive path, or
   destination path
 - **AND** the main process selects the build only from its allowlist
+
+#### Scenario: GUI app release archive is not a direct runtime executable
+- **WHEN** the only known upstream release asset for the current platform is an
+  Electron GUI app archive without a verified embedded-runtime launch descriptor
+- **THEN** managed install remains unavailable
+- **AND** Settings keeps guided BYO setup instead of offering `Install Kun`
 
 #### Scenario: Checksum mismatch fails closed
 - **WHEN** a downloaded Kun asset does not match the allowlisted SHA-256
@@ -105,6 +116,9 @@ accepted only after a bounded `help` probe succeeds. When either Kun executable
 or config file is unavailable, the system SHALL block the run and surface setup
 guidance. If no allowlisted managed build exists for the current platform, Locus
 SHALL provide guided BYO setup instead of claiming secure managed install.
+Current upstream GUI release archives SHALL count as no allowlisted managed build
+until their embedded HTTP/SSE runtime entry can be launched by Locus and verified
+with a real `KUN_READY` smoke.
 
 #### Scenario: Missing Kun blocks with guidance
 - **WHEN** no managed or BYO Kun executable resolves

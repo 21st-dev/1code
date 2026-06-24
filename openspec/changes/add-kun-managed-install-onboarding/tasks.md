@@ -9,6 +9,8 @@
       commits are merged.
 - [x] 0.2 Confirm install source policy: managed install uses a main-process
       allowlist with pinned SHA-256; unsupported platforms remain guided BYO.
+- [x] 0.3 Confirm current upstream `Kun-*.zip` assets are GUI app bundles and
+      are not safe direct `kun serve` executables for Locus managed install.
 
 ## 1. OpenSpec
 - [x] 1.1 Add `add-kun-managed-install-onboarding` proposal, design, tasks, and
@@ -31,6 +33,8 @@
 - [x] 2.6 Do not write a new shell-approved hash during managed install/update;
       preserve any previous approved hash only so a changed executable hash
       disables shell as a mismatch until explicit re-approval.
+- [x] 2.7 Keep the production managed-install allowlist empty until Locus owns a
+      verified headless Kun runtime asset or embedded-runtime launch descriptor.
 
 ## 3. Runtime status and routes
 - [x] 3.1 Extend Kun setup status with renderer-safe managed-install state:
@@ -62,6 +66,8 @@
       mismatch and keeps shell disabled until re-approval.
 - [x] 5.6 Settings/source guards prove installed/configured/shell states remain
       separate.
+- [x] 5.7 Default production managed install fails closed so current GUI app
+      release archives are not offered as runnable Kun runtime installs.
 
 ## 6. Validate
 - [x] 6.1 Targeted tests for managed install and Kun setup UI/status.

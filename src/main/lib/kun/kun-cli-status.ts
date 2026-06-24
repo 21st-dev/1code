@@ -15,6 +15,7 @@ import {
 } from "./kun-cli-settings"
 import {
   isKunManagedExecutablePath,
+  type KunManagedInstallBuild,
   type KunManagedInstallStatus,
   resolveKunManagedInstallStatus,
 } from "./kun-managed-install"
@@ -117,6 +118,9 @@ type KunCliStatusOptions = KunCliSettingsOptions & {
   configPathOverride?: string | null
   ignoreSavedOverride?: boolean
   enabled?: boolean
+  platform?: NodeJS.Platform
+  arch?: NodeJS.Architecture
+  builds?: readonly KunManagedInstallBuild[]
   probeVersion?: (filePath: string) => Promise<KunCliVersionStatus>
 }
 

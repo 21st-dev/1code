@@ -25,8 +25,9 @@ import {
 } from "./kun-cli-settings"
 
 const KUN_MANAGED_INSTALL_HINT =
-  "Install Kun through Locus when a pinned build is available, or use guided BYO setup."
-const KUN_MANAGED_INSTALL_VERSION = "0.2.16"
+  "Use guided BYO setup until Locus has a pinned Kun runtime asset with a verified headless launch model."
+const KUN_MANAGED_INSTALL_UNAVAILABLE_REASON =
+  "No production Kun managed build is enabled. Current upstream release assets are Electron GUI archives; Locus must not install them as direct `kun serve` executables until the embedded runtime launch model is implemented and smoke-tested."
 const ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50
 const ZIP_CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50
 const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50
@@ -86,34 +87,7 @@ export type KunManagedInstallResult = {
 }
 
 export const DEFAULT_KUN_MANAGED_INSTALL_BUILDS: readonly KunManagedInstallBuild[] =
-  [
-    {
-      version: KUN_MANAGED_INSTALL_VERSION,
-      platform: "darwin",
-      arch: "arm64",
-      assetUrl:
-        "https://github.com/KunAgent/Kun/releases/download/v0.2.16/Kun-0.2.16-mac-arm64.zip",
-      assetName: "Kun-0.2.16-mac-arm64.zip",
-      sha256:
-        "ffcdc9fe346722ec2e0243e0ae5957aa64c0e1942b635af5cd57b65289704d3b",
-      sizeBytes: 213_938_855,
-      archiveKind: "zip",
-      executableRelativePath: "Kun.app/Contents/MacOS/Kun",
-    },
-    {
-      version: KUN_MANAGED_INSTALL_VERSION,
-      platform: "darwin",
-      arch: "x64",
-      assetUrl:
-        "https://github.com/KunAgent/Kun/releases/download/v0.2.16/Kun-0.2.16-mac-x64.zip",
-      assetName: "Kun-0.2.16-mac-x64.zip",
-      sha256:
-        "734c4a6ce43c41c0403cc4a44404c2e095580eafe11e64f5ee361c139476ed7c",
-      sizeBytes: 220_778_712,
-      archiveKind: "zip",
-      executableRelativePath: "Kun.app/Contents/MacOS/Kun",
-    },
-  ]
+  []
 
 function sanitizeInstallError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
@@ -236,7 +210,9 @@ export function resolveKunManagedInstallStatus(
   const build = selectKunManagedInstallBuild(options)
   if (!build) {
     return managedInstallUnavailable(
-      `No allowlisted Kun managed build for ${options.platform ?? process.platform}/${options.arch ?? process.arch}.`,
+      options.builds
+        ? `No allowlisted Kun managed build for ${options.platform ?? process.platform}/${options.arch ?? process.arch}.`
+        : KUN_MANAGED_INSTALL_UNAVAILABLE_REASON,
     )
   }
 

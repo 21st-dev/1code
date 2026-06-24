@@ -21,13 +21,15 @@ import {
   resolveKunCliSetupStatus,
 } from "../src/main/lib/kun/kun-cli-status"
 import {
+  DEFAULT_KUN_MANAGED_INSTALL_BUILDS,
   installKunManagedBuild,
   type KunManagedInstallBuild,
   resolveKunManagedInstallStatus,
+  selectKunManagedInstallBuild,
 } from "../src/main/lib/kun/kun-managed-install"
 
 const tempRoots: string[] = []
-const KUN_ENTRY = "Kun.app/Contents/MacOS/Kun"
+const KUN_ENTRY = "kun/dist/cli/serve-entry.js"
 
 function tempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "locus-kun-managed-"))
@@ -160,6 +162,28 @@ afterEach(() => {
 })
 
 describe("Kun managed install", () => {
+  test("fails closed by default until a production headless runtime asset is proven", () => {
+    expect(DEFAULT_KUN_MANAGED_INSTALL_BUILDS).toEqual([])
+    expect(
+      selectKunManagedInstallBuild({
+        platform: "darwin",
+        arch: "arm64",
+      }),
+    ).toBeNull()
+    expect(
+      resolveKunManagedInstallStatus({
+        userDataPath: tempRoot(),
+        platform: "darwin",
+        arch: "arm64",
+      }),
+    ).toMatchObject({
+      state: "unavailable",
+      available: false,
+      installed: false,
+      reason: expect.stringContaining("Electron GUI archives"),
+    })
+  })
+
   test("installs an allowlisted zip into the app-managed runtime directory", async () => {
     const userDataPath = tempRoot()
     const zip = createStoredZip([
@@ -330,6 +354,9 @@ describe("Kun managed install", () => {
 
     const resolved = await resolveKunCliSetupStatus({
       userDataPath,
+      platform: "darwin",
+      arch: "arm64",
+      builds: [secondBuild],
       probeVersion,
     })
     expect(resolved.status.source).toBe("managed")
