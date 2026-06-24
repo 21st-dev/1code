@@ -36,6 +36,6 @@ export const KUN_HTTP_SSE_DESKTOP_ADAPTER_METADATA = {
   label: "Kun HTTP/SSE adapter",
   temporaryFallback: false,
   fallbackReason: null,
-  defaultDisableCondition: "LOCUS_ENABLE_KUN_RUNTIME is not enabled",
+  defaultDisableCondition: "Kun runtime setting is disabled",
   removalCondition: null,
 } satisfies DesktopRuntimeAdapterMetadata

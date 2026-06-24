@@ -1,19 +1,6 @@
 import { eq } from "drizzle-orm"
 import { z } from "zod"
 import {
-  agentProviderDefaults,
-  agentProviderProfiles,
-  getDatabase,
-} from "../db"
-import { createId } from "../db/utils"
-import {
-  providerProfileAuthModes,
-  providerDiagnosticCategories,
-  providerDiagnosticCheckIds,
-  providerDiagnosticStatuses,
-  providerProfileDefaultPurposes,
-  providerProfileProtocols,
-  providerProfileTargets,
   type ProviderProfileAuthMode,
   type ProviderProfileCapabilities,
   type ProviderProfileDefaultPurpose,
@@ -21,18 +8,32 @@ import {
   type ProviderProfileProtocol,
   type ProviderProfileTarget,
   type ProviderProfileTestStatus,
+  providerDiagnosticCategories,
+  providerDiagnosticCheckIds,
+  providerDiagnosticStatuses,
+  providerProfileAuthModes,
+  providerProfileDefaultPurposes,
+  providerProfileProtocols,
+  providerProfileTargets,
 } from "../../../shared/provider-profile-types"
+import { getRuntimeFeatureSettingsSnapshot } from "../agent-runtime/runtime-feature-settings"
 import { getActiveClaudeProviderConfig } from "../claude/provider-config-store"
-import { getActiveLocalApiProviderConfig } from "../trpc/routers/local-api-provider-config"
+import {
+  agentProviderDefaults,
+  agentProviderProfiles,
+  getDatabase,
+} from "../db"
+import { createId } from "../db/utils"
 import {
   decryptProviderToken,
   encryptProviderToken,
   normalizeProviderBaseUrl,
   normalizeProviderToken,
 } from "../provider-token"
+import { getActiveLocalApiProviderConfig } from "../trpc/routers/local-api-provider-config"
 
 // Re-exported for existing consumers (e.g. provider-profiles/gateway.ts).
-export { normalizeProviderToken, normalizeProviderBaseUrl }
+export { normalizeProviderBaseUrl, normalizeProviderToken }
 
 const LEGACY_CLAUDE_PROFILE_ID = "legacy-claude-provider"
 const SAFE_METADATA_HEADER_NAMES = new Set([
@@ -99,6 +100,9 @@ export type ProviderProfileRuntimeConfig = {
   capabilities: ProviderProfileCapabilities
 }
 
+export type SaveProviderProfileOptions = {
+  kunRuntimeEnabled?: boolean
+}
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback
@@ -140,7 +144,9 @@ function sanitizeHeaders(
   return result
 }
 
-export function headersForRenderer(headers: Record<string, string>): Record<string, string> {
+export function headersForRenderer(
+  headers: Record<string, string>,
+): Record<string, string> {
   return Object.fromEntries(
     Object.keys(headers || {}).map((key) => [key, "<redacted>"]),
   )
@@ -151,14 +157,18 @@ export function providerHeadersJsonForSave(
   existingHeadersJson?: string | null,
 ): string {
   if (headers === undefined) {
-    return JSON.stringify(sanitizeHeaders(parseJson(existingHeadersJson, {}), {
-      strict: false,
-    }))
+    return JSON.stringify(
+      sanitizeHeaders(parseJson(existingHeadersJson, {}), {
+        strict: false,
+      }),
+    )
   }
   return JSON.stringify(sanitizeHeaders(headers, { strict: true }))
 }
 
-function parseTestStatus(value: string | null | undefined): ProviderProfileTestStatus | null {
+function parseTestStatus(
+  value: string | null | undefined,
+): ProviderProfileTestStatus | null {
   if (!value) return null
   const parsed = providerProfileTestStatusSchema.safeParse(
     parseJson(value, null),
@@ -179,8 +189,8 @@ function rowToMetadata(
     authMode: providerProfileAuthModeSchema.parse(row.authMode),
     hasToken: Boolean(row.encryptedToken),
     headers: headersForRenderer(parseJson(row.headersJson, {})),
-    targetRuntimes: parseJson(row.targetRuntimesJson, []).filter((target) =>
-      providerProfileTargetSchema.safeParse(target).success,
+    targetRuntimes: parseJson(row.targetRuntimesJson, []).filter(
+      (target) => providerProfileTargetSchema.safeParse(target).success,
     ),
     capabilities: providerProfileCapabilitiesSchema
       .catch({})
@@ -194,11 +204,7 @@ function rowToMetadata(
 export function listProviderProfiles(): ProviderProfileMetadata[] {
   ensureLegacyProviderProfilesMigrated()
   const db = getDatabase()
-  return db
-    .select()
-    .from(agentProviderProfiles)
-    .all()
-    .map(rowToMetadata)
+  return db.select().from(agentProviderProfiles).all().map(rowToMetadata)
 }
 
 export function getProviderProfileMetadata(
@@ -228,7 +234,9 @@ export function getProviderProfileRuntimeConfig(
 
   const authMode = providerProfileAuthModeSchema.parse(row.authMode)
   const encryptedToken = row.encryptedToken
-  const decryptedToken = encryptedToken ? decryptProviderToken(encryptedToken) : null
+  const decryptedToken = encryptedToken
+    ? decryptProviderToken(encryptedToken)
+    : null
   const token = decryptedToken ? normalizeProviderToken(decryptedToken) : null
   if (authMode !== "none" && !token) {
     throw new Error("Provider profile token is missing")
@@ -244,8 +252,8 @@ export function getProviderProfileRuntimeConfig(
     authMode,
     token,
     headers: parseJson(row.headersJson, {}),
-    targetRuntimes: parseJson(row.targetRuntimesJson, []).filter((target) =>
-      providerProfileTargetSchema.safeParse(target).success,
+    targetRuntimes: parseJson(row.targetRuntimesJson, []).filter(
+      (target) => providerProfileTargetSchema.safeParse(target).success,
     ),
     capabilities: providerProfileCapabilitiesSchema
       .catch({})
@@ -286,20 +294,70 @@ export function getProviderProfileTokenRequirement(input: {
   return "none"
 }
 
-export function saveProviderProfile(input: {
-  id?: string
-  name: string
-  presetId?: string | null
-  protocol: ProviderProfileProtocol
-  baseUrl: string
-  defaultModel: string
-  authMode: ProviderProfileAuthMode
-  token?: string
-  headers?: Record<string, string>
+function resolveKunRuntimeEnabledForSave(
+  options: SaveProviderProfileOptions,
+): boolean {
+  if (typeof options.kunRuntimeEnabled === "boolean") {
+    return options.kunRuntimeEnabled
+  }
+
+  try {
+    return getRuntimeFeatureSettingsSnapshot({
+      env: process.env,
+    }).resolved.kunRuntimeEnabled
+  } catch {
+    return true
+  }
+}
+
+export function normalizeProviderProfileTargetsForKunRuntimeGate(input: {
   targetRuntimes: ProviderProfileTarget[]
   capabilities?: ProviderProfileCapabilities
-  lastTestStatus?: ProviderProfileTestStatus | null
-}): ProviderProfileMetadata {
+  existingTargetRuntimes?: ProviderProfileTarget[]
+  kunRuntimeEnabled: boolean
+}): {
+  targetRuntimes: ProviderProfileTarget[]
+  capabilities?: ProviderProfileCapabilities
+} {
+  if (input.kunRuntimeEnabled) {
+    return {
+      targetRuntimes: input.targetRuntimes,
+      capabilities: input.capabilities,
+    }
+  }
+
+  const preserveExistingKun =
+    input.existingTargetRuntimes?.includes("kun") ?? false
+  const targetRuntimes: ProviderProfileTarget[] = input.targetRuntimes.filter(
+    (target) => target !== "kun",
+  )
+  if (preserveExistingKun) targetRuntimes.push("kun")
+  return {
+    targetRuntimes,
+    capabilities: {
+      ...(input.capabilities ?? {}),
+      kun: preserveExistingKun,
+    },
+  }
+}
+
+export function saveProviderProfile(
+  input: {
+    id?: string
+    name: string
+    presetId?: string | null
+    protocol: ProviderProfileProtocol
+    baseUrl: string
+    defaultModel: string
+    authMode: ProviderProfileAuthMode
+    token?: string
+    headers?: Record<string, string>
+    targetRuntimes: ProviderProfileTarget[]
+    capabilities?: ProviderProfileCapabilities
+    lastTestStatus?: ProviderProfileTestStatus | null
+  },
+  options: SaveProviderProfileOptions = {},
+): ProviderProfileMetadata {
   const db = getDatabase()
   const id = input.id?.trim() || createId()
   const existing = id
@@ -312,8 +370,9 @@ export function saveProviderProfile(input: {
   const authMode = providerProfileAuthModeSchema.parse(input.authMode)
   const protocol = providerProfileProtocolSchema.parse(input.protocol)
   const baseUrl = normalizeProviderBaseUrl(input.baseUrl)
-  const token =
-    input.token && input.token.trim() ? normalizeProviderToken(input.token) : undefined
+  const token = input.token?.trim()
+    ? normalizeProviderToken(input.token)
+    : undefined
   const tokenRequirement = getProviderProfileTokenRequirement({
     authMode,
     protocol,
@@ -338,6 +397,17 @@ export function saveProviderProfile(input: {
     : authMode === "none"
       ? null
       : existing?.encryptedToken
+  const normalizedTargets = normalizeProviderProfileTargetsForKunRuntimeGate({
+    targetRuntimes: input.targetRuntimes,
+    capabilities: input.capabilities,
+    existingTargetRuntimes: existing
+      ? rowToMetadata(existing).targetRuntimes
+      : undefined,
+    kunRuntimeEnabled: resolveKunRuntimeEnabledForSave(options),
+  })
+  if (normalizedTargets.targetRuntimes.length === 0) {
+    throw new Error("Kun runtime is disabled. Select another provider target.")
+  }
 
   const values = {
     id,
@@ -348,16 +418,19 @@ export function saveProviderProfile(input: {
     defaultModel: input.defaultModel.trim(),
     authMode,
     encryptedToken,
-    headersJson: providerHeadersJsonForSave(input.headers, existing?.headersJson),
+    headersJson: providerHeadersJsonForSave(
+      input.headers,
+      existing?.headersJson,
+    ),
     targetRuntimesJson: JSON.stringify(
-      input.targetRuntimes.filter((target) =>
-        providerProfileTargetSchema.safeParse(target).success,
+      normalizedTargets.targetRuntimes.filter(
+        (target) => providerProfileTargetSchema.safeParse(target).success,
       ),
     ),
-    capabilitiesJson: JSON.stringify(input.capabilities || {}),
+    capabilitiesJson: JSON.stringify(normalizedTargets.capabilities || {}),
     lastTestStatusJson:
       input.lastTestStatus === undefined
-        ? existing?.lastTestStatusJson ?? null
+        ? (existing?.lastTestStatusJson ?? null)
         : input.lastTestStatus
           ? JSON.stringify(input.lastTestStatus)
           : null,
@@ -371,9 +444,7 @@ export function saveProviderProfile(input: {
       .where(eq(agentProviderProfiles.id, id))
       .run()
   } else {
-    db.insert(agentProviderProfiles)
-      .values(values)
-      .run()
+    db.insert(agentProviderProfiles).values(values).run()
   }
 
   const saved = getProviderProfileMetadata(id)
@@ -391,9 +462,7 @@ export function deleteProviderProfile(id: string): void {
     })
     .where(eq(agentProviderDefaults.profileId, id))
     .run()
-  db.delete(agentProviderProfiles)
-    .where(eq(agentProviderProfiles.id, id))
-    .run()
+  db.delete(agentProviderProfiles).where(eq(agentProviderProfiles.id, id)).run()
 }
 
 export function setProviderDefault(input: {

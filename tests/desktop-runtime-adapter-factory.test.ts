@@ -55,7 +55,7 @@ describe("desktop runtime adapter factory", () => {
       runtimeId: "kun",
       source: "kun-http-sse",
       temporaryFallback: false,
-      defaultDisableCondition: "LOCUS_ENABLE_KUN_RUNTIME is not enabled",
+      defaultDisableCondition: "Kun runtime setting is disabled",
     })
   })
 
@@ -260,9 +260,7 @@ describe("desktop runtime adapter factory", () => {
       "utf8",
     )
 
-    expect(claudeRouter).toContain(
-      "prepareClaudeAgentSdkDesktopRunStartup({",
-    )
+    expect(claudeRouter).toContain("prepareClaudeAgentSdkDesktopRunStartup({")
     expect(claudeRouter).not.toContain(
       "createClaudeAgentSdkDesktopRunStartup({",
     )
@@ -270,7 +268,9 @@ describe("desktop runtime adapter factory", () => {
       "createClaudeAgentSdkDesktopRunStartup",
     )
     expect(claudeDesktopJob).toContain("createDesktopRunRequest({")
-    expect(claudeDesktopRunRequest).toContain("createDesktopRunContextFromPreflight")
+    expect(claudeDesktopRunRequest).toContain(
+      "createDesktopRunContextFromPreflight",
+    )
     expect(claudeDesktopRunRequest).toContain("DesktopRunPreflightResult")
     expect(desktopRunRequest).toContain("cwd: preflight.cwd")
     expect(desktopRunRequest).toContain("workspaceKind: preflight.kind")

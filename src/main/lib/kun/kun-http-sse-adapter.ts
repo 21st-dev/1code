@@ -446,6 +446,8 @@ export function createKunHttpSseAdapter({
         if (!streamAbort.signal.aborted) streamAbort.abort()
       }
       request.signal.addEventListener("abort", abortStream, { once: true })
+      const cleanupSignal = () =>
+        request.signal.aborted ? new AbortController().signal : request.signal
 
       let sequence = 0
       let terminal: KunRunTerminal | null = null
@@ -499,7 +501,7 @@ export function createKunHttpSseAdapter({
           approvalId,
           decision: "deny",
           reason,
-          signal: request.signal,
+          signal: cleanupSignal(),
         })
         emitChunk({
           type: "observed-tool-decision",
@@ -650,7 +652,7 @@ export function createKunHttpSseAdapter({
             approvalId,
             decision,
             reason: message,
-            signal: request.signal,
+            signal: cleanupSignal(),
           })
           emitChunk({
             type: "ask-user-question-result",
@@ -681,7 +683,7 @@ export function createKunHttpSseAdapter({
           approvalId,
           decision,
           reason: guardDecision.reason,
-          signal: request.signal,
+          signal: cleanupSignal(),
         })
         emitToolDecision({
           decision,
@@ -748,7 +750,7 @@ export function createKunHttpSseAdapter({
           approvalId,
           decision,
           reason: approval.message,
-          signal: request.signal,
+          signal: cleanupSignal(),
         })
         emitChunk({
           type: "ask-user-question-result",
@@ -937,7 +939,7 @@ export function createKunHttpSseAdapter({
         if (request.signal.aborted) {
           if (threadId && turnId) {
             await transport
-              .interruptTurn({ threadId, turnId, signal: streamAbort.signal })
+              .interruptTurn({ threadId, turnId, signal: cleanupSignal() })
               .catch(() => undefined)
           }
           setTerminal({ status: "canceled", message: "Kun run was canceled." })

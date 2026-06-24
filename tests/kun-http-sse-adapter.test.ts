@@ -7,7 +7,10 @@ import type { DesktopRunProviderBinding } from "../src/main/lib/agent-runtime/de
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import type { RunEvent } from "../src/main/lib/agent-runtime/runtime-events"
 import { createKunDesktopRunRequest } from "../src/main/lib/kun/desktop-run-request"
-import { createKunHttpSseAdapter } from "../src/main/lib/kun/kun-http-sse-adapter"
+import {
+  createKunHttpSseAdapter,
+  type KunHttpSseApprovalPending,
+} from "../src/main/lib/kun/kun-http-sse-adapter"
 import type { KunServeHandle } from "../src/main/lib/kun/kun-serve-launcher"
 
 type KunDesktopRunRequestInput = Parameters<
@@ -97,9 +100,7 @@ describe("Kun HTTP/SSE adapter", () => {
           async interruptTurn() {},
           async decideApproval() {},
           async streamEvents(input) {
-            await waitFor(() =>
-              calls.some((call) => call.kind === "startTurn"),
-            )
+            await waitFor(() => calls.some((call) => call.kind === "startTurn"))
             input.onEvent({ kind: "turn_completed" })
           },
         },
@@ -135,9 +136,7 @@ describe("Kun HTTP/SSE adapter", () => {
           async interruptTurn() {},
           async decideApproval() {},
           async streamEvents(input) {
-            await waitFor(() =>
-              calls.some((call) => call.kind === "startTurn"),
-            )
+            await waitFor(() => calls.some((call) => call.kind === "startTurn"))
             input.onEvent({ kind: "turn_completed" })
           },
         },
@@ -409,7 +408,10 @@ describe("Kun HTTP/SSE adapter", () => {
       guardedContract: guardedContract(),
       emit: (chunk) => emitted.push(chunk),
       registerPendingApproval: (_toolUseId, pending) => {
-        pending.resolve({ approved: true, message: "user approved scoped shell" })
+        pending.resolve({
+          approved: true,
+          message: "user approved scoped shell",
+        })
       },
       createTransport: async () => ({
         transport: {
@@ -827,6 +829,81 @@ describe("Kun HTTP/SSE adapter", () => {
       }),
     )
     expect(JSON.stringify(emitted)).not.toContain('"decision":"allow"')
+  })
+
+  test("posts external approval denials with a cleanup signal after run abort", async () => {
+    const runAbort = new AbortController()
+    let pendingApproval: KunHttpSseApprovalPending | null = null
+    const decisions: Array<{
+      approvalId: string
+      decision: string
+      reason?: string | null
+      signalAborted: boolean
+    }> = []
+    const interruptSignals: boolean[] = []
+    const adapter = createKunHttpSseAdapter({
+      registerPendingApproval: (_toolUseId, pending) => {
+        pendingApproval = pending
+      },
+      createTransport: async () => ({
+        transport: {
+          async createThread() {
+            return { id: "thread-1" }
+          },
+          async startTurn() {
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn(input) {
+            interruptSignals.push(input.signal.aborted)
+          },
+          async decideApproval(input) {
+            decisions.push({
+              approvalId: input.approvalId,
+              decision: input.decision,
+              reason: input.reason,
+              signalAborted: input.signal.aborted,
+            })
+          },
+          async streamEvents(input) {
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_5",
+                toolName: "edit",
+                toolKind: "file_change",
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_5",
+              toolName: "edit",
+              status: "pending",
+            })
+            await waitFor(() => Boolean(pendingApproval))
+            pendingApproval?.resolve({
+              approved: false,
+              message: "Kun runtime was disabled in Settings.",
+            })
+            runAbort.abort()
+            await waitFor(() => decisions.length === 1)
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(fakeKunRequest(runAbort.signal))
+
+    expect(result.status).toBe("canceled")
+    expect(decisions).toEqual([
+      {
+        approvalId: "appr_call_5",
+        decision: "deny",
+        reason: "Kun runtime was disabled in Settings.",
+        signalAborted: false,
+      },
+    ])
+    expect(interruptSignals).toEqual([false])
   })
 
   test("missing approval bridge fails closed by timeout", async () => {

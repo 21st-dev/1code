@@ -206,12 +206,12 @@ function abortActiveRuntimeStreams(
   runtimeId: ExperimentalRuntimeChatId,
   message: string,
 ): void {
+  clearPendingRuntimeApprovals(message, runtimeId)
   for (const [streamKey, stream] of activeRuntimeStreams) {
     if (stream.runtimeId !== runtimeId) continue
     stream.controller.abort()
     activeRuntimeStreams.delete(streamKey)
   }
-  clearPendingRuntimeApprovals(message, runtimeId)
 }
 
 export const agentRuntimeRouter = router({
@@ -898,10 +898,7 @@ export const agentRuntimeRouter = router({
       if (!pending) {
         return { ok: false }
       }
-      if (
-        pending.runtimeId === "kun" &&
-        !isKunRuntimeEnabledForRuntime()
-      ) {
+      if (pending.runtimeId === "kun" && !isKunRuntimeEnabledForRuntime()) {
         pending.resolve({
           approved: false,
           message: "Kun runtime is disabled.",
