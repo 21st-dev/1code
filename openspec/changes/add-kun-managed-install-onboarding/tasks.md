@@ -65,6 +65,6 @@
 
 ## 6. Validate
 - [x] 6.1 Targeted tests for managed install and Kun setup UI/status.
-- [ ] 6.2 `openspec validate add-kun-managed-install-onboarding --strict --no-interactive`.
+- [x] 6.2 `openspec validate add-kun-managed-install-onboarding --strict --no-interactive`.
 - [ ] 6.3 `bun run check`.
-- [ ] 6.4 Commit this change independently.
+- [x] 6.4 Commit this change independently.
