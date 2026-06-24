@@ -1429,6 +1429,10 @@ export function AgentsModelsTab() {
     trpc.agentRuntime.updateKunConfigPath.useMutation()
   const resetKunConfigPathMutation =
     trpc.agentRuntime.resetKunConfigPath.useMutation()
+  const approveKunShellExecutableHashMutation =
+    trpc.agentRuntime.approveKunShellExecutableHash.useMutation()
+  const resetKunShellExecutableHashMutation =
+    trpc.agentRuntime.resetKunShellExecutableHash.useMutation()
 
   useEffect(() => {
     if (!modelsSettingsTarget) return
@@ -1586,6 +1590,34 @@ export function AgentsModelsTab() {
         error instanceof Error
           ? error.message
           : "Failed to reset Kun config path",
+      )
+    }
+  }
+
+  const handleApproveKunShellExecutableHash = async () => {
+    try {
+      await approveKunShellExecutableHashMutation.mutateAsync()
+      await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
+      toast.success("Kun shell build approved")
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to approve Kun shell build",
+      )
+    }
+  }
+
+  const handleResetKunShellExecutableHash = async () => {
+    try {
+      await resetKunShellExecutableHashMutation.mutateAsync()
+      await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
+      toast.success("Kun shell approval reset")
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to reset Kun shell approval",
       )
     }
   }
@@ -2198,6 +2230,84 @@ export function AgentsModelsTab() {
                     <p className="text-xs text-amber-700 dark:text-amber-300">
                       Version probe failed: {kunCliStatus.version.error}
                     </p>
+                  )}
+                  {kunCliStatus?.shell && (
+                    <div className="mt-2 space-y-1 rounded-md border border-border bg-muted/40 p-2 text-xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-foreground">
+                          Guarded shell
+                        </span>
+                        {kunCliStatus.shell.approved ? (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-xs font-medium text-emerald-700 dark:text-emerald-200"
+                          >
+                            <ShieldCheck className="h-3 w-3" />
+                            Approved
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="gap-1 border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-200"
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            Disabled
+                          </Badge>
+                        )}
+                        <span className="text-muted-foreground">
+                          {kunCliStatus.shell.reason}
+                        </span>
+                      </div>
+                      {kunCliStatus.shell.currentHash && (
+                        <p className="font-mono text-[11px] text-muted-foreground">
+                          Current hash:{" "}
+                          {kunCliStatus.shell.currentHash.slice(0, 12)}
+                        </p>
+                      )}
+                      {kunCliStatus.shell.approvedHash && (
+                        <p className="font-mono text-[11px] text-muted-foreground">
+                          Approved hash:{" "}
+                          {kunCliStatus.shell.approvedHash.slice(0, 12)}
+                        </p>
+                      )}
+                      {kunCliStatus.shell.error && (
+                        <p className="text-amber-700 dark:text-amber-300">
+                          {kunCliStatus.shell.error}
+                        </p>
+                      )}
+                      <p className="text-muted-foreground">
+                        {kunCliStatus.shell.hint}
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            void handleApproveKunShellExecutableHash()
+                          }
+                          disabled={
+                            !kunCliStatus.shell.currentHash ||
+                            approveKunShellExecutableHashMutation.isPending
+                          }
+                        >
+                          <ShieldCheck className="h-3 w-3 mr-1" />
+                          {approveKunShellExecutableHashMutation.isPending
+                            ? t("common.saving")
+                            : "Approve current build"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void handleResetKunShellExecutableHash()}
+                          disabled={
+                            !kunCliStatus.shell.approvedHash ||
+                            resetKunShellExecutableHashMutation.isPending
+                          }
+                        >
+                          {t("common.reset")}
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

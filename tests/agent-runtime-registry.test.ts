@@ -180,8 +180,13 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain("resetKunExecutablePath")
     expect(runtimeRouter).toContain("updateKunConfigPath")
     expect(runtimeRouter).toContain("resetKunConfigPath")
+    expect(runtimeRouter).toContain("approveKunShellExecutableHash")
+    expect(runtimeRouter).toContain("resetKunShellExecutableHash")
     expect(runtimeRouter).toContain("chat: publicProcedure")
     expect(runtimeRouter).toContain('runtimeId: z.enum(["qwen-code", "kun"])')
+    expect(runtimeRouter).toContain(
+      "scopeContract: agentScopeContractInputSchema.optional()",
+    )
     expect(runtimeRouter).toContain("function runtimeStreamKey(")
     expect(runtimeRouter).toContain(
       "return `" + "$" + "{runtimeId}:" + "$" + "{subChatId}`",
@@ -202,6 +207,8 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain("createKunHttpSseAdapter")
     expect(runtimeRouter).toContain("executable: executablePath")
     expect(runtimeRouter).toContain("configPath: kunConfigPath")
+    expect(runtimeRouter).toContain("sandboxMode: kunSandboxMode")
+    expect(runtimeRouter).toContain("guardedContract")
   })
 
   test("renderer consumes runtime manifests through a store instead of static capability truth", () => {

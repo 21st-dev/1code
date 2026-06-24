@@ -82,10 +82,10 @@ export type KunHttpSsePermissionMapping = {
   adapterSource: "kun-http-sse"
   controlLevel: ResolvedDesktopRuntimeControlLevel
   approvalPolicy: "on-request"
-  sandboxMode: "workspace-write"
+  sandboxMode: "danger-full-access"
   observedToolPolicy: ObservedToolPolicy
   requiresApprovalGate: true
-  commandExecution: "sandbox-blocked"
+  commandExecution: "guarded-by-locus"
   permissionHandlerFailure: "fail-closed"
 }
 
@@ -503,10 +503,10 @@ function createKunHttpSsePermissionMapping({
     adapterSource: "kun-http-sse",
     controlLevel,
     approvalPolicy: "on-request",
-    sandboxMode: "workspace-write",
+    sandboxMode: "danger-full-access",
     observedToolPolicy,
     requiresApprovalGate: true,
-    commandExecution: "sandbox-blocked",
+    commandExecution: "guarded-by-locus",
     permissionHandlerFailure: "fail-closed",
   }
 }

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process"
-import { existsSync, realpathSync, statSync } from "node:fs"
+import { createHash } from "node:crypto"
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { delimiter, isAbsolute, join, relative, resolve } from "node:path"
 import { promisify } from "node:util"
 import { redactRuntimePayload } from "../agent-runtime/redaction"
@@ -51,6 +52,20 @@ export type KunCliVersionStatus = {
   error: string | null
 }
 
+export type KunShellApprovalStatus = {
+  approved: boolean
+  currentHash: string | null
+  approvedHash: string | null
+  reason:
+    | "approved"
+    | "unapproved"
+    | "hash-mismatch"
+    | "hash-unavailable"
+    | "runtime-disabled"
+  error: string | null
+  hint: string
+}
+
 export type KunConfigFileStatus = {
   ok: boolean
   path: string | null
@@ -69,6 +84,7 @@ export type KunCliSetupStatus = {
   executable: RuntimeExecutableStatus
   config: KunConfigFileStatus
   version: KunCliVersionStatus
+  shell: KunShellApprovalStatus
   blocker: {
     component: "kun-cli"
     code: KunCliBlockerCode
@@ -116,6 +132,77 @@ function sanitizeForRenderer(value: string | null): string | null {
   }).payload
   const text = typeof redacted === "string" ? redacted : "Kun CLI diagnostic."
   return text.trim().slice(0, 500)
+}
+
+function defaultKunShellApprovalStatus(
+  reason: KunShellApprovalStatus["reason"],
+  error: string | null = null,
+): KunShellApprovalStatus {
+  return {
+    approved: false,
+    currentHash: null,
+    approvedHash: null,
+    reason,
+    error: sanitizeForRenderer(error),
+    hint: "Approve the current Kun executable hash in Settings before enabling guarded shell.",
+  }
+}
+
+function hashKunExecutableFile(filePath: string): KunShellApprovalStatus {
+  try {
+    const currentHash = createHash("sha256")
+      .update(readFileSync(filePath))
+      .digest("hex")
+    return {
+      approved: false,
+      currentHash,
+      approvedHash: null,
+      reason: "unapproved",
+      error: null,
+      hint: "Approve the current Kun executable hash in Settings before enabling guarded shell.",
+    }
+  } catch (error) {
+    return defaultKunShellApprovalStatus(
+      "hash-unavailable",
+      error instanceof Error ? error.message : String(error),
+    )
+  }
+}
+
+function resolveKunShellApprovalStatus(input: {
+  executablePath: string | null
+  approvedHash: string | null
+  enabled?: boolean
+}): KunShellApprovalStatus {
+  if (input.enabled === false) {
+    return defaultKunShellApprovalStatus("runtime-disabled")
+  }
+  if (!input.executablePath) {
+    return defaultKunShellApprovalStatus("hash-unavailable")
+  }
+  const hashed = hashKunExecutableFile(input.executablePath)
+  const approvedHash = input.approvedHash?.trim().toLowerCase() || null
+  if (!hashed.currentHash) {
+    return { ...hashed, approvedHash }
+  }
+  if (!approvedHash) {
+    return { ...hashed, approvedHash, reason: "unapproved" }
+  }
+  if (approvedHash !== hashed.currentHash) {
+    return {
+      ...hashed,
+      approvedHash,
+      reason: "hash-mismatch",
+      error: "Kun executable hash does not match the shell-approved hash.",
+    }
+  }
+  return {
+    ...hashed,
+    approved: true,
+    approvedHash,
+    reason: "approved",
+    error: null,
+  }
 }
 
 function containsSecretLikeText(value: string): boolean {
@@ -273,6 +360,9 @@ function invalidStatus(
         value: null,
         error: null,
       },
+      shell: defaultKunShellApprovalStatus(
+        availability === "disabled" ? "runtime-disabled" : "hash-unavailable",
+      ),
       blocker: {
         component: "kun-cli",
         code,
@@ -410,6 +500,7 @@ async function statusForCandidate(
   candidate: KunPathCandidate | null,
   options: KunCliStatusOptions,
   configPath: string | null,
+  approvedShellHash: string | null,
 ): Promise<ResolvedKunCliSetupStatus> {
   const config = kunConfigFileStatus(configPath)
   if (!candidate) {
@@ -424,6 +515,13 @@ async function statusForCandidate(
 
   const rawStatus = getRuntimeExecutableStatus(candidate.path, KUN_INSTALL_HINT)
   const executable = kunExecutableStatus(candidate.path)
+  const shell = rawStatus.ok
+    ? resolveKunShellApprovalStatus({
+        executablePath: candidate.path,
+        approvedHash: approvedShellHash,
+        enabled: options.enabled,
+      })
+    : defaultKunShellApprovalStatus("hash-unavailable")
   if (!rawStatus.ok) {
     return {
       executablePath: null,
@@ -441,6 +539,7 @@ async function statusForCandidate(
           value: null,
           error: null,
         },
+        shell,
         blocker: {
           component: "kun-cli",
           code: rawStatus.exists
@@ -503,6 +602,7 @@ async function statusForCandidate(
         value: sanitizeForRenderer(version.value),
         error: sanitizeForRenderer(version.error),
       },
+      shell,
       blocker,
       guidance: {
         installCommand: KUN_INSTALL_COMMAND,
@@ -521,7 +621,7 @@ export async function resolveKunCliSetupStatus(
   }
 
   const savedSettings = options.ignoreSavedOverride
-    ? { executablePath: null, configPath: null }
+    ? { executablePath: null, configPath: null, shellApprovedExecutableHash: null }
     : readKunCliSettings(options)
   const explicitOverride = options.overridePath ?? null
   const savedOverride = savedSettings.executablePath
@@ -530,7 +630,12 @@ export async function resolveKunCliSetupStatus(
   if (override && "status" in override) return override
   const candidate =
     override ?? discoverKunOnPath(options.env ?? process.env, options.cwd)
-  return statusForCandidate(candidate, options, configPath)
+  return statusForCandidate(
+    candidate,
+    options,
+    configPath,
+    savedSettings.shellApprovedExecutableHash,
+  )
 }
 
 export function toRendererKunCliSetupStatus(
@@ -557,6 +662,10 @@ export async function saveKunExecutablePathOverride(
       {
         executablePath: resolved.executablePath,
         configPath: current.configPath,
+        shellApprovedExecutableHash:
+          current.executablePath === resolved.executablePath
+            ? current.shellApprovedExecutableHash
+            : null,
       },
       options,
     )
@@ -581,6 +690,7 @@ export async function saveKunConfigPathOverride(
     {
       executablePath: current.executablePath,
       configPath,
+      shellApprovedExecutableHash: current.shellApprovedExecutableHash,
     },
     options,
   )
@@ -595,6 +705,7 @@ export async function resetKunConfigPathOverride(
     {
       executablePath: current.executablePath,
       configPath: null,
+      shellApprovedExecutableHash: current.shellApprovedExecutableHash,
     },
     options,
   )
@@ -609,6 +720,7 @@ export async function resetKunExecutablePathOverride(
     {
       executablePath: null,
       configPath: current.configPath,
+      shellApprovedExecutableHash: null,
     },
     options,
   )
@@ -617,4 +729,46 @@ export async function resetKunExecutablePathOverride(
     ignoreSavedOverride: true,
     configPathOverride: current.configPath,
   })
+}
+
+export async function approveKunShellExecutableHash(
+  options: KunCliStatusOptions = {},
+): Promise<ResolvedKunCliSetupStatus> {
+  const resolved = await resolveKunCliSetupStatus(options)
+  if (!resolved.executablePath || !resolved.status.executable.ok) {
+    return resolved
+  }
+  const shell = resolveKunShellApprovalStatus({
+    executablePath: resolved.executablePath,
+    approvedHash: null,
+    enabled: options.enabled,
+  })
+  if (!shell.currentHash) {
+    return resolved
+  }
+  const current = readKunCliSettings(options)
+  writeKunCliSettings(
+    {
+      executablePath: resolved.executablePath,
+      configPath: current.configPath,
+      shellApprovedExecutableHash: shell.currentHash,
+    },
+    options,
+  )
+  return resolveKunCliSetupStatus(options)
+}
+
+export async function resetKunShellExecutableHash(
+  options: KunCliStatusOptions = {},
+): Promise<ResolvedKunCliSetupStatus> {
+  const current = readKunCliSettings(options)
+  writeKunCliSettings(
+    {
+      executablePath: current.executablePath,
+      configPath: current.configPath,
+      shellApprovedExecutableHash: null,
+    },
+    options,
+  )
+  return resolveKunCliSetupStatus(options)
 }

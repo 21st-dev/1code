@@ -11,6 +11,11 @@ import { getElectronUserDataPath } from "../electron-app"
 
 const KUN_READY_PREFIX = "KUN_READY "
 const KUN_SERVE_READY_TIMEOUT_MS = 10_000
+export const KUN_FILE_ONLY_SANDBOX_MODE = "workspace-write"
+export const KUN_SHELL_SANDBOX_MODE = "danger-full-access"
+export type KunServeSandboxMode =
+  | typeof KUN_FILE_ONLY_SANDBOX_MODE
+  | typeof KUN_SHELL_SANDBOX_MODE
 
 export type KunServeReadyInfo = {
   service: "kun"
@@ -34,6 +39,7 @@ export type KunServeLaunchInput = {
   cwd: string
   configPath?: string | null
   secretHints?: readonly string[]
+  sandboxMode?: KunServeSandboxMode
   env?: NodeJS.ProcessEnv
   userDataPath?: string
   spawnProcess?: (
@@ -87,7 +93,12 @@ function parseKunReadyLine(line: string): KunServeReadyInfo | null {
   }
 }
 
-export function verifyKunReadyInfo(info: KunServeReadyInfo): void {
+export function verifyKunReadyInfo(
+  info: KunServeReadyInfo,
+  options: { sandboxMode?: KunServeSandboxMode } = {},
+): void {
+  const expectedSandboxMode =
+    options.sandboxMode ?? KUN_FILE_ONLY_SANDBOX_MODE
   if (info.service !== "kun" || info.mode !== "serve") {
     throw new Error("Kun serve handshake did not identify a Kun serve runtime.")
   }
@@ -105,7 +116,7 @@ export function verifyKunReadyInfo(info: KunServeReadyInfo): void {
       `Kun serve reported unsupported approvalPolicy=${info.approvalPolicy}.`,
     )
   }
-  if (info.sandboxMode !== "workspace-write") {
+  if (info.sandboxMode !== expectedSandboxMode) {
     throw new Error(
       `Kun serve reported unsupported sandboxMode=${info.sandboxMode}.`,
     )
@@ -204,6 +215,7 @@ export async function launchKunServe(
   input: KunServeLaunchInput,
 ): Promise<KunServeHandle> {
   const runtimeToken = createKunRuntimeToken()
+  const sandboxMode = input.sandboxMode ?? KUN_FILE_ONLY_SANDBOX_MODE
   const dataDir = createKunDataDir({
     userDataPath: input.userDataPath,
     runId: input.runId,
@@ -220,7 +232,7 @@ export async function launchKunServe(
     "--approval-policy",
     "on-request",
     "--sandbox-mode",
-    "workspace-write",
+    sandboxMode,
     "--insecure",
     "false",
   ]
@@ -271,7 +283,7 @@ export async function launchKunServe(
         try {
           const parsed = parseKunReadyLine(line)
           if (parsed) {
-            verifyKunReadyInfo(parsed)
+            verifyKunReadyInfo(parsed, { sandboxMode })
             cleanup()
             resolve(parsed)
             return

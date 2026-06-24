@@ -2,14 +2,44 @@ import { describe, expect, test } from "bun:test"
 import { EventEmitter } from "node:events"
 import { createServer } from "node:http"
 import { setTimeout as sleep } from "node:timers/promises"
+import type { ValidatedAgentScopeContract } from "../src/main/lib/agent-guard"
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
+import type { RunEvent } from "../src/main/lib/agent-runtime/runtime-events"
 import { createKunDesktopRunRequest } from "../src/main/lib/kun/desktop-run-request"
 import { createKunHttpSseAdapter } from "../src/main/lib/kun/kun-http-sse-adapter"
 import type { KunServeHandle } from "../src/main/lib/kun/kun-serve-launcher"
 
-type KunDesktopRunRequestInput = Parameters<typeof createKunDesktopRunRequest>[0]
+type KunDesktopRunRequestInput = Parameters<
+  typeof createKunDesktopRunRequest
+>[0]
 
-function fakeKunRequest(signal = new AbortController().signal) {
+function guardedContract(): ValidatedAgentScopeContract {
+  return {
+    id: "contract-kun-shell",
+    version: 1,
+    status: "approved",
+    createdAt: "2026-06-24T00:00:00.000Z",
+    approvedAt: "2026-06-24T00:00:01.000Z",
+    source: "manual",
+    chatId: "chat-1",
+    subChatId: "sub-1",
+    runId: "run-1",
+    cwd: "/repo",
+    editableScope: [{ path: "src", kind: "directory" }],
+    readOnlyEvidence: [],
+    successChecks: [{ command: "bun test" }],
+    blockedPaths: [],
+    expansions: [],
+  }
+}
+
+function fakeKunRequest(
+  signal = new AbortController().signal,
+  options: {
+    hasScopeContract?: boolean
+    traceEvents?: RunEvent[]
+  } = {},
+) {
   const preflight: KunDesktopRunRequestInput["preflight"] = {
     kind: "project",
     cwd: "/repo",
@@ -26,9 +56,12 @@ function fakeKunRequest(signal = new AbortController().signal) {
     permissionPolicy: resolveDesktopPermissionPolicy({
       runtimeId: "kun",
       mode: "agent",
+      hasScopeContract: options.hasScopeContract,
     }),
     signal,
-    emitTrace: () => {},
+    emitTrace: (event) => {
+      options.traceEvents?.push(event)
+    },
   })
 }
 
@@ -180,6 +213,463 @@ describe("Kun HTTP/SSE adapter", () => {
         )
       }),
     ).toHaveLength(1)
+  })
+
+  test("routes shell-enabled command_execution approvals through the canonical guard owner", async () => {
+    const emitted: Record<string, unknown>[] = []
+    const traceEvents: RunEvent[] = []
+    const decisions: Array<{
+      approvalId: string
+      decision: string
+      reason?: string | null
+    }> = []
+    const adapter = createKunHttpSseAdapter({
+      shellEnabled: true,
+      guardedContract: guardedContract(),
+      emit: (chunk) => emitted.push(chunk),
+      createTransport: async () => ({
+        transport: {
+          async createThread() {
+            return { id: "thread-1" }
+          },
+          async startTurn() {
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval(input) {
+            decisions.push({
+              approvalId: input.approvalId,
+              decision: input.decision,
+              reason: input.reason,
+            })
+          },
+          async streamEvents(input) {
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_shell_guarded",
+                toolName: "bash",
+                toolKind: "command_execution",
+                input: { command: "ls src" },
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_shell_guarded",
+              toolName: "bash",
+              status: "pending",
+            })
+            await waitFor(() => decisions.length === 1)
+            input.onEvent({
+              kind: "tool_call_started",
+              callId: "call_shell_guarded",
+            })
+            input.onEvent({ kind: "turn_completed" })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(
+      fakeKunRequest(new AbortController().signal, {
+        hasScopeContract: true,
+        traceEvents,
+      }),
+    )
+
+    expect(result.status).toBe("succeeded")
+    expect(decisions).toEqual([
+      expect.objectContaining({
+        approvalId: "appr_call_shell_guarded",
+        decision: "allow",
+        reason: "Bash command is a read-only inspection command.",
+      }),
+    ])
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        type: "observed-tool-decision",
+        decision: "allow",
+        risk: expect.objectContaining({
+          guardOwner: true,
+          toolKind: "command_execution",
+        }),
+      }),
+    )
+    expect(traceEvents).toContainEqual(
+      expect.objectContaining({
+        type: "guard_decision",
+        payload: expect.objectContaining({
+          type: "allowed",
+          toolName: "Bash",
+          command: "ls src",
+        }),
+      }),
+    )
+  })
+
+  test("requires user approval for bounded scoped shell file operations", async () => {
+    const emitted: Record<string, unknown>[] = []
+    const decisions: Array<{
+      approvalId: string
+      decision: string
+      reason?: string | null
+    }> = []
+    const adapter = createKunHttpSseAdapter({
+      shellEnabled: true,
+      guardedContract: guardedContract(),
+      emit: (chunk) => emitted.push(chunk),
+      registerPendingApproval: (_toolUseId, pending) => {
+        pending.resolve({ approved: true, message: "user approved scoped shell" })
+      },
+      createTransport: async () => ({
+        transport: {
+          async createThread() {
+            return { id: "thread-1" }
+          },
+          async startTurn() {
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval(input) {
+            decisions.push({
+              approvalId: input.approvalId,
+              decision: input.decision,
+              reason: input.reason,
+            })
+          },
+          async streamEvents(input) {
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_scoped_shell_write",
+                toolName: "bash",
+                toolKind: "command_execution",
+                input: {
+                  command:
+                    "/bin/zsh -lc \"mkdir -p /repo/src && printf 'hello' > /repo/src/generated.txt\"",
+                },
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_scoped_shell_write",
+              toolName: "bash",
+              status: "pending",
+            })
+            await waitFor(() => decisions.length === 1)
+            input.onEvent({ kind: "turn_completed" })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(
+      fakeKunRequest(new AbortController().signal, {
+        hasScopeContract: true,
+      }),
+    )
+
+    expect(result.status).toBe("succeeded")
+    expect(decisions).toEqual([
+      expect.objectContaining({
+        approvalId: "appr_call_scoped_shell_write",
+        decision: "allow",
+        reason: "user approved scoped shell",
+      }),
+    ])
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        type: "ask-user-question",
+        toolUseId: "kun-approval-run-1-appr_call_scoped_shell_write",
+      }),
+    )
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        type: "guard-event",
+        event: expect.objectContaining({
+          type: "allowed",
+          toolName: "Bash",
+          paths: ["src", "src/generated.txt"],
+        }),
+      }),
+    )
+  })
+
+  test("normalizes Kun file_change paths through the guard owner", async () => {
+    const emitted: Record<string, unknown>[] = []
+    const decisions: Array<{
+      approvalId: string
+      decision: string
+      reason?: string | null
+    }> = []
+    const adapter = createKunHttpSseAdapter({
+      shellEnabled: true,
+      guardedContract: guardedContract(),
+      emit: (chunk) => emitted.push(chunk),
+      createTransport: async () => ({
+        transport: {
+          async createThread() {
+            return { id: "thread-1" }
+          },
+          async startTurn() {
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval(input) {
+            decisions.push({
+              approvalId: input.approvalId,
+              decision: input.decision,
+              reason: input.reason,
+            })
+          },
+          async streamEvents(input) {
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_sensitive_write",
+                toolName: "edit",
+                toolKind: "file_change",
+                input: { path: "/repo/.env" },
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_sensitive_write",
+              toolName: "edit",
+              status: "pending",
+            })
+            await waitFor(() => decisions.length === 1)
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_scope_expansion",
+                toolName: "edit",
+                toolKind: "file_change",
+                input: { path: "/repo/docs/readme.md" },
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_scope_expansion",
+              toolName: "edit",
+              status: "pending",
+            })
+            await waitFor(() => decisions.length === 2)
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_missing_path",
+                toolName: "edit",
+                toolKind: "file_change",
+                input: {},
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_missing_path",
+              toolName: "edit",
+              status: "pending",
+            })
+            await waitFor(() => decisions.length === 3)
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_in_scope_write",
+                toolName: "edit",
+                toolKind: "file_change",
+                input: { path: "/repo/src/app.ts" },
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_in_scope_write",
+              toolName: "edit",
+              status: "pending",
+            })
+            await waitFor(() => decisions.length === 4)
+            input.onEvent({ kind: "turn_completed" })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(
+      fakeKunRequest(new AbortController().signal, {
+        hasScopeContract: true,
+      }),
+    )
+
+    expect(result.status).toBe("succeeded")
+    expect(decisions).toEqual([
+      expect.objectContaining({
+        approvalId: "appr_call_sensitive_write",
+        decision: "deny",
+        reason: expect.stringContaining("protected path"),
+      }),
+      expect.objectContaining({
+        approvalId: "appr_call_scope_expansion",
+        decision: "deny",
+        reason: expect.stringContaining("requires approval"),
+      }),
+      expect.objectContaining({
+        approvalId: "appr_call_missing_path",
+        decision: "deny",
+        reason: expect.stringContaining("could not be normalized"),
+      }),
+      expect.objectContaining({
+        approvalId: "appr_call_in_scope_write",
+        decision: "allow",
+        reason: expect.stringContaining("approved editable scope"),
+      }),
+    ])
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        type: "guard-event",
+        event: expect.objectContaining({
+          type: "blocked",
+          toolName: "Edit",
+          paths: [".env"],
+        }),
+      }),
+    )
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        type: "guard-event",
+        event: expect.objectContaining({
+          type: "scope-expansion-request",
+          toolName: "Edit",
+          path: "docs/readme.md",
+        }),
+      }),
+    )
+  })
+
+  test("denies shell-enabled side effects when the guarded contract is missing", async () => {
+    const decisions: Array<{
+      approvalId: string
+      decision: string
+      reason?: string | null
+    }> = []
+    const adapter = createKunHttpSseAdapter({
+      shellEnabled: true,
+      createTransport: async () => ({
+        transport: {
+          async createThread() {
+            return { id: "thread-1" }
+          },
+          async startTurn() {
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval(input) {
+            decisions.push({
+              approvalId: input.approvalId,
+              decision: input.decision,
+              reason: input.reason,
+            })
+          },
+          async streamEvents(input) {
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_shell_no_contract",
+                toolName: "bash",
+                toolKind: "command_execution",
+                input: { command: "ls src" },
+              },
+            })
+            input.onEvent({
+              kind: "approval_requested",
+              approvalId: "appr_call_shell_no_contract",
+              toolName: "bash",
+              status: "pending",
+            })
+            await waitFor(() => decisions.length === 1)
+            input.onEvent({ kind: "turn_completed" })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(fakeKunRequest())
+
+    expect(result.status).toBe("succeeded")
+    expect(decisions).toEqual([
+      expect.objectContaining({
+        approvalId: "appr_call_shell_no_contract",
+        decision: "deny",
+        reason: expect.stringContaining("guarded scope contract"),
+      }),
+    ])
+  })
+
+  test("fails closed when a side-effecting tool executes without prior guard approval", async () => {
+    const emitted: Record<string, unknown>[] = []
+    const adapter = createKunHttpSseAdapter({
+      shellEnabled: true,
+      guardedContract: guardedContract(),
+      emit: (chunk) => emitted.push(chunk),
+      createTransport: async () => ({
+        transport: {
+          async createThread() {
+            return { id: "thread-1" }
+          },
+          async startTurn() {
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval() {},
+          async streamEvents(input) {
+            input.onEvent({
+              kind: "item_created",
+              item: {
+                kind: "tool_call",
+                callId: "call_unapproved_execution",
+                toolName: "bash",
+                toolKind: "command_execution",
+                input: { command: "ls src" },
+              },
+            })
+            input.onEvent({
+              kind: "tool_call_started",
+              callId: "call_unapproved_execution",
+            })
+            input.onEvent({ kind: "turn_completed" })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(
+      fakeKunRequest(new AbortController().signal, {
+        hasScopeContract: true,
+      }),
+    )
+
+    expect(result).toMatchObject({
+      status: "failed",
+      error: {
+        message: expect.stringContaining(
+          "without a prior approved guard decision",
+        ),
+      },
+    })
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        type: "runtime-status",
+        ok: false,
+        blocker: expect.objectContaining({
+          code: "kun-unguarded-side-effect",
+        }),
+      }),
+    )
   })
 
   test("denies file_change when approval is denied by the UI bridge", async () => {

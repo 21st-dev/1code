@@ -213,8 +213,8 @@ describe("desktop runtime permission policy", () => {
       adapterSource: "kun-http-sse",
       controlLevel: "plan",
       approvalPolicy: "on-request",
-      sandboxMode: "workspace-write",
-      commandExecution: "sandbox-blocked",
+      sandboxMode: "danger-full-access",
+      commandExecution: "guarded-by-locus",
       permissionHandlerFailure: "fail-closed",
     })
 
@@ -224,6 +224,8 @@ describe("desktop runtime permission policy", () => {
     expect(getKunHttpSsePermissionMapping(guardedPolicy)).toMatchObject({
       controlLevel: "guarded",
       requiresApprovalGate: true,
+      sandboxMode: "danger-full-access",
+      commandExecution: "guarded-by-locus",
     })
 
     expect(observedPolicy.enforcement).toBe("kun-http-sse-agent-approval-gate")
@@ -325,8 +327,8 @@ describe("desktop runtime permission policy", () => {
       adapterSource: "kun-http-sse",
       controlLevel: "assistant",
       approvalPolicy: "on-request",
-      sandboxMode: "workspace-write",
-      commandExecution: "sandbox-blocked",
+      sandboxMode: "danger-full-access",
+      commandExecution: "guarded-by-locus",
       permissionHandlerFailure: "fail-closed",
     })
 

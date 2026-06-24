@@ -10,6 +10,11 @@ import {
   parseProviderProfileSource,
   providerProfileSource,
 } from "../../../../shared/provider-profile-types"
+import {
+  agentScopeContractInputSchema,
+  prepareActiveGuardedRunContract,
+  type ValidatedAgentScopeContract,
+} from "../../agent-guard"
 import type { DesktopRunProviderBinding } from "../../agent-runtime/desktop-run-request"
 import { resolveDesktopPermissionPolicy } from "../../agent-runtime/permission-policy"
 import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
@@ -34,8 +39,10 @@ import {
 } from "../../desktop-agent-jobs"
 import { createKunDesktopRunRequest } from "../../kun/desktop-run-request"
 import {
+  approveKunShellExecutableHash,
   resetKunConfigPathOverride,
   resetKunExecutablePathOverride,
+  resetKunShellExecutableHash,
   resolveKunCliSetupStatus,
   saveKunConfigPathOverride,
   saveKunExecutablePathOverride,
@@ -49,6 +56,10 @@ import {
   type SynthesizedKunProviderConfig,
   synthesizeKunProviderConfig,
 } from "../../kun/kun-provider-config"
+import {
+  KUN_FILE_ONLY_SANDBOX_MODE,
+  KUN_SHELL_SANDBOX_MODE,
+} from "../../kun/kun-serve-launcher"
 import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
 import { createQwenDesktopRunRequest } from "../../qwen/desktop-run-request"
 import {
@@ -76,6 +87,7 @@ const experimentalRuntimeChatInputSchema = z.object({
   sessionId: z.string().optional(),
   modelSource: z.string().optional(),
   providerProfileId: z.string().trim().max(512).nullable().optional(),
+  scopeContract: agentScopeContractInputSchema.optional(),
 })
 
 const runtimeExecutablePathInputSchema = z.object({
@@ -318,6 +330,39 @@ export const agentRuntimeRouter = router({
     return toRendererKunCliSetupStatus(resolved)
   }),
 
+  approveKunShellExecutableHash: publicProcedure.mutation(async () => {
+    if (!shouldEnableKunRuntime(process.env)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Kun runtime is disabled. Enable it before approving Kun shell.",
+      })
+    }
+    const resolved = await approveKunShellExecutableHash()
+    if (!resolved.status.shell.currentHash) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          resolved.status.shell.error ??
+          resolved.status.blocker?.message ??
+          "Kun executable hash is unavailable.",
+      })
+    }
+    return toRendererKunCliSetupStatus(resolved)
+  }),
+
+  resetKunShellExecutableHash: publicProcedure.mutation(async () => {
+    if (!shouldEnableKunRuntime(process.env)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Kun runtime is disabled. Enable it before changing Kun shell approval.",
+      })
+    }
+    const resolved = await resetKunShellExecutableHash()
+    return toRendererKunCliSetupStatus(resolved)
+  }),
+
   chat: publicProcedure
     .input(experimentalRuntimeChatInputSchema)
     .subscription(({ input }) => {
@@ -391,6 +436,33 @@ export const agentRuntimeRouter = router({
               subChatId: input.subChatId,
               cwd: input.cwd,
             })
+            let guardedContract: ValidatedAgentScopeContract | null = null
+            if (input.scopeContract) {
+              if (input.runtimeId !== "kun") {
+                safeEmit({
+                  type: "capability-error",
+                  errorText:
+                    "Guarded scope contracts are only wired for Kun shell in this experimental runtime endpoint.",
+                })
+                return
+              }
+              const activeGuardedRun = await prepareActiveGuardedRunContract({
+                scopeContract: input.scopeContract,
+                cwd: preflight.cwd,
+                chatId: input.chatId,
+                subChatId: input.subChatId,
+                runId,
+                fallbackRunId: runId,
+              })
+              if (!activeGuardedRun.ok) {
+                safeEmit({
+                  type: "capability-error",
+                  errorText: `Guarded run contract rejected: ${activeGuardedRun.error}`,
+                })
+                return
+              }
+              guardedContract = activeGuardedRun.contract
+            }
 
             if (input.runtimeId === "kun" && input.mode === "plan") {
               safeEmit({
@@ -403,6 +475,10 @@ export const agentRuntimeRouter = router({
 
             let executablePath: string
             let kunConfigPath: string | null = null
+            let kunSandboxMode:
+              | typeof KUN_FILE_ONLY_SANDBOX_MODE
+              | typeof KUN_SHELL_SANDBOX_MODE = KUN_FILE_ONLY_SANDBOX_MODE
+            let kunShellEnabled = false
             let kunProviderBinding:
               | Omit<DesktopRunProviderBinding, "diagnostics">
               | undefined
@@ -493,11 +569,32 @@ export const agentRuntimeRouter = router({
 
               executablePath = kunCli.executablePath
               kunConfigPath = kunProviderConfig?.configPath ?? kunCli.configPath
+              if (kunCli.status.shell.approved && guardedContract) {
+                kunSandboxMode = KUN_SHELL_SANDBOX_MODE
+                kunShellEnabled = true
+              } else {
+                const shellReason = !kunCli.status.shell.approved
+                  ? kunCli.status.shell.reason
+                  : "missing-guarded-scope-contract"
+                safeEmit({
+                  type: "runtime-status",
+                  ok: true,
+                  degraded: true,
+                  component: "kun-shell",
+                  code: `kun-shell-${shellReason}`,
+                  message:
+                    shellReason === "missing-guarded-scope-contract"
+                      ? "Kun shell is disabled because this run does not have an approved guarded scope contract."
+                      : "Kun shell is disabled because the current Kun executable hash is not approved for shell.",
+                  runtimeStatus: toRendererKunCliSetupStatus(kunCli),
+                })
+              }
             }
             const permissionPolicy = resolveDesktopPermissionPolicy({
               runtimeId: input.runtimeId,
               mode: input.mode,
               workspaceKind: preflight.kind,
+              hasScopeContract: Boolean(guardedContract),
             })
             const desktopJob = createAndRegisterDesktopChatAgentJob(db, {
               runtime: input.runtimeId,
@@ -560,6 +657,9 @@ export const agentRuntimeRouter = router({
                     executable: executablePath,
                     configPath: kunConfigPath,
                     configSecretHints: kunProviderConfig?.secretHints ?? [],
+                    sandboxMode: kunSandboxMode,
+                    shellEnabled: kunShellEnabled,
+                    guardedContract,
                     emit: safeEmit,
                     registerPendingApproval: (toolUseId, pending) => {
                       pendingRuntimeToolApprovals.set(toolUseId, {

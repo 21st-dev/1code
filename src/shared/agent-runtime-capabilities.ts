@@ -858,15 +858,15 @@ const KUN_RUNTIME_MANIFEST = manifest({
       status: "degraded",
       scope: "runtime-neutral",
       reason:
-        "Kun can expose approval requests for file changes, but shell and command-execution tools must stay sandbox-blocked rather than approval-mediated in the BYO runtime path.",
-      hint: "Keep Kun behind LOCUS_ENABLE_KUN_RUNTIME and fail closed on unrecognized approval or tool events.",
+        "Kun guarded shell is implemented only for a current run whose resolved executable SHA-256 matches a user-approved shell hash; no bless or hash mismatch falls back to file-only workspace-write.",
+      hint: "Keep Kun behind LOCUS_ENABLE_KUN_RUNTIME and require guarded-shell smoke evidence before marking hardToolGuard supported.",
     }),
     capability({
       id: "planMode",
       status: "degraded",
       scope: "runtime-specific",
       reason:
-        "Kun exposes create_plan events, but Locus plan-mode semantics and write-denial parity are not proven for the first BYO adapter.",
+        "Kun native create_plan is auto-policy and bypasses approval; Locus does not yet own a plan artifact or approval boundary for Kun plan mode.",
       hint: "Expose Kun plan details as runtime output only until a separate plan-mode contract is implemented.",
     }),
     capability({

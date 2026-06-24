@@ -1,6 +1,8 @@
 import type { ChatTransport, UIMessage } from "ai"
 import { toast } from "sonner"
+import { appStore } from "../../../lib/jotai-store"
 import { trpcClient } from "../../../lib/trpc"
+import { approvedGuardedRunContractsAtom } from "../atoms"
 import {
   type AiSdkTransportChunk,
   getCanonicalMessageParts,
@@ -55,11 +57,24 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
         const runId = crypto.randomUUID()
         let sub: { unsubscribe: () => void } | null = null
         let didUnsubscribe = false
+        const approvedScopeContract =
+          this.runtimeId === "kun"
+            ? appStore
+                .get(approvedGuardedRunContractsAtom)
+                .get(this.config.subChatId)
+            : undefined
 
         const safeUnsubscribe = () => {
           if (didUnsubscribe) return
           didUnsubscribe = true
           sub?.unsubscribe()
+        }
+        const clearApprovedScopeContract = () => {
+          const approvedContracts = appStore.get(approvedGuardedRunContractsAtom)
+          if (!approvedContracts.has(this.config.subChatId)) return
+          const nextContracts = new Map(approvedContracts)
+          nextContracts.delete(this.config.subChatId)
+          appStore.set(approvedGuardedRunContractsAtom, nextContracts)
         }
 
         sub = trpcClient.agentRuntime.chat.subscribe(
@@ -76,6 +91,9 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
               : {}),
             ...(this.config.providerProfileId
               ? { providerProfileId: this.config.providerProfileId }
+              : {}),
+            ...(approvedScopeContract
+              ? { scopeContract: approvedScopeContract }
               : {}),
             ...(metadata?.sessionId ? { sessionId: metadata.sessionId } : {}),
           },
@@ -108,6 +126,7 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
                 description: error.message,
               })
               controller.error(error)
+              clearApprovedScopeContract()
               safeUnsubscribe()
             },
             onComplete: () => {
@@ -116,6 +135,7 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
               } catch {
                 // Stream already closed.
               }
+              clearApprovedScopeContract()
               safeUnsubscribe()
             },
           },
@@ -127,6 +147,7 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
           } catch {
             // Stream already closed.
           }
+          clearApprovedScopeContract()
           safeUnsubscribe()
         })
       },

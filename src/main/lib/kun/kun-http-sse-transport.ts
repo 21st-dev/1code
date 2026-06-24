@@ -1,4 +1,8 @@
 import { redactRuntimePayload } from "../agent-runtime/redaction"
+import {
+  KUN_FILE_ONLY_SANDBOX_MODE,
+  type KunServeSandboxMode,
+} from "./kun-serve-launcher"
 
 export type KunRuntimeEvent = Record<string, unknown> & {
   kind?: string
@@ -20,17 +24,20 @@ export type KunStartTurnResponse = {
 export type KunHttpSseTransportInput = {
   baseUrl: string
   runtimeToken: string
+  sandboxMode?: KunServeSandboxMode
   fetchImpl?: typeof fetch
 }
 
 export class KunHttpSseTransport {
   private readonly baseUrl: string
   private readonly runtimeToken: string
+  private readonly sandboxMode: KunServeSandboxMode
   private readonly fetchImpl: typeof fetch
 
   constructor(input: KunHttpSseTransportInput) {
     this.baseUrl = input.baseUrl.replace(/\/+$/, "")
     this.runtimeToken = input.runtimeToken
+    this.sandboxMode = input.sandboxMode ?? KUN_FILE_ONLY_SANDBOX_MODE
     this.fetchImpl = input.fetchImpl ?? fetch
   }
 
@@ -48,7 +55,7 @@ export class KunHttpSseTransport {
         model: input.model,
         mode: input.mode,
         approvalPolicy: "on-request",
-        sandboxMode: "workspace-write",
+        sandboxMode: this.sandboxMode,
       },
     })
     const id = getString(json, "id")
@@ -73,7 +80,7 @@ export class KunHttpSseTransport {
           mode: input.mode,
           model: input.model || undefined,
           approvalPolicy: "on-request",
-          sandboxMode: "workspace-write",
+          sandboxMode: this.sandboxMode,
         },
       },
     )

@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { PassThrough } from "node:stream"
 import {
   KUN_SERVE_TEST_ONLY,
+  KUN_SHELL_SANDBOX_MODE,
   launchKunServe,
   verifyKunReadyInfo,
 } from "../src/main/lib/kun/kun-serve-launcher"
@@ -179,7 +180,65 @@ describe("Kun serve launcher", () => {
     }
   })
 
+  test("passes danger-full-access only when requested by the guarded shell gate", async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), "locus-kun-serve-"))
+    const captured: { args?: string[] } = {}
+    try {
+      const handle = await launchKunServe({
+        executable: "/usr/local/bin/kun",
+        runId: "run-shell",
+        cwd: "/repo",
+        userDataPath,
+        sandboxMode: KUN_SHELL_SANDBOX_MODE,
+        spawnProcess: (_command, args) => {
+          captured.args = args
+          const child = fakeChild()
+          setImmediate(() => {
+            child.stdout.emit(
+              "data",
+              Buffer.from(
+                `${KUN_SERVE_TEST_ONLY.KUN_READY_PREFIX}${JSON.stringify({
+                  service: "kun",
+                  mode: "serve",
+                  host: "127.0.0.1",
+                  port: 34569,
+                  dataDir: join(userDataPath, "kun-sessions", "run-shell"),
+                  approvalPolicy: "on-request",
+                  sandboxMode: "danger-full-access",
+                  insecure: false,
+                  pid: 789,
+                })}\n`,
+              ),
+            )
+          })
+          return child
+        },
+      })
+
+      expect(captured.args).toEqual(
+        expect.arrayContaining(["--sandbox-mode", "danger-full-access"]),
+      )
+      await handle.close()
+    } finally {
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  })
+
   test("rejects hardened handshake drift", () => {
+    expect(() =>
+      verifyKunReadyInfo(
+        {
+          service: "kun",
+          mode: "serve",
+          host: "127.0.0.1",
+          port: 1234,
+          approvalPolicy: "on-request",
+          sandboxMode: "danger-full-access",
+          insecure: false,
+        },
+        { sandboxMode: KUN_SHELL_SANDBOX_MODE },
+      ),
+    ).not.toThrow()
     expect(() =>
       verifyKunReadyInfo({
         service: "kun",

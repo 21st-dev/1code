@@ -1,4 +1,9 @@
 import { setTimeout as sleep } from "node:timers/promises"
+import {
+  decideClaudeToolUse,
+  resolveGuardedScopedShellWriteApproval,
+  type ValidatedAgentScopeContract,
+} from "../agent-guard"
 import { KUN_HTTP_SSE_DESKTOP_ADAPTER_METADATA } from "../agent-runtime/desktop-adapter-metadata"
 import type {
   DesktopRunRequest,
@@ -9,7 +14,7 @@ import {
   emitDesktopRuntimeAdapterStarted,
 } from "../agent-runtime/desktop-runner"
 import { getKunHttpSsePermissionMapping } from "../agent-runtime/permission-policy"
-import type { RunEvent } from "../agent-runtime/runtime-events"
+import { createRunEvent, type JsonValue } from "../agent-runtime/runtime-events"
 import {
   mapDesktopStreamChunkToRunEvents,
   redactRendererRuntimeChunk,
@@ -19,8 +24,10 @@ import {
   type KunRuntimeEvent,
 } from "./kun-http-sse-transport"
 import {
+  KUN_FILE_ONLY_SANDBOX_MODE,
   type KunServeHandle,
   type KunServeLaunchInput,
+  type KunServeSandboxMode,
   launchKunServe,
 } from "./kun-serve-launcher"
 
@@ -34,6 +41,7 @@ const KNOWN_KUN_NOOP_EVENTS = new Set([
   "item_completed",
   "tool_call_ready",
   "tool_result_upload_wait",
+  "tool_result",
   "tool_storm_suppressed",
   "tool_catalog_changed",
   "tool_call_started",
@@ -94,6 +102,9 @@ export type CreateKunHttpSseAdapterInput = {
   executable?: string
   configPath?: string | null
   configSecretHints?: readonly string[]
+  sandboxMode?: KunServeSandboxMode
+  shellEnabled?: boolean
+  guardedContract?: ValidatedAgentScopeContract | null
   emit?: (chunk: Record<string, unknown>) => void
   registerPendingApproval?: (
     toolUseId: string,
@@ -116,6 +127,7 @@ type KunToolCallRecord = {
   callId: string
   toolName: string
   toolKind: "tool_call" | "command_execution" | "file_change"
+  toolInput: Record<string, unknown>
   summary?: string
 }
 
@@ -130,6 +142,66 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null
+}
+
+function parseJsonRecord(value: unknown): Record<string, unknown> | null {
+  if (isRecord(value)) return value
+  if (typeof value !== "string" || !value.trim()) return null
+  try {
+    const parsed = JSON.parse(value)
+    return isRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function kunToolInputFromItem(
+  item: Record<string, unknown>,
+): Record<string, unknown> {
+  return (
+    recordValue(item.input) ??
+    recordValue(item.args) ??
+    parseJsonRecord(item.arguments) ??
+    {}
+  )
+}
+
+function normalizeKunToolForGuard(
+  toolCall: KunToolCallRecord,
+): { toolName: string; toolInput: Record<string, unknown> } | null {
+  if (toolCall.toolKind === "command_execution") {
+    const command =
+      stringValue(toolCall.toolInput.command) ??
+      stringValue(toolCall.toolInput.cmd) ??
+      stringValue(toolCall.toolInput.input) ??
+      stringValue(toolCall.toolInput.script)
+    return {
+      toolName: "Bash",
+      toolInput: { ...toolCall.toolInput, command: command ?? "" },
+    }
+  }
+
+  if (toolCall.toolKind === "file_change") {
+    const filePath =
+      stringValue(toolCall.toolInput.file_path) ??
+      stringValue(toolCall.toolInput.path) ??
+      stringValue(toolCall.toolInput.targetPath) ??
+      stringValue(toolCall.toolInput.target_path)
+    if (!filePath) return null
+    const toolName = toolCall.toolName.toLowerCase().includes("write")
+      ? "Write"
+      : "Edit"
+    return {
+      toolName,
+      toolInput: { ...toolCall.toolInput, file_path: filePath },
+    }
+  }
+
+  return null
 }
 
 function emitQuestion(input: {
@@ -253,7 +325,7 @@ function toolCallRecordFromEvent(
     return null
   }
   const item = isRecord(event.item) ? event.item : null
-  if (!item || item.kind !== "tool_call") return null
+  if (item?.kind !== "tool_call") return null
   const callId = stringValue(item.callId)
   const toolName = stringValue(item.toolName)
   const toolKind = stringValue(item.toolKind)
@@ -270,6 +342,7 @@ function toolCallRecordFromEvent(
     callId,
     toolName,
     toolKind,
+    toolInput: kunToolInputFromItem(item),
     summary: stringValue(item.summary) ?? undefined,
   }
 }
@@ -306,6 +379,9 @@ export function createKunHttpSseAdapter({
   executable,
   configPath,
   configSecretHints = [],
+  sandboxMode = KUN_FILE_ONLY_SANDBOX_MODE,
+  shellEnabled = false,
+  guardedContract = null,
   emit,
   registerPendingApproval,
   unregisterPendingApproval,
@@ -351,6 +427,8 @@ export function createKunHttpSseAdapter({
       const toolCallsByCallId = new Map<string, KunToolCallRecord>()
       let threadId: string | null = null
       let turnId: string | null = null
+      const decidedSideEffectCallIds = new Set<string>()
+      const approvedSideEffectCallIds = new Set<string>()
 
       const emitChunk = (chunk: Record<string, unknown>) => {
         emit?.(
@@ -406,6 +484,188 @@ export function createKunHttpSseAdapter({
         })
       }
 
+      const isSideEffectToolCall = (toolCall: KunToolCallRecord): boolean =>
+        toolCall.toolKind === "command_execution" ||
+        toolCall.toolKind === "file_change"
+
+      const emitToolDecision = (input: {
+        decision: "allow" | "deny"
+        message: string
+        toolCall: KunToolCallRecord
+        approvalId: string
+        guardOwner?: boolean
+      }) => {
+        emitChunk({
+          type: "observed-tool-decision",
+          controlLevel: permissionMapping.controlLevel,
+          decision: input.decision,
+          message: input.message,
+          risk: {
+            runtime: "kun",
+            adapterSource: permissionMapping.adapterSource,
+            guardOwner: input.guardOwner ?? false,
+            tool: input.toolCall.toolName,
+            toolKind: input.toolCall.toolKind,
+            approvalId: input.approvalId,
+            callId: input.toolCall.callId,
+          },
+        })
+      }
+
+      const emitGuardDecisionEvent = (event: unknown) => {
+        emitChunk({
+          type: "guard-event",
+          event,
+        })
+        request.trace.emit(
+          createRunEvent({
+            type: "guard_decision",
+            runtimeId: "kun",
+            runId: request.identity.runId,
+            jobId: request.identity.jobId,
+            sequence: ++sequence,
+            payload: event as JsonValue,
+          }),
+        )
+      }
+
+      const sideEffectCallIdFromExecutionEvent = (
+        event: KunRuntimeEvent,
+      ): string | null => {
+        if (
+          event.kind !== "tool_call_started" &&
+          event.kind !== "tool_call_finished" &&
+          event.kind !== "tool_result"
+        ) {
+          return null
+        }
+        const item = isRecord(event.item) ? event.item : null
+        return (
+          stringValue(event.callId) ??
+          stringValue(event.toolCallId) ??
+          (item ? stringValue(item.callId) : null)
+        )
+      }
+
+      const failClosedForUnguardedSideEffect = (
+        callId: string,
+        trigger: string,
+      ) => {
+        const toolCall = toolCallsByCallId.get(callId)
+        if (!toolCall || !isSideEffectToolCall(toolCall)) return
+        if (approvedSideEffectCallIds.has(callId)) return
+        const message = `Kun observed ${trigger} for ${toolCall.toolKind} without a prior approved guard decision.`
+        emitChunk({
+          type: "runtime-status",
+          ok: false,
+          blocker: {
+            component: "kun",
+            code: "kun-unguarded-side-effect",
+            message,
+          },
+        })
+        setTerminal({ status: "failed", message })
+      }
+
+      const decideWithGuardOwner = async (
+        transport: KunHttpSseTransportLike,
+        approvalId: string,
+        toolCall: KunToolCallRecord,
+      ): Promise<boolean> => {
+        if (!guardedContract) {
+          const reason =
+            "Kun guarded shell requires an approved guarded scope contract."
+          decidedSideEffectCallIds.add(toolCall.callId)
+          await denyApproval(transport, approvalId, reason)
+          return false
+        }
+        const normalized = normalizeKunToolForGuard(toolCall)
+        if (!normalized) {
+          const reason =
+            "Kun side-effect approval could not be normalized for the guard owner."
+          decidedSideEffectCallIds.add(toolCall.callId)
+          await denyApproval(transport, approvalId, reason)
+          return false
+        }
+        const scopedShellApproval = resolveGuardedScopedShellWriteApproval({
+          contract: guardedContract,
+          toolName: normalized.toolName,
+          toolInput: normalized.toolInput,
+          toolUseId: toolCall.callId,
+        })
+        if (
+          scopedShellApproval?.decision === "allow" &&
+          scopedShellApproval.requiresUserApproval
+        ) {
+          emitGuardDecisionEvent(scopedShellApproval.event)
+          const toolUseId = `kun-approval-${request.identity.runId}-${approvalId}`
+          const approval = await waitForKunApproval({
+            subChatId: request.context.subChatId,
+            toolUseId,
+            toolLabel: toolCall.toolName,
+            summary: scopedShellApproval.reason,
+            signal: request.signal,
+            timeoutMs: approvalTimeoutMs,
+            emitChunk,
+            registerPendingApproval,
+            unregisterPendingApproval,
+          })
+          const decision = approval.approved ? "allow" : "deny"
+          const message = approval.message ?? scopedShellApproval.reason
+          decidedSideEffectCallIds.add(toolCall.callId)
+          if (decision === "allow") {
+            approvedSideEffectCallIds.add(toolCall.callId)
+          }
+          await transport.decideApproval({
+            approvalId,
+            decision,
+            reason: message,
+            signal: request.signal,
+          })
+          emitChunk({
+            type: "ask-user-question-result",
+            toolUseId,
+            result: decision === "allow" ? "approved" : message,
+          })
+          emitToolDecision({
+            decision,
+            message,
+            toolCall,
+            approvalId,
+            guardOwner: true,
+          })
+          return decision === "allow"
+        }
+        const guardDecision = decideClaudeToolUse({
+          contract: guardedContract,
+          toolName: normalized.toolName,
+          toolInput: normalized.toolInput,
+          toolUseId: toolCall.callId,
+        })
+        const decision = guardDecision.decision === "allow" ? "allow" : "deny"
+        decidedSideEffectCallIds.add(toolCall.callId)
+        if (decision === "allow") {
+          approvedSideEffectCallIds.add(toolCall.callId)
+        }
+        await transport.decideApproval({
+          approvalId,
+          decision,
+          reason: guardDecision.reason,
+          signal: request.signal,
+        })
+        emitToolDecision({
+          decision,
+          message: guardDecision.reason,
+          toolCall,
+          approvalId,
+          guardOwner: true,
+        })
+        if (guardDecision.event) {
+          emitGuardDecisionEvent(guardDecision.event)
+        }
+        return decision === "allow"
+      }
+
       const handleApproval = async (
         transport: KunHttpSseTransportLike,
         event: KunRuntimeEvent,
@@ -421,6 +681,10 @@ export function createKunHttpSseAdapter({
             approvalId,
             "Kun approval could not be correlated to a verified tool_call item.",
           )
+          return
+        }
+        if (shellEnabled && isSideEffectToolCall(toolCall)) {
+          await decideWithGuardOwner(transport, approvalId, toolCall)
           return
         }
         if (toolCall.toolKind === "command_execution") {
@@ -445,6 +709,11 @@ export function createKunHttpSseAdapter({
           unregisterPendingApproval,
         })
         const decision = approval.approved ? "allow" : "deny"
+        if (isSideEffectToolCall(toolCall)) {
+          decidedSideEffectCallIds.add(toolCall.callId)
+          if (decision === "allow")
+            approvedSideEffectCallIds.add(toolCall.callId)
+        }
         await transport.decideApproval({
           approvalId,
           decision,
@@ -458,19 +727,11 @@ export function createKunHttpSseAdapter({
             ? "approved"
             : (approval.message ?? "denied"),
         })
-        emitChunk({
-          type: "observed-tool-decision",
-          controlLevel: permissionMapping.controlLevel,
+        emitToolDecision({
           decision,
           message: approval.message ?? decision,
-          risk: {
-            runtime: "kun",
-            adapterSource: permissionMapping.adapterSource,
-            tool: toolName,
-            toolKind: toolCall.toolKind,
-            approvalId,
-            callId,
-          },
+          toolCall,
+          approvalId,
         })
       }
 
@@ -481,6 +742,15 @@ export function createKunHttpSseAdapter({
         const toolCall = toolCallRecordFromEvent(event)
         if (toolCall) {
           toolCallsByCallId.set(toolCall.callId, toolCall)
+        }
+        if (shellEnabled) {
+          const executionCallId = sideEffectCallIdFromExecutionEvent(event)
+          if (executionCallId) {
+            failClosedForUnguardedSideEffect(
+              executionCallId,
+              event.kind ?? "execution",
+            )
+          }
         }
         const textDelta = textDeltaFromEvent(event)
         if (textDelta) emitChunk(textDelta)
@@ -501,6 +771,19 @@ export function createKunHttpSseAdapter({
         }
         const nextTerminal = kunTerminalFromEvent(event)
         if (nextTerminal) {
+          if (shellEnabled && nextTerminal.status === "succeeded") {
+            for (const toolCall of toolCallsByCallId.values()) {
+              if (
+                isSideEffectToolCall(toolCall) &&
+                !decidedSideEffectCallIds.has(toolCall.callId)
+              ) {
+                failClosedForUnguardedSideEffect(
+                  toolCall.callId,
+                  "turn completion",
+                )
+              }
+            }
+          }
           setTerminal(nextTerminal)
           return
         }
@@ -546,6 +829,7 @@ export function createKunHttpSseAdapter({
             executable,
             configPath,
             secretHints: configSecretHints,
+            sandboxMode,
             runId: request.identity.runId,
             cwd: request.context.cwd,
           })
@@ -559,6 +843,7 @@ export function createKunHttpSseAdapter({
           transport = new KunHttpSseTransport({
             baseUrl: serveHandle.baseUrl,
             runtimeToken: serveHandle.runtimeToken,
+            sandboxMode,
           })
           closeTransport = serveHandle.close
           secretHints = [serveHandle.runtimeToken, ...configSecretHints]

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { createHash } from "node:crypto"
 import {
   chmodSync,
   existsSync,
@@ -12,6 +13,8 @@ import { tmpdir } from "node:os"
 import { delimiter, join } from "node:path"
 import { getKunCliSettingsPath } from "../src/main/lib/kun/kun-cli-settings"
 import {
+  approveKunShellExecutableHash,
+  resetKunShellExecutableHash,
   resolveKunCliSetupStatus,
   saveKunConfigPathOverride,
   saveKunExecutablePathOverride,
@@ -38,7 +41,7 @@ function kunWithoutVersionFile(root: string): string {
     filePath,
     [
       "#!/bin/sh",
-      "if [ \"$1\" = \"help\" ]; then",
+      'if [ "$1" = "help" ]; then',
       "  echo 'kun <command> [options]'",
       "  exit 0",
       "fi",
@@ -210,6 +213,77 @@ describe("Kun CLI setup status", () => {
         value: "Kun CLI detected (version unavailable)",
         error: null,
       },
+    })
+  })
+
+  test("requires explicit executable hash approval before enabling shell", async () => {
+    const userDataPath = tempRoot()
+    const installRoot = tempRoot()
+    const overridePath = executableFile(installRoot)
+    const configPath = configFile(installRoot)
+    const currentHash = createHash("sha256")
+      .update(readFileSync(overridePath))
+      .digest("hex")
+    const probeVersion = async () => ({
+      ok: true as const,
+      value: "kun test",
+      error: null,
+    })
+
+    await saveKunExecutablePathOverride(overridePath, {
+      userDataPath,
+      probeVersion,
+    })
+    await saveKunConfigPathOverride(configPath, { userDataPath, probeVersion })
+
+    const unapproved = await resolveKunCliSetupStatus({
+      userDataPath,
+      probeVersion,
+    })
+    expect(unapproved.status.shell).toMatchObject({
+      approved: false,
+      currentHash,
+      approvedHash: null,
+      reason: "unapproved",
+    })
+
+    const approved = await approveKunShellExecutableHash({
+      userDataPath,
+      probeVersion,
+    })
+    expect(approved.status.shell).toMatchObject({
+      approved: true,
+      currentHash,
+      approvedHash: currentHash,
+      reason: "approved",
+    })
+
+    writeFileSync(overridePath, "#!/bin/sh\necho kun updated\n", "utf8")
+    chmodSync(overridePath, 0o755)
+    const changedHash = createHash("sha256")
+      .update(readFileSync(overridePath))
+      .digest("hex")
+    const mismatched = await resolveKunCliSetupStatus({
+      userDataPath,
+      probeVersion,
+    })
+    expect(changedHash).not.toBe(currentHash)
+    expect(mismatched.status.shell).toMatchObject({
+      approved: false,
+      currentHash: changedHash,
+      approvedHash: currentHash,
+      reason: "hash-mismatch",
+    })
+
+    const reset = await resetKunShellExecutableHash({
+      userDataPath,
+      probeVersion,
+    })
+    expect(reset.status.shell).toMatchObject({
+      approved: false,
+      currentHash: changedHash,
+      approvedHash: null,
+      reason: "unapproved",
     })
   })
 

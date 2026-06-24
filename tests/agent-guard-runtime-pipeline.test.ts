@@ -166,6 +166,48 @@ describe("agent guard runtime pipeline", () => {
     expect(claude).not.toContain("const activeSessions")
   })
 
+  test("Kun guarded shell is wired through hash approval and canonical guard owner", () => {
+    const router = readFileSync(
+      "src/main/lib/trpc/routers/agent-runtime.ts",
+      "utf8",
+    )
+    const qwenTransport = readFileSync(
+      "src/renderer/features/agents/lib/qwen-chat-transport.ts",
+      "utf8",
+    )
+    const kunAdapter = readFileSync(
+      "src/main/lib/kun/kun-http-sse-adapter.ts",
+      "utf8",
+    )
+    const kunCliStatus = readFileSync(
+      "src/main/lib/kun/kun-cli-status.ts",
+      "utf8",
+    )
+    const kunCliSettings = readFileSync(
+      "src/main/lib/kun/kun-cli-settings.ts",
+      "utf8",
+    )
+
+    expect(kunCliSettings).toContain("shellApprovedExecutableHash")
+    expect(kunCliStatus).toContain('createHash("sha256")')
+    expect(kunCliStatus).toContain("approveKunShellExecutableHash")
+    expect(router).toContain("approveKunShellExecutableHash")
+    expect(router).toContain("prepareActiveGuardedRunContract")
+    expect(router).toContain("KUN_SHELL_SANDBOX_MODE")
+    expect(router).toContain("kunCli.status.shell.approved && guardedContract")
+    expect(router).toContain("shellEnabled: kunShellEnabled")
+    expect(qwenTransport).toContain("approvedGuardedRunContractsAtom")
+    expect(qwenTransport).toContain('this.runtimeId === "kun"')
+    expect(qwenTransport).toContain("scopeContract: approvedScopeContract")
+    expect(kunAdapter).toContain("decideClaudeToolUse")
+    expect(kunAdapter).toContain("resolveGuardedScopedShellWriteApproval")
+    expect(kunAdapter).toContain("normalizeKunToolForGuard")
+    expect(kunAdapter).toContain("guardOwner: true")
+    expect(kunAdapter).toContain('type: "guard-event"')
+    expect(kunAdapter).toContain("kun-unguarded-side-effect")
+    expect(kunAdapter).not.toContain('type: "permission"')
+  })
+
   test("Codex guarded and plan-mode runs install app-server approval enforcement", () => {
     const codex = readFileSync("src/main/lib/trpc/routers/codex.ts", "utf8")
     const codexAppServerAdapter = readFileSync(
