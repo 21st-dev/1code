@@ -32,7 +32,12 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "ts:check": "tsgo --noEmit",
-    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs"
+    "postinstall": "node -e \"if(!process.env.VERCEL){require('child_process').execSync('electron-rebuild -f -w better-sqlite3,node-pty',{stdio:'inherit'})}\" && node scripts/patch-electron-dev.mjs",
+    "test:runtime": "bun test src/main/lib/moss-account/entitlement.test.ts src/main/lib/moss-source/provider-config.test.ts src/main/lib/mcp-stdio-compat.test.ts src/main/lib/trpc/routers/chat-runtime-selection.test.ts src/main/lib/trpc/routers/codex-mcp-session.test.ts src/main/lib/codex-automations.test.ts src/main/lib/shared-resources/registry.test.ts src/main/lib/shared-resources/codex-native-resources.test.ts src/main/lib/shared-resources/governance.test.ts src/renderer/features/agents/lib/agent-runtime.test.ts src/renderer/features/agents/lib/models.test.ts src/renderer/features/plugins/plugin-entry-surfaces.test.ts src/shared/codex-runtime-notices.test.ts",
+    "release:credentials:strict": "node scripts/verify-release-credentials.mjs --require-credentials",
+    "test:packaged-app-smoke": "node scripts/smoke-packaged-app.mjs",
+    "release:notarize": "node scripts/notarize-release-artifacts.mjs",
+    "release:evidence:audit": "node scripts/audit-release-evidence.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.14",

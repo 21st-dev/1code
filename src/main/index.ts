@@ -1,9 +1,20 @@
 import * as Sentry from "@sentry/electron/main"
-import { app, BrowserWindow, dialog, Menu, nativeImage, session } from "electron"
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  Menu,
+  nativeImage,
+  session,
+} from "electron"
 import { existsSync, readFileSync, readlinkSync, unlinkSync } from "fs"
 import { createServer } from "http"
 import { join } from "path"
-import { AuthManager, initAuthManager, getAuthManager as getAuthManagerFromModule } from "./auth-manager"
+import {
+  AuthManager,
+  initAuthManager,
+  getAuthManager as getAuthManagerFromModule,
+} from "./auth-manager"
 import {
   identify,
   initAnalytics,
@@ -16,6 +27,7 @@ import {
   checkForUpdates,
   downloadUpdate,
   initAutoUpdater,
+  registerAutoUpdaterIpcHandlers,
   setupFocusUpdateCheck,
 } from "./lib/auto-updater"
 import { closeDatabase, initDatabase } from "./lib/db"
@@ -28,8 +40,20 @@ import {
 } from "./lib/cli"
 import { cleanupGitWatchers } from "./lib/git/watcher"
 import { cancelAllPendingOAuth, handleMcpOAuthCallback } from "./lib/mcp-auth"
-import { getAllMcpConfigHandler, hasActiveClaudeSessions, abortAllClaudeSessions } from "./lib/trpc/routers/claude"
-import { getAllCodexMcpConfigHandler, hasActiveCodexStreams, abortAllCodexStreams } from "./lib/trpc/routers/codex"
+import {
+  getAllMcpConfigHandler,
+  hasActiveClaudeSessions,
+  abortAllClaudeSessions,
+} from "./lib/trpc/routers/claude"
+import {
+  getAllCodexMcpConfigHandler,
+  hasActiveCodexStreams,
+  abortAllCodexStreams,
+} from "./lib/trpc/routers/codex"
+import {
+  hasActiveHermesStreams,
+  abortAllHermesStreams,
+} from "./lib/trpc/routers/hermes"
 import {
   createMainWindow,
   createWindow,
@@ -39,7 +63,16 @@ import {
 } from "./windows/main"
 import { windowManager } from "./windows/window-manager"
 
-import { IS_DEV, AUTH_SERVER_PORT } from "./constants"
+import {
+  IS_DEV,
+  AUTH_SERVER_PORT,
+  getAuthServerPort,
+  setAuthServerPort,
+} from "./constants"
+import {
+  parsePluginDeepLink,
+  type PluginDeepLinkTarget,
+} from "../shared/plugin-deep-link"
 
 // Deep link protocol (must match package.json build.protocols.schemes)
 // Use different protocol in dev to avoid conflicts with production app
@@ -185,6 +218,41 @@ export async function handleAuthCode(code: string): Promise<void> {
   }
 }
 
+function sendPluginDeepLink(
+  win: BrowserWindow,
+  target: PluginDeepLinkTarget,
+): void {
+  if (win.isDestroyed()) return
+
+  const send = () => {
+    if (!win.isDestroyed()) {
+      win.webContents.send("plugin:open-detail", target)
+    }
+  }
+
+  if (win.webContents.isLoading()) {
+    win.webContents.once("did-finish-load", send)
+  } else {
+    send()
+  }
+
+  if (win.isMinimized()) win.restore()
+  win.focus()
+}
+
+function dispatchPluginDeepLink(target: PluginDeepLinkTarget): void {
+  const windows = getAllWindows()
+
+  if (windows.length === 0) {
+    sendPluginDeepLink(createMainWindow(), target)
+    return
+  }
+
+  for (const win of windows) {
+    sendPluginDeepLink(win, target)
+  }
+}
+
 // Handle deep link
 function handleDeepLink(url: string): void {
   console.log("[DeepLink] Received:", url)
@@ -209,6 +277,16 @@ function handleDeepLink(url: string): void {
         handleMcpOAuthCallback(code, state)
         return
       }
+    }
+
+    // Handle plugin catalog links:
+    // twentyfirst-agents://plugins/github
+    // twentyfirst-agents:///plugins/github
+    // twentyfirst-agents://plugins/github/try-in-chat
+    const pluginDeepLink = parsePluginDeepLink(url)
+    if (pluginDeepLink) {
+      dispatchPluginDeepLink(pluginDeepLink)
+      return
     }
   } catch (e) {
     console.error("[DeepLink] Failed to parse:", e)
@@ -290,29 +368,30 @@ const FAVICON_DATA_URI = `data:image/svg+xml,${encodeURIComponent(FAVICON_SVG)}`
 // Start local HTTP server for auth callbacks
 // This catches http://localhost:{AUTH_SERVER_PORT}/auth/callback?code=xxx and /callback (for MCP OAuth)
 const server = createServer((req, res) => {
-    const url = new URL(req.url || "", `http://localhost:${AUTH_SERVER_PORT}`)
+  const requestHost = req.headers.host || `localhost:${getAuthServerPort()}`
+  const url = new URL(req.url || "", `http://${requestHost}`)
 
-    // Serve favicon
-    if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg") {
-      res.writeHead(200, { "Content-Type": "image/svg+xml" })
-      res.end(FAVICON_SVG)
-      return
-    }
+  // Serve favicon
+  if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg") {
+    res.writeHead(200, { "Content-Type": "image/svg+xml" })
+    res.end(FAVICON_SVG)
+    return
+  }
 
-    if (url.pathname === "/auth/callback") {
-      const code = url.searchParams.get("code")
-      console.log(
-        "[Auth Server] Received callback with code:",
-        code?.slice(0, 8) + "...",
-      )
+  if (url.pathname === "/auth/callback") {
+    const code = url.searchParams.get("code")
+    console.log(
+      "[Auth Server] Received callback with code:",
+      code?.slice(0, 8) + "...",
+    )
 
-      if (code) {
-        // Handle the auth code
-        handleAuthCode(code)
+    if (code) {
+      // Handle the auth code
+      handleAuthCode(code)
 
-        // Send success response and close the browser tab
-        res.writeHead(200, { "Content-Type": "text/html" })
-        res.end(`<!DOCTYPE html>
+      // Send success response and close the browser tab
+      res.writeHead(200, { "Content-Type": "text/html" })
+      res.end(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -375,28 +454,28 @@ const server = createServer((req, res) => {
   <script>setTimeout(() => window.close(), 1000)</script>
 </body>
 </html>`)
-      } else {
-        res.writeHead(400, { "Content-Type": "text/plain" })
-        res.end("Missing code parameter")
-      }
-    } else if (url.pathname === "/callback") {
-      // Handle MCP OAuth callback
-      const code = url.searchParams.get("code")
-      const state = url.searchParams.get("state")
-      console.log(
-        "[Auth Server] Received MCP OAuth callback with code:",
-        code?.slice(0, 8) + "...",
-        "state:",
-        state?.slice(0, 8) + "...",
-      )
+    } else {
+      res.writeHead(400, { "Content-Type": "text/plain" })
+      res.end("Missing code parameter")
+    }
+  } else if (url.pathname === "/callback") {
+    // Handle MCP OAuth callback
+    const code = url.searchParams.get("code")
+    const state = url.searchParams.get("state")
+    console.log(
+      "[Auth Server] Received MCP OAuth callback with code:",
+      code?.slice(0, 8) + "...",
+      "state:",
+      state?.slice(0, 8) + "...",
+    )
 
-      if (code && state) {
-        // Handle the MCP OAuth callback
-        handleMcpOAuthCallback(code, state)
+    if (code && state) {
+      // Handle the MCP OAuth callback
+      handleMcpOAuthCallback(code, state)
 
-        // Send success response and close the browser tab
-        res.writeHead(200, { "Content-Type": "text/html" })
-        res.end(`<!DOCTYPE html>
+      // Send success response and close the browser tab
+      res.writeHead(200, { "Content-Type": "text/html" })
+      res.end(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -459,19 +538,45 @@ const server = createServer((req, res) => {
   <script>setTimeout(() => window.close(), 1000)</script>
 </body>
 </html>`)
-      } else {
-        res.writeHead(400, { "Content-Type": "text/plain" })
-        res.end("Missing code or state parameter")
-      }
     } else {
-      res.writeHead(404, { "Content-Type": "text/plain" })
-      res.end("Not found")
+      res.writeHead(400, { "Content-Type": "text/plain" })
+      res.end("Missing code or state parameter")
+    }
+  } else {
+    res.writeHead(404, { "Content-Type": "text/plain" })
+    res.end("Not found")
+  }
+})
+
+function listenForAuthCallbacks(port: number, attempt = 0): void {
+  setAuthServerPort(port)
+
+  server.once("error", (error: NodeJS.ErrnoException) => {
+    if (IS_DEV && error.code === "EADDRINUSE" && attempt < 20) {
+      const nextPort = port + 1
+      console.warn(
+        `[Auth Server] Port ${port} is already in use; retrying on ${nextPort}`,
+      )
+      listenForAuthCallbacks(nextPort, attempt + 1)
+      return
+    }
+
+    console.error("[Auth Server] Failed to listen:", error)
+    if (!IS_DEV) {
+      throw error
     }
   })
 
-server.listen(AUTH_SERVER_PORT, () => {
-  console.log(`[Auth Server] Listening on http://localhost:${AUTH_SERVER_PORT}`)
-})
+  server.listen(port, () => {
+    const address = server.address()
+    const actualPort =
+      address && typeof address === "object" ? address.port : port
+    setAuthServerPort(actualPort)
+    console.log(`[Auth Server] Listening on http://localhost:${actualPort}`)
+  })
+}
+
+listenForAuthCallbacks(AUTH_SERVER_PORT)
 
 // Clean up stale lock files from crashed instances
 // Returns true if locks were cleaned, false otherwise
@@ -496,7 +601,12 @@ function cleanupStaleLocks(): boolean {
       } catch {
         // Process doesn't exist, clean up stale locks
         console.log("[App] Cleaning stale locks (pid", pid, "not running)")
-        const filesToRemove = ["SingletonLock", "SingletonSocket", "SingletonCookie"]
+        const filesToRemove = [
+          "SingletonLock",
+          "SingletonSocket",
+          "SingletonCookie",
+          "DevToolsActivePort",
+        ]
         for (const file of filesToRemove) {
           const filePath = join(userDataPath, file)
           if (existsSync(filePath)) {
@@ -515,6 +625,10 @@ function cleanupStaleLocks(): boolean {
   }
   return false
 }
+
+// Clean crashed dev instances before Electron evaluates the single-instance lock.
+// If the lock belongs to a live process, cleanupStaleLocks() leaves it intact.
+cleanupStaleLocks()
 
 // Prevent multiple instances
 let gotTheLock = app.requestSingleInstanceLock()
@@ -557,7 +671,6 @@ if (gotTheLock) {
     // if (IS_DEV) {
     //   app.name = "Agents Dev"
     // }
-
 
     // Register protocol handler (must be after app is ready)
     initialRegistration = registerProtocol()
@@ -613,11 +726,14 @@ if (gotTheLock) {
     // Menu icons: PNG template for settings (auto light/dark via "Template" suffix),
     // macOS native SF Symbol for terminal
     const settingsMenuIcon = nativeImage.createFromPath(
-      join(__dirname, "../../build/settingsTemplate.png")
+      join(__dirname, "../../build/settingsTemplate.png"),
     )
-    const terminalMenuIcon = process.platform === "darwin"
-      ? nativeImage.createFromNamedImage("terminal")?.resize({ width: 12, height: 12 })
-      : null
+    const terminalMenuIcon =
+      process.platform === "darwin"
+        ? nativeImage
+            .createFromNamedImage("terminal")
+            ?.resize({ width: 12, height: 12 })
+        : null
 
     // Function to build and set application menu
     const buildMenu = () => {
@@ -675,11 +791,15 @@ if (gotTheLock) {
                     dialog.showMessageBox({
                       type: "info",
                       message: "CLI command uninstalled",
-                      detail: "The '1code' command has been removed from your PATH.",
+                      detail:
+                        "The '1code' command has been removed from your PATH.",
                     })
                     buildMenu()
                   } else {
-                    dialog.showErrorBox("Uninstallation Failed", result.error || "Unknown error")
+                    dialog.showErrorBox(
+                      "Uninstallation Failed",
+                      result.error || "Unknown error",
+                    )
                   }
                 } else {
                   const result = await installCli()
@@ -692,7 +812,10 @@ if (gotTheLock) {
                     })
                     buildMenu()
                   } else {
-                    dialog.showErrorBox("Installation Failed", result.error || "Unknown error")
+                    dialog.showErrorBox(
+                      "Installation Failed",
+                      result.error || "Unknown error",
+                    )
                   }
                 }
               },
@@ -708,7 +831,11 @@ if (gotTheLock) {
               label: "Quit",
               accelerator: "CmdOrCtrl+Q",
               click: async () => {
-                if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
+                if (
+                  hasActiveClaudeSessions() ||
+                  hasActiveCodexStreams() ||
+                  hasActiveHermesStreams()
+                ) {
                   const { dialog } = await import("electron")
                   const { response } = await dialog.showMessageBox({
                     type: "warning",
@@ -717,11 +844,13 @@ if (gotTheLock) {
                     cancelId: 0,
                     title: "Active Sessions",
                     message: "There are active agent sessions running.",
-                    detail: "Quitting now will interrupt them. Are you sure you want to quit?",
+                    detail:
+                      "Quitting now will interrupt them. Are you sure you want to quit?",
                   })
                   if (response === 1) {
                     abortAllClaudeSessions()
                     abortAllCodexStreams()
+                    abortAllHermesStreams()
                     setIsQuitting(true)
                     app.quit()
                   }
@@ -793,7 +922,11 @@ if (gotTheLock) {
               click: () => {
                 const win = BrowserWindow.getFocusedWindow()
                 if (!win) return
-                if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
+                if (
+                  hasActiveClaudeSessions() ||
+                  hasActiveCodexStreams() ||
+                  hasActiveHermesStreams()
+                ) {
                   dialog
                     .showMessageBox(win, {
                       type: "warning",
@@ -809,6 +942,7 @@ if (gotTheLock) {
                       if (response === 1) {
                         abortAllClaudeSessions()
                         abortAllCodexStreams()
+                        abortAllHermesStreams()
                         win.webContents.reloadIgnoringCache()
                       }
                     })
@@ -853,7 +987,7 @@ if (gotTheLock) {
     }
 
     // macOS: Set dock menu (right-click on dock icon)
-    if (process.platform === "darwin") {
+    if (process.platform === "darwin" && app.dock) {
       const dockMenu = Menu.buildFromTemplate([
         {
           label: "New Window",
@@ -937,6 +1071,11 @@ if (gotTheLock) {
       console.log("[App] Database initialized")
     } catch (error) {
       console.error("[App] Failed to initialize database:", error)
+    }
+
+    // Dev builds still render update preferences, but should not initialize updater.
+    if (!app.isPackaged) {
+      registerAutoUpdaterIpcHandlers()
     }
 
     // Create main window

@@ -34,6 +34,15 @@ let globalWindowId: string | null = null
 export function getWindowId(): string {
   if (globalWindowId) return globalWindowId
 
+  if (
+    typeof window === "undefined" ||
+    typeof window.location === "undefined" ||
+    typeof sessionStorage === "undefined"
+  ) {
+    globalWindowId = "main"
+    return globalWindowId
+  }
+
   // Try URL params first (dev mode)
   const urlParams = new URLSearchParams(window.location.search)
   let id = urlParams.get("windowId")
@@ -69,6 +78,14 @@ export function getWindowId(): string {
  * These are one-time use - cleared from sessionStorage after first read.
  */
 export function getInitialWindowParams(): { chatId?: string; subChatId?: string } {
+  if (
+    typeof window === "undefined" ||
+    typeof window.location === "undefined" ||
+    typeof sessionStorage === "undefined"
+  ) {
+    return {}
+  }
+
   // Check if already consumed
   const consumed = sessionStorage.getItem("windowParamsConsumed")
   if (consumed) return {}

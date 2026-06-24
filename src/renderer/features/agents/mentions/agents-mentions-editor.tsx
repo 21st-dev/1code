@@ -29,7 +29,7 @@ export interface FileMentionOption {
   description?: string // skill/agent/tool description
   tools?: string[] // agent allowed tools
   model?: string // agent model
-  source?: "user" | "project" // skill/agent source
+  source?: "moss" | "user" | "project" | "plugin" // skill/agent source
   mcpServer?: string // MCP server name for tools
 }
 
@@ -1365,7 +1365,7 @@ export const AgentsMentionsEditor = memo(
       return (
         <div className="relative">
           {!hasContent && placeholder && (
-            <div className="pointer-events-none absolute left-1 top-1 text-sm text-muted-foreground/60 whitespace-pre-wrap">
+            <div className="codex-editor-placeholder pointer-events-none absolute left-1 top-1 whitespace-pre-wrap">
               {placeholder}
             </div>
           )}
@@ -1384,7 +1384,7 @@ export const AgentsMentionsEditor = memo(
             onFocus={onFocus}
             onBlur={onBlur}
             className={cn(
-              "min-h-[24px] outline-none whitespace-pre-wrap break-words text-sm relative",
+              "codex-composer-editor relative min-h-[24px] whitespace-pre-wrap break-words outline-none",
               disabled && "opacity-50 cursor-not-allowed",
               className,
             )}

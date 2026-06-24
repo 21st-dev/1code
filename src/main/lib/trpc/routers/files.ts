@@ -29,6 +29,15 @@ const IGNORED_DIRS = new Set([
   ".astro",
 ])
 
+const ALLOWED_HIDDEN_DIRS = new Set([
+  ".1code",
+  ".moss",
+  ".claude",
+  ".codex",
+  ".github",
+  ".vscode",
+])
+
 // Files to ignore
 const IGNORED_FILES = new Set([
   ".DS_Store",
@@ -125,8 +134,8 @@ async function scanDirectory(
       if (entry.isDirectory()) {
         // Skip ignored directories
         if (IGNORED_DIRS.has(entry.name)) continue
-        // Skip hidden directories (except .github, .vscode, etc.)
-        if (entry.name.startsWith(".") && !entry.name.startsWith(".github") && !entry.name.startsWith(".vscode")) continue
+        // Keep product-owned agent/config directories visible in the right panel.
+        if (entry.name.startsWith(".") && !ALLOWED_HIDDEN_DIRS.has(entry.name)) continue
 
         // Add the folder itself to results
         entries.push({ path: relativePath, type: "folder" })
@@ -391,6 +400,13 @@ export const filesRouter = router({
           ".webp": "image/webp",
           ".ico": "image/x-icon",
           ".bmp": "image/bmp",
+          ".pdf": "application/pdf",
+          ".mp4": "video/mp4",
+          ".m4v": "video/mp4",
+          ".mov": "video/quicktime",
+          ".webm": "video/webm",
+          ".ogv": "video/ogg",
+          ".ogg": "video/ogg",
         }
         const mimeType = mimeMap[ext] || "application/octet-stream"
 

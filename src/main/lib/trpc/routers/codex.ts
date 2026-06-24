@@ -3,12 +3,12 @@ import { observable } from "@trpc/server/observable"
 import { streamText } from "ai"
 import { eq } from "drizzle-orm"
 import { app } from "electron"
-import { spawn, type ChildProcess } from "node:child_process"
+import { spawn, spawnSync, type ChildProcess } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
 import { readdir, readFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { basename, dirname, join, sep } from "node:path"
+import { basename, delimiter, dirname, join, sep } from "node:path"
 import { z } from "zod"
 import {
   normalizeCodexAssistantMessage,
@@ -16,13 +16,51 @@ import {
 } from "../../../../shared/codex-tool-normalizer"
 import { getClaudeShellEnvironment } from "../../claude/env"
 import { resolveProjectPathFromWorktree } from "../../claude-config"
+import { shouldIgnoreMossStoredMessageSessionIds } from "../../agent-runtime/session-actions"
+import {
+  codexJsonlEventToNativeToolEvent,
+  extractCodexJsonlEventSessionId,
+  extractCodexJsonlEventText,
+  isCodexJsonlCommentaryTextEvent,
+  isCodexJsonlDeltaTextEvent,
+  isCodexJsonlFinalTextEvent,
+  isCodexNativeRepeatedFinalText,
+  parseCodexJsonlEventLine,
+  reconcileCodexNativeTextAppend,
+  runCodexExecResumeBridge,
+  runCodexExecStartBridge,
+  splitCodexTextForStreamingDeltas,
+  type CodexExecResumeBridgeResult,
+  type CodexJsonlEvent,
+} from "../../agent-runtime/codex-native-session"
+import {
+  buildNativePartsFromCodexEvents,
+  getCodexNativePartsRichness,
+  isCodexJsonlUserEvent,
+} from "../../agent-runtime/codex-native-recovery"
+import {
+  createCodexNativeMessagePartsAccumulator,
+  isCodexNativeRuntimeNoticeText,
+} from "../../agent-runtime/codex-native-message-parts"
+import {
+  shouldStartFreshCodexNativeSession,
+  stripCodexNativeRuntimeNoticeMessages,
+} from "../../agent-runtime/codex-native-resume"
 import { getDatabase, projects as projectsTable, subChats } from "../../db"
+import { persistAgentRuntimeSession } from "../../agent-runtime/session-store"
+import {
+  getMossProviderSecret,
+  getMossProviderFingerprint,
+  resolveMossProviderForEngine,
+  type ResolvedMossProvider,
+} from "../../moss-source"
 import {
   fetchMcpTools,
   fetchMcpToolsStdio,
   type McpToolInfo,
 } from "../../mcp-auth"
 import { publicProcedure, router } from "../index"
+import { shouldAttachCodexMcpServerToSession } from "./codex-mcp-session"
 
 const imageAttachmentSchema = z.object({
   base64Data: z.string(),
@@ -30,11 +68,29 @@ const imageAttachmentSchema = z.object({
   filename: z.string().optional(),
 })
 
+const permissionModeSchema = z.enum([
+  "plan",
+  "agent",
+  "bypass",
+  "read-only",
+  "ask-approval",
+  "full-access",
+  "custom",
+])
+
 type CodexProviderSession = {
   provider: ACPProvider
   cwd: string
   authFingerprint: string | null
+  mossProviderFingerprint: string | null
   mcpFingerprint: string
+}
+
+type CodexAuthConfig = {
+  apiKey: string
+  authMethodId?: "codex-api-key" | "openai-api-key"
+  baseUrl?: string
+  providerId?: string
 }
 
 type CodexLoginSessionState =
@@ -53,7 +109,7 @@ type CodexLoginSession = {
   exitCode: number | null
 }
 
-type CodexIntegrationState =
+export type CodexIntegrationState =
   | "connected_chatgpt"
   | "connected_api_key"
   | "not_logged_in"
@@ -66,6 +122,7 @@ type CodexMcpServerForSession =
       command: string
       args: string[]
       env: Array<{ name: string; value: string }>
+      cwd?: string
     }
   | {
       name: string
@@ -80,6 +137,17 @@ type CodexMcpServerForSettings = {
   tools: McpToolInfo[]
   needsAuth: boolean
   config: Record<string, unknown>
+  serverInfo?: {
+    name: string
+    version: string
+    icons?: Array<{
+      src: string
+      mimeType?: string
+      sizes?: string[]
+      theme?: "light" | "dark"
+    }>
+  }
+  error?: string
 }
 
 type CodexMcpSnapshot = {
@@ -106,6 +174,15 @@ const activeStreams = new Map<string, ActiveCodexStream>()
 /** Check if there are any active Codex streaming sessions */
 export function hasActiveCodexStreams(): boolean {
   return activeStreams.size > 0
+}
+
+export function hasActiveCodexStreamForSubChat(
+  subChatId: string,
+  runId?: string | null,
+): boolean {
+  const stream = activeStreams.get(subChatId)
+  if (!stream) return false
+  return !runId || stream.runId === runId
 }
 
 /** Abort all active Codex streams so their cleanup saves partial state */
@@ -136,10 +213,16 @@ const AUTH_HINTS = [
   "401",
   "403",
 ]
-const DEFAULT_CODEX_MODEL = "gpt-5.3-codex/high"
+const DEFAULT_CODEX_MODEL = "gpt-5.5/medium"
+const MIN_DEFAULT_CODEX_CLI_VERSION = "0.133.0"
 const CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS = 40_000
 const CODEX_USAGE_POLL_ATTEMPTS = 3
 const CODEX_USAGE_POLL_INTERVAL_MS = 200
+const NATIVE_TEXT_REPLAY_CHUNK_LENGTH = 12
+const NATIVE_TEXT_REPLAY_MIN_INTERVAL_MS = 16
+const NATIVE_TEXT_REPLAY_MAX_INTERVAL_MS = 50
+const NATIVE_TEXT_REPLAY_MAX_DURATION_MS = 2400
+let loggedCodexCliPath: string | null = null
 
 type CodexTokenUsage = {
   input_tokens?: number
@@ -170,13 +253,13 @@ const codexMcpListEntrySchema = z
         type: z.string(),
         command: z.string().nullable().optional(),
         args: z.array(z.string()).nullable().optional(),
-        env: z.record(z.string()).nullable().optional(),
+        env: z.record(z.string(), z.string()).nullable().optional(),
         env_vars: z.array(z.string()).nullable().optional(),
         cwd: z.string().nullable().optional(),
         url: z.string().nullable().optional(),
         bearer_token_env_var: z.string().nullable().optional(),
-        http_headers: z.record(z.string()).nullable().optional(),
-        env_http_headers: z.record(z.string()).nullable().optional(),
+        http_headers: z.record(z.string(), z.string()).nullable().optional(),
+        env_http_headers: z.record(z.string(), z.string()).nullable().optional(),
       })
       .passthrough(),
     auth_status: z.string().nullable().optional(),
@@ -234,7 +317,7 @@ function resolveCodexAcpBinaryPath(): string {
   return toUnpackedAsarPath(resolvedPath)
 }
 
-function resolveBundledCodexCliPath(): string {
+function getBundledCodexCliPath(): string {
   const binaryName = process.platform === "win32" ? "codex.exe" : "codex"
   const resourcesDir = app.isPackaged
     ? join(process.resourcesPath, "bin")
@@ -245,18 +328,131 @@ function resolveBundledCodexCliPath(): string {
         `${process.platform}-${process.arch}`,
       )
 
-  const binaryPath = join(resourcesDir, binaryName)
-  if (existsSync(binaryPath)) {
-    return binaryPath
+  return join(resourcesDir, binaryName)
+}
+
+function parseCodexCliVersion(output: string): string | null {
+  const match = output.match(/\bcodex-cli\s+(\d+\.\d+\.\d+)\b/i)
+  return match?.[1] ?? null
+}
+
+function compareSemver(a: string | null, b: string | null): number {
+  if (!a && !b) return 0
+  if (!a) return -1
+  if (!b) return 1
+
+  const aParts = a.split(".").map((part) => Number.parseInt(part, 10) || 0)
+  const bParts = b.split(".").map((part) => Number.parseInt(part, 10) || 0)
+  const length = Math.max(aParts.length, bParts.length)
+
+  for (let index = 0; index < length; index += 1) {
+    const diff = (aParts[index] ?? 0) - (bParts[index] ?? 0)
+    if (diff !== 0) return diff
   }
 
-  const hint = app.isPackaged
-    ? "Binary is missing from bundled resources."
-    : "Run `bun run codex:download` to download it for local dev."
+  return 0
+}
 
-  throw new Error(
-    `[codex] Bundled Codex CLI not found at ${binaryPath}. ${hint}`,
+function getCodexCliVersion(binaryPath: string): string | null {
+  const result = spawnSync(binaryPath, ["--version"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: process.env,
+    encoding: "utf8",
+    timeout: 5_000,
+    windowsHide: true,
+  })
+
+  if (result.error || result.status !== 0) {
+    return null
+  }
+
+  return parseCodexCliVersion(`${result.stdout}\n${result.stderr}`)
+}
+
+function getSystemCodexCliCandidates(): string[] {
+  const binaryName = process.platform === "win32" ? "codex.exe" : "codex"
+  const candidates = [
+    process.env.MOSS_CODEX_CLI_PATH,
+    process.env.CODEX_CLI_PATH,
+    join(homedir(), ".local", "bin", binaryName),
+  ]
+
+  if (process.platform === "darwin") {
+    candidates.push(
+      join("/opt/homebrew/bin", binaryName),
+      join("/usr/local/bin", binaryName),
+    )
+  }
+
+  for (const pathEntry of process.env.PATH?.split(delimiter) ?? []) {
+    if (pathEntry.trim().length > 0) {
+      candidates.push(join(pathEntry, binaryName))
+    }
+  }
+
+  return Array.from(
+    new Set(candidates.filter((candidate): candidate is string => Boolean(candidate))),
   )
+}
+
+function resolveCodexCliPath(): string {
+  const bundledPath = getBundledCodexCliPath()
+  const explicitPath = process.env.MOSS_CODEX_CLI_PATH || process.env.CODEX_CLI_PATH
+
+  if (explicitPath) {
+    if (!existsSync(explicitPath)) {
+      throw new Error(`[codex] Configured Codex CLI not found at ${explicitPath}.`)
+    }
+
+    return explicitPath
+  }
+
+  const candidates = [
+    bundledPath,
+    ...getSystemCodexCliCandidates().filter((candidate) => candidate !== bundledPath),
+  ]
+    .filter((candidate) => existsSync(candidate))
+    .map((path) => ({
+      path,
+      isBundled: path === bundledPath,
+      version: getCodexCliVersion(path),
+    }))
+
+  if (candidates.length === 0) {
+    const hint = app.isPackaged
+      ? "Binary is missing from bundled resources."
+      : "Run `bun run codex:download` to download it for local dev or install a current `codex` CLI."
+
+    throw new Error(
+      `[codex] Codex CLI not found at ${bundledPath} or on PATH. ${hint}`,
+    )
+  }
+
+  const selected = candidates.reduce((best, candidate) => {
+    const versionDiff = compareSemver(candidate.version, best.version)
+    if (versionDiff > 0) return candidate
+    if (versionDiff === 0 && best.isBundled && !candidate.isBundled) return candidate
+    return best
+  })
+
+  if (
+    loggedCodexCliPath !== selected.path &&
+    selected.version &&
+    compareSemver(selected.version, MIN_DEFAULT_CODEX_CLI_VERSION) < 0
+  ) {
+    console.warn(
+      `[codex] Using Codex CLI ${selected.version} at ${selected.path}; default model ${DEFAULT_CODEX_MODEL} expects ${MIN_DEFAULT_CODEX_CLI_VERSION} or newer.`,
+    )
+  }
+
+  if (loggedCodexCliPath !== selected.path && !selected.isBundled) {
+    console.info(
+      `[codex] Using Codex CLI ${selected.version ?? "unknown"} at ${selected.path}.`,
+    )
+  }
+  loggedCodexCliPath = selected.path
+
+  return selected.path
 }
 
 function stripAnsi(input: string): string {
@@ -360,7 +556,7 @@ async function runCodexCli(
   stderr: string
   exitCode: number | null
 }> {
-  const codexCliPath = resolveBundledCodexCliPath()
+  const codexCliPath = resolveCodexCliPath()
   const cwd = options?.cwd?.trim()
 
   return await new Promise((resolvePromise, rejectPromise) => {
@@ -501,6 +697,155 @@ async function findSessionFileById(sessionId: string): Promise<string | null> {
   return null
 }
 
+async function readSessionEventsForCurrentRun(
+  sessionId: string,
+  options: { notBeforeTimestampMs: number },
+): Promise<CodexJsonlEvent[]> {
+  const sessionFile = await findSessionFileById(sessionId)
+  if (!sessionFile) return []
+
+  let rawContent = ""
+  try {
+    rawContent = await readFile(sessionFile, "utf8")
+  } catch {
+    return []
+  }
+
+  return parseSessionEventsForCurrentRun(rawContent, options)
+}
+
+function parseSessionEventsForCurrentRun(
+  rawContent: string,
+  options: { notBeforeTimestampMs: number },
+): CodexJsonlEvent[] {
+  const events: CodexJsonlEvent[] = []
+  const notBeforeTimestampMs = Math.max(0, options.notBeforeTimestampMs - 2_000)
+  for (const line of rawContent.split("\n")) {
+    const event = parseCodexJsonlEventLine(line)
+    if (!event) continue
+
+    const timestampMs = toTimestampMs((event as any).timestamp)
+    if (timestampMs !== undefined && timestampMs < notBeforeTimestampMs) {
+      continue
+    }
+    events.push(event)
+  }
+
+  return events
+}
+
+type NativeSessionEventTailer = {
+  start: (sessionId: string | null | undefined) => void
+  stop: () => Promise<number>
+  getForwardedCount: () => number
+}
+
+function createNativeSessionEventTailer(options: {
+  notBeforeTimestampMs: number
+  onEvent: (event: CodexJsonlEvent) => void
+  intervalMs?: number
+}): NativeSessionEventTailer {
+  const intervalMs = options.intervalMs ?? 250
+  const forwardedEventHashes = new Set<string>()
+  let currentSessionId: string | null = null
+  let currentSessionFile: string | null = null
+  let stopped = false
+  let polling = false
+  let pendingPoll = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let forwardedCount = 0
+
+  const getEventHash = (event: CodexJsonlEvent): string => {
+    try {
+      return createHash("sha1").update(JSON.stringify(event)).digest("hex")
+    } catch {
+      return createHash("sha1").update(String(event)).digest("hex")
+    }
+  }
+
+  const poll = async (): Promise<number> => {
+    if (!currentSessionId) return 0
+    if (polling) {
+      pendingPoll = true
+      return 0
+    }
+
+    polling = true
+    let forwardedInPoll = 0
+    try {
+      currentSessionFile =
+        currentSessionFile ?? (await findSessionFileById(currentSessionId))
+      if (!currentSessionFile) {
+        return 0
+      }
+
+      let rawContent = ""
+      try {
+        rawContent = await readFile(currentSessionFile, "utf8")
+      } catch {
+        return 0
+      }
+
+      const events = parseSessionEventsForCurrentRun(rawContent, {
+        notBeforeTimestampMs: options.notBeforeTimestampMs,
+      })
+      for (const event of events) {
+        const eventHash = getEventHash(event)
+        if (forwardedEventHashes.has(eventHash)) continue
+        forwardedEventHashes.add(eventHash)
+        forwardedInPoll += 1
+        forwardedCount += 1
+        try {
+          options.onEvent(event)
+        } catch (error) {
+          console.warn("[codex] Ignoring tailed native JSONL event:", error)
+        }
+      }
+    } finally {
+      polling = false
+    }
+
+    if (pendingPoll && !stopped) {
+      pendingPoll = false
+      forwardedInPoll += await poll()
+    }
+    return forwardedInPoll
+  }
+
+  const schedule = () => {
+    if (stopped || !currentSessionId || timer) return
+    timer = setTimeout(() => {
+      timer = null
+      void poll().finally(schedule)
+    }, intervalMs)
+  }
+
+  return {
+    start(sessionId) {
+      const cleanedSessionId = sessionId?.trim()
+      if (!cleanedSessionId || stopped) return
+      if (currentSessionId === cleanedSessionId && timer) return
+      if (currentSessionId !== cleanedSessionId) {
+        currentSessionFile = null
+      }
+      currentSessionId = cleanedSessionId
+      void poll()
+      schedule()
+    },
+    async stop() {
+      stopped = true
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      return poll()
+    },
+    getForwardedCount() {
+      return forwardedCount
+    },
+  }
+}
+
 async function readLatestTokenCountInfo(
   filePath: string,
   options?: { notBeforeTimestampMs?: number },
@@ -602,6 +947,39 @@ function mapToUsageMetadata(info: CodexTokenCountInfo): CodexUsageMetadata | nul
   if (totalTokens !== undefined) usageMetadata.totalTokens = totalTokens
   if (info.model_context_window !== undefined) {
     usageMetadata.modelContextWindow = info.model_context_window
+  }
+
+  return Object.keys(usageMetadata).length > 0 ? usageMetadata : null
+}
+
+function mapNativeUsageMetadata(
+  usage: Record<string, unknown> | undefined,
+): CodexUsageMetadata | null {
+  if (!usage) return null
+
+  const rawInputTokens =
+    toNonNegativeInt(usage.input_tokens) ?? toNonNegativeInt(usage.inputTokens)
+  const rawCachedInputTokens =
+    toNonNegativeInt(usage.cached_input_tokens) ??
+    toNonNegativeInt(usage.cachedInputTokens)
+  const outputTokens =
+    toNonNegativeInt(usage.output_tokens) ?? toNonNegativeInt(usage.outputTokens)
+  const totalTokens =
+    toNonNegativeInt(usage.total_tokens) ?? toNonNegativeInt(usage.totalTokens)
+  const modelContextWindow =
+    toNonNegativeInt(usage.model_context_window) ??
+    toNonNegativeInt(usage.modelContextWindow)
+  const inputTokens =
+    rawInputTokens !== undefined
+      ? Math.max(0, rawInputTokens - (rawCachedInputTokens ?? 0))
+      : undefined
+
+  const usageMetadata: CodexUsageMetadata = {}
+  if (inputTokens !== undefined) usageMetadata.inputTokens = inputTokens
+  if (outputTokens !== undefined) usageMetadata.outputTokens = outputTokens
+  if (totalTokens !== undefined) usageMetadata.totalTokens = totalTokens
+  if (modelContextWindow !== undefined) {
+    usageMetadata.modelContextWindow = modelContextWindow
   }
 
   return Object.keys(usageMetadata).length > 0 ? usageMetadata : null
@@ -745,7 +1123,10 @@ function normalizeCodexTools(tools: McpToolInfo[]): McpToolInfo[] {
   return [...unique.values()]
 }
 
-async function fetchCodexMcpTools(entry: CodexMcpListEntry): Promise<McpToolInfo[]> {
+async function fetchCodexMcpTools(
+  entry: CodexMcpListEntry,
+  sourcePath?: string | null,
+): Promise<McpToolInfo[]> {
   const transportType = entry.transport.type.trim().toLowerCase()
   const timeoutPromise = new Promise<McpToolInfo[]>((_, reject) =>
     setTimeout(() => reject(new Error("Timeout")), CODEX_MCP_TOOLS_FETCH_TIMEOUT_MS),
@@ -759,6 +1140,8 @@ async function fetchCodexMcpTools(entry: CodexMcpListEntry): Promise<McpToolInfo
         command,
         args: entry.transport.args || undefined,
         env: resolveCodexStdioEnv(entry.transport),
+        cwd: normalizeCodexTransportCwd(entry.transport.cwd),
+        sourcePath,
       })
     }
 
@@ -785,6 +1168,13 @@ async function fetchCodexMcpTools(entry: CodexMcpListEntry): Promise<McpToolInfo
 
 function resolveCodexLookupPath(pathCandidate: string | null | undefined): string {
   return pathCandidate && pathCandidate.trim() ? pathCandidate.trim() : "__global__"
+}
+
+function normalizeCodexTransportCwd(
+  cwd: string | null | undefined,
+): string | undefined {
+  const trimmed = cwd?.trim()
+  return trimmed && trimmed.length > 0 ? trimmed : undefined
 }
 
 function getCodexMcpFingerprint(servers: CodexMcpServerForSession[]): string {
@@ -829,6 +1219,7 @@ async function resolveCodexMcpSnapshot(params: {
       const includeInSession = entry.enabled
       const resolvedStdioEnv = resolveCodexStdioEnv(entry.transport)
       const resolvedHttpHeaders = resolveCodexHttpHeaders(entry.transport)
+      const transportCwd = normalizeCodexTransportCwd(entry.transport.cwd)
       let status: CodexMcpServerForSettings["status"] = !entry.enabled
         ? "failed"
         : authState.needsAuth
@@ -854,11 +1245,13 @@ async function resolveCodexMcpSnapshot(params: {
             command,
             args: Array.isArray(args) ? args : [],
             env: envPairs,
+            ...(transportCwd ? { cwd: transportCwd } : {}),
           }
         }
 
         settingsConfig.command = command
         settingsConfig.args = args
+        settingsConfig.cwd = transportCwd
         settingsConfig.env = entry.transport.env || undefined
         settingsConfig.envVars = entry.transport.env_vars || undefined
       } else if (
@@ -895,7 +1288,12 @@ async function resolveCodexMcpSnapshot(params: {
           // For auth-capable HTTP, only probe if explicit auth header is available.
           Boolean(resolvedHttpHeaders?.Authorization)
         )
-      const tools = shouldProbeTools ? await fetchCodexMcpTools(entry) : []
+      const tools = shouldProbeTools
+        ? await fetchCodexMcpTools(
+            entry,
+            lookupPath === "__global__" ? undefined : lookupPath,
+          )
+        : []
       if (shouldProbeTools && tools.length === 0) {
         status = "failed"
       }
@@ -914,8 +1312,16 @@ async function resolveCodexMcpSnapshot(params: {
   )
 
   for (const converted of convertedEntries) {
-    if (converted.sessionServer) {
-      mcpServersForSession.push(converted.sessionServer)
+    const { sessionServer } = converted
+    if (
+      sessionServer &&
+      shouldAttachCodexMcpServerToSession({
+        sessionServer,
+        settingsServer: converted.settingsServer,
+        toolsWereResolved: shouldIncludeTools,
+      })
+    ) {
+      mcpServersForSession.push(sessionServer)
     }
     mcpServersForSettings.push(converted.settingsServer)
   }
@@ -952,6 +1358,7 @@ function getCodexServerIdentity(
     transportType: config.transportType ?? null,
     command: config.command ?? null,
     args: config.args ?? null,
+    cwd: config.cwd ?? null,
     env: config.env ?? null,
     envVars: config.envVars ?? null,
     url: config.url ?? null,
@@ -1047,6 +1454,28 @@ function normalizeCodexIntegrationState(rawOutput: string): CodexIntegrationStat
   return "unknown"
 }
 
+export async function getCodexIntegrationStatus(): Promise<{
+  state: CodexIntegrationState
+  isConnected: boolean
+  rawOutput: string
+  exitCode: number | null
+}> {
+  const result = await runCodexCli(["login", "status"])
+  const combinedOutput = [result.stdout, result.stderr]
+    .filter((chunk) => chunk.trim().length > 0)
+    .join("\n")
+    .trim()
+  const state = normalizeCodexIntegrationState(combinedOutput)
+
+  return {
+    state,
+    isConnected:
+      state === "connected_chatgpt" || state === "connected_api_key",
+    rawOutput: combinedOutput,
+    exitCode: result.exitCode,
+  }
+}
+
 function parseStoredMessages(raw: string | null | undefined): any[] {
   if (!raw) return []
   try {
@@ -1100,7 +1529,7 @@ function extractCodexModelId(rawModel: unknown): string | undefined {
 
 function preprocessCodexModelName(params: {
   modelId: string
-  authConfig?: { apiKey: string }
+  authConfig?: CodexAuthConfig
 }): string {
   const hasAppManagedApiKey = Boolean(params.authConfig?.apiKey?.trim())
   if (!hasAppManagedApiKey) {
@@ -1111,13 +1540,25 @@ function preprocessCodexModelName(params: {
   return params.modelId
 }
 
-function getAuthFingerprint(authConfig?: { apiKey: string }): string | null {
+function getAuthFingerprint(authConfig?: CodexAuthConfig): string | null {
   const apiKey = authConfig?.apiKey?.trim()
-  if (!apiKey) return null
-  return createHash("sha256").update(apiKey).digest("hex")
+  if (!apiKey && !authConfig?.baseUrl && !authConfig?.authMethodId) return null
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        apiKey,
+        baseUrl: authConfig?.baseUrl,
+        authMethodId: authConfig?.authMethodId,
+        providerId: authConfig?.providerId,
+      }),
+    )
+    .digest("hex")
 }
 
-function buildCodexProviderEnv(authConfig?: { apiKey: string }): Record<string, string> {
+function buildCodexProviderEnv(params?: {
+  authConfig?: CodexAuthConfig
+  mossProvider?: ResolvedMossProvider | null
+}): Record<string, string> {
   // Prefer shell-derived values (notably PATH) so stdio MCP dependencies
   // like pipx/npx resolve the same way as in MCP tool probing.
   const env: Record<string, string> = {}
@@ -1135,23 +1576,40 @@ function buildCodexProviderEnv(authConfig?: { apiKey: string }): Record<string, 
     }
   }
 
-  const apiKey = authConfig?.apiKey?.trim()
+  if (params?.mossProvider?.status === "resolved") {
+    Object.assign(env, params.mossProvider.env)
+  }
+
+  const apiKey = params?.authConfig?.apiKey?.trim()
+  const baseUrl = params?.authConfig?.baseUrl?.trim()
+  if (baseUrl) {
+    env.CODEX_BASE_URL = baseUrl
+    env.OPENAI_BASE_URL = baseUrl
+  }
+
   if (!apiKey) {
     return env
   }
 
+  const apiKeyEnvName =
+    params?.authConfig?.authMethodId === "openai-api-key"
+      ? "OPENAI_API_KEY"
+      : "CODEX_API_KEY"
+
   return {
     ...env,
-    CODEX_API_KEY: apiKey,
+    [apiKeyEnvName]: apiKey,
   }
 }
 
-function getCodexAuthMethodId(authConfig?: {
-  apiKey: string
-}): "codex-api-key" | undefined {
+function getCodexAuthMethodId(authConfig?: CodexAuthConfig): "codex-api-key" | "openai-api-key" | undefined {
   const apiKey = authConfig?.apiKey?.trim()
   if (!apiKey) {
     return undefined
+  }
+
+  if (authConfig?.authMethodId === "openai-api-key") {
+    return "openai-api-key"
   }
 
   // codex-acp advertises auth methods:
@@ -1160,6 +1618,22 @@ function getCodexAuthMethodId(authConfig?: {
   // - openai-api-key
   // For app-managed API key path we want deterministic key auth.
   return "codex-api-key"
+}
+
+function buildCodexAuthConfigFromMossProvider(
+  provider: ResolvedMossProvider,
+): CodexAuthConfig | undefined {
+  if (provider.status !== "resolved" || !provider.apiKey) return undefined
+
+  return {
+    apiKey: provider.apiKey,
+    authMethodId:
+      provider.authMethod === "openai-api-key"
+        ? "openai-api-key"
+        : "codex-api-key",
+    baseUrl: provider.baseUrl,
+    providerId: provider.providerId,
+  }
 }
 
 function buildUserParts(
@@ -1218,23 +1692,81 @@ function buildModelMessageContent(
   return content
 }
 
+function shouldUseNativeCodexExec(): boolean {
+  return true
+}
+
+function buildNativeCodexAssistantMessage(params: {
+  id?: string
+  text?: string
+  parts?: any[]
+  metadata: Record<string, unknown>
+}): any {
+  const parts = [...(params.parts ?? [])]
+  if (params.text) {
+    parts.push({
+      type: "text",
+      text: params.text,
+      state: "done",
+    })
+  }
+
+  return {
+    id: params.id ?? crypto.randomUUID(),
+    role: "assistant",
+    parts,
+    metadata: params.metadata,
+  }
+}
+
+function emitNativeCodexUiChunks(params: {
+  result: CodexExecResumeBridgeResult
+  metadata: Record<string, unknown>
+  messageId: string
+  emit: (chunk: any) => void
+}): void {
+  const textPartId = crypto.randomUUID()
+  const text = params.result.lastText || ""
+
+  params.emit({
+    type: "start",
+    messageId: params.messageId,
+    messageMetadata: params.metadata,
+  })
+  params.emit({ type: "start-step" })
+
+  if (text) {
+    params.emit({ type: "text-start", id: textPartId })
+    params.emit({ type: "text-delta", id: textPartId, delta: text })
+    params.emit({ type: "text-end", id: textPartId })
+  }
+
+  params.emit({ type: "finish-step" })
+  params.emit({
+    type: "finish",
+    finishReason: params.result.success ? "stop" : "error",
+    messageMetadata: params.metadata,
+  })
+}
+
 function getOrCreateProvider(params: {
   subChatId: string
   cwd: string
   mcpServers: CodexMcpServerForSession[]
   mcpFingerprint: string
   existingSessionId?: string
-  authConfig?: {
-    apiKey: string
-  }
+  authConfig?: CodexAuthConfig
+  mossProvider?: ResolvedMossProvider | null
 }): ACPProvider {
   const authFingerprint = getAuthFingerprint(params.authConfig)
+  const mossProviderFingerprint = getMossProviderFingerprint(params.mossProvider)
   const existing = providerSessions.get(params.subChatId)
 
   if (
     existing &&
     existing.cwd === params.cwd &&
     existing.authFingerprint === authFingerprint &&
+    existing.mossProviderFingerprint === mossProviderFingerprint &&
     existing.mcpFingerprint === params.mcpFingerprint
   ) {
     return existing.provider
@@ -1254,7 +1786,10 @@ function getOrCreateProvider(params: {
 
   const provider = createACPProvider({
     command: resolveCodexAcpBinaryPath(),
-    env: buildCodexProviderEnv(params.authConfig),
+    env: buildCodexProviderEnv({
+      authConfig: params.authConfig,
+      mossProvider: params.mossProvider,
+    }),
     authMethodId: getCodexAuthMethodId(params.authConfig),
     session: {
       cwd: params.cwd,
@@ -1270,6 +1805,7 @@ function getOrCreateProvider(params: {
     provider,
     cwd: params.cwd,
     authFingerprint,
+    mossProviderFingerprint,
     mcpFingerprint: params.mcpFingerprint,
   })
 
@@ -1286,21 +1822,7 @@ function cleanupProvider(subChatId: string): void {
 
 export const codexRouter = router({
   getIntegration: publicProcedure.query(async () => {
-    const result = await runCodexCli(["login", "status"])
-    const combinedOutput = [result.stdout, result.stderr]
-      .filter((chunk) => chunk.trim().length > 0)
-      .join("\n")
-      .trim()
-
-    const state = normalizeCodexIntegrationState(combinedOutput)
-
-    return {
-      state,
-      isConnected:
-        state === "connected_chatgpt" || state === "connected_api_key",
-      rawOutput: combinedOutput,
-      exitCode: result.exitCode,
-    }
+    return getCodexIntegrationStatus()
   }),
 
   logout: publicProcedure.mutation(async () => {
@@ -1341,7 +1863,7 @@ export const codexRouter = router({
       return toLoginSessionResponse(existingSession)
     }
 
-    const codexCliPath = resolveBundledCodexCliPath()
+    const codexCliPath = resolveCodexCliPath()
     const sessionId = crypto.randomUUID()
 
     const child = spawn(codexCliPath, ["login"], {
@@ -1566,18 +2088,23 @@ export const codexRouter = router({
         cwd: z.string(),
         projectPath: z.string().optional(),
         mode: z.enum(["plan", "agent"]).default("agent"),
+        permissionMode: permissionModeSchema.optional(),
         sessionId: z.string().optional(),
         forceNewSession: z.boolean().optional(),
         images: z.array(imageAttachmentSchema).optional(),
         authConfig: z
           .object({
             apiKey: z.string().min(1),
+            authMethodId: z.enum(["codex-api-key", "openai-api-key"]).optional(),
+            baseUrl: z.string().min(1).optional(),
+            providerId: z.string().min(1).optional(),
           })
           .optional(),
       }),
     )
     .subscription(({ input }) => {
       return observable<any>((emit) => {
+        const runtimePermissionMode = input.permissionMode ?? input.mode
         const existingStream = activeStreams.get(input.subChatId)
         if (existingStream) {
           existingStream.cancelRequested = true
@@ -1594,6 +2121,8 @@ export const codexRouter = router({
         })
 
         let isActive = true
+        let clearActiveStreamId: (() => void) | null = null
+        let latestKnownCodexSessionId: string | null = input.sessionId ?? null
 
         const safeEmit = (chunk: any) => {
           if (!isActive) return
@@ -1628,12 +2157,57 @@ export const codexRouter = router({
               throw new Error("Sub-chat not found")
             }
 
-            const existingMessages = parseStoredMessages(existingSubChat.messages)
+            const parsedExistingMessages = parseStoredMessages(existingSubChat.messages)
+            const nativeMessageHygiene =
+              stripCodexNativeRuntimeNoticeMessages(parsedExistingMessages)
+            const existingMessages = nativeMessageHygiene.messages as any[]
+            const ignoreStoredSessionIds = shouldIgnoreMossStoredMessageSessionIds(
+              existingSubChat.runtimeMetadata,
+            )
+            const existingRunSessionIdCandidate = input.forceNewSession
+              ? undefined
+              : (ignoreStoredSessionIds ? undefined : input.sessionId) ??
+                existingSubChat.engineSessionId ??
+                (ignoreStoredSessionIds
+                  ? undefined
+                  : getLastSessionId(existingMessages))
+            const nativeResumeDecision = shouldStartFreshCodexNativeSession({
+              storedMessagesByteLength: Buffer.byteLength(
+                existingSubChat.messages ?? "",
+                "utf8",
+              ),
+              runtimeMetadata: existingSubChat.runtimeMetadata,
+              candidateSessionId: existingRunSessionIdCandidate,
+              forceNewSession: input.forceNewSession,
+              messages: existingMessages,
+            })
+            const existingRunSessionId = nativeResumeDecision.startFresh
+              ? undefined
+              : existingRunSessionIdCandidate
+            latestKnownCodexSessionId = existingRunSessionId ?? null
+            const requestedModelIdFromInput = extractCodexModelId(input.model)
+            const resolvedProjectPathFromCwd = resolveProjectPathFromWorktree(
+              input.cwd,
+            )
+            const providerLookupPath =
+              input.projectPath || resolvedProjectPathFromCwd || input.cwd
+            const mossProvider = await resolveMossProviderForEngine({
+              projectPath: providerLookupPath,
+              engineId: "codex",
+              requestedModelId: requestedModelIdFromInput,
+              createIfMissing: true,
+              secretResolver: { getSecret: getMossProviderSecret },
+            })
+            if (mossProvider.warnings.length > 0) {
+              console.warn("[codex] Moss provider warnings:", mossProvider.warnings)
+            }
+            const effectiveAuthConfig =
+              input.authConfig || buildCodexAuthConfigFromMossProvider(mossProvider)
             const requestedModelId =
-              extractCodexModelId(input.model) || DEFAULT_CODEX_MODEL
+              requestedModelIdFromInput || mossProvider.model || DEFAULT_CODEX_MODEL
             const selectedModelId = preprocessCodexModelName({
               modelId: requestedModelId,
-              authConfig: input.authConfig,
+              authConfig: effectiveAuthConfig,
             })
             const metadataModel = selectedModelId
 
@@ -1663,15 +2237,66 @@ export const codexRouter = router({
               return true
             }
 
-            const cleanAssistantMessageForPersistence = (message: any) => {
-              if (!message || message.role !== "assistant") return message
-              if (!Array.isArray(message.parts)) return message
+            const persistSubChatStreamId = (streamId: string | null) => {
+              if (!isAuthoritativeRun()) {
+                return false
+              }
 
-              const cleanedParts = message.parts.filter(
-                (part: any) => part?.state !== "input-streaming",
-              )
+              db.update(subChats)
+                .set({
+                  streamId,
+                  updatedAt: new Date(),
+                })
+                .where(eq(subChats.id, input.subChatId))
+                .run()
+              return true
+            }
+	            clearActiveStreamId = () => {
+	              persistSubChatStreamId(null)
+	            }
 
-              if (cleanedParts.length === 0) {
+	            const shouldDedupeCodexNativeTextParts = (message: any) =>
+	              message?.metadata?.transport === "codex-native-exec" ||
+	              typeof message?.metadata?.nativeBridge === "string"
+
+	            const getTextPartDedupeKey = (text: unknown) => {
+	              if (typeof text !== "string") return null
+	              const trimmed = text.trim()
+	              return trimmed ? trimmed.replace(/\r\n/g, "\n") : null
+	            }
+
+	            const dedupeCodexNativeTextParts = (
+	              message: any,
+	              parts: any[],
+	            ) => {
+	              if (!shouldDedupeCodexNativeTextParts(message)) return parts
+	              const seenTextParts = new Set<string>()
+	              const dedupedParts: any[] = []
+	              for (const part of parts) {
+	                if (part?.type !== "text") {
+	                  dedupedParts.push(part)
+	                  continue
+	                }
+	                const textKey = getTextPartDedupeKey(part.text)
+	                if (textKey && seenTextParts.has(textKey)) continue
+	                if (textKey) seenTextParts.add(textKey)
+	                dedupedParts.push(part)
+	              }
+	              return dedupedParts
+	            }
+
+	            const cleanAssistantMessageForPersistence = (message: any) => {
+	              if (!message || message.role !== "assistant") return message
+	              if (!Array.isArray(message.parts)) return message
+
+	              const cleanedParts = dedupeCodexNativeTextParts(
+	                message,
+	                message.parts.filter(
+	                  (part: any) => part?.state !== "input-streaming",
+	                ),
+	              )
+
+	              if (cleanedParts.length === 0) {
                 return null
               }
 
@@ -1698,10 +2323,19 @@ export const codexRouter = router({
               db.update(subChats)
                 .set({
                   messages: JSON.stringify(messagesForStream),
+                  streamId: input.runId,
                   updatedAt: new Date(),
                 })
                 .where(eq(subChats.id, input.subChatId))
                 .run()
+            } else {
+              if (
+                nativeMessageHygiene.removedCount > 0 ||
+                nativeMessageHygiene.removedPartCount > 0
+              ) {
+                persistSubChatMessages(messagesForStream)
+              }
+              persistSubChatStreamId(input.runId)
             }
 
             if (input.forceNewSession) {
@@ -1716,16 +2350,785 @@ export const codexRouter = router({
               toolsResolved: false,
             }
             try {
-              const resolvedProjectPathFromCwd = resolveProjectPathFromWorktree(
-                input.cwd,
-              )
               const mcpLookupPath =
                 input.projectPath || resolvedProjectPathFromCwd || input.cwd
               mcpSnapshot = await resolveCodexMcpSnapshot({
                 lookupPath: mcpLookupPath,
+                includeTools: true,
               })
             } catch (mcpError) {
               console.error("[codex] Failed to resolve MCP servers:", mcpError)
+            }
+
+            if (shouldUseNativeCodexExec()) {
+              const startedAt = Date.now()
+              const responseMessageId = crypto.randomUUID()
+              let didEmitNativeStart = false
+              let didEmitNativeStartStep = false
+              let didEmitNativeFinishStep = false
+              let activeNativeTextPartId: string | null = null
+              let nativeTextSequence = 0
+              let nativeFinalTextPartId: string | null = null
+              let didEmitNativeFinalTextStart = false
+              let emittedNativeText = ""
+              let emittedNativeFinalText = ""
+              let latestNativeSessionId = existingRunSessionId ?? null
+              let pendingNativeSnapshotTimer: ReturnType<typeof setTimeout> | null =
+                null
+              let lastNativeSnapshotPersistedAt = 0
+              let lastNativeSnapshotKey = ""
+              let nativeVisualTextQueue: Promise<void> = Promise.resolve()
+              const handledNativeEventHashes = new Set<string>()
+              const nativeMessageParts =
+                createCodexNativeMessagePartsAccumulator()
+              const runningNativeBridge = existingRunSessionId
+                ? "codex-exec-resume"
+                : "codex-exec-start"
+              let nativeSessionEventTailer: NativeSessionEventTailer | null = null
+              let tailedNativeSessionEventCount = 0
+              const nativeRuntimeNoticeCleanupMetadata: Record<string, unknown> = {
+                ...(nativeMessageHygiene.removedCount > 0
+                  ? {
+                      nativeRuntimeNoticeMessagesRemoved:
+                        nativeMessageHygiene.removedCount,
+                    }
+                  : {}),
+                ...(nativeMessageHygiene.removedPartCount > 0
+                  ? {
+                      nativeRuntimeNoticePartsRemoved:
+                        nativeMessageHygiene.removedPartCount,
+                    }
+                  : {}),
+              }
+
+              const buildNativeResponseMetadata = (
+                resultSubtype: "running" | "success" | "error" | "cancelled",
+                options?: {
+                  durationMs?: number
+                  nativeBridge?: string
+                  imageCount?: number
+                  usageMetadata?: CodexUsageMetadata | null
+                  error?: string | null
+                },
+              ): Record<string, unknown> => ({
+                model: metadataModel,
+                sessionId: latestNativeSessionId ?? undefined,
+                durationMs: options?.durationMs ?? Date.now() - startedAt,
+                resultSubtype,
+                nativeBridge: options?.nativeBridge ?? runningNativeBridge,
+                transport: "codex-native-exec",
+                imageCount: options?.imageCount ?? input.images?.length ?? 0,
+                ...(nativeResumeDecision.reason
+                  ? { nativeResumeSkipReason: nativeResumeDecision.reason }
+                  : {}),
+                ...nativeRuntimeNoticeCleanupMetadata,
+                ...(options?.usageMetadata || {}),
+                ...(options?.error ? { error: options.error } : {}),
+              })
+
+              const persistNativeRuntimeSession = (
+                resultSubtype: "running" | "success" | "error" | "cancelled",
+                options?: {
+                  nativeBridge?: string
+                  imageCount?: number
+                  eventCount?: number
+                  exitCode?: number | null
+                  error?: string | null
+                },
+              ) => {
+                if (!isAuthoritativeRun()) return false
+
+                persistAgentRuntimeSession({
+                  subChatId: input.subChatId,
+                  engine: "codex",
+                  nativeSessionId: latestNativeSessionId,
+                  configDir: join(homedir(), ".codex"),
+                  modelId: metadataModel,
+                  permissionMode: runtimePermissionMode,
+                  metadata: {
+                    cwd: input.cwd,
+                    projectPath: input.projectPath ?? null,
+                    transport: "codex-native-exec",
+                    nativeBridge: options?.nativeBridge ?? runningNativeBridge,
+                    authMode: input.authConfig
+                      ? "api-key"
+                      : effectiveAuthConfig
+                        ? "moss-provider"
+                        : "codex-cli",
+                    mossProviderStatus: mossProvider.status,
+                    mossProviderId: mossProvider.providerId ?? null,
+                    mossProviderMode: mossProvider.mode ?? null,
+                    forceNewSession: Boolean(input.forceNewSession),
+                    ignoredStoredSessionIds: ignoreStoredSessionIds,
+                    ...(nativeResumeDecision.reason
+                      ? { nativeResumeSkipReason: nativeResumeDecision.reason }
+                      : {}),
+                    ...nativeRuntimeNoticeCleanupMetadata,
+                    mcpFingerprint: mcpSnapshot.fingerprint,
+                    mcpFetchedAt: mcpSnapshot.fetchedAt,
+                    mcpToolsResolved: mcpSnapshot.toolsResolved,
+                    mcpServerCount: mcpSnapshot.mcpServersForSession.length,
+                    hasImages: Boolean(input.images?.length),
+                    imageCount: options?.imageCount ?? input.images?.length ?? 0,
+                    resultSubtype,
+                    ...(typeof options?.eventCount === "number"
+                      ? { eventCount: options.eventCount }
+                      : {}),
+                    ...(options?.exitCode !== undefined
+                      ? { exitCode: options.exitCode }
+                      : {}),
+                    ...(options?.error ? { error: options.error } : {}),
+                  },
+                })
+                return true
+              }
+
+              persistNativeRuntimeSession("running")
+
+              const persistNativeSnapshot = (
+                resultSubtype: "running" | "success" | "error" | "cancelled" =
+                  "running",
+                options?: {
+                  force?: boolean
+                  nativeBridge?: string
+                  imageCount?: number
+                  usageMetadata?: CodexUsageMetadata | null
+                  error?: string | null
+                },
+              ) => {
+                if (nativeMessageParts.parts.length === 0) {
+                  return false
+                }
+
+                const snapshotKey = JSON.stringify({
+                  resultSubtype,
+                  sessionId: latestNativeSessionId,
+                  textLength: emittedNativeText.length,
+                  parts: nativeMessageParts.parts.map((part) => ({
+                    type: part.type,
+                    id: part.toolCallId,
+                    state: part.state,
+                    textLength:
+                      typeof part.text === "string" ? part.text.length : undefined,
+                    hasResult: part.result !== undefined || part.output !== undefined,
+                  })),
+                  tools: nativeMessageParts.toolParts.map((part) => ({
+                    type: part.type,
+                    id: part.toolCallId,
+                    state: part.state,
+                    textLength:
+                      typeof part.text === "string" ? part.text.length : undefined,
+                    hasResult: part.result !== undefined || part.output !== undefined,
+                  })),
+                })
+                if (!options?.force && snapshotKey === lastNativeSnapshotKey) {
+                  return false
+                }
+
+                const responseMessage = buildNativeCodexAssistantMessage({
+                  id: responseMessageId,
+                  parts: nativeMessageParts.parts,
+                  metadata: buildNativeResponseMetadata(resultSubtype, options),
+                })
+                const cleanedResponseMessage =
+                  cleanAssistantMessageForPersistence(responseMessage)
+                const messagesToPersist = cleanedResponseMessage
+                  ? [...messagesForStream, cleanedResponseMessage]
+                  : messagesForStream
+
+                if (persistSubChatMessages(messagesToPersist)) {
+                  lastNativeSnapshotKey = snapshotKey
+                  lastNativeSnapshotPersistedAt = Date.now()
+                  return true
+                }
+                return false
+              }
+
+              const flushNativeSnapshot = (
+                resultSubtype: "running" | "success" | "error" | "cancelled" =
+                  "running",
+                options?: Parameters<typeof persistNativeSnapshot>[1],
+              ) => {
+                if (pendingNativeSnapshotTimer) {
+                  clearTimeout(pendingNativeSnapshotTimer)
+                  pendingNativeSnapshotTimer = null
+                }
+                return persistNativeSnapshot(resultSubtype, {
+                  ...options,
+                  force: true,
+                })
+              }
+
+              const scheduleNativeSnapshotPersist = () => {
+                const now = Date.now()
+                const elapsed = now - lastNativeSnapshotPersistedAt
+                if (elapsed >= 500) {
+                  persistNativeSnapshot()
+                  return
+                }
+
+                if (pendingNativeSnapshotTimer) return
+                pendingNativeSnapshotTimer = setTimeout(() => {
+                  pendingNativeSnapshotTimer = null
+                  persistNativeSnapshot()
+                }, Math.max(50, 500 - elapsed))
+              }
+
+              const getNativeEventHash = (event: CodexJsonlEvent): string => {
+                try {
+                  return createHash("sha1")
+                    .update(JSON.stringify(event))
+                    .digest("hex")
+                } catch {
+                  return createHash("sha1")
+                    .update(String(event))
+                    .digest("hex")
+                }
+              }
+
+              const emitNativeStart = () => {
+                if (didEmitNativeStart) return
+                didEmitNativeStart = true
+                safeEmit({
+                  type: "start",
+                  messageId: responseMessageId,
+                  messageMetadata: {
+                    model: metadataModel,
+                    sessionId: latestNativeSessionId ?? undefined,
+                    transport: "codex-native-exec",
+                  },
+                })
+                safeEmit({ type: "start-step" })
+                didEmitNativeStartStep = true
+              }
+
+              const enqueueNativeVisualTextDelta = (
+                emitChunk: () => void,
+                delayAfterMs: number,
+              ) => {
+                nativeVisualTextQueue = nativeVisualTextQueue
+                  .catch(() => undefined)
+                  .then(async () => {
+                    if (!isActive) return
+                    emitChunk()
+                    await sleep(delayAfterMs)
+                  })
+                return nativeVisualTextQueue
+              }
+
+              const drainNativeVisualTextQueue = async () => {
+                try {
+                  await nativeVisualTextQueue
+                } catch {
+                  // Keep stream completion authoritative even if a late UI emit races
+                  // with teardown.
+                }
+              }
+
+              const closeNativeTextPart = () => {
+                if (!activeNativeTextPartId) {
+                  nativeMessageParts.closeActiveTextPart()
+                  return
+                }
+                safeEmit({ type: "text-end", id: activeNativeTextPartId })
+                activeNativeTextPartId = null
+                nativeMessageParts.closeActiveTextPart()
+              }
+
+              const closeNativeFinalTextPart = () => {
+                if (!didEmitNativeFinalTextStart || !nativeFinalTextPartId) {
+                  nativeMessageParts.closeFinalTextPart()
+                  return
+                }
+                safeEmit({ type: "text-end", id: nativeFinalTextPartId })
+                didEmitNativeFinalTextStart = false
+                nativeFinalTextPartId = null
+                nativeMessageParts.closeFinalTextPart()
+              }
+
+              const closeNativeTextParts = () => {
+                closeNativeTextPart()
+                closeNativeFinalTextPart()
+              }
+
+              const emitNativeFinishStep = () => {
+                if (!didEmitNativeStartStep || didEmitNativeFinishStep) return
+                closeNativeTextParts()
+                safeEmit({ type: "finish-step" })
+                didEmitNativeFinishStep = true
+              }
+
+              const emitNativeTextDelta = (delta: string) => {
+                if (!delta) return
+                emitNativeStart()
+                const textChange = nativeMessageParts.appendTextDelta(delta)
+                if (!textChange) return
+                if (textChange.didStart || !activeNativeTextPartId) {
+                  activeNativeTextPartId = `native-text-${responseMessageId}-${nativeTextSequence++}`
+                  safeEmit({ type: "text-start", id: activeNativeTextPartId })
+                }
+                safeEmit({ type: "text-delta", id: activeNativeTextPartId, delta })
+                emittedNativeText += delta
+                scheduleNativeSnapshotPersist()
+              }
+
+              const emitNativeTextDeltaChunks = (delta: string) => {
+                for (const chunk of splitCodexTextForStreamingDeltas(delta)) {
+                  emitNativeTextDelta(chunk)
+                }
+              }
+
+              const reconcileNativeText = (text: string) => {
+                if (!text) return
+                if (!emittedNativeText) {
+                  emitNativeTextDeltaChunks(text)
+                  return
+                }
+                const textAppend = reconcileCodexNativeTextAppend(
+                  emittedNativeText,
+                  text,
+                )
+                if (textAppend.kind !== "separate") {
+                  emitNativeTextDeltaChunks(textAppend.appendText)
+                }
+              }
+
+              const emitNativeFinalText = (text: string) => {
+                if (!text) return
+                closeNativeTextPart()
+                if (!emittedNativeText) {
+                  emitNativeFinalTextDeltaChunks(text, false)
+                  return
+                }
+                if (emittedNativeFinalText.includes(text)) {
+                  return
+                }
+                if (
+                  isCodexNativeRepeatedFinalText(emittedNativeFinalText, text) ||
+                  isCodexNativeRepeatedFinalText(emittedNativeText, text)
+                ) {
+                  return
+                }
+
+                const textAppend = reconcileCodexNativeTextAppend(
+                  emittedNativeText,
+                  text,
+                )
+                if (!textAppend.appendText) return
+
+                emitNativeFinalTextDeltaChunks(
+                  textAppend.appendText,
+                  textAppend.kind === "separate",
+                )
+              }
+
+              const emitNativeFinalTextDelta = (
+                delta: string,
+                separateFromPreviousText: boolean,
+              ) => {
+                if (!delta) return
+                emitNativeStart()
+                const finalTextChange = nativeMessageParts.appendFinalTextDelta(delta)
+                if (!finalTextChange) return
+                if (finalTextChange.didStart || !nativeFinalTextPartId) {
+                  nativeFinalTextPartId = `native-final-${responseMessageId}`
+                  safeEmit({ type: "text-start", id: nativeFinalTextPartId })
+                  didEmitNativeFinalTextStart = true
+                }
+                safeEmit({ type: "text-delta", id: nativeFinalTextPartId, delta })
+                emittedNativeFinalText += delta
+                emittedNativeText +=
+                  separateFromPreviousText && emittedNativeText
+                    ? `\n\n${delta}`
+                    : delta
+                scheduleNativeSnapshotPersist()
+              }
+
+              const emitNativeFinalTextDeltaChunks = (
+                delta: string,
+                separateFromPreviousText: boolean,
+              ) => {
+                const chunks = splitCodexTextForStreamingDeltas(
+                  delta,
+                  NATIVE_TEXT_REPLAY_CHUNK_LENGTH,
+                )
+                const replayDelayMs = Math.max(
+                  NATIVE_TEXT_REPLAY_MIN_INTERVAL_MS,
+                  Math.min(
+                    NATIVE_TEXT_REPLAY_MAX_INTERVAL_MS,
+                    Math.floor(
+                      NATIVE_TEXT_REPLAY_MAX_DURATION_MS /
+                        Math.max(chunks.length, 1),
+                    ),
+                  ),
+                )
+                chunks.forEach((chunk, index) => {
+                  enqueueNativeVisualTextDelta(
+                    () => {
+                      emitNativeFinalTextDelta(
+                        chunk,
+                        separateFromPreviousText && index === 0,
+                      )
+                    },
+                    replayDelayMs,
+                  )
+                })
+              }
+
+              const emitNativeCommentaryText = (text: string) => {
+                const commentaryText = text.trim()
+                if (!commentaryText) return
+
+                emitNativeStart()
+                closeNativeTextPart()
+
+                const commentaryPart = nativeMessageParts.appendCommentaryText(text)
+                if (!commentaryPart) return
+                const commentaryTextPartId = `native-commentary-${responseMessageId}-${nativeTextSequence++}`
+
+                safeEmit({ type: "text-start", id: commentaryTextPartId })
+                for (const chunk of splitCodexTextForStreamingDeltas(commentaryText)) {
+                  safeEmit({
+                    type: "text-delta",
+                    id: commentaryTextPartId,
+                    delta: chunk,
+                  })
+                }
+                safeEmit({ type: "text-end", id: commentaryTextPartId })
+                emittedNativeText += emittedNativeText
+                  ? `\n\n${commentaryText}`
+                  : commentaryText
+                scheduleNativeSnapshotPersist()
+              }
+
+              const emitNativeToolInput = (params: {
+                callId: string
+                toolName: string
+                input: unknown
+                title?: string
+              }) => {
+                emitNativeStart()
+                closeNativeTextPart()
+                closeNativeFinalTextPart()
+                const toolChange = nativeMessageParts.startTool({
+                  callId: params.callId,
+                  toolName: params.toolName,
+                  input: params.input,
+                  ...(params.title ? { title: params.title } : {}),
+                })
+
+                if (toolChange.didStart) {
+                  safeEmit({
+                    type: "tool-input-available",
+                    toolCallId: toolChange.part.toolCallId ?? params.callId,
+                    toolName: params.toolName,
+                    input: params.input,
+                    ...(params.title ? { title: params.title } : {}),
+                  })
+                }
+                scheduleNativeSnapshotPersist()
+                return toolChange.part
+              }
+
+              const emitNativeToolOutput = (params: {
+                callId: string
+                output: unknown
+                toolName?: string
+                input?: unknown
+                title?: string
+                isError?: boolean
+              }) => {
+                emitNativeStart()
+                let updatedToolPart = nativeMessageParts.updateToolResult(
+                  params.callId,
+                  {
+                    output: params.output,
+                    ...(params.input !== undefined ? { input: params.input } : {}),
+                    ...(params.isError ? { isError: true } : {}),
+                  },
+                )
+                if (!updatedToolPart && params.toolName) {
+                  emitNativeToolInput({
+                    callId: params.callId,
+                    toolName: params.toolName,
+                    input: params.input ?? {},
+                    ...(params.title ? { title: params.title } : {}),
+                  })
+                  updatedToolPart = nativeMessageParts.updateToolResult(
+                    params.callId,
+                    {
+                      output: params.output,
+                      ...(params.input !== undefined ? { input: params.input } : {}),
+                      ...(params.isError ? { isError: true } : {}),
+                    },
+                  )
+                }
+
+                safeEmit({
+                  type: params.isError ? "tool-output-error" : "tool-output-available",
+                  toolCallId: updatedToolPart?.toolCallId ?? params.callId,
+                  ...(params.isError
+                    ? { errorText: String(params.output ?? "Codex tool failed") }
+                    : { output: params.output }),
+                })
+                scheduleNativeSnapshotPersist()
+              }
+
+              const handleNativeJsonlEvent = (event: CodexJsonlEvent) => {
+                const eventHash = getNativeEventHash(event)
+                if (handledNativeEventHashes.has(eventHash)) return
+                handledNativeEventHashes.add(eventHash)
+
+                const eventSessionId = extractCodexJsonlEventSessionId(event)
+                if (eventSessionId && eventSessionId !== latestNativeSessionId) {
+                  latestNativeSessionId = eventSessionId
+                  latestKnownCodexSessionId = eventSessionId
+                  nativeSessionEventTailer?.start(eventSessionId)
+                  persistNativeRuntimeSession("running")
+                  safeEmit({
+                    type: "message-metadata",
+                    messageMetadata: buildNativeResponseMetadata("running"),
+                  })
+                  scheduleNativeSnapshotPersist()
+                }
+
+                if (isCodexJsonlUserEvent(event)) return
+
+                const text = extractCodexJsonlEventText(event)
+                if (text && isCodexNativeRuntimeNoticeText(text)) return
+                if (text && isCodexJsonlCommentaryTextEvent(event)) {
+                  emitNativeCommentaryText(text)
+                  return
+                }
+
+                const toolEvent = codexJsonlEventToNativeToolEvent(event)
+                if (toolEvent?.kind === "tool-input") {
+                  emitNativeToolInput({
+                    callId: toolEvent.callId,
+                    toolName: toolEvent.toolName,
+                    input: toolEvent.input,
+                    ...(toolEvent.title ? { title: toolEvent.title } : {}),
+                  })
+                } else if (toolEvent?.kind === "tool-output") {
+                  emitNativeToolOutput({
+                    callId: toolEvent.callId,
+                    output: toolEvent.output,
+                    ...(toolEvent.toolName ? { toolName: toolEvent.toolName } : {}),
+                    ...(toolEvent.input !== undefined ? { input: toolEvent.input } : {}),
+                    ...(toolEvent.title ? { title: toolEvent.title } : {}),
+                    ...(toolEvent.isError ? { isError: true } : {}),
+                  })
+                }
+
+                if (!text) return
+
+                if (isCodexJsonlFinalTextEvent(event)) {
+                  emitNativeFinalText(text)
+                  return
+                }
+
+                if (isCodexJsonlDeltaTextEvent(event)) {
+                  emitNativeTextDelta(text)
+                  return
+                }
+
+                reconcileNativeText(text)
+              }
+
+              nativeSessionEventTailer = createNativeSessionEventTailer({
+                notBeforeTimestampMs: startedAt,
+                onEvent: handleNativeJsonlEvent,
+              })
+              nativeSessionEventTailer.start(existingRunSessionId)
+
+              try {
+                emitNativeStart()
+                const nativeEnv = buildCodexProviderEnv({
+                  authConfig: effectiveAuthConfig,
+                  mossProvider,
+                })
+                const runNativeCodex = existingRunSessionId
+                  ? runCodexExecResumeBridge({
+                      sessionId: existingRunSessionId,
+                      cwd: input.cwd,
+                      prompt: input.prompt,
+                      modelId: selectedModelId,
+                      permissionMode: runtimePermissionMode,
+                      command: resolveCodexCliPath(),
+                      images: input.images,
+                      env: nativeEnv,
+                      abortSignal: abortController.signal,
+                      onEvent: handleNativeJsonlEvent,
+                    })
+                  : runCodexExecStartBridge({
+                      cwd: input.cwd,
+                      prompt: input.prompt,
+                      modelId: selectedModelId,
+                      permissionMode: runtimePermissionMode,
+                      command: resolveCodexCliPath(),
+                      images: input.images,
+                      env: nativeEnv,
+                      abortSignal: abortController.signal,
+                      onEvent: handleNativeJsonlEvent,
+                    })
+
+                const nativeResult = await runNativeCodex
+                for (const event of nativeResult.events) {
+                  handleNativeJsonlEvent(event)
+                  await drainNativeVisualTextQueue()
+                }
+                tailedNativeSessionEventCount += await nativeSessionEventTailer.stop()
+                const replaySessionId =
+                  nativeResult.nativeSessionId ||
+                  latestNativeSessionId ||
+                  existingRunSessionId
+                const replayedNativeSessionEvents = replaySessionId
+                  ? await readSessionEventsForCurrentRun(replaySessionId, {
+                      notBeforeTimestampMs: startedAt,
+                    })
+                  : []
+                if (replayedNativeSessionEvents.length > 0) {
+                  const replaySnapshot = buildNativePartsFromCodexEvents(
+                    replayedNativeSessionEvents,
+                  )
+                  if (
+                    getCodexNativePartsRichness(replaySnapshot) >
+                    getCodexNativePartsRichness(nativeMessageParts.snapshot())
+                  ) {
+                    nativeMessageParts.replaceWith(replaySnapshot)
+                    scheduleNativeSnapshotPersist()
+                  }
+                }
+                await drainNativeVisualTextQueue()
+                const activeStream = activeStreams.get(input.subChatId)
+                const wasCancelled =
+                  abortController.signal.aborted || activeStream?.cancelRequested
+                latestNativeSessionId =
+                  nativeResult.nativeSessionId ||
+                  latestNativeSessionId ||
+                  existingRunSessionId ||
+                  null
+                latestKnownCodexSessionId = latestNativeSessionId
+                const usageMetadata = mapNativeUsageMetadata(nativeResult.usage)
+                const resultSubtype = wasCancelled
+                  ? "cancelled"
+                  : nativeResult.success
+                    ? "success"
+                    : "error"
+                const finalText = nativeResult.lastText || emittedNativeText
+
+                const finalTextAlreadyPresent = nativeMessageParts.parts.some(
+                  (part) =>
+                    part.type === "text" &&
+                    typeof part.text === "string" &&
+                    part.text.trim() === finalText.trim(),
+                )
+                if (!finalTextAlreadyPresent) {
+                  emitNativeFinalText(finalText)
+                }
+                await drainNativeVisualTextQueue()
+
+                persistNativeRuntimeSession(resultSubtype, {
+                  nativeBridge: nativeResult.plan.bridge,
+                  imageCount: nativeResult.plan.imageCount,
+                  eventCount:
+                    nativeResult.events.length +
+                    tailedNativeSessionEventCount +
+                    replayedNativeSessionEvents.length,
+                  exitCode: nativeResult.exitCode,
+                  ...(nativeResult.error ? { error: nativeResult.error } : {}),
+                })
+
+                if (wasCancelled) {
+                  const responseMetadata = buildNativeResponseMetadata("cancelled", {
+                    nativeBridge: nativeResult.plan.bridge,
+                    imageCount: nativeResult.plan.imageCount,
+                    usageMetadata,
+                  })
+                  flushNativeSnapshot("cancelled", {
+                    nativeBridge: nativeResult.plan.bridge,
+                    imageCount: nativeResult.plan.imageCount,
+                    usageMetadata,
+                  })
+                  emitNativeFinishStep()
+                  persistSubChatStreamId(null)
+                  safeEmit({
+                    type: "message-metadata",
+                    messageMetadata: responseMetadata,
+                  })
+                  safeEmit({
+                    type: "finish",
+                    finishReason: "stop",
+                    messageMetadata: responseMetadata,
+                  })
+                  safeComplete()
+                  return
+                }
+
+                if (!nativeResult.success) {
+                  flushNativeSnapshot("error", {
+                    nativeBridge: nativeResult.plan.bridge,
+                    imageCount: nativeResult.plan.imageCount,
+                    usageMetadata,
+                    error: nativeResult.error ?? null,
+                  })
+                  emitNativeFinishStep()
+                  throw new Error(
+                    nativeResult.error ||
+                      `Codex native exec failed with exit code ${nativeResult.exitCode ?? "unknown"}.`,
+                  )
+                }
+
+                const responseMetadata: Record<string, unknown> = {
+                  model: metadataModel,
+                  sessionId: latestNativeSessionId ?? undefined,
+                  durationMs: Date.now() - startedAt,
+                  resultSubtype,
+                  nativeBridge: nativeResult.plan.bridge,
+                  transport: "codex-native-exec",
+                  imageCount: nativeResult.plan.imageCount,
+                  ...(nativeResumeDecision.reason
+                    ? { nativeResumeSkipReason: nativeResumeDecision.reason }
+                    : {}),
+                  ...nativeRuntimeNoticeCleanupMetadata,
+                  ...(usageMetadata || {}),
+                }
+                flushNativeSnapshot("success", {
+                  nativeBridge: nativeResult.plan.bridge,
+                  imageCount: nativeResult.plan.imageCount,
+                  usageMetadata,
+                })
+                persistSubChatStreamId(null)
+                emitNativeFinishStep()
+                safeEmit({
+                  type: "message-metadata",
+                  messageMetadata: responseMetadata,
+                })
+                safeEmit({
+                  type: "finish",
+                  finishReason: "stop",
+                  messageMetadata: responseMetadata,
+                })
+                safeComplete()
+                return
+              } catch (nativeError) {
+                tailedNativeSessionEventCount +=
+                  (await nativeSessionEventTailer?.stop().catch((tailError) => {
+                    console.warn("[codex] Failed to stop native session tailer:", tailError)
+                    return 0
+                  })) ?? 0
+                flushNativeSnapshot(
+                  abortController.signal.aborted ? "cancelled" : "error",
+                  {
+                    error:
+                      nativeError instanceof Error
+                        ? nativeError.message
+                        : String(nativeError),
+                  },
+                )
+                emitNativeFinishStep()
+                throw nativeError
+              }
             }
 
             const provider = getOrCreateProvider({
@@ -1733,19 +3136,56 @@ export const codexRouter = router({
               cwd: input.cwd,
               mcpServers: mcpSnapshot.mcpServersForSession,
               mcpFingerprint: mcpSnapshot.fingerprint,
-              existingSessionId:
-                input.forceNewSession
-                  ? undefined
-                  : input.sessionId ?? getLastSessionId(existingMessages),
-              authConfig: input.authConfig,
+              existingSessionId: existingRunSessionId,
+              authConfig: effectiveAuthConfig,
+              mossProvider,
             })
 
             const startedAt = Date.now()
-            let latestSessionId =
-              provider.getSessionId() ||
-              input.sessionId ||
-              getLastSessionId(existingMessages)
+            let latestSessionId = provider.getSessionId() || existingRunSessionId
+            if (latestSessionId) {
+              latestKnownCodexSessionId = latestSessionId
+            }
             let usagePromise: Promise<CodexUsageMetadata | null> | null = null
+            const persistCodexRuntimeSession = (
+              resultSubtype: "success" | "error" | "cancelled" = "success",
+            ) => {
+              if (!isAuthoritativeRun()) return false
+
+              persistAgentRuntimeSession({
+                subChatId: input.subChatId,
+                engine: "codex",
+                nativeSessionId:
+                  provider.getSessionId() || latestSessionId || null,
+                configDir: join(homedir(), ".codex"),
+                modelId: metadataModel,
+                permissionMode: runtimePermissionMode,
+                metadata: {
+                  cwd: input.cwd,
+                  projectPath: input.projectPath ?? null,
+                  authMode: input.authConfig
+                    ? "api-key"
+                    : effectiveAuthConfig
+                      ? "moss-provider"
+                      : "codex-cli",
+                  mossProviderStatus: mossProvider.status,
+                  mossProviderId: mossProvider.providerId ?? null,
+                  mossProviderMode: mossProvider.mode ?? null,
+                  forceNewSession: Boolean(input.forceNewSession),
+                  ignoredStoredSessionIds: ignoreStoredSessionIds,
+                  mcpFingerprint: mcpSnapshot.fingerprint,
+                  mcpFetchedAt: mcpSnapshot.fetchedAt,
+                  mcpToolsResolved: mcpSnapshot.toolsResolved,
+                  mcpServerCount: mcpSnapshot.mcpServersForSession.length,
+                  hasImages: Boolean(input.images?.length),
+                  resultSubtype,
+                },
+              })
+
+              return true
+            }
+
+            persistCodexRuntimeSession()
 
             const resolveUsageOnce = (): Promise<CodexUsageMetadata | null> => {
               if (usagePromise) return usagePromise
@@ -1780,6 +3220,7 @@ export const codexRouter = router({
                 const sessionId = provider.getSessionId() || undefined
                 if (sessionId) {
                   latestSessionId = sessionId
+                  latestKnownCodexSessionId = sessionId
                 }
 
                 if (part.type === "finish") {
@@ -1816,7 +3257,9 @@ export const codexRouter = router({
                     cleanAssistantMessageForPersistence(responseWithUsage)
 
                   if (!cleanedResponseMessage) {
-                    persistSubChatMessages(messagesForStream)
+                    if (persistSubChatMessages(messagesForStream)) {
+                      persistCodexRuntimeSession()
+                    }
                     return
                   }
 
@@ -1827,9 +3270,12 @@ export const codexRouter = router({
                     cleanedResponseMessage,
                   ]
 
-                  persistSubChatMessages(messagesToPersist)
+                  if (persistSubChatMessages(messagesToPersist)) {
+                    persistCodexRuntimeSession()
+                  }
                 } catch (error) {
                   console.error("[codex] Failed to persist messages:", error)
+                  persistCodexRuntimeSession("error")
                 }
               },
               onError: (error) => extractCodexError(error).message,
@@ -1873,11 +3319,30 @@ export const codexRouter = router({
               safeEmit({ type: "finish" })
             }
 
+            persistSubChatStreamId(null)
             safeComplete()
           } catch (error) {
             const normalized = extractCodexError(error)
 
             console.error("[codex] chat stream error:", error)
+            try {
+              persistAgentRuntimeSession({
+                subChatId: input.subChatId,
+                engine: "codex",
+                nativeSessionId: latestKnownCodexSessionId,
+                configDir: join(homedir(), ".codex"),
+                modelId: input.model ?? DEFAULT_CODEX_MODEL,
+                permissionMode: runtimePermissionMode,
+                metadata: {
+                  cwd: input.cwd,
+                  projectPath: input.projectPath ?? null,
+                  resultSubtype: "error",
+                  error: normalized.message,
+                },
+              })
+            } catch {
+              // Best-effort runtime index update only.
+            }
             if (isCodexAuthError(normalized)) {
               safeEmit({ type: "auth-error", errorText: normalized.message })
             } else {
@@ -1893,6 +3358,7 @@ export const codexRouter = router({
               if (shouldCleanupProvider) {
                 cleanupProvider(input.subChatId)
               }
+              clearActiveStreamId?.()
               activeStreams.delete(input.subChatId)
             }
           }

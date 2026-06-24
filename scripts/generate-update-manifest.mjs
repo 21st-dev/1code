@@ -10,8 +10,8 @@
  *   node scripts/generate-update-manifest.mjs
  *
  * The script expects ZIP files to exist in the release/ directory:
- *   - Agents-{version}-arm64-mac.zip
- *   - Agents-{version}-mac.zip
+ *   - 1Code-{version}-arm64-mac.zip
+ *   - 1Code-{version}-mac.zip
  *
  * Run this after `npm run dist` to generate the manifest files.
  */
@@ -77,8 +77,8 @@ function findReleaseFile(pattern, ext = ".zip") {
  */
 function generateManifest(arch) {
   // electron-builder names files differently:
-  // arm64: Agents-{version}-arm64-mac.zip
-  // x64: Agents-{version}-mac.zip
+  // arm64: 1Code-{version}-arm64-mac.zip
+  // x64: 1Code-{version}-mac.zip
   const pattern = arch === "arm64" ? `${version}-arm64-mac` : `${version}-mac`
   const zipPath = findReleaseFile(pattern, ".zip")
 
@@ -248,13 +248,13 @@ console.log("Next steps:")
 console.log("1. Upload the following files to cdn.21st.dev/releases/desktop/:")
 if (arm64Manifest) {
   console.log(`   - ${prefix}-mac.yml`)
-  console.log(`   - Agents-${version}-arm64-mac.zip`)
-  console.log(`   - Agents-${version}-arm64.dmg (for manual download)`)
+  console.log(`   - 1Code-${version}-arm64-mac.zip`)
+  console.log(`   - 1Code-${version}-arm64.dmg (for manual download)`)
 }
 if (x64Manifest) {
   console.log(`   - ${prefix}-mac-x64.yml`)
-  console.log(`   - Agents-${version}-mac.zip`)
-  console.log(`   - Agents-${version}.dmg (for manual download)`)
+  console.log(`   - 1Code-${version}-mac.zip`)
+  console.log(`   - 1Code-${version}.dmg (for manual download)`)
 }
 console.log("2. Create a release entry in the admin dashboard")
 console.log("=".repeat(50))

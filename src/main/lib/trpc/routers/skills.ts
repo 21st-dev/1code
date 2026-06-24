@@ -3,35 +3,26 @@ import { router, publicProcedure } from "../index"
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
-import matter from "gray-matter"
 import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { isDirentDirectory } from "../../fs/dirent"
 import { getEnabledPlugins } from "./claude-settings"
+import {
+  ensureMossSource,
+  getMossSourceLayout,
+  materializeMossWorkspaceProjections,
+  removeMossProjectionResource,
+} from "../../moss-source"
+import { generateSkillMd, parseSkillMd } from "./skill-md"
+
+type SkillSource = "moss" | "user" | "project" | "plugin"
 
 export interface FileSkill {
   name: string
   description: string
-  source: "user" | "project" | "plugin"
+  source: SkillSource
   pluginName?: string
   path: string
   content: string
-}
-
-/**
- * Parse SKILL.md frontmatter to extract name and description
- */
-function parseSkillMd(rawContent: string): { name?: string; description?: string; content: string } {
-  try {
-    const { data, content } = matter(rawContent)
-    return {
-      name: typeof data.name === "string" ? data.name : undefined,
-      description: typeof data.description === "string" ? data.description : undefined,
-      content: content.trim(),
-    }
-  } catch (err) {
-    console.error("[skills] Failed to parse frontmatter:", err)
-    return { content: rawContent.trim() }
-  }
 }
 
 /**
@@ -39,10 +30,16 @@ function parseSkillMd(rawContent: string): { name?: string; description?: string
  */
 async function scanSkillsDirectory(
   dir: string,
-  source: "user" | "project" | "plugin",
+  source: SkillSource,
   basePath?: string, // For project skills, the cwd to make paths relative to
+  options?: {
+    skipResolvedUnder?: string
+  },
 ): Promise<FileSkill[]> {
   const skills: FileSkill[] = []
+  const skipResolvedRoot = options?.skipResolvedUnder
+    ? path.resolve(options.skipResolvedUnder)
+    : undefined
 
   try {
     // Check if directory exists
@@ -69,12 +66,22 @@ async function scanSkillsDirectory(
 
       try {
         await fs.access(skillMdPath)
+        if (skipResolvedRoot) {
+          const realSkillDir = await fs.realpath(path.dirname(skillMdPath))
+          if (
+            realSkillDir === skipResolvedRoot ||
+            realSkillDir.startsWith(`${skipResolvedRoot}${path.sep}`)
+          ) {
+            continue
+          }
+        }
+
         const content = await fs.readFile(skillMdPath, "utf-8")
         const parsed = parseSkillMd(content)
 
-        // For project skills, show relative path; for user skills, show ~/.claude/... path
+        // For project/Moss skills, show relative path; for user skills, show ~/.claude/... path
         let displayPath: string
-        if (source === "project" && basePath) {
+        if ((source === "project" || source === "moss") && basePath) {
           displayPath = path.relative(basePath, skillMdPath)
         } else {
           // For user skills, show ~/.claude/skills/... format
@@ -115,10 +122,15 @@ const listSkillsProcedure = publicProcedure
     const userSkillsDir = path.join(os.homedir(), ".claude", "skills")
     const userSkillsPromise = scanSkillsDirectory(userSkillsDir, "user")
 
+    let mossSkillsPromise = Promise.resolve<FileSkill[]>([])
     let projectSkillsPromise = Promise.resolve<FileSkill[]>([])
     if (input?.cwd) {
+      const mossSkillsDir = path.join(input.cwd, ".moss", "skills")
+      mossSkillsPromise = scanSkillsDirectory(mossSkillsDir, "moss", input.cwd)
       const projectSkillsDir = path.join(input.cwd, ".claude", "skills")
-      projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project", input.cwd)
+      projectSkillsPromise = scanSkillsDirectory(projectSkillsDir, "project", input.cwd, {
+        skipResolvedUnder: mossSkillsDir,
+      })
     }
 
     // Discover plugin skills
@@ -140,37 +152,87 @@ const listSkillsProcedure = publicProcedure
     })
 
     // Scan all directories in parallel
-    const [userSkills, projectSkills, ...pluginSkillsArrays] =
+    const [userSkills, mossSkills, projectSkills, ...pluginSkillsArrays] =
       await Promise.all([
         userSkillsPromise,
+        mossSkillsPromise,
         projectSkillsPromise,
         ...pluginSkillsPromises,
       ])
     const pluginSkills = pluginSkillsArrays.flat()
 
-    return [...projectSkills, ...userSkills, ...pluginSkills]
+    return [...mossSkills, ...projectSkills, ...userSkills, ...pluginSkills]
   })
-
-/**
- * Generate SKILL.md content from name, description, and body
- */
-function generateSkillMd(skill: { name: string; description: string; content: string }): string {
-  const frontmatter: string[] = []
-  frontmatter.push(`name: ${skill.name}`)
-  if (skill.description) {
-    frontmatter.push(`description: ${skill.description}`)
-  }
-  return `---\n${frontmatter.join("\n")}\n---\n\n${skill.content}`
-}
 
 /**
  * Resolve the absolute filesystem path of a skill given its display path
  */
-function resolveSkillPath(displayPath: string): string {
+function resolveSkillPath(displayPath: string, cwd?: string): string {
   if (displayPath.startsWith("~")) {
     return path.join(os.homedir(), displayPath.slice(1))
   }
+  if (!path.isAbsolute(displayPath)) {
+    if (!cwd) throw new Error("Project path (cwd) required for project-relative skills")
+    return path.join(cwd, displayPath)
+  }
   return displayPath
+}
+
+function safeSkillName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+}
+
+function assertSafeSkillName(name: string): string {
+  const safeName = safeSkillName(name)
+  if (!safeName || safeName.includes("..")) {
+    throw new Error("Skill name must contain at least one alphanumeric character")
+  }
+  return safeName
+}
+
+function isUnderPath(filePath: string, rootPath: string): boolean {
+  const resolvedFile = path.resolve(filePath)
+  const resolvedRoot = path.resolve(rootPath)
+  return resolvedFile === resolvedRoot || resolvedFile.startsWith(`${resolvedRoot}${path.sep}`)
+}
+
+async function resolveWritableSkill(
+  displayPath: string,
+  cwd?: string,
+): Promise<{
+  absolutePath: string
+  skillDir: string
+  skillName: string
+  isMoss: boolean
+}> {
+  const absolutePath = resolveSkillPath(displayPath, cwd)
+  let writablePath = absolutePath
+  let isMoss = false
+
+  if (cwd) {
+    const mossSkillsRoot = getMossSourceLayout(cwd).skillsRoot
+    if (isUnderPath(absolutePath, mossSkillsRoot)) {
+      isMoss = true
+    } else {
+      try {
+        const realPath = await fs.realpath(absolutePath)
+        if (isUnderPath(realPath, mossSkillsRoot)) {
+          writablePath = realPath
+          isMoss = true
+        }
+      } catch {
+        // The caller will handle missing files through fs.access below.
+      }
+    }
+  }
+
+  const skillDir = path.dirname(writablePath)
+  return {
+    absolutePath: writablePath,
+    skillDir,
+    skillName: path.basename(skillDir),
+    isMoss,
+  }
 }
 
 export const skillsRouter = router({
@@ -195,18 +257,21 @@ export const skillsRouter = router({
         name: z.string(),
         description: z.string(),
         content: z.string(),
-        source: z.enum(["user", "project"]),
+        source: z.enum(["moss", "user", "project"]),
         cwd: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
-      const safeName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
-      if (!safeName) {
-        throw new Error("Skill name must contain at least one alphanumeric character")
-      }
+      const safeName = assertSafeSkillName(input.name)
 
       let targetDir: string
-      if (input.source === "project") {
+      if (input.source === "moss") {
+        if (!input.cwd) {
+          throw new Error("Project path (cwd) required for Moss skills")
+        }
+        await ensureMossSource({ projectPath: input.cwd })
+        targetDir = getMossSourceLayout(input.cwd).skillsRoot
+      } else if (input.source === "project") {
         if (!input.cwd) {
           throw new Error("Project path (cwd) required for project skills")
         }
@@ -239,9 +304,18 @@ export const skillsRouter = router({
 
       await fs.writeFile(skillMdPath, fileContent, "utf-8")
 
+      if (input.source === "moss" && input.cwd) {
+        await materializeMossWorkspaceProjections({
+          projectPath: input.cwd,
+          expectedResourceIds: [`moss:skill:${safeName}`],
+        })
+      }
+
       return {
         name: safeName,
-        path: skillMdPath,
+        path: input.source === "moss" && input.cwd
+          ? path.relative(input.cwd, skillMdPath)
+          : skillMdPath,
         source: input.source,
       }
     }),
@@ -260,12 +334,10 @@ export const skillsRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const absolutePath = input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
-        ? path.join(input.cwd, input.path)
-        : resolveSkillPath(input.path)
+      const skill = await resolveWritableSkill(input.path, input.cwd)
 
       // Verify file exists before writing
-      await fs.access(absolutePath)
+      await fs.access(skill.absolutePath)
 
       const fileContent = generateSkillMd({
         name: input.name,
@@ -273,7 +345,14 @@ export const skillsRouter = router({
         content: input.content,
       })
 
-      await fs.writeFile(absolutePath, fileContent, "utf-8")
+      await fs.writeFile(skill.absolutePath, fileContent, "utf-8")
+
+      if (skill.isMoss && input.cwd) {
+        await materializeMossWorkspaceProjections({
+          projectPath: input.cwd,
+          expectedResourceIds: [`moss:skill:${skill.skillName}`],
+        })
+      }
 
       return { success: true }
     }),
@@ -293,14 +372,25 @@ export const skillsRouter = router({
         throw new Error("Invalid path")
       }
 
-      const absolutePath = input.cwd && !input.path.startsWith("~") && !input.path.startsWith("/")
-        ? path.join(input.cwd, input.path)
-        : resolveSkillPath(input.path)
+      const skill = await resolveWritableSkill(input.path, input.cwd)
 
-      // Skills are directories containing SKILL.md — delete the parent directory
-      const skillDir = path.dirname(absolutePath)
-      await fs.access(skillDir)
-      await fs.rm(skillDir, { recursive: true })
+      // Skills are directories containing SKILL.md - delete the parent directory.
+      await fs.access(skill.skillDir)
+      await fs.rm(skill.skillDir, { recursive: true, force: true })
+
+      if (skill.isMoss && input.cwd) {
+        await removeMossProjectionResource({
+          projectPath: input.cwd,
+          resourceId: `moss:skill:${skill.skillName}`,
+          sourcePath: path.join(".moss", "skills", skill.skillName),
+          targetPaths: [
+            path.join(".claude", "skills", skill.skillName),
+            path.join(".codex", "skills", skill.skillName),
+          ],
+          removeTargets: true,
+        })
+        await materializeMossWorkspaceProjections({ projectPath: input.cwd })
+      }
 
       return { success: true }
     }),

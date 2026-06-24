@@ -1,6 +1,6 @@
 import { AuthStore, AuthData, AuthUser } from "./auth-store"
 import { app, BrowserWindow } from "electron"
-import { AUTH_SERVER_PORT } from "./constants"
+import { getAuthServerPort } from "./constants"
 
 // Get API URL - in packaged app always use production, in dev allow override
 function getApiBaseUrl(): string {
@@ -214,7 +214,7 @@ export class AuthManager {
     // In dev mode, use localhost callback (we run HTTP server on AUTH_SERVER_PORT)
     // Also pass the protocol so web knows which deep link to use as fallback
     if (this.isDev) {
-      authUrl += `&callback=${encodeURIComponent(`http://localhost:${AUTH_SERVER_PORT}/auth/callback`)}`
+      authUrl += `&callback=${encodeURIComponent(`http://localhost:${getAuthServerPort()}/auth/callback`)}`
       // Pass dev protocol so production web can use correct deep link if callback fails
       authUrl += `&protocol=twentyfirst-agents-dev`
     }
@@ -256,7 +256,23 @@ export class AuthManager {
    * Fetch user's subscription plan from web backend
    * Used for PostHog analytics enrichment
    */
-  async fetchUserPlan(): Promise<{ email: string; plan: string; status: string | null } | null> {
+  async fetchUserPlan(): Promise<{
+    email: string
+    plan: string
+    status: string | null
+    quota?: {
+      includedCredits?: number | null
+      usedCredits?: number | null
+      remainingCredits?: number | null
+      resetAt?: string | null
+      unit?: string | null
+    } | null
+    includedCredits?: number | null
+    usedCredits?: number | null
+    remainingCredits?: number | null
+    resetAt?: string | null
+    quotaUnit?: string | null
+  } | null> {
     const token = await this.getValidToken()
     if (!token) return null
 
