@@ -38,11 +38,21 @@ describe("provider routing UX source guards", () => {
     "utf8",
   )
   const chatInputAreaSource = readFileSync(
-    join(process.cwd(), "src/renderer/features/agents/main/chat-input-area.tsx"),
+    join(
+      process.cwd(),
+      "src/renderer/features/agents/main/chat-input-area.tsx",
+    ),
     "utf8",
   )
   const activeChatSource = readFileSync(
     join(process.cwd(), "src/renderer/features/agents/main/active-chat.tsx"),
+    "utf8",
+  )
+  const qwenChatTransportSource = readFileSync(
+    join(
+      process.cwd(),
+      "src/renderer/features/agents/lib/qwen-chat-transport.ts",
+    ),
     "utf8",
   )
   const kunProviderSelectorSource = readFileSync(
@@ -161,9 +171,7 @@ describe("provider routing UX source guards", () => {
   })
 
   test("new chats persist selected provider metadata for transport routing", () => {
-    expect(newChatFormSource).toContain(
-      "provider: selectedRuntimeProvider",
-    )
+    expect(newChatFormSource).toContain("provider: selectedRuntimeProvider")
     expect(newChatFormSource).toContain(
       'selectedRuntimeProvider === "qwen-code"',
     )
@@ -192,17 +200,30 @@ describe("provider routing UX source guards", () => {
       'profile.targetRuntimes.includes("kun")',
     )
     expect(newChatFormSource).toContain("lastSelectedKunModelSourceAtom")
-    expect(newChatFormSource).toContain(
-      'selectedRuntimeProvider === "kun"',
-    )
+    expect(newChatFormSource).toContain('selectedRuntimeProvider === "kun"')
     expect(chatInputAreaSource).toContain("subChatKunModelSourceAtomFamily")
     expect(activeChatSource).toContain("subChatKunModelSourceAtomFamily")
-    expect(activeChatSource).toContain("parseProviderProfileSource(kunModelSource)")
+    expect(activeChatSource).toContain(
+      "parseProviderProfileSource(kunModelSource)",
+    )
     expect(providerGatewaySource).toContain('target === "kun"')
     expect(agentRuntimeRouterSource).toContain("synthesizeKunProviderConfig")
     expect(agentRuntimeRouterSource).toContain("kunProviderConfig?.cleanup()")
     expect(kunProviderSelectorSource).not.toContain(
       'targetRuntimes.includes("local")',
     )
+  })
+
+  test("experimental runtime transport finalizes AI SDK message streams", () => {
+    expect(qwenChatTransportSource).toContain(
+      "createExperimentalRuntimeUiStreamState",
+    )
+    expect(qwenChatTransportSource).toContain(
+      "normalizeExperimentalRuntimeUiChunk",
+    )
+    expect(qwenChatTransportSource).toContain(
+      "finalizeExperimentalRuntimeUiStream",
+    )
+    expect(qwenChatTransportSource).toContain("controller.close()")
   })
 })

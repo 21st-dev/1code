@@ -16,6 +16,14 @@ import {
   type ValidatedAgentScopeContract,
 } from "../../agent-guard"
 import type { DesktopRunProviderBinding } from "../../agent-runtime/desktop-run-request"
+import {
+  collectExperimentalRuntimeAssistantChunk,
+  createExperimentalRuntimeAssistantAccumulator,
+  persistExperimentalRuntimeSubChatMessages,
+  prepareExperimentalRuntimeAssistantMessages,
+  prepareExperimentalRuntimeUserMessages,
+  readExperimentalRuntimeSubChatMessages,
+} from "../../agent-runtime/experimental-runtime-message-history"
 import { resolveDesktopPermissionPolicy } from "../../agent-runtime/permission-policy"
 import { verifyDesktopRunPreflight } from "../../agent-runtime/preflight"
 import type { RunEvent } from "../../agent-runtime/runtime-events"
@@ -441,6 +449,11 @@ export const agentRuntimeRouter = router({
         let desktopJobReachedNaturalFinish = false
         let desktopJobDb: ReturnType<typeof getDatabase> | null = null
         let kunProviderConfig: SynthesizedKunProviderConfig | null = null
+        let messagesToSave = [] as ReturnType<
+          typeof readExperimentalRuntimeSubChatMessages
+        >
+        const assistantAccumulator =
+          createExperimentalRuntimeAssistantAccumulator()
 
         const safeEmit = (chunk: Record<string, unknown>) => {
           if (!isActive) return
@@ -448,14 +461,17 @@ export const agentRuntimeRouter = router({
             desktopJobSawError = true
           }
           try {
-            emit.next(
-              redactRendererRuntimeChunk({
-                runtimeId: input.runtimeId,
-                runId,
-                jobId: desktopJobId,
-                chunk,
-              }) as Record<string, unknown>,
+            const redactedChunk = redactRendererRuntimeChunk({
+              runtimeId: input.runtimeId,
+              runId,
+              jobId: desktopJobId,
+              chunk,
+            }) as Record<string, unknown>
+            collectExperimentalRuntimeAssistantChunk(
+              assistantAccumulator,
+              redactedChunk,
             )
+            emit.next(redactedChunk)
           } catch {
             isActive = false
           }
@@ -645,6 +661,27 @@ export const agentRuntimeRouter = router({
               workspaceKind: preflight.kind,
               hasScopeContract: Boolean(guardedContract),
             })
+            messagesToSave = prepareExperimentalRuntimeUserMessages({
+              existingMessages: readExperimentalRuntimeSubChatMessages(
+                db,
+                input.subChatId,
+              ),
+              prompt: input.prompt,
+              metadata: {
+                runtimeId: input.runtimeId,
+                modelSource: input.modelSource,
+                providerProfileId: runtimeProviderProfileId({
+                  modelSource: input.modelSource,
+                  providerProfileId: input.providerProfileId,
+                }),
+              },
+            })
+            persistExperimentalRuntimeSubChatMessages({
+              db,
+              chatId: input.chatId,
+              subChatId: input.subChatId,
+              messages: messagesToSave,
+            })
             const desktopJob = createAndRegisterDesktopChatAgentJob(db, {
               runtime: input.runtimeId,
               mode: input.mode,
@@ -742,6 +779,34 @@ export const agentRuntimeRouter = router({
           } finally {
             kunProviderConfig?.cleanup()
             if (desktopJobDb) {
+              try {
+                const finalMessages =
+                  prepareExperimentalRuntimeAssistantMessages({
+                    messagesToSave,
+                    accumulator: assistantAccumulator,
+                    metadata: {
+                      runtimeId: input.runtimeId,
+                      modelSource: input.modelSource,
+                      providerProfileId: runtimeProviderProfileId({
+                        modelSource: input.modelSource,
+                        providerProfileId: input.providerProfileId,
+                      }),
+                    },
+                  })
+                if (finalMessages.length !== messagesToSave.length) {
+                  persistExperimentalRuntimeSubChatMessages({
+                    db: desktopJobDb,
+                    chatId: input.chatId,
+                    subChatId: input.subChatId,
+                    messages: finalMessages,
+                  })
+                }
+              } catch (error) {
+                console.warn(
+                  "[agent-runtime] Failed to persist experimental runtime messages",
+                  error,
+                )
+              }
               clearPendingRuntimeApprovals(
                 "Session cancelled.",
                 input.runtimeId,

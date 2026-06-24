@@ -532,6 +532,32 @@ export function NewChatForm({
       enabledAgents.some((agent) => agent.id === selectedAgent.id),
     [enabledAgents, selectedAgent.id],
   )
+  const chatAgentOptions = useMemo(
+    () =>
+      selectableAgents.filter((agent): agent is NewChatAgent & {
+        id: AgentChatProvider
+      } => isAgentChatProvider(agent.id)),
+    [selectableAgents],
+  )
+  const isAgentOptionDisabled = useCallback(
+    (agent: NewChatAgent) => {
+      if (agent.disabled) return true
+      if (!quickChatAllowedProviderIds) return false
+      if (!isAgentChatProvider(agent.id)) return true
+      return !quickChatAllowedProviderIds.includes(agent.id)
+    },
+    [quickChatAllowedProviderIds],
+  )
+  const handleAgentSelect = useCallback(
+    (agent: NewChatAgent) => {
+      if (!isAgentChatProvider(agent.id) || isAgentOptionDisabled(agent)) {
+        return
+      }
+      setSelectedAgent(agent)
+      setLastSelectedAgentId(agent.id)
+    },
+    [isAgentOptionDisabled, setLastSelectedAgentId],
+  )
 
   // Get available models (with offline support)
   const availableModels = useAvailableModels()
@@ -2317,6 +2343,44 @@ export function NewChatForm({
                         <span className="truncate">{t("chat.mode.agent")}</span>
                       </div>
                     )}
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label="Agent"
+                        title="Agent"
+                        className="flex h-8 max-w-[150px] min-w-0 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground transition-[background-color,color] duration-150 ease-out hover:bg-muted/50 hover:text-foreground outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70"
+                      >
+                        <AgentIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{selectedAgent.name}</span>
+                        <IconChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="start"
+                        sideOffset={6}
+                        className="w-44"
+                        onCloseAutoFocus={(e) => e.preventDefault()}
+                      >
+                        {chatAgentOptions.map((agent) => {
+                          const disabled = isAgentOptionDisabled(agent)
+                          const selected = agent.id === selectedAgent.id
+                          return (
+                            <DropdownMenuItem
+                              key={agent.id}
+                              disabled={disabled}
+                              onSelect={() => handleAgentSelect(agent)}
+                              className="justify-between gap-2"
+                            >
+                              <span className="min-w-0 truncate">
+                                {agent.name}
+                              </span>
+                              {selected ? (
+                                <CheckIcon className="h-3.5 w-3.5 shrink-0" />
+                              ) : null}
+                            </DropdownMenuItem>
+                          )
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
 
                     <div className="group/model-controls flex min-w-0 flex-1 items-center gap-0.5">
                       {selectedAgent.id === "qwen-code" ? (

@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events"
 import { createServer } from "node:http"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { ValidatedAgentScopeContract } from "../src/main/lib/agent-guard"
+import type { DesktopRunProviderBinding } from "../src/main/lib/agent-runtime/desktop-run-request"
 import { resolveDesktopPermissionPolicy } from "../src/main/lib/agent-runtime/permission-policy"
 import type { RunEvent } from "../src/main/lib/agent-runtime/runtime-events"
 import { createKunDesktopRunRequest } from "../src/main/lib/kun/desktop-run-request"
@@ -37,6 +38,7 @@ function fakeKunRequest(
   signal = new AbortController().signal,
   options: {
     hasScopeContract?: boolean
+    providerBinding?: Omit<DesktopRunProviderBinding, "diagnostics">
     traceEvents?: RunEvent[]
   } = {},
 ) {
@@ -58,6 +60,7 @@ function fakeKunRequest(
       mode: "agent",
       hasScopeContract: options.hasScopeContract,
     }),
+    providerBinding: options.providerBinding,
     signal,
     emitTrace: (event) => {
       options.traceEvents?.push(event)
@@ -74,6 +77,92 @@ async function waitFor(predicate: () => boolean) {
 }
 
 describe("Kun HTTP/SSE adapter", () => {
+  test("uses Kun ready model for BYO config without overriding turn model", async () => {
+    const calls: Array<{
+      kind: "createThread" | "startTurn"
+      model?: string | null
+    }> = []
+    const adapter = createKunHttpSseAdapter({
+      createTransport: async () => ({
+        ready: { model: "deepseek-v4-flash" },
+        transport: {
+          async createThread(input) {
+            calls.push({ kind: "createThread", model: input.model })
+            return { id: "thread-1" }
+          },
+          async startTurn(input) {
+            calls.push({ kind: "startTurn", model: input.model })
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval() {},
+          async streamEvents(input) {
+            await waitFor(() =>
+              calls.some((call) => call.kind === "startTurn"),
+            )
+            input.onEvent({ kind: "turn_completed" })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(fakeKunRequest())
+
+    expect(result.status).toBe("succeeded")
+    expect(calls).toEqual([
+      { kind: "createThread", model: "deepseek-v4-flash" },
+      { kind: "startTurn", model: null },
+    ])
+  })
+
+  test("uses provider profile model for thread and turn overrides", async () => {
+    const calls: Array<{
+      kind: "createThread" | "startTurn"
+      model?: string | null
+    }> = []
+    const adapter = createKunHttpSseAdapter({
+      createTransport: async () => ({
+        ready: { model: "deepseek-v4-flash" },
+        transport: {
+          async createThread(input) {
+            calls.push({ kind: "createThread", model: input.model })
+            return { id: "thread-1" }
+          },
+          async startTurn(input) {
+            calls.push({ kind: "startTurn", model: input.model })
+            return { threadId: "thread-1", turnId: "turn-1" }
+          },
+          async interruptTurn() {},
+          async decideApproval() {},
+          async streamEvents(input) {
+            await waitFor(() =>
+              calls.some((call) => call.kind === "startTurn"),
+            )
+            input.onEvent({ kind: "turn_completed" })
+          },
+        },
+      }),
+    })
+
+    const result = await adapter.run(
+      fakeKunRequest(new AbortController().signal, {
+        providerBinding: {
+          model: "deepseek-v4-pro",
+          modelSource: "provider-profile:profile-1",
+          providerProfileId: "profile-1",
+          gatewayEndpoint: "http://127.0.0.1:4000/v1",
+          authMode: "provider-profile",
+        },
+      }),
+    )
+
+    expect(result.status).toBe("succeeded")
+    expect(calls).toEqual([
+      { kind: "createThread", model: "deepseek-v4-pro" },
+      { kind: "startTurn", model: "deepseek-v4-pro" },
+    ])
+  })
+
   test("correlates approval to tool_call and posts allow after UI approval", async () => {
     const emitted: Record<string, unknown>[] = []
     const decisions: Array<{ approvalId: string; decision: string }> = []

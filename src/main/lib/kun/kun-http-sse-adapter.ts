@@ -27,6 +27,7 @@ import {
   KUN_FILE_ONLY_SANDBOX_MODE,
   type KunServeHandle,
   type KunServeLaunchInput,
+  type KunServeReadyInfo,
   type KunServeSandboxMode,
   launchKunServe,
 } from "./kun-serve-launcher"
@@ -117,6 +118,7 @@ export type CreateKunHttpSseAdapterInput = {
   }) => Promise<{
     transport: KunHttpSseTransportLike
     close?: () => Promise<void>
+    ready?: Pick<KunServeReadyInfo, "model">
     secretHints?: readonly string[]
   }>
   launchServe?: (input: KunServeLaunchInput) => Promise<KunServeHandle>
@@ -142,6 +144,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null
+}
+
+function isRuntimeManagedKunBinding(request: DesktopRunRequest): boolean {
+  const binding = request.providerBinding
+  return (
+    (binding.authMode ?? "runtime-managed") === "runtime-managed" &&
+    (binding.modelSource ?? "runtime-managed") === "runtime-managed" &&
+    !binding.providerProfileId &&
+    !binding.gatewayEndpoint
+  )
+}
+
+function resolveKunHttpModels(input: {
+  request: DesktopRunRequest
+  readyModel?: string | null
+}): { threadModel: string; turnModel: string | null } {
+  const requestModel = input.request.providerBinding.model?.trim() || null
+  if (isRuntimeManagedKunBinding(input.request)) {
+    return {
+      threadModel: input.readyModel?.trim() || requestModel || "kun",
+      turnModel: null,
+    }
+  }
+  return {
+    threadModel: requestModel || "kun",
+    turnModel: requestModel,
+  }
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {
@@ -424,6 +453,7 @@ export function createKunHttpSseAdapter({
       let serveHandle: KunServeHandle | null = null
       let closeTransport: (() => Promise<void>) | undefined
       let secretHints: readonly string[] = []
+      let readyModel: string | null = null
       const toolCallsByCallId = new Map<string, KunToolCallRecord>()
       let threadId: string | null = null
       let turnId: string | null = null
@@ -820,6 +850,7 @@ export function createKunHttpSseAdapter({
         if (created) {
           transport = created.transport
           closeTransport = created.close
+          readyModel = created.ready?.model?.trim() || null
           secretHints = created.secretHints ?? []
         } else {
           if (!executable) {
@@ -846,12 +877,15 @@ export function createKunHttpSseAdapter({
             sandboxMode,
           })
           closeTransport = serveHandle.close
+          readyModel = serveHandle.ready.model?.trim() || null
           secretHints = [serveHandle.runtimeToken, ...configSecretHints]
         }
 
+        const models = resolveKunHttpModels({ request, readyModel })
+
         const thread = await transport.createThread({
           workspace: request.context.cwd,
-          model: request.providerBinding.model || "kun",
+          model: models.threadModel,
           mode: "agent",
           signal: request.signal,
         })
@@ -884,7 +918,7 @@ export function createKunHttpSseAdapter({
           threadId,
           prompt: request.prompt,
           mode: "agent",
-          model: request.providerBinding.model,
+          model: models.turnModel,
           signal: request.signal,
         })
         turnId = started.turnId

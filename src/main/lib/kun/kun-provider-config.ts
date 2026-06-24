@@ -46,10 +46,12 @@ export async function synthesizeKunProviderConfig(input: {
     configPath,
     `${JSON.stringify(
       {
-        baseUrl: endpoint.baseUrl,
-        apiKey: endpoint.token,
-        endpointFormat: "responses",
-        model: input.profile.defaultModel,
+        serve: {
+          baseUrl: endpoint.baseUrl,
+          apiKey: endpoint.token,
+          endpointFormat: "responses",
+          model: input.profile.defaultModel,
+        },
       },
       null,
       2,

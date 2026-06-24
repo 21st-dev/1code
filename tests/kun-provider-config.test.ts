@@ -69,10 +69,12 @@ describe("Kun synthesized provider config", () => {
         kind: "responses",
       })
       expect(parsed).toEqual({
-        baseUrl: config.gatewayBaseUrl,
-        apiKey: config.gatewayToken,
-        endpointFormat: "responses",
-        model: profile.defaultModel,
+        serve: {
+          baseUrl: config.gatewayBaseUrl,
+          apiKey: config.gatewayToken,
+          endpointFormat: "responses",
+          model: profile.defaultModel,
+        },
       })
       expect(rawConfig).toContain(config.gatewayToken)
       expect(rawConfig).not.toContain(profile.token)

@@ -8,8 +8,12 @@ import {
   getCanonicalMessageParts,
   isFileContentMessagePart,
   isTextMessagePart,
-  toAiSdkTransportChunk,
 } from "./chat-message-ui-adapter"
+import {
+  createExperimentalRuntimeUiStreamState,
+  finalizeExperimentalRuntimeUiStream,
+  normalizeExperimentalRuntimeUiChunk,
+} from "./qwen-ui-stream-normalizer"
 import { applyRuntimeEventStateChunk } from "./runtime-event-state"
 
 type ExperimentalRuntimeTransportId = "qwen-code" | "kun"
@@ -24,7 +28,7 @@ type QwenChatTransportConfig = {
   providerProfileId?: string | null
 }
 
-type QwenTransportChunk = Record<string, any>
+type QwenTransportChunk = Record<string, unknown>
 
 export class QwenChatTransport implements ChatTransport<UIMessage> {
   constructor(private config: QwenChatTransportConfig) {}
@@ -57,6 +61,7 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
         const runId = crypto.randomUUID()
         let sub: { unsubscribe: () => void } | null = null
         let didUnsubscribe = false
+        const uiStreamState = createExperimentalRuntimeUiStreamState()
         const approvedScopeContract =
           this.runtimeId === "kun"
             ? appStore
@@ -70,7 +75,9 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
           sub?.unsubscribe()
         }
         const clearApprovedScopeContract = () => {
-          const approvedContracts = appStore.get(approvedGuardedRunContractsAtom)
+          const approvedContracts = appStore.get(
+            approvedGuardedRunContractsAtom,
+          )
           if (!approvedContracts.has(this.config.subChatId)) return
           const nextContracts = new Map(approvedContracts)
           nextContracts.delete(this.config.subChatId)
@@ -100,10 +107,12 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
           {
             onData: (chunk: QwenTransportChunk) => {
               if (chunk.type === "error" || chunk.type === "capability-error") {
+                const errorText =
+                  typeof chunk.errorText === "string"
+                    ? chunk.errorText
+                    : `The ${this.runtimeLabel} runtime stream failed.`
                 toast.error(`${this.runtimeLabel} error`, {
-                  description:
-                    chunk.errorText ||
-                    `The ${this.runtimeLabel} runtime stream failed.`,
+                  description: errorText,
                 })
               }
 
@@ -116,7 +125,12 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
               )
 
               try {
-                controller.enqueue(toAiSdkTransportChunk(chunk))
+                for (const normalizedChunk of normalizeExperimentalRuntimeUiChunk(
+                  uiStreamState,
+                  chunk,
+                )) {
+                  controller.enqueue(normalizedChunk)
+                }
               } catch {
                 // Stream already closed.
               }
@@ -130,6 +144,15 @@ export class QwenChatTransport implements ChatTransport<UIMessage> {
               safeUnsubscribe()
             },
             onComplete: () => {
+              try {
+                for (const normalizedChunk of finalizeExperimentalRuntimeUiStream(
+                  uiStreamState,
+                )) {
+                  controller.enqueue(normalizedChunk)
+                }
+              } catch {
+                // Stream already closed.
+              }
               try {
                 controller.close()
               } catch {
