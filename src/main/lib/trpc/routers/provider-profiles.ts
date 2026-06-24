@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { getRuntimeFeatureSettingsSnapshot } from "../../agent-runtime/runtime-feature-settings"
 import {
   providerProfileAuthModeSchema,
   providerProfileCapabilitiesSchema,
@@ -6,6 +7,7 @@ import {
   providerProfileProtocolSchema,
   providerProfileTargetSchema,
   getProviderDefaults,
+  getProviderProfileMetadata,
   getProviderProfileRuntimeConfig,
   listProviderProfiles,
   saveProviderProfile,
@@ -32,6 +34,34 @@ const saveInputSchema = z.object({
   capabilities: providerProfileCapabilitiesSchema.optional(),
 })
 
+function normalizeTargetsForKunRuntimeGate(input: z.infer<typeof saveInputSchema>) {
+  const kunEnabled = getRuntimeFeatureSettingsSnapshot({
+    env: process.env,
+  }).resolved.kunRuntimeEnabled
+  if (kunEnabled) return input
+
+  const existingProfile = input.id
+    ? getProviderProfileMetadata(input.id)
+    : null
+  const preserveExistingKun =
+    existingProfile?.targetRuntimes.includes("kun") ?? false
+  const targetRuntimes = input.targetRuntimes.filter(
+    (target) => target !== "kun",
+  )
+  if (preserveExistingKun) targetRuntimes.push("kun")
+  if (targetRuntimes.length === 0) {
+    throw new Error("Kun runtime is disabled. Select another provider target.")
+  }
+  return {
+    ...input,
+    targetRuntimes,
+    capabilities: {
+      ...(input.capabilities ?? {}),
+      kun: preserveExistingKun,
+    },
+  }
+}
+
 export const providerProfilesRouter = router({
   listPresets: publicProcedure.query(() => ({
     presets: PROVIDER_PROFILE_PRESETS,
@@ -46,7 +76,7 @@ export const providerProfilesRouter = router({
   })),
 
   saveProfile: publicProcedure.input(saveInputSchema).mutation(({ input }) => ({
-    profile: saveProviderProfile(input),
+    profile: saveProviderProfile(normalizeTargetsForKunRuntimeGate(input)),
   })),
 
   deleteProfile: publicProcedure

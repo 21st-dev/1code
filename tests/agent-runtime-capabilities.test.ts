@@ -14,6 +14,7 @@ import {
   isRuntimeCapabilitySupported,
   resolveAgentRuntimeCapability,
   resolveAgentRuntimeCapabilityManifest,
+  resolveKunRuntimeEnabled,
   shouldEnableExperimentalAgentRuntime,
   shouldEnableKunRuntime,
   shouldEnableQwenCodeRuntime,
@@ -73,6 +74,33 @@ describe("agent runtime capability manifests", () => {
     expect(shouldEnableKunRuntime({ LOCUS_ENABLE_KUN_RUNTIME: "1" })).toBe(
       true,
     )
+    expect(
+      shouldEnableKunRuntime(
+        { LOCUS_ENABLE_KUN_RUNTIME: "1" },
+        { allowEnvOverride: false },
+      ),
+    ).toBe(false)
+    expect(
+      resolveKunRuntimeEnabled({
+        setting: false,
+        env: { LOCUS_ENABLE_KUN_RUNTIME: "1" },
+        isPackaged: true,
+      }),
+    ).toBe(false)
+    expect(
+      resolveKunRuntimeEnabled({
+        setting: false,
+        env: { LOCUS_ENABLE_KUN_RUNTIME: "1" },
+        isPackaged: false,
+      }),
+    ).toBe(true)
+    expect(
+      resolveKunRuntimeEnabled({
+        setting: true,
+        env: {},
+        isPackaged: true,
+      }),
+    ).toBe(true)
     expect(
       shouldEnableExperimentalAgentRuntime("qwen-code", {
         LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1",

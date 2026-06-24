@@ -395,7 +395,7 @@ function disabledStatus(
   managedInstall: KunManagedInstallStatus,
 ): ResolvedKunCliSetupStatus {
   return invalidStatus(
-    "Kun runtime is disabled. Set LOCUS_ENABLE_KUN_RUNTIME=1 to enable Kun setup.",
+    "Kun runtime is disabled. Enable it in Settings to configure Kun setup.",
     "unresolved",
     "kun-runtime-disabled",
     "disabled",

@@ -23,6 +23,9 @@ export type AgentRuntimeRegistryScope = "contract" | "desktop"
 export type AgentRuntimeRegistryOptions = {
   scope?: AgentRuntimeRegistryScope
   env?: AgentRuntimeFeatureEnv
+  runtimeFeatureSettings?: {
+    kunRuntimeEnabled?: boolean
+  }
 }
 
 function includesExperimentalRuntimes(
@@ -30,9 +33,18 @@ function includesExperimentalRuntimes(
 ): boolean {
   return (
     (options.scope ?? "contract") === "desktop" &&
-    EXPERIMENTAL_RUNTIME_IDS.some((runtimeId) =>
-      shouldEnableExperimentalAgentRuntime(runtimeId, options.env ?? process.env),
-    )
+    EXPERIMENTAL_RUNTIME_IDS.some((runtimeId) => {
+      if (
+        runtimeId === "kun" &&
+        typeof options.runtimeFeatureSettings?.kunRuntimeEnabled === "boolean"
+      ) {
+        return options.runtimeFeatureSettings.kunRuntimeEnabled
+      }
+      return shouldEnableExperimentalAgentRuntime(
+        runtimeId,
+        options.env ?? process.env,
+      )
+    })
   )
 }
 
@@ -42,6 +54,12 @@ function isRegisteredAgentRuntimeId(
 ): boolean {
   if (!isExperimentalAgentRuntimeId(runtimeId)) return true
   if ((options.scope ?? "contract") !== "desktop") return false
+  if (
+    runtimeId === "kun" &&
+    typeof options.runtimeFeatureSettings?.kunRuntimeEnabled === "boolean"
+  ) {
+    return options.runtimeFeatureSettings.kunRuntimeEnabled
+  }
   return shouldEnableExperimentalAgentRuntime(
     runtimeId,
     options.env ?? process.env,

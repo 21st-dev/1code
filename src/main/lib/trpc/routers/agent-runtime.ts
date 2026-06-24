@@ -3,7 +3,6 @@ import { observable } from "@trpc/server/observable"
 import { z } from "zod"
 import {
   AGENT_RUNTIME_CAPABILITY_IDS,
-  shouldEnableKunRuntime,
   shouldEnableQwenCodeRuntime,
 } from "../../../../shared/agent-runtime-capabilities"
 import {
@@ -16,6 +15,10 @@ import {
   type ValidatedAgentScopeContract,
 } from "../../agent-guard"
 import type { DesktopRunProviderBinding } from "../../agent-runtime/desktop-run-request"
+import {
+  getRuntimeFeatureSettingsSnapshot,
+  setKunRuntimeEnabled,
+} from "../../agent-runtime/runtime-feature-settings"
 import {
   collectExperimentalRuntimeAssistantChunk,
   createExperimentalRuntimeAssistantAccumulator,
@@ -150,8 +153,23 @@ function isExperimentalRuntimeEnabled(runtimeId: ExperimentalRuntimeChatId) {
     case "qwen-code":
       return shouldEnableQwenCodeRuntime(process.env)
     case "kun":
-      return shouldEnableKunRuntime(process.env)
+      return isKunRuntimeEnabledForRuntime()
   }
+}
+
+function runtimeFeatureSettingsForRequest() {
+  return getRuntimeFeatureSettingsSnapshot({ env: process.env })
+}
+
+function runtimeRegistryFeatureSettings() {
+  return {
+    kunRuntimeEnabled:
+      runtimeFeatureSettingsForRequest().resolved.kunRuntimeEnabled,
+  }
+}
+
+function isKunRuntimeEnabledForRuntime(): boolean {
+  return runtimeFeatureSettingsForRequest().resolved.kunRuntimeEnabled
 }
 
 function runtimeProviderProfileId(input: {
@@ -167,7 +185,7 @@ function runtimeDisabledMessage(runtimeId: ExperimentalRuntimeChatId): string {
     case "qwen-code":
       return "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable the desktop ACP spike."
     case "kun":
-      return "Kun runtime is disabled. Set LOCUS_ENABLE_KUN_RUNTIME=1 to enable the desktop HTTP/SSE runtime."
+      return "Kun runtime is disabled. Enable it in Settings before starting the desktop HTTP/SSE runtime."
   }
 }
 
@@ -184,9 +202,24 @@ function clearPendingRuntimeApprovals(
   }
 }
 
+function abortActiveRuntimeStreams(
+  runtimeId: ExperimentalRuntimeChatId,
+  message: string,
+): void {
+  for (const [streamKey, stream] of activeRuntimeStreams) {
+    if (stream.runtimeId !== runtimeId) continue
+    stream.controller.abort()
+    activeRuntimeStreams.delete(streamKey)
+  }
+  clearPendingRuntimeApprovals(message, runtimeId)
+}
+
 export const agentRuntimeRouter = router({
   listManifests: publicProcedure.query(() => {
-    return listRegisteredAgentRuntimeManifests({ scope: "desktop" })
+    return listRegisteredAgentRuntimeManifests({
+      scope: "desktop",
+      runtimeFeatureSettings: runtimeRegistryFeatureSettings(),
+    })
   }),
 
   getManifest: publicProcedure
@@ -194,6 +227,7 @@ export const agentRuntimeRouter = router({
     .query(({ input }) => {
       return resolveRegisteredAgentRuntimeManifest(input.runtimeId, {
         scope: "desktop",
+        runtimeFeatureSettings: runtimeRegistryFeatureSettings(),
       })
     }),
 
@@ -208,8 +242,28 @@ export const agentRuntimeRouter = router({
       return resolveRegisteredAgentRuntimeCapability({
         runtime: input.runtimeId,
         capabilityId: input.capabilityId,
-        options: { scope: "desktop" },
+        options: {
+          scope: "desktop",
+          runtimeFeatureSettings: runtimeRegistryFeatureSettings(),
+        },
       })
+    }),
+
+  getRuntimeFeatureSettings: publicProcedure.query(() => {
+    return runtimeFeatureSettingsForRequest()
+  }),
+
+  setKunRuntimeEnabled: publicProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(({ input }) => {
+      const snapshot = setKunRuntimeEnabled(input.enabled, { env: process.env })
+      if (!snapshot.resolved.kunRuntimeEnabled) {
+        abortActiveRuntimeStreams(
+          "kun",
+          "Kun runtime was disabled in Settings.",
+        )
+      }
+      return snapshot
     }),
 
   respondScopeExpansion: publicProcedure
@@ -264,13 +318,13 @@ export const agentRuntimeRouter = router({
 
   getKunCliStatus: publicProcedure.query(async () => {
     const resolved = await resolveKunCliSetupStatus({
-      enabled: shouldEnableKunRuntime(process.env),
+      enabled: isKunRuntimeEnabledForRuntime(),
     })
     return toRendererKunCliSetupStatus(resolved)
   }),
 
   installKunManagedBuild: publicProcedure.mutation(async () => {
-    if (!shouldEnableKunRuntime(process.env)) {
+    if (!isKunRuntimeEnabledForRuntime()) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message:
@@ -289,13 +343,13 @@ export const agentRuntimeRouter = router({
       })
     }
     const resolved = await resolveKunCliSetupStatus({
-      enabled: shouldEnableKunRuntime(process.env),
+      enabled: isKunRuntimeEnabledForRuntime(),
     })
     return toRendererKunCliSetupStatus(resolved)
   }),
 
   updateKunManagedBuild: publicProcedure.mutation(async () => {
-    if (!shouldEnableKunRuntime(process.env)) {
+    if (!isKunRuntimeEnabledForRuntime()) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message:
@@ -312,7 +366,7 @@ export const agentRuntimeRouter = router({
       })
     }
     const resolved = await resolveKunCliSetupStatus({
-      enabled: shouldEnableKunRuntime(process.env),
+      enabled: isKunRuntimeEnabledForRuntime(),
     })
     return toRendererKunCliSetupStatus(resolved)
   }),
@@ -320,7 +374,7 @@ export const agentRuntimeRouter = router({
   updateKunExecutablePath: publicProcedure
     .input(runtimeExecutablePathInputSchema)
     .mutation(async ({ input }) => {
-      if (!shouldEnableKunRuntime(process.env)) {
+      if (!isKunRuntimeEnabledForRuntime()) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message:
@@ -341,7 +395,7 @@ export const agentRuntimeRouter = router({
     }),
 
   resetKunExecutablePath: publicProcedure.mutation(async () => {
-    if (!shouldEnableKunRuntime(process.env)) {
+    if (!isKunRuntimeEnabledForRuntime()) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message:
@@ -355,7 +409,7 @@ export const agentRuntimeRouter = router({
   updateKunConfigPath: publicProcedure
     .input(runtimeConfigPathInputSchema)
     .mutation(async ({ input }) => {
-      if (!shouldEnableKunRuntime(process.env)) {
+      if (!isKunRuntimeEnabledForRuntime()) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message:
@@ -376,7 +430,7 @@ export const agentRuntimeRouter = router({
     }),
 
   resetKunConfigPath: publicProcedure.mutation(async () => {
-    if (!shouldEnableKunRuntime(process.env)) {
+    if (!isKunRuntimeEnabledForRuntime()) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message:
@@ -388,7 +442,7 @@ export const agentRuntimeRouter = router({
   }),
 
   approveKunShellExecutableHash: publicProcedure.mutation(async () => {
-    if (!shouldEnableKunRuntime(process.env)) {
+    if (!isKunRuntimeEnabledForRuntime()) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message:
@@ -409,7 +463,7 @@ export const agentRuntimeRouter = router({
   }),
 
   resetKunShellExecutableHash: publicProcedure.mutation(async () => {
-    if (!shouldEnableKunRuntime(process.env)) {
+    if (!isKunRuntimeEnabledForRuntime()) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message:
@@ -842,6 +896,17 @@ export const agentRuntimeRouter = router({
     .mutation(({ input }) => {
       const pending = pendingRuntimeToolApprovals.get(input.toolUseId)
       if (!pending) {
+        return { ok: false }
+      }
+      if (
+        pending.runtimeId === "kun" &&
+        !isKunRuntimeEnabledForRuntime()
+      ) {
+        pending.resolve({
+          approved: false,
+          message: "Kun runtime is disabled.",
+        })
+        pendingRuntimeToolApprovals.delete(input.toolUseId)
         return { ok: false }
       }
       const response: RuntimeToolApproval = {

@@ -52,6 +52,14 @@ describe("agent runtime registry", () => {
       listRegisteredAgentRuntimeManifests({
         scope: "desktop",
         env: { LOCUS_ENABLE_KUN_RUNTIME: "1" },
+        runtimeFeatureSettings: { kunRuntimeEnabled: false },
+      }).map((manifest) => manifest.runtimeId),
+    ).toEqual(["claude-code", "codex"])
+    expect(
+      listRegisteredAgentRuntimeManifests({
+        scope: "desktop",
+        env: {},
+        runtimeFeatureSettings: { kunRuntimeEnabled: true },
       }).map((manifest) => manifest.runtimeId),
     ).toEqual(["claude-code", "codex", "kun"])
     expect(
@@ -101,6 +109,20 @@ describe("agent runtime registry", () => {
       resolveRegisteredAgentRuntimeManifest("kun", {
         scope: "desktop",
         env: { LOCUS_ENABLE_KUN_RUNTIME: "1" },
+        runtimeFeatureSettings: { kunRuntimeEnabled: false },
+      }),
+    ).toMatchObject({
+      ok: false,
+      diagnostic: {
+        type: "unavailable-runtime",
+        runtimeId: "kun",
+      },
+    })
+    expect(
+      resolveRegisteredAgentRuntimeManifest("kun", {
+        scope: "desktop",
+        env: {},
+        runtimeFeatureSettings: { kunRuntimeEnabled: true },
       }),
     ).toMatchObject({
       ok: true,
@@ -197,7 +219,9 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain("pending.runtimeId !== runtimeId")
     expect(runtimeRouter).toContain("pending.subChatId !== subChatId")
     expect(runtimeRouter).toContain("shouldEnableQwenCodeRuntime(process.env)")
-    expect(runtimeRouter).toContain("shouldEnableKunRuntime(process.env)")
+    expect(runtimeRouter).toContain("isKunRuntimeEnabledForRuntime()")
+    expect(runtimeRouter).toContain("runtimeRegistryFeatureSettings()")
+    expect(runtimeRouter).toContain("setKunRuntimeEnabled")
     expect(runtimeRouter).toContain("runtimeDisabledMessage(input.runtimeId)")
     expect(runtimeRouter).toContain('type: "capability-error"')
     expect(runtimeRouter).toContain("verifyDesktopRunPreflight")
