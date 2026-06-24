@@ -12,6 +12,7 @@ import {
 } from "./agent-utils"
 import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { getEnabledPlugins } from "./claude-settings"
+import { removeMossProjectionResource } from "../../moss-source"
 
 // Shared procedure for listing agents
 const listAgentsProcedure = publicProcedure
@@ -61,6 +62,28 @@ const listAgentsProcedure = publicProcedure
 
     return [...projectAgents, ...userAgents, ...pluginAgents]
   })
+
+async function resolveMossSubagentSymlinkSource(
+  agentPath: string,
+  projectPath: string,
+): Promise<string | null> {
+  try {
+    const stat = await fs.lstat(agentPath)
+    if (!stat.isSymbolicLink()) return null
+    const linkTarget = await fs.readlink(agentPath)
+    const resolvedTarget = path.resolve(path.dirname(agentPath), linkTarget)
+    const mossSubagentsRoot = path.resolve(projectPath, ".moss", "subagents")
+    if (
+      resolvedTarget === mossSubagentsRoot ||
+      resolvedTarget.startsWith(`${mossSubagentsRoot}${path.sep}`)
+    ) {
+      return resolvedTarget
+    }
+  } catch {
+    return null
+  }
+  return null
+}
 
 export const agentsRouter = router({
   /**
@@ -306,16 +329,42 @@ export const agentsRouter = router({
       }
 
       let targetDir: string
+      let projectPath: string | undefined
       if (input.source === "project") {
         if (!input.cwd) {
           throw new Error("Project path (cwd) required for project agents")
         }
+        projectPath = input.cwd
         targetDir = path.join(input.cwd, ".claude", "agents")
       } else {
         targetDir = path.join(os.homedir(), ".claude", "agents")
       }
 
       const agentPath = path.join(targetDir, `${safeName}.md`)
+
+      const mossSourcePath = projectPath
+        ? await resolveMossSubagentSymlinkSource(agentPath, projectPath)
+        : null
+
+      if (mossSourcePath && projectPath) {
+        try {
+          await fs.unlink(mossSourcePath)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+        }
+        await removeMossProjectionResource({
+          projectPath,
+          resourceId: `moss:subagent:${safeName}`,
+          sourcePath: path.relative(projectPath, mossSourcePath),
+          targetPaths: [
+            path.join(".claude", "agents", `${safeName}.md`),
+            path.join(".codex", "agents", `${safeName}.md`),
+          ],
+          removeTargets: true,
+        })
+        await fs.rm(agentPath, { force: true })
+        return { deleted: true }
+      }
 
       await fs.unlink(agentPath)
 

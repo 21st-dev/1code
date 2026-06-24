@@ -1,107 +1,20 @@
-import * as fs from "fs/promises"
-import * as path from "path"
-import * as os from "os"
 import { z } from "zod"
 import { router, publicProcedure } from "../index"
-
-const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json")
-
-// Cache for enabled plugins to avoid repeated filesystem reads
-let enabledPluginsCache: { plugins: string[]; timestamp: number } | null = null
-const ENABLED_PLUGINS_CACHE_TTL_MS = 5000 // 5 seconds
-
-// Cache for approved plugin MCP servers
-let approvedMcpCache: { servers: string[]; timestamp: number } | null = null
-const APPROVED_MCP_CACHE_TTL_MS = 5000 // 5 seconds
-
-/**
- * Invalidate the enabled plugins cache
- * Call this when enabledPlugins setting changes
- */
-export function invalidateEnabledPluginsCache(): void {
-  enabledPluginsCache = null
-}
-
-/**
- * Invalidate the approved MCP servers cache
- * Call this when approvedPluginMcpServers setting changes
- */
-export function invalidateApprovedMcpCache(): void {
-  approvedMcpCache = null
-}
-
-/**
- * Read Claude settings.json file
- * Returns empty object if file doesn't exist
- */
-async function readClaudeSettings(): Promise<Record<string, unknown>> {
-  try {
-    const content = await fs.readFile(CLAUDE_SETTINGS_PATH, "utf-8")
-    return JSON.parse(content)
-  } catch (error) {
-    // File doesn't exist or is invalid JSON
-    return {}
-  }
-}
-
-/**
- * Get list of enabled plugin identifiers from settings.json
- * Plugins are DISABLED by default — only plugins explicitly in this list are active.
- * Returns empty array if no plugins have been enabled.
- * Results are cached for 5 seconds to reduce filesystem reads.
- */
-export async function getEnabledPlugins(): Promise<string[]> {
-  // Return cached result if still valid
-  if (enabledPluginsCache && Date.now() - enabledPluginsCache.timestamp < ENABLED_PLUGINS_CACHE_TTL_MS) {
-    return enabledPluginsCache.plugins
-  }
-
-  const settings = await readClaudeSettings()
-  const plugins = Array.isArray(settings.enabledPlugins) ? settings.enabledPlugins as string[] : []
-
-  enabledPluginsCache = { plugins, timestamp: Date.now() }
-  return plugins
-}
-
-/**
- * Get list of approved plugin MCP server identifiers from settings.json
- * Format: "{pluginSource}:{serverName}" e.g., "ccsetup:ccsetup:context7"
- * Returns empty array if no approved servers
- * Results are cached for 5 seconds to reduce filesystem reads
- */
-export async function getApprovedPluginMcpServers(): Promise<string[]> {
-  // Return cached result if still valid
-  if (approvedMcpCache && Date.now() - approvedMcpCache.timestamp < APPROVED_MCP_CACHE_TTL_MS) {
-    return approvedMcpCache.servers
-  }
-
-  const settings = await readClaudeSettings()
-  const servers = Array.isArray(settings.approvedPluginMcpServers)
-    ? settings.approvedPluginMcpServers as string[]
-    : []
-
-  approvedMcpCache = { servers, timestamp: Date.now() }
-  return servers
-}
-
-/**
- * Check if a plugin MCP server is approved
- */
-export async function isPluginMcpApproved(pluginSource: string, serverName: string): Promise<boolean> {
-  const approved = await getApprovedPluginMcpServers()
-  const identifier = `${pluginSource}:${serverName}`
-  return approved.includes(identifier)
-}
-
-/**
- * Write Claude settings.json file
- * Creates the .claude directory if it doesn't exist
- */
-async function writeClaudeSettings(settings: Record<string, unknown>): Promise<void> {
-  const dir = path.dirname(CLAUDE_SETTINGS_PATH)
-  await fs.mkdir(dir, { recursive: true })
-  await fs.writeFile(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8")
-}
+export {
+  getApprovedPluginMcpServers,
+  getEnabledPlugins,
+  invalidateApprovedMcpCache,
+  invalidateEnabledPluginsCache,
+  isPluginMcpApproved,
+} from "../../claude-plugin-settings"
+import {
+  getApprovedPluginMcpServers,
+  getEnabledPlugins,
+  invalidateApprovedMcpCache,
+  invalidateEnabledPluginsCache,
+  readClaudeSettings,
+  writeClaudeSettings,
+} from "../../claude-plugin-settings"
 
 export const claudeSettingsRouter = router({
   /**

@@ -36,6 +36,65 @@ const STRIPPED_ENV_KEYS = !app.isPackaged
 // Cache the bundled binary path (only compute once)
 let cachedBinaryPath: string | null = null
 let binaryPathComputed = false
+let cachedExecutableResolution: ClaudeExecutableResolution | null = null
+
+export type ClaudeExecutableSource = "bundled" | "system"
+
+export type ClaudeExecutableResolution = {
+  path: string
+  source: ClaudeExecutableSource
+  bundledPath: string
+  reason?: string
+}
+
+function isExecutableFile(filePath: string): boolean {
+  try {
+    const stats = fs.statSync(filePath)
+    if (!stats.isFile()) return false
+    if (process.platform === "win32") return true
+    return (stats.mode & fs.constants.X_OK) !== 0
+  } catch {
+    return false
+  }
+}
+
+function findExecutableInPath(
+  binaryName: string,
+  pathValue: string | undefined,
+): string | null {
+  if (!pathValue) return null
+
+  for (const rawDir of pathValue.split(path.delimiter)) {
+    const dir = rawDir.trim()
+    if (!dir) continue
+
+    const candidate = path.join(dir, binaryName)
+    if (isExecutableFile(candidate)) {
+      return candidate
+    }
+  }
+
+  return null
+}
+
+function getCommonUserBinPaths(): string[] {
+  const home = os.homedir()
+  const paths = [
+    path.join(home, ".local/bin"),
+    path.join(home, "bin"),
+  ]
+
+  if (process.platform === "darwin") {
+    paths.push("/opt/homebrew/bin", "/usr/local/bin")
+  }
+
+  if (process.platform === "win32") {
+    const appData = process.env.APPDATA
+    if (appData) paths.push(path.join(appData, "npm"))
+  }
+
+  return paths
+}
 
 /**
  * Get path to the bundled Claude binary.
@@ -102,6 +161,70 @@ export function getBundledClaudeBinaryPath(): string {
   binaryPathComputed = true
 
   return binaryPath
+}
+
+/**
+ * Resolve the Claude Code executable used by the SDK.
+ * Prefer the app-bundled binary for packaged builds, but allow a system
+ * `claude` fallback in development so runtime switching can be tested without
+ * downloading the bundle artifact first.
+ */
+export function resolveClaudeCodeExecutable(): ClaudeExecutableResolution {
+  if (cachedExecutableResolution) {
+    return cachedExecutableResolution
+  }
+
+  const bundledPath = getBundledClaudeBinaryPath()
+  if (isExecutableFile(bundledPath)) {
+    cachedExecutableResolution = {
+      path: bundledPath,
+      source: "bundled",
+      bundledPath,
+    }
+    return cachedExecutableResolution
+  }
+
+  const binaryName = process.platform === "win32" ? "claude.exe" : "claude"
+  const pathValues = [process.env.PATH]
+
+  try {
+    const shellEnv = getClaudeShellEnvironment()
+    pathValues.unshift(shellEnv.PATH)
+  } catch (error) {
+    console.warn("[claude-binary] Failed to inspect shell PATH:", error)
+  }
+
+  pathValues.push(getCommonUserBinPaths().join(path.delimiter))
+  const systemPath = findExecutableInPath(
+    binaryName,
+    pathValues.filter(Boolean).join(path.delimiter),
+  )
+  if (systemPath) {
+    cachedExecutableResolution = {
+      path: systemPath,
+      source: "system",
+      bundledPath,
+      reason: "Bundled Claude Code binary is missing; using system claude.",
+    }
+    console.warn(
+      "[claude-binary] Bundled binary missing; using system Claude Code:",
+      systemPath,
+    )
+    return cachedExecutableResolution
+  }
+
+  cachedExecutableResolution = {
+    path: bundledPath,
+    source: "bundled",
+    bundledPath,
+    reason:
+      "Bundled Claude Code binary is missing and no system claude executable was found on PATH.",
+  }
+  return cachedExecutableResolution
+}
+
+export function getClaudeCodeExecutablePath(): string {
+  return resolveClaudeCodeExecutable().path
 }
 
 /**

@@ -1,6 +1,9 @@
 import type { MCPServer, MCPServerStatus, MessageMetadata, UIMessageChunk } from "./types";
 
-export function createTransformer(options?: { isUsingOllama?: boolean }) {
+export function createTransformer(options?: {
+  emitSdkMessageUuid?: boolean
+  isUsingOllama?: boolean
+}) {
   const isUsingOllama = options?.isUsingOllama === true
   let textId: string | null = null
   let textStarted = false
@@ -171,7 +174,7 @@ export function createTransformer(options?: { isUsingOllama?: boolean }) {
         yield {
           type: "tool-input-start",
           toolCallId: currentToolCallId,
-          toolName: currentToolName,
+          toolName: currentToolName ?? "unknown",
         }
       }
 

@@ -1,6 +1,12 @@
 import { atom } from "jotai"
 import { atomFamily, atomWithStorage } from "jotai/utils"
 import { atomWithWindowStorage } from "../../../lib/window-storage"
+import type { PluginDeepLinkTarget } from "../../../../shared/plugin-deep-link"
+import type { RunnableAgentEngineId } from "../lib/agent-runtime"
+import {
+  CODEX_DEFAULT_REASONING_EFFORT,
+  type CodexThinkingLevel,
+} from "../lib/models"
 import type { FileMentionOption } from "../mentions/agents-mentions-editor"
 
 // Agent mode type - extensible for future modes like "debug"
@@ -8,6 +14,54 @@ export type AgentMode = "agent" | "plan"
 
 // Ordered list of modes - Shift+Tab cycles through these
 export const AGENT_MODES: AgentMode[] = ["agent", "plan"]
+
+export type AgentPermissionProfile =
+  | "read-only"
+  | "ask-approval"
+  | "approve-for-me"
+  | "full-access"
+  | "custom"
+
+export type AgentRuntimePermissionMode =
+  | AgentMode
+  | "bypass"
+  | "read-only"
+  | "ask-approval"
+  | "full-access"
+  | "custom"
+
+export const AGENT_PERMISSION_PROFILES: AgentPermissionProfile[] = [
+  "read-only",
+  "ask-approval",
+  "approve-for-me",
+  "full-access",
+  "custom",
+]
+
+export function isAgentPermissionProfile(
+  value: unknown,
+): value is AgentPermissionProfile {
+  return (
+    typeof value === "string" &&
+    AGENT_PERMISSION_PROFILES.includes(value as AgentPermissionProfile)
+  )
+}
+
+export function workModeToDefaultPermissionProfile(
+  mode: AgentMode,
+): AgentPermissionProfile {
+  return mode === "plan" ? "read-only" : "ask-approval"
+}
+
+export function permissionProfileToRuntimePermissionMode(
+  profile: AgentPermissionProfile,
+  fallbackMode: AgentMode = "agent",
+): AgentRuntimePermissionMode {
+  if (profile === "approve-for-me") {
+    return fallbackMode === "plan" ? "read-only" : "ask-approval"
+  }
+  return profile
+}
 
 // Get next mode in cycle (for Shift+Tab toggle)
 export function getNextMode(current: AgentMode): AgentMode {
@@ -206,7 +260,7 @@ export const selectedProjectAtom = atomWithWindowStorage<SelectedProject>(
 
 export const lastSelectedAgentIdAtom = atomWithStorage<string>(
   "agents:lastSelectedAgentId",
-  "claude-code",
+  "hermes",
   undefined,
   { getOnInit: true },
 )
@@ -220,16 +274,16 @@ export const lastSelectedModelIdAtom = atomWithStorage<string>(
 
 export const lastSelectedCodexModelIdAtom = atomWithStorage<string>(
   "agents:lastSelectedCodexModelId",
-  "gpt-5.3-codex",
+  "gpt-5.5",
   undefined,
   { getOnInit: true },
 )
 
-export type CodexThinkingPreference = "low" | "medium" | "high" | "xhigh"
+export type CodexThinkingPreference = CodexThinkingLevel
 
 export const lastSelectedCodexThinkingAtom = atomWithStorage<CodexThinkingPreference>(
   "agents:lastSelectedCodexThinking",
-  "high",
+  CODEX_DEFAULT_REASONING_EFFORT,
   undefined,
   { getOnInit: true },
 )
@@ -342,6 +396,30 @@ export const subChatModeAtomFamily = atomFamily((subChatId: string) =>
   ),
 )
 
+const subChatPermissionProfilesStorageAtom = atomWithStorage<
+  Record<string, AgentPermissionProfile>
+>("agents:subChatPermissionProfiles", {}, undefined, { getOnInit: true })
+
+export const subChatPermissionProfileAtomFamily = atomFamily((subChatId: string) =>
+  atom(
+    (get) => {
+      const stored = get(subChatPermissionProfilesStorageAtom)[subChatId]
+      if (isAgentPermissionProfile(stored)) return stored
+      return workModeToDefaultPermissionProfile(
+        get(subChatModesStorageAtom)[subChatId] ?? "agent",
+      )
+    },
+    (get, set, newProfile: AgentPermissionProfile) => {
+      const current = get(subChatPermissionProfilesStorageAtom)
+      if (current[subChatId] === newProfile) return
+      set(subChatPermissionProfilesStorageAtom, {
+        ...current,
+        [subChatId]: newProfile,
+      })
+    },
+  ),
+)
+
 // Model ID to full Claude model string mapping
 export const MODEL_ID_MAP: Record<string, string> = {
   opus: "opus",
@@ -409,7 +487,7 @@ export type DiffViewDisplayMode = "side-peek" | "center-peek" | "full-page"
 
 export const diffViewDisplayModeAtom = atomWithStorage<DiffViewDisplayMode>(
   "agents:diffViewDisplayMode",
-  "center-peek", // default to dialog for new users
+  "side-peek", // Codex desktop defaults review/diff to a docked right pane
   undefined,
   { getOnInit: true },
 )
@@ -661,6 +739,11 @@ export const subChatToChatMapAtom = atom<Map<string, string>>(new Map())
 // When set, AgentDiffView will only show files matching these paths
 export const filteredDiffFilesAtom = atom<string[] | null>(null)
 
+// Filter files for the Changes/Commit panel (null = show all files)
+// Keep this separate from filteredDiffFilesAtom because the diff viewer rewrites
+// its own filter whenever the focused diff file changes.
+export const filteredChangesFilePathsAtom = atom<string[] | null>(null)
+
 // Selected file path in diff sidebar (for highlighting in file list and showing in diff view)
 // Using atom instead of useState to prevent re-renders of unrelated components
 export const selectedDiffFilePathAtom = atom<string | null>(null)
@@ -705,7 +788,7 @@ export const pendingConflictResolutionMessageAtom = atom<{ message: string; subC
 // After successful OAuth flow, this triggers automatic retry of the message
 export type PendingAuthRetryMessage = {
   subChatId: string  // Required: only retry in the correct chat
-  provider: "claude-code" | "codex"
+  provider: RunnableAgentEngineId
   prompt: string
   images?: Array<{
     base64Data: string
@@ -1019,8 +1102,31 @@ export const showMessageJsonAtom = atomWithStorage<boolean>(
 
 // Desktop view mode - takes priority over chat-based rendering
 // null = default behavior (chat/new-chat/kanban)
-export type DesktopView = "automations" | "automations-detail" | "inbox" | "settings" | null
+export type DesktopView =
+  | "automations"
+  | "automations-detail"
+  | "inbox"
+  | "settings"
+  | "global-search"
+  | "plugins"
+  | "skills"
+  | "mcp-settings"
+  | "projects"
+  | "library"
+  | "pull-requests"
+  | null
 export const desktopViewAtom = atom<DesktopView>(null)
+export type PendingPluginAction = PluginDeepLinkTarget
+export const pendingPluginActionAtom = atom<PendingPluginAction | null>(null)
+export const pendingPluginDetailIdAtom = atom(
+  (get) => get(pendingPluginActionAtom)?.pluginId ?? null,
+  (_get, set, pluginId: string | null) => {
+    set(
+      pendingPluginActionAtom,
+      pluginId ? { pluginId, action: "detail", source: "protocol" } : null,
+    )
+  },
+)
 
 // Which automation is being viewed/edited (ID or "new" for creation)
 export const automationDetailIdAtom = atom<string | null>(null)
@@ -1055,6 +1161,7 @@ export const settingsMcpSidebarWidthAtom = atom(240)
 export const settingsSkillsSidebarWidthAtom = atom(240)
 export const settingsAgentsSidebarWidthAtom = atom(240)
 export const settingsPluginsSidebarWidthAtom = atom(240)
+export const settingsMemorySidebarWidthAtom = atom(240)
 export const settingsKeyboardSidebarWidthAtom = atom(240)
 export const settingsProjectsSidebarWidthAtom = atom(240)
 
@@ -1062,8 +1169,8 @@ export const settingsProjectsSidebarWidthAtom = atom(240)
 export type FileViewerDisplayMode = "side-peek" | "center-peek" | "full-page"
 
 export const fileViewerDisplayModeAtom = atomWithStorage<FileViewerDisplayMode>(
-  "agents:fileViewerDisplayMode",
-  "side-peek",
+  "agents:fileViewerDisplayMode:v2",
+  "center-peek",
   undefined,
   { getOnInit: true },
 )

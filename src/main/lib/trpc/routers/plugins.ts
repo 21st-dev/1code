@@ -11,12 +11,12 @@ import {
 } from "../../plugins"
 import { getEnabledPlugins } from "./claude-settings"
 
-interface PluginComponent {
+export interface PluginComponent {
   name: string
   description?: string
 }
 
-interface PluginWithComponents {
+export interface PluginWithComponents {
   name: string
   version: string
   description?: string

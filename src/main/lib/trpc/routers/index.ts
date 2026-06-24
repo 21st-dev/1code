@@ -7,6 +7,7 @@ import { claudeSettingsRouter } from "./claude-settings"
 import { anthropicAccountsRouter } from "./anthropic-accounts"
 import { ollamaRouter } from "./ollama"
 import { codexRouter } from "./codex"
+import { hermesRouter } from "./hermes"
 import { terminalRouter } from "./terminal"
 import { externalRouter } from "./external"
 import { filesRouter } from "./files"
@@ -18,6 +19,10 @@ import { sandboxImportRouter } from "./sandbox-import"
 import { commandsRouter } from "./commands"
 import { voiceRouter } from "./voice"
 import { pluginsRouter } from "./plugins"
+import { sharedResourcesRouter } from "./shared-resources"
+import { agentRuntimeRouter } from "./agent-runtime"
+import { releaseReadinessRouter } from "./release-readiness"
+import { mossAccountRouter } from "./moss-account"
 import { createGitRouter } from "../../git"
 import { BrowserWindow } from "electron"
 
@@ -35,6 +40,7 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     anthropicAccounts: anthropicAccountsRouter,
     ollama: ollamaRouter,
     codex: codexRouter,
+    hermes: hermesRouter,
     terminal: terminalRouter,
     external: externalRouter,
     files: filesRouter,
@@ -46,6 +52,10 @@ export function createAppRouter(getWindow: () => BrowserWindow | null) {
     commands: commandsRouter,
     voice: voiceRouter,
     plugins: pluginsRouter,
+    sharedResources: sharedResourcesRouter,
+    agentRuntime: agentRuntimeRouter,
+    releaseReadiness: releaseReadinessRouter,
+    mossAccount: mossAccountRouter,
     // Git operations - named "changes" to match Superset API
     changes: createGitRouter(),
   })
