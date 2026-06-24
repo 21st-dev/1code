@@ -8,7 +8,11 @@ describe("quick chat new chat form", () => {
       "utf8",
     )
     const selector = readFileSync(
-      "src/renderer/features/agents/components/agent-model-selector.tsx",
+      "src/renderer/features/agents/components/agent-engine-selector.tsx",
+      "utf8",
+    )
+    const runtimeModelSelector = readFileSync(
+      "src/renderer/features/agents/components/runtime-model-selector.tsx",
       "utf8",
     )
 
@@ -23,18 +27,21 @@ describe("quick chat new chat form", () => {
     expect(form).toContain("kunCliReady")
     expect(form).toContain("disabled: !qwenCliReady")
     expect(form).toContain("disabled: !kunCliReady")
-    expect(form).toContain(
-      "allowedProviderIds={quickChatAllowedProviderIds?.filter(",
-    )
+    expect(form).toContain("const engineOptions = useMemo<AgentEngineOption[]>")
+    expect(form).toContain("isAgentOptionDisabled(agent)")
+    expect(form).toContain("<AgentEngineSelector")
+    expect(form).toContain("<RuntimeModelSelector")
     expect(form).toContain('toast.error(t("quickChat.providerUnavailable"))')
     expect(form).toContain("quickChatRuntimeGateLoaded")
     expect(form).toContain("selectedAgentIsRuntimeAllowed")
 
-    expect(selector).toContain("allowedProviderIds?: AgentProviderId[]")
-    expect(selector).toContain("providerIsAllowed")
-    expect(selector).toContain("getProviderProfileProvider")
-    expect(selector).toContain('providerIsAllowed("claude-code")')
-    expect(selector).toContain('providerIsAllowed("codex")')
+    expect(selector).toContain('option.status === "setup-required"')
+    expect(selector).toContain("onSetupEngine?.(option.id)")
+    expect(selector).toContain("onSelectEngine(option.id)")
+    expect(runtimeModelSelector).toContain('selectedEngineId === "qwen-code"')
+    expect(runtimeModelSelector).toContain(
+      'profile.targetRuntimes.includes("kun")',
+    )
   })
 
   test("drives new-chat project state from explicit target instead of selected project", () => {

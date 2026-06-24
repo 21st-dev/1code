@@ -20,6 +20,7 @@ function normalizeRuntimeId(
   if (runtime === "claude" || runtime === "claude-code") return "claude-code"
   if (runtime === "codex") return "codex"
   if (runtime === "qwen" || runtime === "qwen-code") return "qwen-code"
+  if (runtime === "kun") return "kun"
   return null
 }
 

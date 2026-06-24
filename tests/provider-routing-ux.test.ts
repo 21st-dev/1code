@@ -55,11 +55,29 @@ describe("provider routing UX source guards", () => {
     ),
     "utf8",
   )
-  const kunProviderSelectorSource = readFileSync(
+  const agentEngineSelectorSource = readFileSync(
     join(
       process.cwd(),
-      "src/renderer/features/agents/components/kun-provider-profile-selector.tsx",
+      "src/renderer/features/agents/components/agent-engine-selector.tsx",
     ),
+    "utf8",
+  )
+  const runtimeModelSelectorSource = readFileSync(
+    join(
+      process.cwd(),
+      "src/renderer/features/agents/components/runtime-model-selector.tsx",
+    ),
+    "utf8",
+  )
+  const agentModelSelectorSource = readFileSync(
+    join(
+      process.cwd(),
+      "src/renderer/features/agents/components/agent-model-selector.tsx",
+    ),
+    "utf8",
+  )
+  const dictionariesSource = readFileSync(
+    join(process.cwd(), "src/renderer/lib/i18n/dictionaries.ts"),
     "utf8",
   )
   const providerGatewaySource = readFileSync(
@@ -192,24 +210,61 @@ describe("provider routing UX source guards", () => {
     expect(ipcChatTransportSource).toContain("normalizeClaudeModelSourceForRun")
   })
 
-  test("Kun provider profiles use a dedicated target through UI and runtime routing", () => {
+  test("Engine and Model controls are split across all chat composers", () => {
+    expect(newChatFormSource).toContain("<AgentEngineSelector")
+    expect(newChatFormSource).toContain("<RuntimeModelSelector")
+    expect(chatInputAreaSource).toContain("<AgentEngineSelector")
+    expect(chatInputAreaSource).toContain("<RuntimeModelSelector")
+    expect(agentEngineSelectorSource).toContain("export type AgentEngineOption")
+    expect(agentEngineSelectorSource).toContain("onSetupEngine?.(option.id)")
+    expect(agentEngineSelectorSource).toContain(
+      "ENGINE_SWITCH_DIALOG_DISMISSED_KEY",
+    )
+    expect(agentEngineSelectorSource).toContain("onContinueWithEngine")
+    expect(agentModelSelectorSource).not.toContain("onSelectedAgentIdChange")
+    expect(agentModelSelectorSource).not.toContain("allowedProviderIds")
+    expect(agentModelSelectorSource).not.toContain("onContinueWithProvider")
+    expect(agentModelSelectorSource).not.toContain("CrossProviderConfirmDialog")
+    expect(dictionariesSource).toContain("agent.engine.selector")
+    expect(dictionariesSource).toContain("agent.engine.switchToEngine")
+    expect(dictionariesSource).toContain("agent.model.qwenRuntimeManaged")
+  })
+
+  test("Kun provider profiles use a runtime-scoped Model control and routing", () => {
     expect(providerEditorSource).toContain(
       'kun: "settings.models.providerProfiles.targetKun"',
     )
-    expect(kunProviderSelectorSource).toContain(
+    expect(runtimeModelSelectorSource).toContain(
       'profile.targetRuntimes.includes("kun")',
+    )
+    expect(runtimeModelSelectorSource).toContain(
+      'selectedEngineId === "qwen-code"',
+    )
+    expect(runtimeModelSelectorSource).toContain(
+      "agent.model.qwenRuntimeManaged",
+    )
+    expect(runtimeModelSelectorSource).not.toContain(
+      'targetRuntimes.includes("qwen-code")',
     )
     expect(newChatFormSource).toContain("lastSelectedKunModelSourceAtom")
     expect(newChatFormSource).toContain('selectedRuntimeProvider === "kun"')
     expect(chatInputAreaSource).toContain("subChatKunModelSourceAtomFamily")
+    expect(chatInputAreaSource).toContain(
+      "onProviderChange?: (provider: AgentChatProvider) => void",
+    )
+    expect(chatInputAreaSource).toContain("provider: AgentChatProvider,")
     expect(activeChatSource).toContain("subChatKunModelSourceAtomFamily")
+    expect(activeChatSource).toContain("selection?.kunModelSource")
+    expect(activeChatSource).toContain("nextProvider: AgentChatProvider")
     expect(activeChatSource).toContain(
       "parseProviderProfileSource(kunModelSource)",
     )
     expect(providerGatewaySource).toContain('target === "kun"')
     expect(agentRuntimeRouterSource).toContain("synthesizeKunProviderConfig")
     expect(agentRuntimeRouterSource).toContain("kunProviderConfig?.cleanup()")
-    expect(kunProviderSelectorSource).not.toContain(
+    expect(newChatFormSource).not.toContain("KunProviderProfileSelector")
+    expect(chatInputAreaSource).not.toContain("KunProviderProfileSelector")
+    expect(runtimeModelSelectorSource).not.toContain(
       'targetRuntimes.includes("local")',
     )
   })

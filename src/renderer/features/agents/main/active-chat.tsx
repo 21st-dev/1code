@@ -159,7 +159,7 @@ import {
   type AgentMode,
   type SelectedCommit
 } from "../atoms"
-import type { ContinueWithProviderSelection } from "../components/agent-model-selector"
+import type { ContinueWithProviderSelection } from "../components/agent-engine-selector"
 import { AgentSendButton } from "../components/agent-send-button"
 import type { TextSelectionSource } from "../context/text-selection-context"
 import { TextSelectionProvider } from "../context/text-selection-context"
@@ -1617,10 +1617,7 @@ const ChatViewInner = memo(function ChatViewInner({
   isFirstSubChat: boolean
   onAutoRename: (userMessage: string, subChatId: string) => void
   onCreateNewSubChat?: () => void
-  onProviderChange?: (
-    subChatId: string,
-    provider: "claude-code" | "codex",
-  ) => void
+  onProviderChange?: (subChatId: string, provider: AgentChatProvider) => void
   refreshDiff?: () => void
   repository?: string
   streamId?: string | null
@@ -3999,7 +3996,7 @@ const ChatViewInner = memo(function ChatViewInner({
   const shouldShowStackedCards =
     !displayQuestions && (queue.length > 0 || shouldShowStatusCard)
   const handleInputProviderChange = useCallback(
-    (nextProvider: "claude-code" | "codex") => {
+    (nextProvider: AgentChatProvider) => {
       onProviderChange?.(subChatId, nextProvider)
     },
     [onProviderChange, subChatId],
@@ -4009,7 +4006,7 @@ const ChatViewInner = memo(function ChatViewInner({
   const isContinuingRef = useRef(false)
   const handleContinueWithProvider = useCallback(
     async (
-      targetProvider: "claude-code" | "codex",
+      targetProvider: AgentChatProvider,
       selection?: ContinueWithProviderSelection,
     ) => {
       if (isStreaming || isContinuingRef.current) return
@@ -4064,7 +4061,8 @@ const ChatViewInner = memo(function ChatViewInner({
         )
         appStore.set(
           subChatKunModelSourceAtomFamily(newId),
-          appStore.get(subChatKunModelSourceAtomFamily(subChatId)),
+          selection?.kunModelSource ??
+            appStore.get(subChatKunModelSourceAtomFamily(subChatId)),
         )
         appStore.set(
           subChatCodexThinkingAtomFamily(newId),
@@ -6002,7 +6000,7 @@ Make sure to preserve all functionality from both branches when resolving confli
   )
 
   const handleProviderChange = useCallback(
-    (subChatId: string, nextProvider: "claude-code" | "codex") => {
+    (subChatId: string, nextProvider: AgentChatProvider) => {
       // Provider switch is only allowed for brand new sub-chats.
       const activeChat = agentChatStore.get(subChatId) as any
       let messageCount = Array.isArray(activeChat?.messages)
