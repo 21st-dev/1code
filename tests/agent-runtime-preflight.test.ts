@@ -231,6 +231,18 @@ describe("desktop runtime preflight", () => {
       "prepareChatImageAttachmentsForDesktopRun({",
       runtimeStatusIndex,
     )
+    const providerProfileMetadataIndex = codex.indexOf(
+      "getProviderProfileMetadata(input.providerProfileId)",
+      runtimeStatusIndex,
+    )
+    const providerProfileRuntimeConfigIndex = codex.indexOf(
+      "getProviderProfileRuntimeConfig(",
+      attachmentIndex,
+    )
+    const providerGatewayIndex = codex.indexOf(
+      "getProviderGatewayEndpoint(",
+      attachmentIndex,
+    )
     const mcpIndex = codex.indexOf(
       "mcpSnapshot = await resolveCodexMcpSnapshotForDesktopRun({",
       attachmentIndex,
@@ -253,7 +265,11 @@ describe("desktop runtime preflight", () => {
 
     expect(blockerIndex).toBeGreaterThan(0)
     expect(runtimeStatusIndex).toBeGreaterThan(blockerIndex)
+    expect(providerProfileMetadataIndex).toBeGreaterThan(runtimeStatusIndex)
+    expect(providerProfileMetadataIndex).toBeLessThan(attachmentIndex)
     expect(attachmentIndex).toBeGreaterThan(runtimeStatusIndex)
+    expect(providerProfileRuntimeConfigIndex).toBeGreaterThan(attachmentIndex)
+    expect(providerGatewayIndex).toBeGreaterThan(attachmentIndex)
     expect(localOnlyIndex).toBeGreaterThan(attachmentIndex)
     expect(mcpIndex).toBeGreaterThan(attachmentIndex)
     expect(jobIndex).toBeGreaterThan(localOnlyIndex)

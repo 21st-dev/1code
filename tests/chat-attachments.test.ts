@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { getChatImageAttachmentCapability } from "../src/shared/chat-attachment-capabilities"
 import {
   CHAT_IMAGE_ATTACHMENT_REF_PREFIX,
   CHAT_IMAGE_SINGLE_LIMIT_BYTES,
@@ -24,6 +25,10 @@ const attachments = await import("../src/main/lib/chat-attachments")
 
 const tinyPngBase64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+const supportedImageCapability = getChatImageAttachmentCapability({
+  provider: "claude-code",
+  modelVision: "supported",
+})
 
 describe("chat image attachments", () => {
   beforeEach(async () => {
@@ -140,6 +145,7 @@ describe("chat image attachments", () => {
           sizeBytes: attachment.sizeBytes,
         },
       ],
+      imageCapability: supportedImageCapability,
     })
 
     expect(result.ok).toBe(true)
@@ -158,6 +164,7 @@ describe("chat image attachments", () => {
           mediaType: "image/svg+xml",
         },
       ],
+      imageCapability: supportedImageCapability,
       emitPreflightBlocker: (blocker) => {
         blockers.push(blocker)
       },
@@ -169,6 +176,32 @@ describe("chat image attachments", () => {
       id: "attachment",
       status: "blocked",
       message: "Image attachment unavailable: Invalid image attachment",
+    })
+    expect(blockers).toEqual([result.blocker])
+  })
+
+  test("blocks image-bearing desktop runs when capability is omitted", async () => {
+    const blockers: unknown[] = []
+
+    const result = await attachments.prepareChatImageAttachmentsForDesktopRun({
+      images: [
+        {
+          localRef: "not-a-chat-image-ref",
+          mediaType: "image/png",
+        },
+      ],
+      emitPreflightBlocker: (blocker) => {
+        blockers.push(blocker)
+      },
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error("expected attachment preflight blocker")
+    expect(result.blocker).toMatchObject({
+      id: "attachment",
+      status: "blocked",
+      message:
+        "Image attachment unavailable: current model cannot process image attachments",
     })
     expect(blockers).toEqual([result.blocker])
   })

@@ -3,19 +3,23 @@ import type { Dirent } from "node:fs"
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import { basename, extname, join, relative, resolve } from "node:path"
 import * as electron from "electron"
+import type {
+  ChatImageAttachmentBlockReason,
+  ChatImageAttachmentCapability,
+} from "../../shared/chat-attachment-capabilities"
 import {
   CHAT_IMAGE_AGGREGATE_LIMIT_BYTES,
   CHAT_IMAGE_ATTACHMENT_CLEANUP_AGE_MS,
   CHAT_IMAGE_ATTACHMENT_REF_PREFIX,
   CHAT_IMAGE_MAX_COUNT,
   CHAT_IMAGE_SINGLE_LIMIT_BYTES,
-  getChatImageExtension,
-  getChatImageMediaTypeForExtension,
-  isSupportedChatImageMediaType,
   type ChatImageAttachment,
   type ChatImageAttachmentSendInput,
   type ChatImageAttachmentSource,
   type ChatImageMediaType,
+  getChatImageExtension,
+  getChatImageMediaTypeForExtension,
+  isSupportedChatImageMediaType,
   type ResolvedChatImageAttachment,
 } from "../../shared/chat-attachments"
 import type { DesktopRunPreflightBlocker } from "./agent-runtime/preflight"
@@ -335,10 +339,52 @@ export function createChatImageAttachmentPreflightBlocker(
   }
 }
 
+function createChatImageAttachmentCapabilityBlocker(
+  reason: ChatImageAttachmentBlockReason | undefined,
+): DesktopRunPreflightBlocker {
+  if (reason === "runtime-transport") {
+    return {
+      id: "attachment",
+      status: "blocked",
+      message:
+        "Image attachment unavailable: current runtime does not support image attachments",
+    }
+  }
+
+  if (reason === "offline") {
+    return {
+      id: "attachment",
+      status: "blocked",
+      message:
+        "Image attachment unavailable: current offline model cannot process image attachments",
+    }
+  }
+
+  return {
+    id: "attachment",
+    status: "blocked",
+    message:
+      "Image attachment unavailable: current model cannot process image attachments",
+    hint: "Enable Vision for the selected Provider Profile or choose a vision-capable model.",
+  }
+}
+
 export async function prepareChatImageAttachmentsForDesktopRun(input: {
   images?: ChatImageAttachmentSendInput[]
+  imageCapability?: Pick<
+    ChatImageAttachmentCapability,
+    "supportsImages" | "blockReason"
+  >
   emitPreflightBlocker?: (blocker: DesktopRunPreflightBlocker) => void
 }): Promise<DesktopChatImageAttachmentsResult> {
+  if (input.images?.length && input.imageCapability?.supportsImages !== true) {
+    const blocker = createChatImageAttachmentCapabilityBlocker(
+      input.imageCapability?.blockReason ?? "model-no-vision",
+    )
+    input.emitPreflightBlocker?.(blocker)
+    return { ok: false, blocker }
+  }
+
   try {
     return {
       ok: true,

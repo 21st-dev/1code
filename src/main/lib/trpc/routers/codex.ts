@@ -3,6 +3,10 @@ import { observable } from "@trpc/server/observable"
 import { eq } from "drizzle-orm"
 import { z } from "zod"
 import {
+  getChatImageAttachmentCapability,
+  resolveChatImageModelVision,
+} from "../../../../shared/chat-attachment-capabilities"
+import {
   buildCodexCapabilityErrorChunk,
   buildCodexRuntimeStatusChunk,
   createCodexRuntimeBlocker,
@@ -90,7 +94,10 @@ import {
 } from "../../desktop-agent-jobs"
 import { assertOfficialCloudAllowed } from "../../local-only"
 import { getProviderGatewayEndpoint } from "../../provider-profiles/gateway"
-import { getProviderProfileRuntimeConfig } from "../../provider-profiles/storage"
+import {
+  getProviderProfileMetadata,
+  getProviderProfileRuntimeConfig,
+} from "../../provider-profiles/storage"
 import {
   addCodexMcpServer,
   type CodexMcpSnapshot,
@@ -632,9 +639,24 @@ export const codexRouter = router({
             const existingMessages = parseCodexStoredMessages(
               existingSubChat.messages,
             )
+            const codexProviderProfileMetadata = input.providerProfileId
+              ? getProviderProfileMetadata(input.providerProfileId)
+              : null
+            const imageCapability = getChatImageAttachmentCapability({
+              provider: "codex",
+              modelVision: resolveChatImageModelVision({
+                provider: "codex",
+                providerProfileId: input.providerProfileId,
+                getProviderProfileMetadata: (id) =>
+                  id === input.providerProfileId
+                    ? codexProviderProfileMetadata
+                    : getProviderProfileMetadata(id),
+              }),
+            })
             const imageAttachments =
               await prepareChatImageAttachmentsForDesktopRun({
                 images: input.images,
+                imageCapability,
                 emitPreflightBlocker,
               })
             if (!imageAttachments.ok) {

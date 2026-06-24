@@ -2460,8 +2460,12 @@ export const en = {
   "agent.image.copy": "Copy Image",
   "agent.image.save": "Save Image",
   "agent.attachments.imagesUnsupportedTitle": "Images are not supported",
+  "agent.attachments.imagesUnsupportedRuntime":
+    "The current runtime cannot process image attachments.",
   "agent.attachments.imagesUnsupportedOffline":
     "The current offline Ollama model cannot process image attachments.",
+  "agent.attachments.imagesUnsupportedModel":
+    "The current model cannot process image attachments. Enable Vision for this Provider Profile or choose a vision-capable model.",
   "agent.attachments.remoteDisclosure":
     "Images stay local until send, then go to {provider}.",
   "agent.search.placeholder": "Search...",
@@ -5944,8 +5948,12 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "agent.image.copy": "复制图片",
   "agent.image.save": "保存图片",
   "agent.attachments.imagesUnsupportedTitle": "当前模型不支持图片",
+  "agent.attachments.imagesUnsupportedRuntime":
+    "当前运行时不能处理图片附件。",
   "agent.attachments.imagesUnsupportedOffline":
     "当前离线 Ollama 模型不能处理图片附件。",
+  "agent.attachments.imagesUnsupportedModel":
+    "当前模型不能处理图片附件。请为这个提供方配置启用视觉能力，或切换到支持图片的模型。",
   "agent.attachments.remoteDisclosure":
     "图片会保持本地，发送时才交给 {provider} 处理。",
   "agent.search.placeholder": "搜索...",

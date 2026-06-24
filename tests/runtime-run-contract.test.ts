@@ -143,6 +143,7 @@ describe("runtime run contract", () => {
     expect("chatId" in request.context).toBe(false)
     expect("subChatId" in request.context).toBe(false)
     expect("mcp" in request).toBe(false)
+    expect("images" in request).toBe(false)
     expect("attachments" in request).toBe(false)
     expect("trace" in request).toBe(false)
   })

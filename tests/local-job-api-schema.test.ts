@@ -147,6 +147,9 @@ describe("Local Job API v1 JSON Schema", () => {
       "prompt",
     ])
     expect(promptText.maxLength).toBe(256 * 1024)
+    expect(Object.keys(prompt)).toEqual(["text"])
+    expect(properties).not.toHaveProperty("images")
+    expect(properties).not.toHaveProperty("attachments")
     expect(artifactProperties.writePolicy.default).toBe("metadata-only")
     expect(createRequest.description).toContain("secret-like")
     expect(createRequest.description).toContain("1 MiB")

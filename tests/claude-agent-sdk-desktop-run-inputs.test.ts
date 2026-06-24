@@ -4,7 +4,13 @@ import {
   prepareClaudeAgentSdkDesktopRunInputs,
 } from "../src/main/lib/claude/agent-sdk-desktop-run-inputs"
 import { chats, projects, subChats } from "../src/main/lib/db/schema"
+import { getChatImageAttachmentCapability } from "../src/shared/chat-attachment-capabilities"
 import { createAgentJobTestDb } from "./helpers/agent-job-test-db"
+
+const supportedImageCapability = getChatImageAttachmentCapability({
+  provider: "claude-code",
+  modelVision: "supported",
+})
 
 function seedChat(
   db: ReturnType<typeof createAgentJobTestDb>,
@@ -55,6 +61,7 @@ describe("Claude Agent SDK desktop run input preparation", () => {
           filename: "inline.png",
         },
       ],
+      imageCapability: supportedImageCapability,
       longTextAttachments: [],
       historyEnabled: true,
       createId: () => "user-1",
@@ -110,6 +117,7 @@ describe("Claude Agent SDK desktop run input preparation", () => {
           mediaType: "image/png",
         },
       ],
+      imageCapability: supportedImageCapability,
       longTextAttachments: [],
       historyEnabled: true,
       emitPreflightBlocker: (blocker) => blockers.push(blocker),

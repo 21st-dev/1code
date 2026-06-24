@@ -260,6 +260,7 @@ describe("headless Codex app-server adapter", () => {
       adapterSource: "codex-app-server",
       approvalGateFailure: "fail-closed",
     })
+    expect(desktopRequest?.attachments).toEqual([])
   })
 
   test("fails app-server interaction requests closed without waiting for a headless UI bridge", async () => {

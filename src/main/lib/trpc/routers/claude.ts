@@ -1,6 +1,10 @@
 import { observable } from "@trpc/server/observable"
 import { z } from "zod"
 import {
+  getChatImageAttachmentCapability,
+  resolveChatImageModelVision,
+} from "../../../../shared/chat-attachment-capabilities"
+import {
   agentScopeContractInputSchema,
   type GuardedGitStatusSnapshot,
   type ValidatedAgentScopeContract,
@@ -28,6 +32,7 @@ import {
 } from "../../claude/chat-input-schema"
 import { resolveClaudePendingToolApproval } from "../../claude/tool-approvals"
 import { getDatabase } from "../../db"
+import { getProviderProfileMetadata } from "../../provider-profiles/storage"
 import {
   addClaudeMcpServer,
   clearClaudeCaches,
@@ -142,12 +147,22 @@ export const claudeRouter = router({
             guardedPreRunStatus = runControls.guardedPreRunStatus
             const permissionPolicy = runControls.permissionPolicy
 
+            const imageCapability = getChatImageAttachmentCapability({
+              provider: "claude-code",
+              offlineModeEnabled: input.offlineModeEnabled ?? false,
+              modelVision: resolveChatImageModelVision({
+                provider: "claude-code",
+                modelSource: input.modelSource,
+                getProviderProfileMetadata,
+              }),
+            })
             const runInputs = await prepareClaudeAgentSdkDesktopRunInputs({
               db,
               subChatId: input.subChatId,
               streamId,
               prompt: input.prompt,
               images: input.images,
+              imageCapability,
               longTextAttachments: input.longTextAttachments,
               historyEnabled: input.historyEnabled,
               emitPreflightBlocker,

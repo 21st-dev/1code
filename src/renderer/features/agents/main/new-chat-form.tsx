@@ -116,7 +116,10 @@ import {
   parseProviderProfileSource,
 } from "../../../../shared/provider-profile-types"
 import type { AgentChatProvider } from "../../../../shared/agent-chat-provider"
-import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
+import {
+  getChatImageAttachmentCapability,
+  resolveChatImageModelVision,
+} from "../../../../shared/chat-attachment-capabilities"
 import { useRuntimeCapabilityManifestStore } from "../lib/runtime-manifest-store"
 import { AgentContextRecommendations } from "../components/agent-context-recommendations"
 import { CreateBranchDialog } from "../components/create-branch-dialog"
@@ -134,6 +137,7 @@ import {
   fromDraftPastedText,
   type DraftProject,
 } from "../lib/drafts"
+import { imageAttachmentBlockDescriptionKey } from "../lib/image-attachment-copy"
 import { buildAgentMessageParts } from "../lib/message-parts"
 import {
   CLAUDE_MODELS,
@@ -937,6 +941,39 @@ export function NewChatForm({
     (image) =>
       !image.isLoading && !image.error && (image.localRef || image.url),
   ).length
+  const imageModelVision = useMemo(
+    () =>
+      resolveChatImageModelVision({
+        provider: selectedRuntimeProvider,
+        modelSource:
+          selectedRuntimeProvider === "claude-code"
+            ? effectiveClaudeModelSource
+            : selectedRuntimeProvider === "codex"
+              ? lastSelectedCodexModelSource
+              : selectedRuntimeProvider === "kun"
+                ? lastSelectedKunModelSource
+                : null,
+        providerProfileId:
+          selectedRuntimeProvider === "claude-code"
+            ? selectedClaudeProfileId
+            : selectedRuntimeProvider === "codex"
+              ? selectedCodexProfileId
+              : selectedRuntimeProvider === "kun"
+                ? selectedKunProfileId
+                : null,
+        providerProfiles,
+      }),
+    [
+      effectiveClaudeModelSource,
+      lastSelectedCodexModelSource,
+      lastSelectedKunModelSource,
+      providerProfiles,
+      selectedClaudeProfileId,
+      selectedCodexProfileId,
+      selectedKunProfileId,
+      selectedRuntimeProvider,
+    ],
+  )
   const imageAttachmentCapability = useMemo(
     () =>
       getChatImageAttachmentCapability({
@@ -945,21 +982,26 @@ export function NewChatForm({
           selectedAgent.id === "claude-code" &&
           availableModels.isOffline &&
           availableModels.hasOllama,
+        modelVision: imageModelVision,
       }),
     [
       availableModels.hasOllama,
       availableModels.isOffline,
+      imageModelVision,
       selectedAgent.id,
       selectedRuntimeProvider,
     ],
   )
   const imageAttachmentBlocked =
     readyImageCount > 0 && !imageAttachmentCapability.supportsImages
+  const imageAttachmentBlockDescription = imageAttachmentBlocked
+    ? t(imageAttachmentBlockDescriptionKey(imageAttachmentCapability.blockReason))
+    : null
   const imageAttachmentNotice =
     readyImageCount === 0
       ? null
       : imageAttachmentBlocked
-        ? t("agent.attachments.imagesUnsupportedOffline")
+        ? imageAttachmentBlockDescription
         : t("agent.attachments.remoteDisclosure", {
             provider: selectedModelLabel,
           })
@@ -1466,7 +1508,9 @@ export function NewChatForm({
     }
     if (imageAttachmentBlocked) {
       toast.error(t("agent.attachments.imagesUnsupportedTitle"), {
-        description: t("agent.attachments.imagesUnsupportedOffline"),
+        description:
+          imageAttachmentBlockDescription ??
+          t("agent.attachments.imagesUnsupportedModel"),
       })
       return
     }
@@ -1572,6 +1616,7 @@ export function NewChatForm({
     selectedClaudeProfileId,
     effectiveMode,
     imageAttachmentBlocked,
+    imageAttachmentBlockDescription,
     t,
   ])
 

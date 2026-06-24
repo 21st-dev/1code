@@ -1,10 +1,11 @@
+import type { ChatImageAttachmentCapability } from "../../../shared/chat-attachment-capabilities"
 import type { ResolvedChatImageAttachment } from "../../../shared/chat-attachments"
 import type { DesktopRunPreflightBlocker } from "../agent-runtime/preflight"
 import { prepareChatImageAttachmentsForDesktopRun } from "../chat-attachments"
 import type { AgentJobDatabase } from "../headless/job-store"
 import {
-  prepareClaudeChatHistoryForDesktopRun,
   type PrepareClaudeChatHistoryForDesktopRunResult,
+  prepareClaudeChatHistoryForDesktopRun,
 } from "./chat-history"
 import type { ImageAttachment, LongTextAttachment } from "./chat-input-schema"
 
@@ -14,6 +15,10 @@ export type PrepareClaudeAgentSdkDesktopRunInputsInput = {
   streamId: string
   prompt: string
   images?: ImageAttachment[]
+  imageCapability?: Pick<
+    ChatImageAttachmentCapability,
+    "supportsImages" | "blockReason"
+  >
   longTextAttachments?: LongTextAttachment[]
   historyEnabled?: boolean
   emitPreflightBlocker?: (blocker: DesktopRunPreflightBlocker) => void
@@ -39,6 +44,7 @@ export async function prepareClaudeAgentSdkDesktopRunInputs(
 ): Promise<PrepareClaudeAgentSdkDesktopRunInputsResult> {
   const imageAttachments = await prepareChatImageAttachmentsForDesktopRun({
     images: input.images,
+    imageCapability: input.imageCapability,
     emitPreflightBlocker: input.emitPreflightBlocker,
   })
   if (!imageAttachments.ok) {

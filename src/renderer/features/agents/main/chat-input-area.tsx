@@ -7,7 +7,10 @@ import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import type { AgentChatProvider } from "../../../../shared/agent-chat-provider"
 import type { AgentScopeContract } from "../../../../shared/agent-scope-contracts"
-import { getChatImageAttachmentCapability } from "../../../../shared/chat-attachment-capabilities"
+import {
+  getChatImageAttachmentCapability,
+  resolveChatImageModelVision,
+} from "../../../../shared/chat-attachment-capabilities"
 import type { ChatImageAttachmentSource } from "../../../../shared/chat-attachments"
 import {
   isProviderProfileSource,
@@ -111,6 +114,7 @@ import {
   clearSubChatDraft,
   saveSubChatDraftWithAttachments,
 } from "../lib/drafts"
+import { imageAttachmentBlockDescriptionKey } from "../lib/image-attachment-copy"
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
@@ -908,6 +912,39 @@ export const ChatInputArea = memo(function ChatInputArea({
     (image) =>
       !image.isLoading && !image.error && (image.localRef || image.url),
   ).length
+  const imageModelVision = useMemo(
+    () =>
+      resolveChatImageModelVision({
+        provider,
+        modelSource:
+          provider === "claude-code"
+            ? effectiveClaudeModelSource
+            : provider === "codex"
+              ? selectedSubChatCodexModelSource
+              : provider === "kun"
+                ? selectedSubChatKunModelSource
+                : null,
+        providerProfileId:
+          provider === "claude-code"
+            ? selectedClaudeProfileId
+            : provider === "codex"
+              ? selectedCodexProfileId
+              : provider === "kun"
+                ? selectedKunProfileId
+                : null,
+        providerProfiles,
+      }),
+    [
+      effectiveClaudeModelSource,
+      provider,
+      providerProfiles,
+      selectedClaudeProfileId,
+      selectedCodexProfileId,
+      selectedKunProfileId,
+      selectedSubChatCodexModelSource,
+      selectedSubChatKunModelSource,
+    ],
+  )
   const imageAttachmentCapability = useMemo(
     () =>
       getChatImageAttachmentCapability({
@@ -916,16 +953,25 @@ export const ChatInputArea = memo(function ChatInputArea({
           provider === "claude-code" &&
           availableModels.isOffline &&
           availableModels.hasOllama,
+        modelVision: imageModelVision,
       }),
-    [availableModels.hasOllama, availableModels.isOffline, provider],
+    [
+      availableModels.hasOllama,
+      availableModels.isOffline,
+      imageModelVision,
+      provider,
+    ],
   )
   const imageAttachmentBlocked =
     readyImageCount > 0 && !imageAttachmentCapability.supportsImages
+  const imageAttachmentBlockDescription = imageAttachmentBlocked
+    ? t(imageAttachmentBlockDescriptionKey(imageAttachmentCapability.blockReason))
+    : null
   const imageAttachmentNotice =
     readyImageCount === 0
       ? null
       : imageAttachmentBlocked
-        ? t("agent.attachments.imagesUnsupportedOffline")
+        ? imageAttachmentBlockDescription
         : t("agent.attachments.remoteDisclosure", {
             provider: selectedModelLabel,
           })
@@ -1832,10 +1878,12 @@ export const ChatInputArea = memo(function ChatInputArea({
   const blockUnsupportedImageSend = useCallback(() => {
     if (!imageAttachmentBlocked) return false
     toast.error(t("agent.attachments.imagesUnsupportedTitle"), {
-      description: t("agent.attachments.imagesUnsupportedOffline"),
+      description:
+        imageAttachmentBlockDescription ??
+        t("agent.attachments.imagesUnsupportedModel"),
     })
     return true
-  }, [imageAttachmentBlocked, t])
+  }, [imageAttachmentBlockDescription, imageAttachmentBlocked, t])
   const blockInvalidClaudeModelSource = useCallback(() => {
     if (provider !== "claude-code") return false
     if (

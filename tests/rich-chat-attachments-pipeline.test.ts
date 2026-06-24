@@ -10,7 +10,10 @@ import {
   toDraftImage,
 } from "../src/renderer/features/agents/lib/drafts"
 import type { UploadedImage } from "../src/renderer/features/agents/hooks/use-agents-file-upload"
-import { getChatImageAttachmentCapability } from "../src/shared/chat-attachment-capabilities"
+import {
+  getChatImageAttachmentCapability,
+  resolveChatImageModelVision,
+} from "../src/shared/chat-attachment-capabilities"
 
 const UNIQUE_IMAGE_BODY = "UNIQUE_BASE64_IMAGE_BODY_SHOULD_NOT_PERSIST"
 
@@ -135,30 +138,139 @@ describe("rich chat attachment send pipeline", () => {
     expect(ipc).toContain("normalizeChatImageAttachmentPart(part)")
     expect(acp).toContain("normalizeChatImageAttachmentPart(part)")
     expect(authRetry).toContain('type: "attachment-image"')
+
+    const normalizeSourceIndex = ipc.indexOf(
+      "const normalizedSource = normalizeClaudeModelSourceForRun({",
+    )
+    const admissionBlockerThrowIndex = ipc.indexOf(
+      "throw new Error(normalizedSource.blocker.message)",
+      normalizeSourceIndex,
+    )
+    const subscribeImagesIndex = ipc.indexOf(
+      "...(images.length > 0 && { images })",
+      normalizeSourceIndex,
+    )
+    expect(normalizeSourceIndex).toBeGreaterThan(0)
+    expect(admissionBlockerThrowIndex).toBeGreaterThan(normalizeSourceIndex)
+    expect(subscribeImagesIndex).toBeGreaterThan(admissionBlockerThrowIndex)
   })
 
-  test("provider capability model blocks offline Ollama image sends", () => {
+  test("provider capability model resolves first-party and provider-profile image support", () => {
+    const providerProfiles = [
+      { id: "vision-profile", capabilities: { vision: true } },
+      { id: "text-profile", capabilities: { vision: false } },
+      { id: "unknown-profile", capabilities: {} },
+    ]
+
+    expect(
+      resolveChatImageModelVision({
+        provider: "claude-code",
+        modelSource: "claude-oauth",
+        providerProfiles,
+      }),
+    ).toBe("supported")
+    expect(
+      resolveChatImageModelVision({
+        provider: "codex",
+        modelSource: "chatgpt",
+        providerProfiles,
+      }),
+    ).toBe("supported")
+    expect(
+      resolveChatImageModelVision({
+        provider: "codex",
+        modelSource: "openai-api-key",
+        providerProfiles,
+      }),
+    ).toBe("supported")
+    expect(
+      resolveChatImageModelVision({
+        provider: "claude-code",
+        modelSource: "auto",
+        providerProfiles,
+      }),
+    ).toBe("unknown")
+    expect(
+      resolveChatImageModelVision({
+        provider: "claude-code",
+        modelSource: "custom-provider",
+        providerProfiles,
+      }),
+    ).toBe("unknown")
+    expect(
+      resolveChatImageModelVision({
+        provider: "claude-code",
+        modelSource: "provider-profile:vision-profile",
+        providerProfiles,
+      }),
+    ).toBe("supported")
+    expect(
+      resolveChatImageModelVision({
+        provider: "claude-code",
+        modelSource: "provider-profile:text-profile",
+        providerProfiles,
+      }),
+    ).toBe("unsupported")
+    expect(
+      resolveChatImageModelVision({
+        provider: "codex",
+        providerProfileId: "unknown-profile",
+        providerProfiles,
+      }),
+    ).toBe("unknown")
+    expect(
+      resolveChatImageModelVision({
+        provider: "codex",
+        providerProfileId: "deleted-profile",
+        providerProfiles,
+      }),
+    ).toBe("unknown")
+  })
+
+  test("provider capability model blocks unsupported image sends with specific reasons", () => {
     expect(
       getChatImageAttachmentCapability({
         provider: "claude-code",
         offlineModeEnabled: true,
+        modelVision: "supported",
       }),
     ).toMatchObject({
       supportsImages: false,
-      blockReasonKey: "offline-ollama",
+      blockReason: "offline",
     })
 
     expect(
       getChatImageAttachmentCapability({
         provider: "codex",
         offlineModeEnabled: true,
+        modelVision: "supported",
       }).supportsImages,
     ).toBe(true)
 
     expect(
       getChatImageAttachmentCapability({
+        provider: "codex",
+        modelVision: "unknown",
+      }),
+    ).toMatchObject({
+      supportsImages: false,
+      blockReason: "model-no-vision",
+    })
+
+    expect(
+      getChatImageAttachmentCapability({
         provider: "qwen-code",
+        modelVision: "supported",
       }).supportsImages,
     ).toBe(false)
+    expect(
+      getChatImageAttachmentCapability({
+        provider: "kun",
+        modelVision: "supported",
+      }),
+    ).toMatchObject({
+      supportsImages: false,
+      blockReason: "runtime-transport",
+    })
   })
 })
