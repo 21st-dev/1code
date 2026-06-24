@@ -310,10 +310,7 @@ export function AgentEngineSelector({
             return (
               <DropdownMenuItem
                 key={option.id}
-                onSelect={(event) => {
-                  event.preventDefault()
-                  handleSelectOption(option)
-                }}
+                onSelect={() => handleSelectOption(option)}
                 aria-disabled={blocked}
                 className={cn("justify-between gap-2", blocked && "opacity-60")}
               >
