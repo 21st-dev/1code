@@ -128,6 +128,13 @@ export function providerHeadersFromRows(
   return headers
 }
 
+function providerTargetsEqual(
+  left: ProviderProfileTarget[],
+  right: ProviderProfileTarget[],
+) {
+  return left.length === right.length && left.every((item, index) => item === right[index])
+}
+
 export type ProviderProfileEditorProps = {
   /** When set, the editor edits this profile; otherwise it creates a new one. */
   editingProfile?: ProviderProfileMetadata
@@ -227,9 +234,9 @@ export function ProviderProfileEditor({
         (target) =>
           target !== "kun" ||
           resolvedKunRuntimeEnabled ||
-          targetRuntimes.includes("kun"),
+          editingProfile?.targetRuntimes.includes("kun"),
       ),
-    [resolvedKunRuntimeEnabled, targetRuntimes],
+    [editingProfile?.targetRuntimes, resolvedKunRuntimeEnabled],
   )
   const formIdPrefix = editingId
     ? `provider-profile-${editingId}`
@@ -272,6 +279,14 @@ export function ProviderProfileEditor({
     const firstPreset = presets[0]
     if (firstPreset) applyPreset(firstPreset.id)
   }, [applyPreset, editingProfile, kunRuntimeGateKnown, presetId, presets])
+
+  useEffect(() => {
+    if (!kunRuntimeGateKnown) return
+    setTargetRuntimes((current) => {
+      const next = normalizeTargetsForKunGate(current)
+      return providerTargetsEqual(current, next) ? current : next
+    })
+  }, [kunRuntimeGateKnown, normalizeTargetsForKunGate])
 
   const addHeaderRow = () => {
     setHeadersDirty(true)

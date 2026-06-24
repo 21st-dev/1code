@@ -59,4 +59,30 @@ describe("provider profile Kun runtime gate", () => {
       "export function normalizeProviderProfileTargetsForKunRuntimeGate",
     )
   })
+
+  test("renderer new-profile target list follows the Kun runtime gate", () => {
+    const editorSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/renderer/features/agents/components/provider-profile-editor.tsx",
+      ),
+      "utf8",
+    )
+    const settingsSource = readFileSync(
+      join(
+        process.cwd(),
+        "src/renderer/components/dialogs/settings-tabs/agents-models-tab.tsx",
+      ),
+      "utf8",
+    )
+
+    expect(editorSource).toContain(
+      'editingProfile?.targetRuntimes.includes("kun")',
+    )
+    expect(editorSource).not.toContain(
+      'resolvedKunRuntimeEnabled ||\n          targetRuntimes.includes("kun")',
+    )
+    expect(editorSource).toContain("setTargetRuntimes((current) => {")
+    expect(settingsSource).toContain("kunRuntimeEnabled={kunRuntimeEnabled}")
+  })
 })

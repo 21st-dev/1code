@@ -1890,7 +1890,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       selectedClaudeModelSource === "custom-provider" &&
       !claudeSourceNormalization
     ) {
-      toast.error("Provider Profiles are still loading.")
+      toast.error(t("agent.providerProfiles.loading"))
       return true
     }
     if (claudeSourceNormalization && !claudeSourceNormalization.ok) {
@@ -1900,7 +1900,7 @@ export const ChatInputArea = memo(function ChatInputArea({
       return true
     }
     return false
-  }, [claudeSourceNormalization, provider, selectedClaudeModelSource])
+  }, [claudeSourceNormalization, provider, selectedClaudeModelSource, t])
   const guardedSend = useCallback(() => {
     if (blockUnsupportedImageSend()) return
     if (blockInvalidClaudeModelSource()) return

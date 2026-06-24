@@ -122,6 +122,112 @@ function useIsNarrowScreen(): boolean {
 const MINIMUM_OLLAMA_VERSION = "0.14.2"
 const RECOMMENDED_MODEL = "qwen3-coder:30b"
 
+type Translate = (
+  key: TranslationKey,
+  values?: Record<string, string | number>,
+) => string
+
+const QWEN_STATUS_TEXT_KEYS: Record<string, TranslationKey> = {
+  "Install Qwen Code CLI, run qwen, authenticate with /auth, then retry detection.":
+    "settings.models.qwenCli.installHint",
+  "Run qwen, then use /auth inside the Qwen Code CLI.":
+    "settings.models.qwenCli.authHint",
+  "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable Qwen setup.":
+    "settings.models.qwenCli.runtimeDisabled",
+  "Qwen Code runtime is disabled. Enable it before changing Qwen setup.":
+    "settings.models.qwenCli.runtimeDisabledBeforeChange",
+  "Qwen Code CLI was not found on PATH.":
+    "settings.models.qwenCli.pathMissing",
+  "Qwen executable path must be an absolute local file path.":
+    "settings.models.qwenCli.pathAbsolutePathRequired",
+  "Qwen executable path must be a file path, not a shell command.":
+    "settings.models.qwenCli.pathShellCommandRejected",
+  "Qwen executable path contains secret-like text and was rejected.":
+    "settings.models.qwenCli.pathSecretRejected",
+  "Qwen executable path is invalid or not executable.":
+    "settings.models.qwenCli.pathInvalidOrNotExecutable",
+  "Qwen executable path is invalid.":
+    "settings.models.qwenCli.pathInvalid",
+}
+
+const KUN_STATUS_TEXT_KEYS: Record<string, TranslationKey> = {
+  "Install Kun from the upstream project.":
+    "settings.models.kunCli.installCommand",
+  "Configure Kun with a BYO config file or keep provider profiles degraded until the Locus responses gateway is wired.":
+    "settings.models.kunCli.authHint",
+  "Configure Kun with a BYO config file before running it from Locus.":
+    "settings.models.kunCli.configFallbackHint",
+  "Kun CLI was not found on PATH.": "settings.models.kunCli.pathMissing",
+  "Kun executable path must be an absolute local file path.":
+    "settings.models.kunCli.executableAbsolutePathRequired",
+  "Kun executable path must be a file path, not a shell command.":
+    "settings.models.kunCli.executableShellCommandRejected",
+  "Kun executable path contains secret-like text and was rejected.":
+    "settings.models.kunCli.executableSecretRejected",
+  "Kun executable path is invalid or not executable.":
+    "settings.models.kunCli.executableInvalidOrNotExecutable",
+  "Kun executable path is invalid.":
+    "settings.models.kunCli.executableInvalid",
+  "Kun config path is not configured.":
+    "settings.models.kunCli.configMissing",
+  "Kun config path must be an absolute local file path.":
+    "settings.models.kunCli.configAbsolutePathRequired",
+  "Kun config path must be a file path, not a shell command.":
+    "settings.models.kunCli.configShellCommandRejected",
+  "Kun config path contains secret-like text and was rejected.":
+    "settings.models.kunCli.configSecretRejected",
+  "Kun config file was not found.":
+    "settings.models.kunCli.configFileMissing",
+  "Kun config path exists but is not a file.":
+    "settings.models.kunCli.configNotFile",
+  "Kun config path must be configured before Kun runs.":
+    "settings.models.kunCli.configRequiredBeforeRun",
+  "Kun CLI detected (version unavailable)":
+    "settings.models.kunCli.detectedVersionUnavailable",
+  "Approve the current Kun executable hash in Settings before enabling guarded shell.":
+    "settings.models.kunCli.shellApprovalHint",
+  "No production Kun managed build is enabled. Current upstream release assets are Electron GUI archives; Locus must not install them as direct `kun serve` executables until the embedded runtime launch model is implemented and smoke-tested.":
+    "settings.models.kunCli.managedUnavailableReason",
+  "Use guided BYO setup until Locus has a pinned Kun runtime asset with a verified headless launch model.":
+    "settings.models.kunCli.managedUnavailableHint",
+  "Kun runtime is disabled. Enable it in Settings to configure Kun setup.":
+    "settings.models.kunCli.runtimeDisabled",
+  "Kun runtime is disabled. Enable it before installing managed Kun.":
+    "settings.models.kunCli.runtimeDisabledBeforeInstall",
+  "Kun runtime is disabled. Enable it before updating managed Kun.":
+    "settings.models.kunCli.runtimeDisabledBeforeUpdate",
+  "Kun runtime is disabled. Enable it before changing Kun setup.":
+    "settings.models.kunCli.runtimeDisabledBeforeChange",
+  "Kun runtime is disabled. Enable it before approving Kun shell.":
+    "settings.models.kunCli.runtimeDisabledBeforeShellApproval",
+  "Kun runtime is disabled. Enable it before changing Kun shell approval.":
+    "settings.models.kunCli.runtimeDisabledBeforeShellApprovalChange",
+}
+
+const KUN_SHELL_REASON_LABELS: Record<string, TranslationKey> = {
+  approved: "settings.models.kunCli.shellReasonApproved",
+  unapproved: "settings.models.kunCli.shellReasonUnapproved",
+  "hash-mismatch": "settings.models.kunCli.shellReasonHashMismatch",
+  "hash-unavailable": "settings.models.kunCli.shellReasonHashUnavailable",
+  "runtime-disabled": "settings.models.kunCli.shellReasonRuntimeDisabled",
+}
+
+function localizeKunStatusText(value: string | null | undefined, t: Translate) {
+  if (!value) return null
+  const key = KUN_STATUS_TEXT_KEYS[value]
+  return key ? t(key) : value
+}
+
+function localizeQwenStatusText(value: string | null | undefined, t: Translate) {
+  if (!value) return null
+  const key = QWEN_STATUS_TEXT_KEYS[value]
+  return key ? t(key) : value
+}
+
+function getKunShellReasonLabel(reason: string, t: Translate) {
+  return t(KUN_SHELL_REASON_LABELS[reason] ?? "settings.models.kunCli.unknown")
+}
+
 function LocalModelsSettingsSection() {
   const { t } = useI18n()
   const [showOfflineFeatures, setShowOfflineFeatures] = useAtom(
@@ -731,7 +837,11 @@ function profileStatusClassName(ok: boolean) {
     : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300"
 }
 
-function ProviderProfilesSettingsSection() {
+function ProviderProfilesSettingsSection({
+  kunRuntimeEnabled,
+}: {
+  kunRuntimeEnabled: boolean
+}) {
   const { t } = useI18n()
   const setLastSelectedClaudeModelSource = useSetAtom(
     lastSelectedClaudeModelSourceAtom,
@@ -879,6 +989,7 @@ function ProviderProfilesSettingsSection() {
           editingProfile={editingProfile}
           onSaved={(profile) => setEditingId(profile.id)}
           onReset={() => setEditingId(undefined)}
+          kunRuntimeEnabled={kunRuntimeEnabled}
           className="border-b border-border p-4"
         />
 
@@ -1488,13 +1599,15 @@ export function AgentsModelsTab() {
       }
       await invalidateKunRuntimeSurfaces()
       toast.success(
-        enabled ? "Kun runtime enabled" : "Kun runtime disabled",
+        enabled
+          ? t("toast.models.kunRuntimeEnabled")
+          : t("toast.models.kunRuntimeDisabled"),
       )
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
-          : "Failed to update Kun runtime setting",
+          ? localizeKunStatusText(error.message, t)
+          : t("toast.models.failedToUpdateKunRuntimeSetting"),
       )
     }
   }
@@ -1549,15 +1662,15 @@ export function AgentsModelsTab() {
   const handleCopyKunInstallCommand = async () => {
     try {
       await navigator.clipboard.writeText(
-        kunCliStatus?.guidance.installCommand ??
-          "Install Kun from the upstream project.",
+        localizeKunStatusText(kunCliStatus?.guidance.installCommand, t) ??
+          t("settings.models.kunCli.installCommand"),
       )
       toast.success(t("settings.models.copied"))
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to copy Kun install guidance",
+          : t("toast.models.failedToCopyKunInstallCommand"),
       )
     }
   }
@@ -1566,10 +1679,12 @@ export function AgentsModelsTab() {
     try {
       await installKunManagedBuildMutation.mutateAsync()
       await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
-      toast.success("Kun installed")
+      toast.success(t("toast.models.kunInstalled"))
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to install Kun",
+        error instanceof Error
+          ? localizeKunStatusText(error.message, t)
+          : t("toast.models.failedToInstallKun"),
       )
     }
   }
@@ -1578,10 +1693,12 @@ export function AgentsModelsTab() {
     try {
       await updateKunManagedBuildMutation.mutateAsync()
       await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
-      toast.success("Kun updated")
+      toast.success(t("toast.models.kunUpdated"))
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to update Kun",
+        error instanceof Error
+          ? localizeKunStatusText(error.message, t)
+          : t("toast.models.failedToUpdateKun"),
       )
     }
   }
@@ -1598,7 +1715,7 @@ export function AgentsModelsTab() {
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
+          ? localizeQwenStatusText(error.message, t)
           : t("toast.models.failedToSaveQwenExecutablePath"),
       )
     }
@@ -1612,12 +1729,12 @@ export function AgentsModelsTab() {
       await updateKunExecutablePathMutation.mutateAsync({ executablePath })
       setKunExecutablePath("")
       await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
-      toast.success("Kun executable path saved")
+      toast.success(t("toast.models.kunExecutablePathSaved"))
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
-          : "Failed to save Kun executable path",
+          ? localizeKunStatusText(error.message, t)
+          : t("toast.models.failedToSaveKunExecutablePath"),
       )
     }
   }
@@ -1630,12 +1747,12 @@ export function AgentsModelsTab() {
       await updateKunConfigPathMutation.mutateAsync({ configPath })
       setKunConfigPath("")
       await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
-      toast.success("Kun config path saved")
+      toast.success(t("toast.models.kunConfigPathSaved"))
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
-          : "Failed to save Kun config path",
+          ? localizeKunStatusText(error.message, t)
+          : t("toast.models.failedToSaveKunConfigPath"),
       )
     }
   }
@@ -1649,7 +1766,7 @@ export function AgentsModelsTab() {
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
+          ? localizeQwenStatusText(error.message, t)
           : t("toast.models.failedToResetQwenExecutablePath"),
       )
     }
@@ -1660,12 +1777,12 @@ export function AgentsModelsTab() {
       await resetKunExecutablePathMutation.mutateAsync()
       setKunExecutablePath("")
       await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
-      toast.success("Kun executable path reset")
+      toast.success(t("toast.models.kunExecutablePathReset"))
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
-          : "Failed to reset Kun executable path",
+          ? localizeKunStatusText(error.message, t)
+          : t("toast.models.failedToResetKunExecutablePath"),
       )
     }
   }
@@ -1675,12 +1792,12 @@ export function AgentsModelsTab() {
       await resetKunConfigPathMutation.mutateAsync()
       setKunConfigPath("")
       await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
-      toast.success("Kun config path reset")
+      toast.success(t("toast.models.kunConfigPathReset"))
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
-          : "Failed to reset Kun config path",
+          ? localizeKunStatusText(error.message, t)
+          : t("toast.models.failedToResetKunConfigPath"),
       )
     }
   }
@@ -1689,12 +1806,12 @@ export function AgentsModelsTab() {
     try {
       await approveKunShellExecutableHashMutation.mutateAsync()
       await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
-      toast.success("Kun shell build approved")
+      toast.success(t("toast.models.kunShellBuildApproved"))
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
-          : "Failed to approve Kun shell build",
+          ? localizeKunStatusText(error.message, t)
+          : t("toast.models.failedToApproveKunShellBuild"),
       )
     }
   }
@@ -1703,12 +1820,12 @@ export function AgentsModelsTab() {
     try {
       await resetKunShellExecutableHashMutation.mutateAsync()
       await trpcUtils.agentRuntime.getKunCliStatus.invalidate()
-      toast.success("Kun shell approval reset")
+      toast.success(t("toast.models.kunShellApprovalReset"))
     } catch (error) {
       toast.error(
         error instanceof Error
-          ? error.message
-          : "Failed to reset Kun shell approval",
+          ? localizeKunStatusText(error.message, t)
+          : t("toast.models.failedToResetKunShellApproval"),
       )
     }
   }
@@ -2194,7 +2311,7 @@ export function AgentsModelsTab() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                {qwenCliStatus?.guidance.authHint ??
+                {localizeQwenStatusText(qwenCliStatus?.guidance.authHint, t) ??
                   t("settings.models.qwenCli.authHint")}
               </p>
             </div>
@@ -2251,10 +2368,10 @@ export function AgentsModelsTab() {
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <h4 className="text-sm font-medium text-foreground">
-              Experimental
+              {t("settings.models.experimental.title")}
             </h4>
             <p className="text-xs text-muted-foreground">
-              Enable Kun runtime
+              {t("settings.models.kunRuntime.title")}
             </p>
           </div>
           <Switch
@@ -2263,7 +2380,7 @@ export function AgentsModelsTab() {
             onCheckedChange={(checked) =>
               void handleSetKunRuntimeEnabled(checked)
             }
-            aria-label="Enable Kun runtime"
+            aria-label={t("settings.models.kunRuntime.title")}
           />
         </div>
       </div>
@@ -2272,10 +2389,11 @@ export function AgentsModelsTab() {
         <div ref={kunCliSectionRef} className="space-y-2 scroll-mt-6">
           <div className="pb-2 flex items-center justify-between gap-4">
             <div>
-              <h4 className="text-sm font-medium text-foreground">Kun CLI</h4>
+              <h4 className="text-sm font-medium text-foreground">
+                {t("settings.models.kunCli.title")}
+              </h4>
               <p className="text-xs text-muted-foreground">
-                Install a pinned Kun build through Locus or bring your own
-                executable for the local HTTP/SSE runtime.
+                {t("settings.models.kunCli.description")}
               </p>
             </div>
             <Button
@@ -2294,7 +2412,9 @@ export function AgentsModelsTab() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">Status</span>
+                    <span className="text-sm font-medium">
+                      {t("settings.models.kunCli.status")}
+                    </span>
                     {kunCliStatus?.ok ? (
                       <ActiveStatusBadge>
                         {t("common.active")}
@@ -2307,7 +2427,7 @@ export function AgentsModelsTab() {
                         <AlertTriangle className="h-3 w-3" />
                         {isKunCliStatusLoading
                           ? t("common.loading")
-                          : "Setup required"}
+                          : t("settings.models.kunCli.setupRequired")}
                       </Badge>
                     )}
                     {kunCliStatus?.executable.ok && !kunCliStatus.config.ok && (
@@ -2316,7 +2436,7 @@ export function AgentsModelsTab() {
                         className="gap-1 border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-200"
                       >
                         <AlertTriangle className="h-3 w-3" />
-                        Config needed
+                        {t("settings.models.kunCli.configNeeded")}
                       </Badge>
                     )}
                     {kunCliStatus?.config.ok && (
@@ -2325,7 +2445,7 @@ export function AgentsModelsTab() {
                         className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-xs font-medium text-emerald-700 dark:text-emerald-200"
                       >
                         <Check className="h-3 w-3" />
-                        Config ready
+                        {t("settings.models.kunCli.configReady")}
                       </Badge>
                     )}
                     {kunCliStatus?.shell.reason === "hash-mismatch" && (
@@ -2334,52 +2454,68 @@ export function AgentsModelsTab() {
                         className="gap-1 border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-200"
                       >
                         <AlertTriangle className="h-3 w-3" />
-                        Hash mismatch
+                        {t("settings.models.kunCli.hashMismatch")}
                       </Badge>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {kunCliStatus?.ok
-                      ? "Kun executable and config are ready for flag-gated desktop runs."
+                      ? t("settings.models.kunCli.readyHint")
                       : kunCliStatus?.executable.ok
-                        ? "Kun executable is ready. Add a config.json or select a Kun provider profile before running."
-                        : "Install Kun through Locus or set a BYO executable before running."}
+                        ? t("settings.models.kunCli.configNeededHint")
+                        : t("settings.models.kunCli.missingHint")}
                   </p>
                   {kunCliStatus?.executable.path && (
                     <p className="break-all text-xs text-muted-foreground">
-                      Executable: {kunCliStatus.executable.path}
+                      {t("settings.models.kunCli.executablePath", {
+                        path: kunCliStatus.executable.path,
+                      })}
                     </p>
                   )}
                   {kunCliStatus?.config.path && (
                     <p className="break-all text-xs text-muted-foreground">
-                      Config: {kunCliStatus.config.path}
+                      {t("settings.models.kunCli.configPath", {
+                        path: kunCliStatus.config.path,
+                      })}
                     </p>
                   )}
                   {kunCliStatus?.blocker?.message && !kunCliStatus.ok && (
                     <p className="text-xs text-amber-700 dark:text-amber-300">
-                      {kunCliStatus.blocker.message}
+                      {localizeKunStatusText(kunCliStatus.blocker.message, t)}
                     </p>
                   )}
                   {kunCliStatus?.config.error && (
                     <p className="text-xs text-amber-700 dark:text-amber-300">
-                      Config: {kunCliStatus.config.error}
+                      {t("settings.models.kunCli.configError", {
+                        error:
+                          localizeKunStatusText(kunCliStatus.config.error, t) ??
+                          kunCliStatus.config.error,
+                      })}
                     </p>
                   )}
                   {kunCliStatus?.version.value && (
                     <p className="text-xs text-muted-foreground">
-                      Version: {kunCliStatus.version.value}
+                      {t("settings.models.kunCli.version", {
+                        version:
+                          localizeKunStatusText(kunCliStatus.version.value, t) ??
+                          kunCliStatus.version.value,
+                      })}
                     </p>
                   )}
                   {kunCliStatus?.version.error && (
                     <p className="text-xs text-amber-700 dark:text-amber-300">
-                      Version probe failed: {kunCliStatus.version.error}
+                      {t("settings.models.kunCli.versionProbeFailed", {
+                        error:
+                          localizeKunStatusText(kunCliStatus.version.error, t) ??
+                          kunCliStatus.version.error,
+                      })}
                     </p>
                   )}
                   {kunCliStatus?.managedInstall && (
                     <div className="mt-2 space-y-1 rounded-md border border-border bg-muted/40 p-2 text-xs">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-foreground">
-                          Managed install
+                          {t("settings.models.kunCli.managedInstall")}
                         </span>
                         {kunCliStatus.managedInstall.state === "installed" ? (
                           <Badge
@@ -2387,7 +2523,7 @@ export function AgentsModelsTab() {
                             className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-xs font-medium text-emerald-700 dark:text-emerald-200"
                           >
                             <Check className="h-3 w-3" />
-                            Installed
+                            {t("settings.models.kunCli.installed")}
                           </Badge>
                         ) : kunCliStatus.managedInstall.state ===
                           "update-available" ? (
@@ -2396,7 +2532,7 @@ export function AgentsModelsTab() {
                             className="gap-1 border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-200"
                           >
                             <RefreshCw className="h-3 w-3" />
-                            Update available
+                            {t("settings.models.kunCli.updateAvailable")}
                           </Badge>
                         ) : kunCliStatus.managedInstall.state ===
                           "available" ? (
@@ -2405,22 +2541,32 @@ export function AgentsModelsTab() {
                             className="gap-1 border-blue-500/30 bg-blue-500/10 text-xs font-medium text-blue-700 dark:text-blue-200"
                           >
                             <Plus className="h-3 w-3" />
-                            Available
+                            {t("settings.models.available")}
                           </Badge>
                         ) : (
                           <Badge
                             variant="outline"
                             className="gap-1 border-muted-foreground/30 bg-muted text-xs font-medium text-muted-foreground"
                           >
-                            Unavailable
+                            {t("settings.models.unavailable")}
                           </Badge>
                         )}
                       </div>
                       <p className="text-muted-foreground">
                         {kunCliStatus.managedInstall.state === "installed"
-                          ? `Kun ${kunCliStatus.managedInstall.installedVersion ?? ""} is installed in app-managed storage.`
-                          : (kunCliStatus.managedInstall.reason ??
-                            kunCliStatus.managedInstall.hint)}
+                          ? t("settings.models.kunCli.installedManagedVersion", {
+                              version:
+                                kunCliStatus.managedInstall.installedVersion ??
+                                "",
+                            })
+                          : (localizeKunStatusText(
+                              kunCliStatus.managedInstall.reason,
+                              t,
+                            ) ??
+                            localizeKunStatusText(
+                              kunCliStatus.managedInstall.hint,
+                              t,
+                            ))}
                       </p>
                       {kunCliStatus.managedInstall.installPath && (
                         <p className="break-all font-mono text-[11px] text-muted-foreground">
@@ -2438,7 +2584,7 @@ export function AgentsModelsTab() {
                             <Plus className="h-3 w-3 mr-1" />
                             {installKunManagedBuildMutation.isPending
                               ? t("common.saving")
-                              : "Install Kun"}
+                              : t("settings.models.kunCli.install")}
                           </Button>
                         )}
                         {kunCliStatus.managedInstall.state ===
@@ -2452,7 +2598,7 @@ export function AgentsModelsTab() {
                             <RefreshCw className="h-3 w-3 mr-1" />
                             {updateKunManagedBuildMutation.isPending
                               ? t("common.saving")
-                              : "Update Kun"}
+                              : t("settings.models.kunCli.update")}
                           </Button>
                         )}
                       </div>
@@ -2462,7 +2608,7 @@ export function AgentsModelsTab() {
                     <div className="mt-2 space-y-1 rounded-md border border-border bg-muted/40 p-2 text-xs">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-foreground">
-                          Guarded shell
+                          {t("settings.models.kunCli.guardedShell")}
                         </span>
                         {kunCliStatus.shell.approved ? (
                           <Badge
@@ -2470,7 +2616,7 @@ export function AgentsModelsTab() {
                             className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-xs font-medium text-emerald-700 dark:text-emerald-200"
                           >
                             <ShieldCheck className="h-3 w-3" />
-                            Approved
+                            {t("settings.models.kunCli.shellApproved")}
                           </Badge>
                         ) : (
                           <Badge
@@ -2478,32 +2624,34 @@ export function AgentsModelsTab() {
                             className="gap-1 border-amber-500/30 bg-amber-500/10 text-xs font-medium text-amber-800 dark:text-amber-200"
                           >
                             <AlertTriangle className="h-3 w-3" />
-                            Disabled
+                            {t("common.disabled")}
                           </Badge>
                         )}
                         <span className="text-muted-foreground">
-                          {kunCliStatus.shell.reason}
+                          {getKunShellReasonLabel(kunCliStatus.shell.reason, t)}
                         </span>
                       </div>
                       {kunCliStatus.shell.currentHash && (
                         <p className="font-mono text-[11px] text-muted-foreground">
-                          Current hash:{" "}
-                          {kunCliStatus.shell.currentHash.slice(0, 12)}
+                          {t("settings.models.kunCli.currentHash", {
+                            hash: kunCliStatus.shell.currentHash.slice(0, 12),
+                          })}
                         </p>
                       )}
                       {kunCliStatus.shell.approvedHash && (
                         <p className="font-mono text-[11px] text-muted-foreground">
-                          Approved hash:{" "}
-                          {kunCliStatus.shell.approvedHash.slice(0, 12)}
+                          {t("settings.models.kunCli.approvedHash", {
+                            hash: kunCliStatus.shell.approvedHash.slice(0, 12),
+                          })}
                         </p>
                       )}
                       {kunCliStatus.shell.error && (
                         <p className="text-amber-700 dark:text-amber-300">
-                          {kunCliStatus.shell.error}
+                          {localizeKunStatusText(kunCliStatus.shell.error, t)}
                         </p>
                       )}
                       <p className="text-muted-foreground">
-                        {kunCliStatus.shell.hint}
+                        {localizeKunStatusText(kunCliStatus.shell.hint, t)}
                       </p>
                       <div className="flex flex-wrap gap-2 pt-1">
                         <Button
@@ -2520,7 +2668,7 @@ export function AgentsModelsTab() {
                           <ShieldCheck className="h-3 w-3 mr-1" />
                           {approveKunShellExecutableHashMutation.isPending
                             ? t("common.saving")
-                            : "Approve current build"}
+                            : t("settings.models.kunCli.approveCurrentBuild")}
                         </Button>
                         <Button
                           size="sm"
@@ -2543,8 +2691,11 @@ export function AgentsModelsTab() {
 
               <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-[1fr_auto_auto] sm:items-center">
                 <code className="min-w-0 overflow-x-auto rounded-md bg-muted px-2 py-1 font-mono text-[11px] text-foreground">
-                  {kunCliStatus?.guidance.installCommand ??
-                    "Install Kun from the upstream project."}
+                  {localizeKunStatusText(
+                    kunCliStatus?.guidance.installCommand,
+                    t,
+                  ) ??
+                    t("settings.models.kunCli.installCommand")}
                 </code>
                 <Button
                   size="sm"
@@ -2564,24 +2715,23 @@ export function AgentsModelsTab() {
                     rel="noreferrer"
                   >
                     <ExternalLinkIcon className="h-3 w-3 mr-1" />
-                    Docs
+                    {t("settings.models.qwenCli.docs")}
                   </a>
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                {kunCliStatus?.guidance.authHint ??
-                  "Configure Kun with a BYO config file before running it from Locus."}
+                {localizeKunStatusText(kunCliStatus?.guidance.authHint, t) ??
+                  t("settings.models.kunCli.configFallbackHint")}
               </p>
             </div>
 
             <div className="flex flex-col gap-3 p-4">
               <div>
                 <Label className="text-sm font-medium">
-                  Executable path override
+                  {t("settings.models.kunCli.executablePathOverride")}
                 </Label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Use an absolute local path. Project-local shadow binaries are
-                  ignored during PATH discovery.
+                  {t("settings.models.kunCli.executablePathHint")}
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -2623,11 +2773,10 @@ export function AgentsModelsTab() {
             <div className="flex flex-col gap-3 p-4">
               <div>
                 <Label className="text-sm font-medium">
-                  Config path override
+                  {t("settings.models.kunCli.configPathOverride")}
                 </Label>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Use an absolute Kun config.json path. Locus passes the path to
-                  Kun but does not read or render provider credentials.
+                  {t("settings.models.kunCli.configPathHint")}
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -2690,7 +2839,9 @@ export function AgentsModelsTab() {
           </span>
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-6">
-          <ProviderProfilesSettingsSection />
+          <ProviderProfilesSettingsSection
+            kunRuntimeEnabled={kunResolvedEnabled}
+          />
 
           <div ref={helperApisSectionRef} className="space-y-3 scroll-mt-6">
             <div className="pb-1">

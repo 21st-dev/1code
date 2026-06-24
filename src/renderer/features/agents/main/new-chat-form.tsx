@@ -28,7 +28,7 @@ import {
   PopoverTrigger,
 } from "../../../components/ui/popover"
 import { cn } from "../../../lib/utils"
-import { useI18n } from "../../../lib/i18n"
+import { type TranslationKey, useI18n } from "../../../lib/i18n"
 import {
   justCreatedIdsAtom,
   newChatTargetAtom,
@@ -148,6 +148,40 @@ import {
 } from "../lib/models"
 // import type { PlanType } from "@/lib/config/subscription-plans"
 type PlanType = string
+
+type Translate = (
+  key: TranslationKey,
+  values?: Record<string, string | number>,
+) => string
+
+const RUNTIME_SETUP_TEXT_KEYS: Record<string, TranslationKey> = {
+  "Install Qwen Code CLI, run qwen, authenticate with /auth, then retry detection.":
+    "settings.models.qwenCli.installHint",
+  "Run qwen, then use /auth inside the Qwen Code CLI.":
+    "settings.models.qwenCli.authHint",
+  "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable Qwen setup.":
+    "settings.models.qwenCli.runtimeDisabled",
+  "Qwen Code CLI was not found on PATH.":
+    "settings.models.qwenCli.pathMissing",
+  "Configure Kun with a BYO config file or keep provider profiles degraded until the Locus responses gateway is wired.":
+    "settings.models.kunCli.authHint",
+  "Configure Kun with a BYO config file before running it from Locus.":
+    "settings.models.kunCli.configFallbackHint",
+  "Kun CLI was not found on PATH.": "settings.models.kunCli.pathMissing",
+  "Kun config path is not configured.":
+    "settings.models.kunCli.configMissing",
+  "Kun runtime is disabled. Enable it in Settings to configure Kun setup.":
+    "settings.models.kunCli.runtimeDisabled",
+}
+
+function localizeRuntimeSetupText(
+  value: string | null | undefined,
+  t: Translate,
+) {
+  if (!value) return undefined
+  const key = RUNTIME_SETUP_TEXT_KEYS[value]
+  return key ? t(key) : value
+}
 
 // Hook to get available models (including offline models if Ollama is available and debug enabled)
 function useAvailableModels() {
@@ -1473,7 +1507,7 @@ export function NewChatForm({
     }
     if (selectedAgent.id === "qwen-code" && !qwenCliReady) {
       toast.error(t("agent.qwenCli.setupRequired"), {
-        description: qwenCliStatus?.blocker?.hint,
+        description: localizeRuntimeSetupText(qwenCliStatus?.blocker?.hint, t),
       })
       setSettingsActiveTab("models")
       setModelsSettingsTarget("qwen-cli")
@@ -1481,8 +1515,8 @@ export function NewChatForm({
       return
     }
     if (selectedAgent.id === "kun" && !kunCliReady) {
-      toast.error("Kun setup required", {
-        description: kunCliStatus?.blocker?.hint,
+      toast.error(t("agent.kunCli.setupRequired"), {
+        description: localizeRuntimeSetupText(kunCliStatus?.blocker?.hint, t),
       })
       setSettingsActiveTab("models")
       setModelsSettingsTarget("kun-cli")
@@ -1494,7 +1528,7 @@ export function NewChatForm({
       selectedKunProfileId &&
       selectedKunProfileIsPending
     ) {
-      toast.error("Provider Profiles are still loading.")
+      toast.error(t("agent.providerProfiles.loading"))
       return
     }
     if (
@@ -1502,7 +1536,7 @@ export function NewChatForm({
       selectedKunProfileId &&
       !selectedKunProviderProfile
     ) {
-      toast.error("Selected Kun provider profile is unavailable.")
+      toast.error(t("agent.kunCli.providerProfileUnavailable"))
       setLastSelectedKunModelSource("runtime-managed")
       return
     }
@@ -1519,7 +1553,7 @@ export function NewChatForm({
       selectedClaudeModelSource === "custom-provider" &&
       !claudeSourceNormalization
     ) {
-      toast.error("Provider Profiles are still loading.")
+      toast.error(t("agent.providerProfiles.loading"))
       return
     }
     if (
@@ -2187,7 +2221,7 @@ export function NewChatForm({
                   <div className="mb-1 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-200">
                     <span className="min-w-0 flex-1">
                       {selectedAgent.id === "kun"
-                        ? "Kun setup required"
+                        ? t("agent.kunCli.setupRequired")
                         : t("agent.qwenCli.setupRequired")}
                     </span>
                     <Button
@@ -2204,7 +2238,7 @@ export function NewChatForm({
                       }}
                     >
                       {selectedAgent.id === "kun"
-                        ? "Open setup"
+                        ? t("agent.kunCli.openSetup")
                         : t("agent.qwenCli.openSetup")}
                     </Button>
                   </div>
