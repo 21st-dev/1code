@@ -22,6 +22,7 @@ const PROVIDER_STATUS_STALE_TIME = 30_000
 export type {
   SetupClaudeStatus,
   SetupCodexStatus,
+  SetupQwenStatus,
   SetupStatus,
   SetupStatusInputs,
 } from "./derive-setup-status"
@@ -56,6 +57,20 @@ export function useSetupStatus(): SetupStatus {
   const codexApiKey = trpc.codex.getCodexApiKeyStatus.useQuery(undefined, {
     staleTime: PROVIDER_STATUS_STALE_TIME,
   })
+  // Qwen Code is a conditionally-enabled, runtime-managed engine. CLI detection
+  // feeds setup guidance only; it does not prove auth/run readiness and does not
+  // satisfy the first-run completion gate.
+  const runtimeManifests = trpc.agentRuntime.listManifests.useQuery(undefined, {
+    staleTime: PROVIDER_STATUS_STALE_TIME,
+  })
+  const qwenAvailable =
+    runtimeManifests.data?.some(
+      (manifest) => manifest.runtimeId === "qwen-code",
+    ) ?? false
+  const qwenCli = trpc.agentRuntime.getQwenCliStatus.useQuery(undefined, {
+    staleTime: PROVIDER_STATUS_STALE_TIME,
+    enabled: qwenAvailable,
+  })
   const projectsQuery = trpc.projects.list.useQuery(undefined, {
     staleTime: PROVIDER_STATUS_STALE_TIME,
   })
@@ -86,6 +101,8 @@ export function useSetupStatus(): SetupStatus {
       codexRuntimeReady: codexRuntime.data?.ok === true,
       codexState: codexIntegration.data?.state,
       codexApiKeyPresent: Boolean(codexApiKey.data?.hasApiKey),
+      qwenAvailable,
+      qwenCliReady: qwenAvailable && qwenCli.data?.ok === true,
       hasProject,
       statusQueriesLoading:
         claudeRuntime.isLoading ||
@@ -95,7 +112,9 @@ export function useSetupStatus(): SetupStatus {
         secureProviderConfig.isLoading ||
         codexRuntime.isLoading ||
         codexIntegration.isLoading ||
-        codexApiKey.isLoading,
+        codexApiKey.isLoading ||
+        runtimeManifests.isLoading ||
+        (qwenAvailable && qwenCli.isLoading),
     })
   }, [
     claudeRuntime.data,
@@ -114,6 +133,10 @@ export function useSetupStatus(): SetupStatus {
     codexIntegration.isLoading,
     codexApiKey.data,
     codexApiKey.isLoading,
+    qwenAvailable,
+    qwenCli.data,
+    qwenCli.isLoading,
+    runtimeManifests.isLoading,
     projectsQuery.data,
     projectsQuery.isLoading,
     selectedProject,

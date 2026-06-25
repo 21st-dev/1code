@@ -148,6 +148,14 @@ const QWEN_STATUS_TEXT_KEYS: Record<string, TranslationKey> = {
     "settings.models.qwenCli.pathInvalidOrNotExecutable",
   "Qwen executable path is invalid.":
     "settings.models.qwenCli.pathInvalid",
+  "Runtime executable path could not be resolved.":
+    "settings.models.qwenCli.pathInvalidOrNotExecutable",
+  "Runtime executable was not found.":
+    "settings.models.qwenCli.pathInvalidOrNotExecutable",
+  "Runtime path exists but is not a file.":
+    "settings.models.qwenCli.pathInvalidOrNotExecutable",
+  "Runtime executable is not executable.":
+    "settings.models.qwenCli.pathInvalidOrNotExecutable",
 }
 
 const KUN_STATUS_TEXT_KEYS: Record<string, TranslationKey> = {
@@ -221,7 +229,11 @@ function localizeKunStatusText(value: string | null | undefined, t: Translate) {
 function localizeQwenStatusText(value: string | null | undefined, t: Translate) {
   if (!value) return null
   const key = QWEN_STATUS_TEXT_KEYS[value]
-  return key ? t(key) : value
+  if (key) return t(key)
+  if (/^(EACCES|ENOENT|EPERM):/.test(value)) {
+    return t("settings.models.qwenCli.pathInvalidOrNotExecutable")
+  }
+  return value
 }
 
 function getKunShellReasonLabel(reason: string, t: Translate) {

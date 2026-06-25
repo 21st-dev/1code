@@ -24,6 +24,8 @@ const BASE: SetupStatusInputs = {
   codexRuntimeReady: false,
   codexState: undefined,
   codexApiKeyPresent: false,
+  qwenAvailable: false,
+  qwenCliReady: false,
   hasProject: false,
   statusQueriesLoading: false,
 }
@@ -175,6 +177,49 @@ describe("pathStatus reports runtime-missing before ready", () => {
         ),
       ),
     ).toBe("codex")
+  })
+
+  test("recommends a usable path over a broken one (expired Claude OAuth)", () => {
+    const expiredClaudeWorkingCodex = deriveSetupStatus(
+      inputs({
+        claudeOauthConnected: true,
+        claudeOauthExpired: true,
+        claudeRuntimeReady: true,
+        codexApiKeyPresent: true,
+        codexRuntimeReady: true,
+      }),
+    )
+    // Claude is connected-but-expired (repair-needed); Codex is actually usable.
+    expect(pathStatus("claude", expiredClaudeWorkingCodex)).toBe("repair-needed")
+    expect(recommendedPath(expiredClaudeWorkingCodex)).toBe("codex")
+  })
+
+  test("Qwen CLI detection does not satisfy the first-run completion gate", () => {
+    const cliReadyButRuntimeDisabled = deriveSetupStatus(
+      inputs({ qwenAvailable: false, qwenCliReady: true }),
+    )
+    expect(cliReadyButRuntimeDisabled.qwen.usable).toBe(false)
+    expect(cliReadyButRuntimeDisabled.anyUsableAiPath).toBe(false)
+    expect(pathStatus("qwen", cliReadyButRuntimeDisabled)).toBe(
+      "runtime-missing",
+    )
+
+    const availableButCliMissing = deriveSetupStatus(
+      inputs({ qwenAvailable: true, qwenCliReady: false }),
+    )
+    expect(availableButCliMissing.qwen.usable).toBe(false)
+    expect(availableButCliMissing.anyUsableAiPath).toBe(false)
+    expect(pathStatus("qwen", availableButCliMissing)).toBe("needs-cli")
+
+    const cliDetected = deriveSetupStatus(
+      inputs({ qwenAvailable: true, qwenCliReady: true }),
+    )
+    expect(cliDetected.qwen.cliReady).toBe(true)
+    expect(cliDetected.qwen.usable).toBe(false)
+    expect(cliDetected.anyUsableAiPath).toBe(false)
+    expect(pathStatus("qwen", cliDetected)).toBe("needs-cli-auth")
+    // Qwen status is setup guidance only; it is not a first-run completion path.
+    expect(recommendedPath(cliDetected)).toBe("claude")
   })
 })
 

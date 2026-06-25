@@ -47,6 +47,9 @@ export function ClaudeCodeAction() {
   const existingTokenQuery = trpc.claudeCode.getSystemToken.useQuery()
   const runtimeStatusQuery = trpc.claudeCode.getRuntimeStatus.useQuery()
   const integrationQuery = trpc.claudeCode.getIntegration.useQuery()
+  // Ambient shell/CLI config is detected but the desktop runtime does not consume
+  // it — surface that so a CLI user understands why they still need to sign in.
+  const cliConfigQuery = trpc.claudeCode.hasExistingCliConfig.useQuery()
   const alreadyConnected = Boolean(
     integrationQuery.data?.isConnected && !integrationQuery.data?.isExpired,
   )
@@ -245,6 +248,11 @@ export function ClaudeCodeAction() {
                 : t("onboarding.claude.localOnlyLoginPrompt")}
             </p>
           </div>
+          {cliConfigQuery.data?.hasConfig && !isLocalLoginRunning && (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t("onboarding.claude.cliConfigHint")}
+            </p>
+          )}
           {(isLocalLoginRunning || localLoginState === "importing") && (
             <>
               {localizedLocalLoginOutput && (

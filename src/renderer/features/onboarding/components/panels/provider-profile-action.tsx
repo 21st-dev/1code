@@ -13,7 +13,6 @@ import {
   type ClaudeModelSource,
   lastSelectedClaudeModelSourceAtom,
 } from "../../../agents/atoms"
-import { getUsableClaudeProviderProfile } from "../../../agents/lib/models"
 
 const isValidApiKey = (key: string) => {
   const trimmed = key.trim()
@@ -49,12 +48,21 @@ export function ProviderProfileAction() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submissionError, setSubmissionError] = useState<string | null>(null)
   const canSubmit = isValidApiKey(apiKey) && !isSubmitting
-  const existingProfile = useMemo(
-    () => getUsableClaudeProviderProfile(providerProfiles.data?.profiles ?? []),
+  // Only a genuine first-party Anthropic credential counts as "already
+  // connected" here — a custom claude-target profile (a third-party gateway) is
+  // owned by the Custom path and must not claim "Anthropic API key connected".
+  const anthropicProfile = useMemo(
+    () =>
+      (providerProfiles.data?.profiles ?? []).find(
+        (profile) =>
+          profile.protocol === "anthropic" &&
+          profile.targetRuntimes.includes("claude") &&
+          profile.lastTestStatus?.ok !== false,
+      ),
     [providerProfiles.data?.profiles],
   )
   const alreadyConnected =
-    Boolean(existingProfile) ||
+    Boolean(anthropicProfile) ||
     Boolean(secureProviderConfig.data?.config?.hasToken)
 
   const submitApiKey = () => {

@@ -30,11 +30,26 @@ export type SetupCodexStatus = {
   usable: boolean
 }
 
+/**
+ * Qwen Code is a runtime-managed engine: there is no in-app OAuth or API key —
+ * the CLI handles its own auth (`run qwen` then `/auth`). The app can detect
+ * executable availability, but that does not prove `/auth` or a successful run.
+ */
+export type SetupQwenStatus = {
+  /** The Qwen runtime is enabled (its capability manifest is present). */
+  available: boolean
+  /** The Qwen CLI executable was detected and version-probed. */
+  cliReady: boolean
+  /** Qwen status is setup guidance only; it is not a first-run completion gate. */
+  usable: boolean
+}
+
 export type SetupStatus = {
   /** A status query is still resolving AND nothing is usable yet. */
   isResolving: boolean
   claude: SetupClaudeStatus
   codex: SetupCodexStatus
+  qwen: SetupQwenStatus
   anyProviderConnected: boolean
   /** At least one path has a credential AND a ready runtime — the completion gate. */
   anyUsableAiPath: boolean
@@ -52,6 +67,10 @@ export type SetupStatusInputs = {
   codexRuntimeReady: boolean
   codexState: string | undefined
   codexApiKeyPresent: boolean
+  /** The Qwen runtime is enabled (capability manifest present). */
+  qwenAvailable: boolean
+  /** The Qwen CLI executable was detected and version-probed. */
+  qwenCliReady: boolean
   hasProject: boolean
   statusQueriesLoading: boolean
 }
@@ -93,6 +112,12 @@ export function deriveSetupStatus(input: SetupStatusInputs): SetupStatus {
       (codexOauthConnected || codexApiKeyConnected) && input.codexRuntimeReady,
   }
 
+  const qwen: SetupQwenStatus = {
+    available: input.qwenAvailable,
+    cliReady: input.qwenCliReady,
+    usable: false,
+  }
+
   const anyProviderConnected = claude.connected || codex.connected
   const anyUsableAiPath = claude.usable || codex.usable
 
@@ -103,6 +128,7 @@ export function deriveSetupStatus(input: SetupStatusInputs): SetupStatus {
     isResolving: input.statusQueriesLoading && !anyUsableAiPath,
     claude,
     codex,
+    qwen,
     anyProviderConnected,
     anyUsableAiPath,
     hasProject: input.hasProject,

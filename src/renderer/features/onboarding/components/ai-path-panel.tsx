@@ -1,9 +1,11 @@
 "use client"
 
 import { useAtom, useSetAtom } from "jotai"
+import { CheckCircle2 } from "lucide-react"
 import type { ReactNode } from "react"
 import { providerProfileSource } from "../../../../shared/provider-profile-types"
 import {
+  AgentIcon,
   ClaudeCodeIcon,
   CodexIcon,
   SettingsFilledIcon,
@@ -17,17 +19,18 @@ import {
 } from "../../agents/atoms"
 import { ProviderProfileEditor } from "../../agents/components/provider-profile-editor"
 import {
-  ONBOARDING_PATHS,
   type OnboardingPathId,
   pathStatus,
   pathToProviderMode,
   providerModeToPath,
   recommendedPath,
+  visibleOnboardingPaths,
 } from "../lib/onboarding-status"
 import type { SetupStatus } from "../lib/use-setup-status"
 import { ClaudeCodeAction } from "./panels/claude-code-action"
 import { CodexAction } from "./panels/codex-action"
 import { ProviderProfileAction } from "./panels/provider-profile-action"
+import { QwenAction } from "./panels/qwen-action"
 import { StatusBadge } from "./status-badge"
 
 type PathMeta = {
@@ -49,6 +52,12 @@ const PATH_META: Record<OnboardingPathId, PathMeta> = {
     iconClass: "bg-foreground text-background",
     titleKey: "onboarding.path.codex",
     hintKey: "onboarding.path.codexHint",
+  },
+  qwen: {
+    icon: <AgentIcon className="h-5 w-5" />,
+    iconClass: "bg-muted text-foreground",
+    titleKey: "onboarding.path.qwen",
+    hintKey: "onboarding.path.qwenHint",
   },
   "custom-provider": {
     icon: <SettingsFilledIcon className="h-5 w-5" />,
@@ -118,12 +127,39 @@ function CustomProviderAction() {
   )
 }
 
-function PathAction({ path }: { path: OnboardingPathId }) {
+/**
+ * Shown when a path is already usable, so the active panel agrees with the
+ * card's "ready" badge instead of rendering a sign-in button under it.
+ */
+function PathReadyNotice() {
+  const { t } = useI18n()
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
+      <CheckCircle2 className="h-4 w-4 shrink-0" />
+      {t("onboarding.path.readyNotice")}
+    </div>
+  )
+}
+
+function PathAction({
+  path,
+  status,
+}: {
+  path: OnboardingPathId
+  status: SetupStatus
+}) {
+  // Card badge and panel must agree: if the path is already usable, show the
+  // ready state rather than a connect button under a green "ready" chip.
+  if (pathStatus(path, status) === "ready") {
+    return <PathReadyNotice />
+  }
   switch (path) {
     case "claude":
       return <ClaudeAction />
     case "codex":
       return <CodexAction />
+    case "qwen":
+      return <QwenAction />
     case "custom-provider":
       return <CustomProviderAction />
   }
@@ -133,7 +169,11 @@ export function AiPathPanel({ status }: { status: SetupStatus }) {
   const { t } = useI18n()
   const [providerMode, setProviderMode] = useAtom(onboardingProviderModeAtom)
   const recommended = recommendedPath(status)
-  const selectedPath = providerModeToPath(providerMode) ?? recommended
+  const paths = visibleOnboardingPaths(status)
+  // A persisted selection may point at a now-hidden path (e.g. Qwen disabled
+  // since last run) — fall back to the recommendation in that case.
+  const resolvedPath = providerModeToPath(providerMode) ?? recommended
+  const selectedPath = paths.includes(resolvedPath) ? resolvedPath : recommended
   const selectedMeta = PATH_META[selectedPath]
 
   return (
@@ -147,9 +187,13 @@ export function AiPathPanel({ status }: { status: SetupStatus }) {
         </span>
       </div>
 
+      <p className="text-xs leading-5 text-muted-foreground">
+        {t("onboarding.aiPath.engineNote")}
+      </p>
+
       <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
         <div className="space-y-2">
-          {ONBOARDING_PATHS.map((path) => {
+          {paths.map((path) => {
             const meta = PATH_META[path]
             const isSelected = path === selectedPath
             return (
@@ -182,6 +226,11 @@ export function AiPathPanel({ status }: { status: SetupStatus }) {
                         {t("onboarding.billing.recommended")}
                       </span>
                     )}
+                    {path === "qwen" && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {t("onboarding.path.experimental")}
+                      </span>
+                    )}
                   </span>
                   <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                     {t(meta.hintKey)}
@@ -207,7 +256,7 @@ export function AiPathPanel({ status }: { status: SetupStatus }) {
               {t(selectedMeta.titleKey)}
             </h3>
           </div>
-          <PathAction path={selectedPath} />
+          <PathAction path={selectedPath} status={status} />
         </div>
       </div>
     </div>

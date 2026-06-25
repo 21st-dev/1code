@@ -17,6 +17,7 @@ import {
   pathStatus,
   providerModeToPath,
   recommendedPath,
+  visibleOnboardingPaths,
 } from "./lib/onboarding-status"
 import { useSetupStatus } from "./lib/use-setup-status"
 
@@ -29,8 +30,11 @@ export function OnboardingSurface() {
   const { t } = useI18n()
   const status = useSetupStatus()
   const providerMode = useAtomValue(onboardingProviderModeAtom)
-  const selectedPath =
-    providerModeToPath(providerMode) ?? recommendedPath(status)
+  const recommended = recommendedPath(status)
+  const resolvedPath = providerModeToPath(providerMode) ?? recommended
+  const selectedPath = visibleOnboardingPaths(status).includes(resolvedPath)
+    ? resolvedPath
+    : recommended
 
   const [activeRow, setActiveRow] = useState<RailRowId>(
     status.anyUsableAiPath ? "start-context" : "ai-path",
