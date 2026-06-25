@@ -19,6 +19,22 @@ describe("Qwen CLI setup guidance UI source guards", () => {
 
   test("Models settings exposes passive Qwen CLI setup controls", () => {
     expect(modelsTab).toContain("qwenRuntimeVisible")
+    expect(modelsTab).toContain("qwenSettingEnabled")
+    expect(modelsTab).toContain("qwenResolvedEnabled")
+    expect(modelsTab).toContain(
+      "trpc.agentRuntime.setQwenRuntimeEnabled.useMutation",
+    )
+    expect(modelsTab).toContain("handleSetQwenRuntimeEnabled")
+    expect(modelsTab).toContain("settings.models.qwenRuntime.title")
+    expect(modelsTab).toContain('id="qwen-runtime-toggle"')
+    expect(modelsTab).toContain('next.delete("qwen-code")')
+    expect(modelsTab).toContain("invalidateQwenRuntimeSurfaces")
+    expect(modelsTab).toContain(
+      "trpcUtils.agentRuntime.listManifests.invalidate",
+    )
+    expect(modelsTab).toContain(
+      "trpcUtils.agentRuntime.getQwenCliStatus.invalidate",
+    )
     expect(modelsTab).toContain("trpc.agentRuntime.getQwenCliStatus.useQuery")
     expect(modelsTab).toContain(
       "trpc.agentRuntime.updateQwenExecutablePath.useMutation",
@@ -34,6 +50,9 @@ describe("Qwen CLI setup guidance UI source guards", () => {
     expect(modelsTab).toContain("navigator.clipboard.writeText")
     expect(modelsTab).toContain("qwenCliSectionRef")
     expect(modelsTab).toContain('modelsSettingsTarget === "qwen-cli"')
+    expect(modelsTab).not.toContain(
+      "Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1",
+    )
   })
 
   test("renderer guidance stays passive and does not own Qwen auth/install writes", () => {

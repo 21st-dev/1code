@@ -501,7 +501,7 @@ export const en = {
     "Qwen executable path is invalid or not executable.",
   "settings.models.qwenCli.pathInvalid": "Qwen executable path is invalid.",
   "settings.models.qwenCli.runtimeDisabled":
-    "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable Qwen setup.",
+    "Qwen Code runtime is disabled. Enable it in Settings to configure Qwen setup.",
   "settings.models.qwenCli.runtimeDisabledBeforeChange":
     "Qwen Code runtime is disabled. Enable it before changing Qwen setup.",
   "settings.models.qwenCli.currentPath": "Path: {path}",
@@ -515,6 +515,7 @@ export const en = {
   "settings.models.qwenCli.overrideHint":
     "Use an absolute path when the desktop app cannot see your shell PATH. This stores only the path, never Qwen auth files or provider secrets.",
   "settings.models.experimental.title": "Experimental",
+  "settings.models.qwenRuntime.title": "Enable Qwen Code runtime",
   "settings.models.kunRuntime.title": "Enable Kun runtime",
   "settings.models.kunCli.title": "Kun CLI",
   "settings.models.kunCli.description":
@@ -2091,6 +2092,10 @@ export const en = {
     "Failed to reset Qwen executable path",
   "toast.models.failedToCopyQwenInstallCommand":
     "Failed to copy Qwen install command",
+  "toast.models.qwenRuntimeEnabled": "Qwen Code runtime enabled",
+  "toast.models.qwenRuntimeDisabled": "Qwen Code runtime disabled",
+  "toast.models.failedToUpdateQwenRuntimeSetting":
+    "Failed to update Qwen Code runtime setting",
   "toast.models.kunRuntimeEnabled": "Kun runtime enabled",
   "toast.models.kunRuntimeDisabled": "Kun runtime disabled",
   "toast.models.failedToUpdateKunRuntimeSetting":
@@ -4171,7 +4176,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "Qwen 可执行文件路径无效或不可执行。",
   "settings.models.qwenCli.pathInvalid": "Qwen 可执行文件路径无效。",
   "settings.models.qwenCli.runtimeDisabled":
-    "Qwen Code 运行时已禁用。设置 LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 后才能配置 Qwen。",
+    "Qwen Code 运行时已禁用。请先在设置中启用后再配置 Qwen。",
   "settings.models.qwenCli.runtimeDisabledBeforeChange":
     "Qwen Code 运行时已禁用。启用后才能修改 Qwen 设置。",
   "settings.models.qwenCli.currentPath": "路径：{path}",
@@ -4184,6 +4189,7 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.qwenCli.overrideHint":
     "当桌面应用看不到你的命令行 PATH 时，填写绝对路径。这里只保存路径，不写入 Qwen 认证文件或提供方密钥。",
   "settings.models.experimental.title": "实验功能",
+  "settings.models.qwenRuntime.title": "启用 Qwen Code 运行时",
   "settings.models.kunRuntime.title": "启用 Kun 运行时",
   "settings.models.kunCli.title": "Kun CLI",
   "settings.models.kunCli.description":
@@ -5744,6 +5750,10 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
     "重置 Qwen 可执行文件路径失败",
   "toast.models.failedToCopyQwenInstallCommand":
     "复制 Qwen 安装命令失败",
+  "toast.models.qwenRuntimeEnabled": "Qwen Code 运行时已启用",
+  "toast.models.qwenRuntimeDisabled": "Qwen Code 运行时已禁用",
+  "toast.models.failedToUpdateQwenRuntimeSetting":
+    "更新 Qwen Code 运行时设置失败",
   "toast.models.kunRuntimeEnabled": "Kun 运行时已启用",
   "toast.models.kunRuntimeDisabled": "Kun 运行时已禁用",
   "toast.models.failedToUpdateKunRuntimeSetting":

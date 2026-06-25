@@ -159,7 +159,7 @@ const RUNTIME_SETUP_TEXT_KEYS: Record<string, TranslationKey> = {
     "settings.models.qwenCli.installHint",
   "Run qwen, then use /auth inside the Qwen Code CLI.":
     "settings.models.qwenCli.authHint",
-  "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable Qwen setup.":
+  "Qwen Code runtime is disabled. Enable it in Settings to configure Qwen setup.":
     "settings.models.qwenCli.runtimeDisabled",
   "Qwen Code CLI was not found on PATH.":
     "settings.models.qwenCli.pathMissing",

@@ -37,14 +37,14 @@
       closed.
 
 ## 3. Settings and renderer surfaces
-- [ ] 3.1 Add an off-by-default Qwen runtime toggle in Settings > Models near the
+- [x] 3.1 Add an off-by-default Qwen runtime toggle in Settings > Models near the
       existing Qwen CLI section / experimental runtime controls.
-- [ ] 3.2 When Qwen is off, show only the toggle and hide Qwen CLI setup
+- [x] 3.2 When Qwen is off, show only the toggle and hide Qwen CLI setup
       controls, chat engine option, onboarding path, and manifest-driven Qwen
       surfaces.
-- [ ] 3.3 When Qwen is on, show the existing passive Qwen CLI setup guidance,
+- [x] 3.3 When Qwen is on, show the existing passive Qwen CLI setup guidance,
       executable path override, and setup-required engine state.
-- [ ] 3.4 Toggle mutation invalidates runtime manifests, Qwen CLI status, and
+- [x] 3.4 Toggle mutation invalidates runtime manifests, Qwen CLI status, and
       onboarding/chat query state so UI updates immediately.
 
 ## 4. Preserve current boundaries

@@ -132,7 +132,7 @@ const QWEN_STATUS_TEXT_KEYS: Record<string, TranslationKey> = {
     "settings.models.qwenCli.installHint",
   "Run qwen, then use /auth inside the Qwen Code CLI.":
     "settings.models.qwenCli.authHint",
-  "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable Qwen setup.":
+  "Qwen Code runtime is disabled. Enable it in Settings to configure Qwen setup.":
     "settings.models.qwenCli.runtimeDisabled",
   "Qwen Code runtime is disabled. Enable it before changing Qwen setup.":
     "settings.models.qwenCli.runtimeDisabledBeforeChange",
@@ -1521,13 +1521,18 @@ export function AgentsModelsTab() {
     trpc.agentRuntime.getRuntimeFeatureSettings.useQuery(undefined, {
       staleTime: 15_000,
     })
+  const qwenSettingEnabled =
+    runtimeFeatureSettings?.settings.qwenRuntimeEnabled ?? false
+  const qwenResolvedEnabled =
+    runtimeFeatureSettings?.resolved.qwenRuntimeEnabled ?? false
   const kunSettingEnabled =
     runtimeFeatureSettings?.settings.kunRuntimeEnabled ?? false
   const kunResolvedEnabled =
     runtimeFeatureSettings?.resolved.kunRuntimeEnabled ?? false
   const qwenRuntimeVisible =
-    runtimeManifests?.some((manifest) => manifest.runtimeId === "qwen-code") ??
-    false
+    qwenResolvedEnabled &&
+    (runtimeManifests?.some((manifest) => manifest.runtimeId === "qwen-code") ??
+      false)
   const kunRuntimeVisible =
     kunResolvedEnabled &&
     (runtimeManifests?.some((manifest) => manifest.runtimeId === "kun") ??
@@ -1576,6 +1581,8 @@ export function AgentsModelsTab() {
     trpc.agentRuntime.approveKunShellExecutableHash.useMutation()
   const resetKunShellExecutableHashMutation =
     trpc.agentRuntime.resetKunShellExecutableHash.useMutation()
+  const setQwenRuntimeEnabledMutation =
+    trpc.agentRuntime.setQwenRuntimeEnabled.useMutation()
   const setKunRuntimeEnabledMutation =
     trpc.agentRuntime.setKunRuntimeEnabled.useMutation()
   const isKunManagedInstallPending =
@@ -1591,6 +1598,46 @@ export function AgentsModelsTab() {
       trpcUtils.providerProfiles.listPresets.invalidate(),
       trpcUtils.providerProfiles.listProfiles.invalidate(),
     ])
+  }
+
+  const invalidateQwenRuntimeSurfaces = async () => {
+    await Promise.all([
+      trpcUtils.agentRuntime.getRuntimeFeatureSettings.invalidate(),
+      trpcUtils.agentRuntime.listManifests.invalidate(),
+      trpcUtils.agentRuntime.getManifest.invalidate(),
+      trpcUtils.agentRuntime.getQwenCliStatus.invalidate(),
+    ])
+  }
+
+  const handleSetQwenRuntimeEnabled = async (enabled: boolean) => {
+    try {
+      const snapshot = await setQwenRuntimeEnabledMutation.mutateAsync({
+        enabled,
+      })
+      trpcUtils.agentRuntime.getRuntimeFeatureSettings.setData(
+        undefined,
+        snapshot,
+      )
+      if (!snapshot.resolved.qwenRuntimeEnabled) {
+        setRuntimeCapabilityManifests((current) => {
+          const next = new Map(current)
+          next.delete("qwen-code")
+          return next
+        })
+      }
+      await invalidateQwenRuntimeSurfaces()
+      toast.success(
+        enabled
+          ? t("toast.models.qwenRuntimeEnabled")
+          : t("toast.models.qwenRuntimeDisabled"),
+      )
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? localizeQwenStatusText(error.message, t)
+          : t("toast.models.failedToUpdateQwenRuntimeSetting"),
+      )
+    }
   }
 
   const handleSetKunRuntimeEnabled = async (enabled: boolean) => {
@@ -2376,17 +2423,40 @@ export function AgentsModelsTab() {
         </div>
       )}
 
-      <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+      <div className="space-y-3 rounded-lg border border-border bg-background p-3">
+        <h4 className="text-sm font-medium text-foreground">
+          {t("settings.models.experimental.title")}
+        </h4>
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <h4 className="text-sm font-medium text-foreground">
-              {t("settings.models.experimental.title")}
-            </h4>
-            <p className="text-xs text-muted-foreground">
-              {t("settings.models.kunRuntime.title")}
-            </p>
+            <Label
+              htmlFor="qwen-runtime-toggle"
+              className="text-sm font-medium text-foreground"
+            >
+              {t("settings.models.qwenRuntime.title")}
+            </Label>
           </div>
           <Switch
+            id="qwen-runtime-toggle"
+            checked={qwenSettingEnabled}
+            disabled={setQwenRuntimeEnabledMutation.isPending}
+            onCheckedChange={(checked) =>
+              void handleSetQwenRuntimeEnabled(checked)
+            }
+            aria-label={t("settings.models.qwenRuntime.title")}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4 border-t border-border pt-3">
+          <div className="min-w-0">
+            <Label
+              htmlFor="kun-runtime-toggle"
+              className="text-sm font-medium text-foreground"
+            >
+              {t("settings.models.kunRuntime.title")}
+            </Label>
+          </div>
+          <Switch
+            id="kun-runtime-toggle"
             checked={kunSettingEnabled}
             disabled={setKunRuntimeEnabledMutation.isPending}
             onCheckedChange={(checked) =>
