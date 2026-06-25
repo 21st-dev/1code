@@ -88,3 +88,6 @@
 - [x] 6.1 `openspec validate add-kun-runtime-settings-gate --strict --no-interactive`.
 - [x] 6.2 `bun run check` green (tests that set the env flag still enable Kun via
       the dev/test path).
+- [x] 6.3 Real Electron GUI smoke with a clean `LOCUS_USER_DATA_DIR`: Kun Settings
+      gate off/on/off, onboarding Chinese/Qwen setup guidance, and Qwen not counted
+      as onboarding completion. See `electron-gui-smoke-2026-06-25.md`.
