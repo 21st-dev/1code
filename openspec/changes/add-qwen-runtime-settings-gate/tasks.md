@@ -19,9 +19,13 @@
 - [ ] 1.2 Add a Qwen resolver where packaged product mode ignores
       `LOCUS_ENABLE_QWEN_CODE_RUNTIME`; unpackaged dev/test may honor the env
       override.
-- [ ] 1.3 Inject resolved `qwenRuntimeEnabled` into the runtime registry, Qwen
-      CLI status, and Qwen chat/setup tRPC paths. Do not spoof env to pass the
-      resolved setting.
+- [ ] 1.3 Extend `AgentRuntimeRegistryOptions.runtimeFeatureSettings` with
+      `qwenRuntimeEnabled?`, and add explicit `runtimeId === "qwen-code"`
+      branches in both `includesExperimentalRuntimes` and
+      `isRegisteredAgentRuntimeId`. The Settings toggle must drive registry and
+      manifest visibility; do not leave Qwen falling through to env-only gating.
+- [ ] 1.4 Inject resolved `qwenRuntimeEnabled` into Qwen CLI status and Qwen
+      chat/setup tRPC paths. Do not spoof env to pass the resolved setting.
 
 ## 2. tRPC and fail-closed behavior
 - [ ] 2.1 Add `agentRuntime.setQwenRuntimeEnabled({ enabled })` and include Qwen
@@ -54,7 +58,11 @@
 - [ ] 5.1 `openspec validate add-qwen-runtime-settings-gate --strict --no-interactive`.
 - [ ] 5.2 Targeted unit tests for runtime feature settings, registry gating, Qwen
       CLI setup guidance, and onboarding derived status.
-- [ ] 5.3 `bun run check`.
-- [ ] 5.4 Real Electron GUI smoke with isolated `LOCUS_USER_DATA_DIR`: default
+- [ ] 5.3 Runtime feature settings tests explicitly assert
+      `resolveQwenCodeRuntimeEnabled` ignores
+      `LOCUS_ENABLE_QWEN_CODE_RUNTIME=1` when `isPackaged: true`, and honors the
+      env override when `isPackaged: false`.
+- [ ] 5.4 `bun run check`.
+- [ ] 5.5 Real Electron GUI smoke with isolated `LOCUS_USER_DATA_DIR`: default
       Qwen off, toggle on shows Qwen setup guidance, Qwen CLI detected does not
       complete onboarding, toggle off hides Qwen again.

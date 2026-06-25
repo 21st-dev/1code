@@ -2,19 +2,20 @@
 
 ### Requirement: Flag-gated Qwen Code runtime registration
 
-The system SHALL distinguish desktop/manifest known runtime IDs from
-non-desktop contract runtime IDs before adding `qwen-code`. Product Qwen Code
-runtime exposure SHALL be controlled by a persisted, off-by-default Settings
-value owned by the main-process runtime-feature settings owner. The
-`LOCUS_ENABLE_QWEN_CODE_RUNTIME` environment variable SHALL NOT be the product
-gate; it MAY be honored only as a dev/test override outside packaged product
-gating. Non-desktop contract surfaces SHALL consume a narrower contract runtime
-set that remains Claude Code + Codex, independent of the Qwen desktop gate.
+The system SHALL distinguish desktop/manifest exposure for `qwen-code` from
+non-desktop contract runtime IDs. Product Qwen Code runtime exposure SHALL be
+controlled by a persisted, off-by-default Settings value owned by the
+main-process runtime-feature settings owner. The `LOCUS_ENABLE_QWEN_CODE_RUNTIME`
+environment variable SHALL NOT be the product gate; it MAY be honored only as a
+dev/test override outside packaged product gating. Non-desktop contract surfaces
+SHALL consume a narrower contract runtime set that remains Claude Code + Codex,
+independent of the Qwen desktop gate.
 
 #### Scenario: Default off keeps two-runtime behavior
 - **WHEN** the persisted Qwen runtime setting is off
-- **THEN** the desktop runtime factory, desktop chat route, runtime registry,
-  manifest lookup, and permission layer reject or omit `qwen-code`
+- **THEN** the experimental runtime chat route fails closed for `qwen-code`
+- **AND** the runtime registry and manifest lookup omit or reject `qwen-code`
+- **AND** renderer surfaces that follow manifests do not show Qwen Code
 - **AND** Local Job API, headless CLI, schedules, headless job store, and
   `locus acp` reject the runtime from their static contract runtime set
 - **AND** no `qwen-code` option is offered in the renderer new-chat, engine, or
@@ -22,7 +23,8 @@ set that remains Claude Code + Codex, independent of the Qwen desktop gate.
 
 #### Scenario: Setting on admits the third runtime
 - **WHEN** the persisted Qwen runtime setting is on
-- **THEN** the factory admits `qwen-code` with adapter source `qwen-acp-client`
+- **THEN** the experimental runtime chat route admits `qwen-code` and constructs
+  the Qwen ACP adapter with adapter source `qwen-acp-client`
 - **AND** the runtime registry and manifest lookup include `qwen-code` for
   desktop callers
 - **AND** the permission layer recognizes `qwen-code` as a permission runtime

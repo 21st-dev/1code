@@ -33,6 +33,8 @@ SHALL fail closed or remain hidden instead of probing or mutating Qwen setup.
   version string when available
 - **AND** any stderr/stdout captured during probing is redacted and bounded
 
+## ADDED Requirements
+
 ### Requirement: Qwen Runtime Toggle in Settings
 
 The system SHALL expose an off-by-default Qwen runtime toggle in Settings >

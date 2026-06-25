@@ -49,6 +49,11 @@ credentials.
   - `src/main/lib/agent-runtime/runtime-registry.ts`
   - `src/main/lib/trpc/routers/agent-runtime.ts`
   - `src/renderer/components/dialogs/settings-tabs/agents-models-tab.tsx`
-  - runtime-manifest consumers in chat/onboarding that already follow manifests
+  - `src/renderer/features/onboarding/lib/use-setup-status.ts`
+  - `src/renderer/features/onboarding/lib/derive-setup-status.ts`
+  - `src/renderer/features/onboarding/lib/onboarding-status.ts`
+  - `src/renderer/features/onboarding/components/panels/qwen-action.tsx`
+  - runtime-manifest consumers in chat and engine selectors that already follow
+    manifests
   - tests for runtime settings, runtime registry, Qwen CLI setup guidance, and
     onboarding status
