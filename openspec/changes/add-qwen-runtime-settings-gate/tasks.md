@@ -48,21 +48,27 @@
       onboarding/chat query state so UI updates immediately.
 
 ## 4. Preserve current boundaries
-- [ ] 4.1 Do not add `qwen-code` as a Provider Profile target.
-- [ ] 4.2 Do not add provider-profile/gateway binding, synthesized provider
+- [x] 4.1 Do not add `qwen-code` as a Provider Profile target.
+- [x] 4.2 Do not add provider-profile/gateway binding, synthesized provider
       config, or credential routing for Qwen.
-- [ ] 4.3 Qwen CLI detection still does not count as onboarding completion.
-- [ ] 4.4 Saved Qwen executable path override survives toggling off/on.
+- [x] 4.3 Qwen CLI detection still does not count as onboarding completion.
+- [x] 4.4 Saved Qwen executable path override survives toggling off/on.
 
 ## 5. Validate
-- [ ] 5.1 `openspec validate add-qwen-runtime-settings-gate --strict --no-interactive`.
-- [ ] 5.2 Targeted unit tests for runtime feature settings, registry gating, Qwen
+- [x] 5.1 `openspec validate add-qwen-runtime-settings-gate --strict --no-interactive`.
+- [x] 5.2 Targeted unit tests for runtime feature settings, registry gating, Qwen
       CLI setup guidance, and onboarding derived status.
-- [ ] 5.3 Runtime feature settings tests explicitly assert
+- [x] 5.3 Runtime feature settings tests explicitly assert
       `resolveQwenCodeRuntimeEnabled` ignores
       `LOCUS_ENABLE_QWEN_CODE_RUNTIME=1` when `isPackaged: true`, and honors the
       env override when `isPackaged: false`.
-- [ ] 5.4 `bun run check`.
-- [ ] 5.5 Real Electron GUI smoke with isolated `LOCUS_USER_DATA_DIR`: default
+- [x] 5.4 `bun run check`.
+- [x] 5.5 Real Electron GUI smoke with isolated `LOCUS_USER_DATA_DIR`: default
       Qwen off, toggle on shows Qwen setup guidance, Qwen CLI detected does not
       complete onboarding, toggle off hides Qwen again.
+      Evidence: `/tmp/locus-qwen-gate-smoke2.U2wdXA` with
+      `LOCUS_DISABLE_SAFE_STORAGE=1`, fake `qwen 0.18.5-smoke`, screenshots
+      under `/tmp/locus-qwen-smoke2-*.png`; Qwen off hidden by default, Qwen on
+      showed localized setup guidance without completing onboarding, Settings
+      toggle hid/restored Qwen CLI setup, and engine menu removed Qwen again
+      when disabled.

@@ -9,6 +9,10 @@ import {
   setKunRuntimeEnabled,
   setQwenRuntimeEnabled,
 } from "../src/main/lib/agent-runtime/runtime-feature-settings"
+import {
+  readQwenCliSettings,
+  writeQwenCliSettings,
+} from "../src/main/lib/qwen/qwen-cli-settings"
 
 let tempDir: string | null = null
 
@@ -71,6 +75,35 @@ describe("runtime feature settings", () => {
     expect(readRuntimeFeatureSettings({ settingsPath: path })).toEqual({
       qwenRuntimeEnabled: true,
       kunRuntimeEnabled: false,
+    })
+  })
+
+  test("preserves the saved Qwen executable override while toggling the runtime", () => {
+    const root = mkdtempSync(join(tmpdir(), "locus-qwen-toggle-"))
+    tempDir = root
+    const runtimeSettingsPath = join(root, "runtime-feature-settings.json")
+    const executablePath = join(root, "bin", "qwen")
+
+    writeQwenCliSettings({ executablePath }, { userDataPath: root })
+
+    setQwenRuntimeEnabled(true, {
+      settingsPath: runtimeSettingsPath,
+      env: {},
+      isPackaged: true,
+    })
+    setQwenRuntimeEnabled(false, {
+      settingsPath: runtimeSettingsPath,
+      env: {},
+      isPackaged: true,
+    })
+    setQwenRuntimeEnabled(true, {
+      settingsPath: runtimeSettingsPath,
+      env: {},
+      isPackaged: true,
+    })
+
+    expect(readQwenCliSettings({ userDataPath: root })).toEqual({
+      executablePath,
     })
   })
 
