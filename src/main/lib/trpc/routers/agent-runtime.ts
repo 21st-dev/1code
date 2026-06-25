@@ -3,7 +3,6 @@ import { observable } from "@trpc/server/observable"
 import { z } from "zod"
 import {
   AGENT_RUNTIME_CAPABILITY_IDS,
-  shouldEnableQwenCodeRuntime,
 } from "../../../../shared/agent-runtime-capabilities"
 import {
   parseProviderProfileSource,
@@ -18,6 +17,7 @@ import type { DesktopRunProviderBinding } from "../../agent-runtime/desktop-run-
 import {
   getRuntimeFeatureSettingsSnapshot,
   setKunRuntimeEnabled,
+  setQwenRuntimeEnabled,
 } from "../../agent-runtime/runtime-feature-settings"
 import {
   collectExperimentalRuntimeAssistantChunk,
@@ -151,7 +151,7 @@ function runtimeStreamKey(
 function isExperimentalRuntimeEnabled(runtimeId: ExperimentalRuntimeChatId) {
   switch (runtimeId) {
     case "qwen-code":
-      return shouldEnableQwenCodeRuntime(process.env)
+      return isQwenRuntimeEnabledForRuntime()
     case "kun":
       return isKunRuntimeEnabledForRuntime()
   }
@@ -162,10 +162,15 @@ function runtimeFeatureSettingsForRequest() {
 }
 
 function runtimeRegistryFeatureSettings() {
+  const snapshot = runtimeFeatureSettingsForRequest()
   return {
-    kunRuntimeEnabled:
-      runtimeFeatureSettingsForRequest().resolved.kunRuntimeEnabled,
+    qwenRuntimeEnabled: snapshot.resolved.qwenRuntimeEnabled,
+    kunRuntimeEnabled: snapshot.resolved.kunRuntimeEnabled,
   }
+}
+
+function isQwenRuntimeEnabledForRuntime(): boolean {
+  return runtimeFeatureSettingsForRequest().resolved.qwenRuntimeEnabled
 }
 
 function isKunRuntimeEnabledForRuntime(): boolean {
@@ -183,7 +188,7 @@ function runtimeProviderProfileId(input: {
 function runtimeDisabledMessage(runtimeId: ExperimentalRuntimeChatId): string {
   switch (runtimeId) {
     case "qwen-code":
-      return "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable the desktop ACP spike."
+      return "Qwen Code runtime is disabled. Enable it in Settings before starting the desktop ACP runtime."
     case "kun":
       return "Kun runtime is disabled. Enable it in Settings before starting the desktop HTTP/SSE runtime."
   }
@@ -266,6 +271,21 @@ export const agentRuntimeRouter = router({
       return snapshot
     }),
 
+  setQwenRuntimeEnabled: publicProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(({ input }) => {
+      const snapshot = setQwenRuntimeEnabled(input.enabled, {
+        env: process.env,
+      })
+      if (!snapshot.resolved.qwenRuntimeEnabled) {
+        abortActiveRuntimeStreams(
+          "qwen-code",
+          "Qwen Code runtime was disabled in Settings.",
+        )
+      }
+      return snapshot
+    }),
+
   respondScopeExpansion: publicProcedure
     .input(desktopScopeExpansionResponseInputSchema)
     .mutation(({ input }) => {
@@ -274,7 +294,7 @@ export const agentRuntimeRouter = router({
 
   getQwenCliStatus: publicProcedure.query(async () => {
     const resolved = await resolveQwenCliSetupStatus({
-      enabled: shouldEnableQwenCodeRuntime(process.env),
+      enabled: isQwenRuntimeEnabledForRuntime(),
     })
     return toRendererQwenCliSetupStatus(resolved)
   }),
@@ -282,7 +302,7 @@ export const agentRuntimeRouter = router({
   updateQwenExecutablePath: publicProcedure
     .input(runtimeExecutablePathInputSchema)
     .mutation(async ({ input }) => {
-      if (!shouldEnableQwenCodeRuntime(process.env)) {
+      if (!isQwenRuntimeEnabledForRuntime()) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message:
@@ -305,7 +325,7 @@ export const agentRuntimeRouter = router({
     }),
 
   resetQwenExecutablePath: publicProcedure.mutation(async () => {
-    if (!shouldEnableQwenCodeRuntime(process.env)) {
+    if (!isQwenRuntimeEnabledForRuntime()) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message:
@@ -604,6 +624,7 @@ export const agentRuntimeRouter = router({
             if (input.runtimeId === "qwen-code") {
               const qwenCli = await resolveQwenCliSetupStatus({
                 cwd: preflight.cwd,
+                enabled: isQwenRuntimeEnabledForRuntime(),
               })
               if (!qwenCli.status.ok || !qwenCli.executablePath) {
                 safeEmit({
@@ -902,6 +923,17 @@ export const agentRuntimeRouter = router({
         pending.resolve({
           approved: false,
           message: "Kun runtime is disabled.",
+        })
+        pendingRuntimeToolApprovals.delete(input.toolUseId)
+        return { ok: false }
+      }
+      if (
+        pending.runtimeId === "qwen-code" &&
+        !isQwenRuntimeEnabledForRuntime()
+      ) {
+        pending.resolve({
+          approved: false,
+          message: "Qwen Code runtime is disabled.",
         })
         pendingRuntimeToolApprovals.delete(input.toolUseId)
         return { ok: false }

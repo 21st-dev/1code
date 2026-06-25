@@ -26,7 +26,7 @@ export const QWEN_ACP_CLIENT_DESKTOP_ADAPTER_METADATA = {
   label: "Qwen ACP client adapter",
   temporaryFallback: false,
   fallbackReason: null,
-  defaultDisableCondition: "LOCUS_ENABLE_QWEN_CODE_RUNTIME is not enabled",
+  defaultDisableCondition: "Qwen runtime setting is disabled",
   removalCondition: null,
 } satisfies DesktopRuntimeAdapterMetadata
 

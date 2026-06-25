@@ -17,7 +17,9 @@ const TRUE_ENV_VALUES = new Set(["1", "true", "yes", "on"])
 
 export function shouldEnableQwenCodeRuntime(
   env: AgentRuntimeFeatureEnv = {},
+  options: { allowEnvOverride?: boolean } = {},
 ): boolean {
+  if (options.allowEnvOverride === false) return false
   const value = env.LOCUS_ENABLE_QWEN_CODE_RUNTIME
   return TRUE_ENV_VALUES.has(value?.trim().toLowerCase() ?? "")
 }
@@ -42,6 +44,17 @@ export function resolveKunRuntimeEnabled(input: {
   })
 }
 
+export function resolveQwenCodeRuntimeEnabled(input: {
+  setting: boolean
+  env?: AgentRuntimeFeatureEnv
+  isPackaged: boolean
+}): boolean {
+  if (input.setting) return true
+  return shouldEnableQwenCodeRuntime(input.env ?? {}, {
+    allowEnvOverride: !input.isPackaged,
+  })
+}
+
 export function isExperimentalAgentRuntimeId(
   runtimeId: AgentRuntimeId,
 ): runtimeId is AgentRuntimeExperimentalId {
@@ -51,11 +64,16 @@ export function isExperimentalAgentRuntimeId(
 export function shouldEnableExperimentalAgentRuntime(
   runtimeId: AgentRuntimeExperimentalId,
   env: AgentRuntimeFeatureEnv = {},
-  options: { allowKunEnvOverride?: boolean } = {},
+  options: {
+    allowKunEnvOverride?: boolean
+    allowQwenEnvOverride?: boolean
+  } = {},
 ): boolean {
   switch (runtimeId) {
     case "qwen-code":
-      return shouldEnableQwenCodeRuntime(env)
+      return shouldEnableQwenCodeRuntime(env, {
+        allowEnvOverride: options.allowQwenEnvOverride,
+      })
     case "kun":
       return shouldEnableKunRuntime(env, {
         allowEnvOverride: options.allowKunEnvOverride,

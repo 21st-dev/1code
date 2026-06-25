@@ -46,6 +46,14 @@ describe("agent runtime registry", () => {
       listRegisteredAgentRuntimeManifests({
         scope: "desktop",
         env: { LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1" },
+        runtimeFeatureSettings: { qwenRuntimeEnabled: false },
+      }).map((manifest) => manifest.runtimeId),
+    ).toEqual(["claude-code", "codex"])
+    expect(
+      listRegisteredAgentRuntimeManifests({
+        scope: "desktop",
+        env: {},
+        runtimeFeatureSettings: { qwenRuntimeEnabled: true },
       }).map((manifest) => manifest.runtimeId),
     ).toEqual(["claude-code", "codex", "qwen-code"])
     expect(
@@ -69,6 +77,10 @@ describe("agent runtime registry", () => {
           LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1",
           LOCUS_ENABLE_KUN_RUNTIME: "1",
         },
+        runtimeFeatureSettings: {
+          qwenRuntimeEnabled: true,
+          kunRuntimeEnabled: true,
+        },
       }).map((manifest) => manifest.runtimeId),
     ).toEqual(["claude-code", "codex", "qwen-code", "kun"])
 
@@ -88,6 +100,20 @@ describe("agent runtime registry", () => {
       resolveRegisteredAgentRuntimeManifest("qwen-code", {
         scope: "desktop",
         env: { LOCUS_ENABLE_QWEN_CODE_RUNTIME: "1" },
+        runtimeFeatureSettings: { qwenRuntimeEnabled: false },
+      }),
+    ).toMatchObject({
+      ok: false,
+      diagnostic: {
+        type: "unavailable-runtime",
+        runtimeId: "qwen-code",
+      },
+    })
+    expect(
+      resolveRegisteredAgentRuntimeManifest("qwen-code", {
+        scope: "desktop",
+        env: {},
+        runtimeFeatureSettings: { qwenRuntimeEnabled: true },
       }),
     ).toMatchObject({
       ok: true,
@@ -218,10 +244,14 @@ describe("agent runtime registry", () => {
     expect(runtimeRouter).toContain("clearPendingRuntimeApprovals(")
     expect(runtimeRouter).toContain("pending.runtimeId !== runtimeId")
     expect(runtimeRouter).toContain("pending.subChatId !== subChatId")
-    expect(runtimeRouter).toContain("shouldEnableQwenCodeRuntime(process.env)")
+    expect(runtimeRouter).toContain("isQwenRuntimeEnabledForRuntime()")
     expect(runtimeRouter).toContain("isKunRuntimeEnabledForRuntime()")
     expect(runtimeRouter).toContain("runtimeRegistryFeatureSettings()")
+    expect(runtimeRouter).toContain("setQwenRuntimeEnabled")
     expect(runtimeRouter).toContain("setKunRuntimeEnabled")
+    expect(runtimeRouter).toContain(
+      "runtimeFeatureSettingsForRequest().resolved.qwenRuntimeEnabled",
+    )
     expect(runtimeRouter).toContain("runtimeDisabledMessage(input.runtimeId)")
     expect(runtimeRouter).toContain('type: "capability-error"')
     expect(runtimeRouter).toContain("verifyDesktopRunPreflight")

@@ -49,7 +49,7 @@ describe("desktop runtime adapter factory", () => {
       runtimeId: "qwen-code",
       source: "qwen-acp-client",
       temporaryFallback: false,
-      defaultDisableCondition: "LOCUS_ENABLE_QWEN_CODE_RUNTIME is not enabled",
+      defaultDisableCondition: "Qwen runtime setting is disabled",
     })
     expect(KUN_HTTP_SSE_DESKTOP_ADAPTER_METADATA).toMatchObject({
       runtimeId: "kun",

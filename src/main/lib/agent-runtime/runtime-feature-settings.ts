@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import {
   resolveKunRuntimeEnabled,
+  resolveQwenCodeRuntimeEnabled,
   type AgentRuntimeFeatureEnv,
 } from "../../../shared/agent-runtime-capabilities"
 import { getElectronApp, getElectronUserDataPath } from "../electron-app"
@@ -9,6 +10,7 @@ import { getElectronApp, getElectronUserDataPath } from "../electron-app"
 const RUNTIME_FEATURE_SETTINGS_FILE = "runtime-feature-settings.json"
 
 export type RuntimeFeatureSettings = {
+  qwenRuntimeEnabled: boolean
   kunRuntimeEnabled: boolean
 }
 
@@ -22,6 +24,7 @@ export type RuntimeFeatureSettingsSnapshot = {
 }
 
 const DEFAULT_RUNTIME_FEATURE_SETTINGS: RuntimeFeatureSettings = {
+  qwenRuntimeEnabled: false,
   kunRuntimeEnabled: false,
 }
 
@@ -61,6 +64,7 @@ function parseRuntimeFeatureSettingsContent(
   try {
     const parsed = JSON.parse(content) as Record<string, unknown>
     return {
+      qwenRuntimeEnabled: parsed.qwenRuntimeEnabled === true,
       kunRuntimeEnabled: parsed.kunRuntimeEnabled === true,
     }
   } catch {
@@ -86,6 +90,7 @@ export function writeRuntimeFeatureSettings(
 ): void {
   const settingsPath = getRuntimeFeatureSettingsPath(options)
   const normalized: RuntimeFeatureSettings = {
+    qwenRuntimeEnabled: settings.qwenRuntimeEnabled === true,
     kunRuntimeEnabled: settings.kunRuntimeEnabled === true,
   }
   mkdirSync(dirname(settingsPath), { recursive: true })
@@ -110,6 +115,11 @@ export function getRuntimeFeatureSettingsSnapshot(
   return {
     settings,
     resolved: {
+      qwenRuntimeEnabled: resolveQwenCodeRuntimeEnabled({
+        setting: settings.qwenRuntimeEnabled,
+        env,
+        isPackaged,
+      }),
       kunRuntimeEnabled: resolveKunRuntimeEnabled({
         setting: settings.kunRuntimeEnabled,
         env,
@@ -135,8 +145,26 @@ export function setKunRuntimeEnabled(
   return getRuntimeFeatureSettingsSnapshot(options)
 }
 
+export function setQwenRuntimeEnabled(
+  enabled: boolean,
+  options: RuntimeFeatureSettingsOptions = {},
+): RuntimeFeatureSettingsSnapshot {
+  const current = readRuntimeFeatureSettings(options)
+  writeRuntimeFeatureSettings(
+    { ...current, qwenRuntimeEnabled: enabled },
+    options,
+  )
+  return getRuntimeFeatureSettingsSnapshot(options)
+}
+
 export function isKunRuntimeEnabled(
   options: RuntimeFeatureSettingsOptions = {},
 ): boolean {
   return getRuntimeFeatureSettingsSnapshot(options).resolved.kunRuntimeEnabled
+}
+
+export function isQwenRuntimeEnabled(
+  options: RuntimeFeatureSettingsOptions = {},
+): boolean {
+  return getRuntimeFeatureSettingsSnapshot(options).resolved.qwenRuntimeEnabled
 }

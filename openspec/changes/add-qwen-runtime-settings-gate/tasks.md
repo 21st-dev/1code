@@ -6,33 +6,33 @@
 > Profile/gateway binding here.
 
 ## 0. Pre-flight
-- [ ] 0.1 Confirm branch starts from clean `main`.
-- [ ] 0.2 Inventory current Qwen gate readers:
+- [x] 0.1 Confirm branch starts from clean `main`.
+- [x] 0.2 Inventory current Qwen gate readers:
       `shared/agent-runtime-capabilities.ts`, runtime registry, agent-runtime
       tRPC routes, Qwen CLI status/setup mutations, Settings, onboarding, and
       chat engine selectors.
-- [ ] 0.3 Confirm pending OpenSpecs do not already own this scope.
+- [x] 0.3 Confirm pending OpenSpecs do not already own this scope.
 
 ## 1. Runtime feature settings owner
-- [ ] 1.1 Extend `RuntimeFeatureSettings` with `qwenRuntimeEnabled: false` and
+- [x] 1.1 Extend `RuntimeFeatureSettings` with `qwenRuntimeEnabled: false` and
       preserve backward-compatible parsing of old settings files.
-- [ ] 1.2 Add a Qwen resolver where packaged product mode ignores
+- [x] 1.2 Add a Qwen resolver where packaged product mode ignores
       `LOCUS_ENABLE_QWEN_CODE_RUNTIME`; unpackaged dev/test may honor the env
       override.
-- [ ] 1.3 Extend `AgentRuntimeRegistryOptions.runtimeFeatureSettings` with
+- [x] 1.3 Extend `AgentRuntimeRegistryOptions.runtimeFeatureSettings` with
       `qwenRuntimeEnabled?`, and add explicit `runtimeId === "qwen-code"`
       branches in both `includesExperimentalRuntimes` and
       `isRegisteredAgentRuntimeId`. The Settings toggle must drive registry and
       manifest visibility; do not leave Qwen falling through to env-only gating.
-- [ ] 1.4 Inject resolved `qwenRuntimeEnabled` into Qwen CLI status and Qwen
+- [x] 1.4 Inject resolved `qwenRuntimeEnabled` into Qwen CLI status and Qwen
       chat/setup tRPC paths. Do not spoof env to pass the resolved setting.
 
 ## 2. tRPC and fail-closed behavior
-- [ ] 2.1 Add `agentRuntime.setQwenRuntimeEnabled({ enabled })` and include Qwen
+- [x] 2.1 Add `agentRuntime.setQwenRuntimeEnabled({ enabled })` and include Qwen
       settings/resolved state in `getRuntimeFeatureSettings`.
-- [ ] 2.2 Qwen chat/start, `getQwenCliStatus`, executable path save/reset, and
+- [x] 2.2 Qwen chat/start, `getQwenCliStatus`, executable path save/reset, and
       runtime manifest lookup consult the resolved Qwen setting.
-- [ ] 2.3 Turning Qwen off aborts active Qwen streams and denies/clears pending
+- [x] 2.3 Turning Qwen off aborts active Qwen streams and denies/clears pending
       Qwen tool approvals; later approval responses for disabled Qwen fail
       closed.
 

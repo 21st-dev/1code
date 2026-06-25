@@ -181,7 +181,7 @@ function invalidStatus(
 
 function disabledStatus(): ResolvedQwenCliSetupStatus {
   return invalidStatus(
-    "Qwen Code runtime is disabled. Set LOCUS_ENABLE_QWEN_CODE_RUNTIME=1 to enable Qwen setup.",
+    "Qwen Code runtime is disabled. Enable it in Settings to configure Qwen setup.",
     "unresolved",
     "qwen-runtime-disabled",
     "disabled",

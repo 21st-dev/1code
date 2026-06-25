@@ -39,6 +39,30 @@ afterEach(() => {
 })
 
 describe("Qwen CLI setup status", () => {
+  test("returns disabled status without probing when Qwen runtime is off", async () => {
+    let probeCount = 0
+
+    const resolved = await resolveQwenCliSetupStatus({
+      enabled: false,
+      probeVersion: async () => {
+        probeCount += 1
+        return { ok: true, value: "qwen 0.18.5", error: null }
+      },
+    })
+
+    expect(resolved.executablePath).toBeNull()
+    expect(resolved.status).toMatchObject({
+      ok: false,
+      availability: "disabled",
+      blocker: {
+        code: "qwen-runtime-disabled",
+        message:
+          "Qwen Code runtime is disabled. Enable it in Settings to configure Qwen setup.",
+      },
+    })
+    expect(probeCount).toBe(0)
+  })
+
   test("reports missing CLI and ignores cwd-controlled PATH shadowing", async () => {
     const projectRoot = tempRoot()
     executableFile(projectRoot)

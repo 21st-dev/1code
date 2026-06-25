@@ -24,6 +24,7 @@ export type AgentRuntimeRegistryOptions = {
   scope?: AgentRuntimeRegistryScope
   env?: AgentRuntimeFeatureEnv
   runtimeFeatureSettings?: {
+    qwenRuntimeEnabled?: boolean
     kunRuntimeEnabled?: boolean
   }
 }
@@ -34,6 +35,12 @@ function includesExperimentalRuntimes(
   return (
     (options.scope ?? "contract") === "desktop" &&
     EXPERIMENTAL_RUNTIME_IDS.some((runtimeId) => {
+      if (
+        runtimeId === "qwen-code" &&
+        typeof options.runtimeFeatureSettings?.qwenRuntimeEnabled === "boolean"
+      ) {
+        return options.runtimeFeatureSettings.qwenRuntimeEnabled
+      }
       if (
         runtimeId === "kun" &&
         typeof options.runtimeFeatureSettings?.kunRuntimeEnabled === "boolean"
@@ -54,6 +61,12 @@ function isRegisteredAgentRuntimeId(
 ): boolean {
   if (!isExperimentalAgentRuntimeId(runtimeId)) return true
   if ((options.scope ?? "contract") !== "desktop") return false
+  if (
+    runtimeId === "qwen-code" &&
+    typeof options.runtimeFeatureSettings?.qwenRuntimeEnabled === "boolean"
+  ) {
+    return options.runtimeFeatureSettings.qwenRuntimeEnabled
+  }
   if (
     runtimeId === "kun" &&
     typeof options.runtimeFeatureSettings?.kunRuntimeEnabled === "boolean"
