@@ -109,6 +109,13 @@
 
 ### Critical
 
+**R0a — 渲染层 XSS → public tRPC terminal RCE 链** · **已证实 / 待修 / ✓核对**
+- 可利用性结论：链条成立。只要不可信内容能在特权 renderer main world 执行 JS，就能触达 `window.electronTRPC`，进而构造 public tRPC mutation；`terminal.createOrAttach` 仍接收 renderer 提供的 `cwd` 与 `initialCommands` 并建 PTY（[terminal.ts](src/main/lib/trpc/routers/terminal.ts)）。
+- subtitle 路径：`AgentToolCall` 把 `subtitleStr` 原样写进 `dangerouslySetInnerHTML`（[agent-tool-call.tsx](src/renderer/features/agents/ui/agent-tool-call.tsx)）。上游 `AgentToolRegistry` 的 subtitle 来自 `part.input` / `part.output`，包括 Task 描述、Grep/Glob pattern/path、Bash command、WebSearch query、Plan title、Task subject、Thinking text 等；这些可由模型、仓库内容、MCP/tool 输入输出间接控制（[agent-tool-registry.tsx](src/renderer/features/agents/ui/agent-tool-registry.tsx)）。
+- Mermaid 路径：```mermaid 块由主 markdown 渲染器转给 `MermaidBlock`（[chat-markdown-renderer.tsx](src/renderer/components/chat-markdown-renderer.tsx)）；`MermaidBlock` 使用 `securityLevel: "loose"` 并把 `mermaid.render()` 返回的 SVG 直接插入两处 `dangerouslySetInnerHTML`（[mermaid-block.tsx](src/renderer/components/mermaid-block.tsx)）。受控 Electron fixture 证明 loose `click` 指令可生成 `javascript:` SVG href，真实点击后执行 JS 并发出 `terminal.createOrAttach` mutation 形状消息。
+- CSP 放大因素：[index.html](src/renderer/index.html) 当前 `script-src` 允许 `'unsafe-inline'` / `'unsafe-eval'` 和 `https://unpkg.com`；受控 Electron fixture 证明 raw subtitle `<img onerror>` 可在 renderer 执行并触达 `electronTRPC` bridge。
+- 非本单范围：本条先关闭 renderer XSS 前置条件；`terminal.createOrAttach` capability/consent/server-resolved cwd 硬化留在 `update-trpc-capability-boundary` 后续 Phase 1/3。
+
 **R1 — 打开恶意仓库即触发任意 shell 执行（malicious-repo RCE，无确认）** · **已修 / ✓核对**
 - 原问题：`.locus/worktree.json` / `.cursor/worktrees.json` / `.1code/worktree.json` 里的 setup 命令来自仓库内容，旧路径会在建 chat 的 worktree 后台直接执行。`.cursor/worktrees.json` 兼容性使"现存 Cursor 仓库已带毒"成为现实向量。
 - 修复边界：仓库 setup 命令不做字符串清洗，改为显式信任门。worktree 创建只检测计划并计算命令指纹；首次遇到 setup 命令时向 renderer 发审批请求，用户批准后才记录 `project_id + command_hash` 并执行。无 `projectId` 时 fail closed，不执行。
