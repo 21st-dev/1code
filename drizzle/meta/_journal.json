@@ -127,6 +127,13 @@
       "when": 1782108273614,
       "tag": "0017_last_george_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1782452870640,
+      "tag": "0018_classy_ultimatum",
+      "breakpoints": true
     }
   ]
 }

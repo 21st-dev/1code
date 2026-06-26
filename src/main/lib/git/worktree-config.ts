@@ -1,6 +1,6 @@
-import { readFile, writeFile, mkdir, access } from "node:fs/promises"
-import { join, dirname, isAbsolute } from "node:path"
 import { exec } from "node:child_process"
+import { access, mkdir, readFile, writeFile } from "node:fs/promises"
+import { dirname, isAbsolute, join } from "node:path"
 import { promisify } from "node:util"
 
 const execAsync = promisify(exec)
@@ -11,7 +11,12 @@ export interface WorktreeConfig {
   "setup-worktree"?: string[] | string
 }
 
-export type WorktreeConfigSource = "custom" | "locus" | "cursor" | "1code" | null
+export type WorktreeConfigSource =
+  | "custom"
+  | "locus"
+  | "cursor"
+  | "1code"
+  | null
 
 export interface DetectedWorktreeConfig {
   config: WorktreeConfig | null
@@ -94,9 +99,7 @@ export async function detectWorktreeConfig(
  * Get available config paths for a project
  * Returns which paths exist and can be used
  */
-export async function getAvailableConfigPaths(
-  projectPath: string,
-): Promise<{
+export async function getAvailableConfigPaths(projectPath: string): Promise<{
   locus: { exists: boolean; path: string }
   cursor: { exists: boolean; path: string }
   onecode: { exists: boolean; path: string }
@@ -164,7 +167,9 @@ export async function saveWorktreeConfig(
 /**
  * Get setup commands for current platform
  */
-export function getSetupCommands(config: WorktreeConfig): string[] | string | null {
+export function getSetupCommands(
+  config: WorktreeConfig,
+): string[] | string | null {
   const platformCommands =
     process.platform === "win32"
       ? config["setup-worktree-windows"]
@@ -199,13 +204,47 @@ export interface WorktreeSetupResult {
   errors: string[]
 }
 
+export interface WorktreeSetupPlan {
+  source: Exclude<WorktreeConfigSource, null>
+  configPath: string
+  commands: string[]
+}
+
+export async function detectWorktreeSetupPlan(
+  mainRepoPath: string,
+): Promise<WorktreeSetupPlan | null> {
+  const detected = await detectWorktreeConfig(mainRepoPath)
+  if (!detected.config || !detected.path || !detected.source) {
+    return null
+  }
+
+  const commands = getSetupCommands(detected.config)
+  if (!commands) {
+    return null
+  }
+
+  const commandList = (Array.isArray(commands) ? commands : [commands])
+    .map((cmd) => cmd.trim())
+    .filter((cmd) => cmd.length > 0)
+
+  if (commandList.length === 0) {
+    return null
+  }
+
+  return {
+    source: detected.source,
+    configPath: detected.path,
+    commands: commandList,
+  }
+}
+
 /**
- * Execute worktree setup commands
- * Runs after worktree creation to install deps, copy envs, etc.
+ * Execute an already-approved worktree setup command list.
  */
-export async function executeWorktreeSetup(
+export async function executeWorktreeSetupCommands(
   worktreePath: string,
   mainRepoPath: string,
+  commandList: string[],
 ): Promise<WorktreeSetupResult> {
   const result: WorktreeSetupResult = {
     success: true,
@@ -214,28 +253,14 @@ export async function executeWorktreeSetup(
     errors: [],
   }
 
-  // Detect config from main repo
-  const detected = await detectWorktreeConfig(mainRepoPath)
-  if (!detected.config) {
-    result.output.push("No worktree config found, skipping setup")
-    return result
-  }
-
-  // Get commands for current platform
-  const commands = getSetupCommands(detected.config)
-  if (!commands) {
-    result.output.push("No commands for current platform")
-    return result
-  }
-
-  // Normalize to array
-  const commandList = Array.isArray(commands) ? commands : [commands]
   if (commandList.length === 0) {
     result.output.push("Empty command list")
     return result
   }
 
-  console.log(`[worktree-setup] Running ${commandList.length} setup commands in ${worktreePath}`)
+  console.log(
+    `[worktree-setup] Running ${commandList.length} setup commands in ${worktreePath}`,
+  )
 
   // Execute each command
   for (const cmd of commandList) {
@@ -275,7 +300,7 @@ export async function executeWorktreeSetup(
 
   console.log(
     `[worktree-setup] Completed: ${result.commandsRun}/${commandList.length} commands, ` +
-    `${result.errors.length} errors`
+      `${result.errors.length} errors`,
   )
 
   return result

@@ -4,11 +4,11 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
-import { buildAgentRuntimeCapabilityDiagnostic } from "../../../../shared/agent-runtime-capabilities"
 import {
   agentChatProviders,
   buildAgentChatMessageMetadata,
 } from "../../../../shared/agent-chat-provider"
+import { buildAgentRuntimeCapabilityDiagnostic } from "../../../../shared/agent-runtime-capabilities"
 import {
   trackPRCreated,
   trackWorkspaceArchived,
@@ -23,25 +23,25 @@ import {
   removeWorktree,
   sanitizeProjectName,
 } from "../../git"
-import type { WorktreeSetupResult } from "../../git/worktree-config"
 import { computeContentHash, gitCache } from "../../git/cache"
 import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
+import type { WorktreeSetupResult } from "../../git/worktree-config"
 import { assertOfficialCloudAllowed } from "../../local-only"
 import { checkOllamaStatus } from "../../ollama"
+import { getProviderDefaultRuntimeConfig } from "../../provider-profiles/storage"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
-import {
-  getActiveLocalApiProviderConfig,
-  type LocalApiProviderPurpose,
-} from "./local-api-provider-config"
-import { getProviderDefaultRuntimeConfig } from "../../provider-profiles/storage"
 import {
   buildCommitFileSummary,
   buildCommitMessagePrompt,
   cleanGeneratedCommitMessage,
 } from "./commit-message-utils"
+import {
+  getActiveLocalApiProviderConfig,
+  type LocalApiProviderPurpose,
+} from "./local-api-provider-config"
 
 export type WorktreeSetupFailurePayload = {
   kind: "create-failed" | "create-timeout" | "setup-failed"
@@ -51,6 +51,16 @@ export type WorktreeSetupFailurePayload = {
     mode: "project-directory"
     path: string
   }
+}
+
+export type WorktreeSetupApprovalRequiredPayload = {
+  chatId: string
+  projectId: string
+  worktreePath: string
+  source: string
+  configPath: string
+  commandHash: string
+  commands: string[]
 }
 
 export function isCodexBackedMessage(message: unknown): boolean {
@@ -95,6 +105,29 @@ export function sendWorktreeSetupFailure(
   for (const window of targets) {
     if (window.isDestroyed()) continue
     window.webContents.send("worktree:setup-failed", payload)
+  }
+}
+
+export function sendWorktreeSetupApprovalRequired(
+  windowId: number | null,
+  payload: WorktreeSetupApprovalRequiredPayload,
+): void {
+  const targets: BrowserWindow[] = []
+
+  if (windowId !== null) {
+    const window = BrowserWindow.fromId(windowId)
+    if (window && !window.isDestroyed()) {
+      targets.push(window)
+    }
+  }
+
+  if (targets.length === 0) {
+    targets.push(...BrowserWindow.getAllWindows())
+  }
+
+  for (const window of targets) {
+    if (window.isDestroyed()) continue
+    window.webContents.send("worktree:setup-approval-required", payload)
   }
 }
 
@@ -289,14 +322,14 @@ export function getMessageTimestampMs(
   return fallbackDate?.getTime() ?? 0
 }
 
-export function getUsageAmounts(message: Record<string, unknown>): UsageAmounts | null {
+export function getUsageAmounts(
+  message: Record<string, unknown>,
+): UsageAmounts | null {
   const metadata = readObject(message.metadata)
   const nestedUsage = readObject(metadata.usage)
 
   const inputTokens =
-    readNumber(metadata.inputTokens) ??
-    readNumber(nestedUsage.inputTokens) ??
-    0
+    readNumber(metadata.inputTokens) ?? readNumber(nestedUsage.inputTokens) ?? 0
   const outputTokens =
     readNumber(metadata.outputTokens) ??
     readNumber(nestedUsage.outputTokens) ??
@@ -310,7 +343,12 @@ export function getUsageAmounts(message: Record<string, unknown>): UsageAmounts 
     readNumber(nestedUsage.totalCostUsd) ??
     0
 
-  if (inputTokens <= 0 && outputTokens <= 0 && totalTokens <= 0 && estimatedCostUsd <= 0) {
+  if (
+    inputTokens <= 0 &&
+    outputTokens <= 0 &&
+    totalTokens <= 0 &&
+    estimatedCostUsd <= 0
+  ) {
     return null
   }
 
@@ -401,7 +439,10 @@ export async function generateChatNameWithConfiguredProvider(
   }
 
   try {
-    assertOfficialCloudAllowed("generate chat title with configured provider", config.apiUrl)
+    assertOfficialCloudAllowed(
+      "generate chat title with configured provider",
+      config.apiUrl,
+    )
     const response = await fetch(config.apiUrl, {
       method: "POST",
       headers: buildUtilityProviderHeaders(config),
@@ -457,7 +498,10 @@ export async function generateCommitMessageWithConfiguredProvider(
   )
 
   try {
-    assertOfficialCloudAllowed("generate commit message with configured provider", config.apiUrl)
+    assertOfficialCloudAllowed(
+      "generate commit message with configured provider",
+      config.apiUrl,
+    )
     const response = await fetch(config.apiUrl, {
       method: "POST",
       signal: controller.signal,
@@ -516,7 +560,7 @@ export async function generateCommitMessageWithConfiguredProvider(
  */
 export async function generateChatNameWithOllama(
   userMessage: string,
-  model?: string | null
+  model?: string | null,
 ): Promise<string | null> {
   try {
     const ollamaStatus = await checkOllamaStatus()
@@ -525,7 +569,8 @@ export async function generateChatNameWithOllama(
     }
 
     // Use provided model, or recommended, or first available
-    const modelToUse = model || ollamaStatus.recommendedModel || ollamaStatus.models[0]
+    const modelToUse =
+      model || ollamaStatus.recommendedModel || ollamaStatus.models[0]
     if (!modelToUse) {
       console.error("[Ollama] No model available")
       return null
@@ -583,7 +628,7 @@ export async function generateCommitMessageWithOllama(
   fileCount: number,
   additions: number,
   deletions: number,
-  model?: string | null
+  model?: string | null,
 ): Promise<string | null> {
   try {
     const ollamaStatus = await checkOllamaStatus()
@@ -592,7 +637,8 @@ export async function generateCommitMessageWithOllama(
     }
 
     // Use provided model, or recommended, or first available
-    const modelToUse = model || ollamaStatus.recommendedModel || ollamaStatus.models[0]
+    const modelToUse =
+      model || ollamaStatus.recommendedModel || ollamaStatus.models[0]
     if (!modelToUse) {
       console.error("[Ollama] No model available")
       return null

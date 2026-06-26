@@ -89,6 +89,17 @@ or UI helper.
 - Rule: the contract/audit schema and validation belong to the guard package;
   runtime-specific code may only attach runtime context.
 
+## Worktree Setup Trust
+
+- Canonical owner: `src/main/lib/git/worktree-setup-trust.ts`
+- Consumers: worktree creation, worktree setup config routes, renderer approval
+  prompt
+- Rule: repository-provided worktree setup commands must not execute until this
+  owner has produced or verified an explicit user approval for the current
+  project and setup command fingerprint. Routes and renderer code may display
+  or submit approval decisions, but must not derive their own trust state or
+  start setup command execution directly.
+
 ## Desktop Runtime Preflight
 
 - Canonical owner: `src/main/lib/agent-runtime/preflight.ts`

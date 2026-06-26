@@ -2208,6 +2208,15 @@ export const en = {
   "toast.worktree.checkoutTimedOut": "Worktree checkout timed out",
   "toast.worktree.creationFailed": "Worktree creation failed",
   "toast.worktree.setupFailed": "Worktree setup failed",
+  "toast.worktree.setupCompleted": "Worktree setup completed",
+  "toast.worktree.setupCompletedDescription": "{count} command(s) ran",
+  "toast.worktree.setupApprovalTitle": "Review worktree setup commands",
+  "toast.worktree.setupApprovalDescription":
+    "This repository defines shell commands for new worktrees. Review them before allowing Locus to run them on your machine.",
+  "toast.worktree.setupApprovalSource": "Source",
+  "toast.worktree.setupApprovalPath": "Path",
+  "toast.worktree.setupApprovalSkip": "Skip",
+  "toast.worktree.setupApprovalRun": "Trust and run",
   "toast.worktree.runningInProjectDirectory":
     "Running in project directory instead: {path}",
   "toast.worktree.openSettings": "Open settings",
@@ -5895,6 +5904,15 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "toast.worktree.checkoutTimedOut": "工作树检出超时",
   "toast.worktree.creationFailed": "工作树创建失败",
   "toast.worktree.setupFailed": "工作树初始化失败",
+  "toast.worktree.setupCompleted": "工作树初始化完成",
+  "toast.worktree.setupCompletedDescription": "已运行 {count} 条命令",
+  "toast.worktree.setupApprovalTitle": "审查工作树初始化命令",
+  "toast.worktree.setupApprovalDescription":
+    "这个仓库为新工作树定义了 shell 命令。请先审查这些命令，再允许 Locus 在你的机器上运行。",
+  "toast.worktree.setupApprovalSource": "来源",
+  "toast.worktree.setupApprovalPath": "路径",
+  "toast.worktree.setupApprovalSkip": "跳过",
+  "toast.worktree.setupApprovalRun": "信任并运行",
   "toast.worktree.runningInProjectDirectory":
     "已改为在项目目录中运行：{path}",
   "toast.worktree.openSettings": "打开设置",

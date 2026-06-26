@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNotNull } from "drizzle-orm"
 import { agentJobs, chats, projects, subChats } from "./db/schema"
+import type { WorktreeSetupApprovalRequired } from "./git"
 import type { AgentJobDatabase } from "./headless/job-store"
 import {
   type CreateProjectChatWorktree,
@@ -18,6 +19,9 @@ export type AttachProjectToChatInput = {
   targetMode: AttachProjectTargetMode
   createWorktreeForChat?: CreateProjectChatWorktree
   onWorktreeFailure?: (payload: ProjectChatWorktreeFailurePayload) => void
+  onWorktreeSetupApprovalRequired?: (
+    request: WorktreeSetupApprovalRequired,
+  ) => void
 }
 
 export async function attachProjectToChat(
@@ -87,6 +91,7 @@ export async function attachProjectToChat(
     branchType: input.branchType,
     createWorktreeForChat: input.createWorktreeForChat,
     onWorktreeFailure: input.onWorktreeFailure,
+    onWorktreeSetupApprovalRequired: input.onWorktreeSetupApprovalRequired,
   })
   const now = new Date()
 

@@ -36,7 +36,8 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // Window events
   onFullscreenChange: (callback: (isFullscreen: boolean) => void) => {
-    const handler = (_event: unknown, isFullscreen: boolean) => callback(isFullscreen)
+    const handler = (_event: unknown, isFullscreen: boolean) =>
+      callback(isFullscreen)
     ipcRenderer.on("window:fullscreen-change", handler)
     return () => ipcRenderer.removeListener("window:fullscreen-change", handler)
   },
@@ -54,13 +55,19 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // Multi-window
   newWindow: (options?: { chatId?: string; subChatId?: string }) =>
-    ipcRenderer.invoke("window:new", options) as Promise<{ blocked: boolean } | void>,
-  setWindowTitle: (title: string) => ipcRenderer.invoke("window:set-title", title),
+    ipcRenderer.invoke("window:new", options) as Promise<{
+      blocked: boolean
+    } | void>,
+  setWindowTitle: (title: string) =>
+    ipcRenderer.invoke("window:set-title", title),
 
   // Chat ownership — prevent same chat open in multiple windows
   claimChat: (chatId: string) =>
-    ipcRenderer.invoke("chat:claim", chatId) as Promise<{ ok: true } | { ok: false; ownerStableId: string }>,
-  releaseChat: (chatId: string) => ipcRenderer.invoke("chat:release", chatId) as Promise<void>,
+    ipcRenderer.invoke("chat:claim", chatId) as Promise<
+      { ok: true } | { ok: false; ownerStableId: string }
+    >,
+  releaseChat: (chatId: string) =>
+    ipcRenderer.invoke("chat:release", chatId) as Promise<void>,
   focusChatOwner: (chatId: string) =>
     ipcRenderer.invoke("chat:focus-owner", chatId) as Promise<boolean>,
 
@@ -69,8 +76,10 @@ contextBridge.exposeInMainWorld("desktopApi", {
   unlockDevTools: () => ipcRenderer.invoke("window:unlock-devtools"),
 
   // Native features
-  setBadge: (count: number | null) => ipcRenderer.invoke("app:set-badge", count),
-  setBadgeIcon: (imageData: string | null) => ipcRenderer.invoke("app:set-badge-icon", imageData),
+  setBadge: (count: number | null) =>
+    ipcRenderer.invoke("app:set-badge", count),
+  setBadgeIcon: (imageData: string | null) =>
+    ipcRenderer.invoke("app:set-badge-icon", imageData),
   showNotification: (options: { title: string; body: string }) =>
     ipcRenderer.invoke("app:show-notification", options),
   openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
@@ -83,8 +92,15 @@ contextBridge.exposeInMainWorld("desktopApi", {
   clipboardRead: () => ipcRenderer.invoke("clipboard:read"),
 
   // Save file with native dialog
-  saveFile: (options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] }) =>
-    ipcRenderer.invoke("dialog:save-file", options) as Promise<{ success: boolean; filePath?: string }>,
+  saveFile: (options: {
+    base64Data: string
+    filename: string
+    filters?: { name: string; extensions: string[] }[]
+  }) =>
+    ipcRenderer.invoke("dialog:save-file", options) as Promise<{
+      success: boolean
+      filePath?: string
+    }>,
 
   // Auth methods
   getUser: () => ipcRenderer.invoke("auth:get-user"),
@@ -93,11 +109,16 @@ contextBridge.exposeInMainWorld("desktopApi", {
 
   // MCP import preview
   getPendingMcpImportPreview: () =>
-    ipcRenderer.invoke("mcp-import:get-pending-preview") as Promise<McpImportPreview | null>,
+    ipcRenderer.invoke(
+      "mcp-import:get-pending-preview",
+    ) as Promise<McpImportPreview | null>,
   clearPendingMcpImportPreview: () =>
-    ipcRenderer.invoke("mcp-import:clear-pending-preview") as Promise<{ success: boolean }>,
+    ipcRenderer.invoke("mcp-import:clear-pending-preview") as Promise<{
+      success: boolean
+    }>,
   onMcpImportPreview: (callback: (preview: McpImportPreview) => void) => {
-    const handler = (_event: unknown, preview: McpImportPreview) => callback(preview)
+    const handler = (_event: unknown, preview: McpImportPreview) =>
+      callback(preview)
     ipcRenderer.on("mcp-import:preview", handler)
     return () => ipcRenderer.removeListener("mcp-import:preview", handler)
   },
@@ -137,33 +158,100 @@ contextBridge.exposeInMainWorld("desktopApi", {
   },
 
   // File change events (from Claude Write/Edit tools)
-  onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => {
-    const handler = (_event: unknown, data: { filePath: string; type: string; subChatId: string }) => callback(data)
+  onFileChanged: (
+    callback: (data: {
+      filePath: string
+      type: string
+      subChatId: string
+    }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      data: { filePath: string; type: string; subChatId: string },
+    ) => callback(data)
     ipcRenderer.on("file-changed", handler)
     return () => ipcRenderer.removeListener("file-changed", handler)
   },
 
   // Git status change events (from file watcher)
-  onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => {
-    const handler = (_event: unknown, data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => callback(data)
+  onGitStatusChanged: (
+    callback: (data: {
+      worktreePath: string
+      changes: Array<{ path: string; type: "add" | "change" | "unlink" }>
+    }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        worktreePath: string
+        changes: Array<{ path: string; type: "add" | "change" | "unlink" }>
+      },
+    ) => callback(data)
     ipcRenderer.on("git:status-changed", handler)
     return () => ipcRenderer.removeListener("git:status-changed", handler)
   },
 
   // Worktree setup failure events
-  onWorktreeSetupFailed: (callback: (data: { kind: "create-failed" | "create-timeout" | "setup-failed"; message: string; projectId: string; fallback?: { mode: "project-directory"; path: string } }) => void) => {
-    const handler = (_event: unknown, data: { kind: "create-failed" | "create-timeout" | "setup-failed"; message: string; projectId: string; fallback?: { mode: "project-directory"; path: string } }) => callback(data)
+  onWorktreeSetupFailed: (
+    callback: (data: {
+      kind: "create-failed" | "create-timeout" | "setup-failed"
+      message: string
+      projectId: string
+      fallback?: { mode: "project-directory"; path: string }
+    }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        kind: "create-failed" | "create-timeout" | "setup-failed"
+        message: string
+        projectId: string
+        fallback?: { mode: "project-directory"; path: string }
+      },
+    ) => callback(data)
     ipcRenderer.on("worktree:setup-failed", handler)
     return () => ipcRenderer.removeListener("worktree:setup-failed", handler)
   },
 
+  // Worktree setup approval events
+  onWorktreeSetupApprovalRequired: (
+    callback: (data: {
+      chatId: string
+      projectId: string
+      worktreePath: string
+      source: string
+      configPath: string
+      commandHash: string
+      commands: string[]
+    }) => void,
+  ) => {
+    const handler = (
+      _event: unknown,
+      data: {
+        chatId: string
+        projectId: string
+        worktreePath: string
+        source: string
+        configPath: string
+        commandHash: string
+        commands: string[]
+      },
+    ) => callback(data)
+    ipcRenderer.on("worktree:setup-approval-required", handler)
+    return () =>
+      ipcRenderer.removeListener("worktree:setup-approval-required", handler)
+  },
+
   // Subscribe to git watcher for a worktree (from renderer)
-  subscribeToGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
-  unsubscribeFromGitWatcher: (worktreePath: string) => ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),
+  subscribeToGitWatcher: (worktreePath: string) =>
+    ipcRenderer.invoke("git:subscribe-watcher", worktreePath),
+  unsubscribeFromGitWatcher: (worktreePath: string) =>
+    ipcRenderer.invoke("git:unsubscribe-watcher", worktreePath),
 
   // VS Code theme scanning
   scanVSCodeThemes: () => ipcRenderer.invoke("vscode:scan-themes"),
-  loadVSCodeTheme: (themePath: string) => ipcRenderer.invoke("vscode:load-theme", themePath),
+  loadVSCodeTheme: (themePath: string) =>
+    ipcRenderer.invoke("vscode:load-theme", themePath),
 })
 
 export type EditorSource = "vscode" | "vscode-insiders" | "cursor" | "windsurf"
@@ -214,10 +302,15 @@ export interface DesktopApi {
   zoomReset: () => Promise<void>
   getZoom: () => Promise<number>
   // Multi-window
-  newWindow: (options?: { chatId?: string; subChatId?: string }) => Promise<{ blocked: boolean } | void>
+  newWindow: (options?: {
+    chatId?: string
+    subChatId?: string
+  }) => Promise<{ blocked: boolean } | void>
   setWindowTitle: (title: string) => Promise<void>
   // Chat ownership — prevent same chat open in multiple windows
-  claimChat: (chatId: string) => Promise<{ ok: true } | { ok: false; ownerStableId: string }>
+  claimChat: (
+    chatId: string,
+  ) => Promise<{ ok: true } | { ok: false; ownerStableId: string }>
   releaseChat: (chatId: string) => Promise<void>
   focusChatOwner: (chatId: string) => Promise<boolean>
   toggleDevTools: () => Promise<void>
@@ -229,7 +322,11 @@ export interface DesktopApi {
   getApiBaseUrl: () => Promise<string | null>
   clipboardWrite: (text: string) => Promise<void>
   clipboardRead: () => Promise<string>
-  saveFile: (options: { base64Data: string; filename: string; filters?: { name: string; extensions: string[] }[] }) => Promise<{ success: boolean; filePath?: string }>
+  saveFile: (options: {
+    base64Data: string
+    filename: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => Promise<{ success: boolean; filePath?: string }>
   // Auth
   getUser: () => Promise<{
     id: string
@@ -242,18 +339,56 @@ export interface DesktopApi {
   logout: () => Promise<void>
   getPendingMcpImportPreview: () => Promise<McpImportPreview | null>
   clearPendingMcpImportPreview: () => Promise<{ success: boolean }>
-  onMcpImportPreview: (callback: (preview: McpImportPreview) => void) => () => void
-  onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => () => void
+  onMcpImportPreview: (
+    callback: (preview: McpImportPreview) => void,
+  ) => () => void
+  onStreamChunk: (
+    streamId: string,
+    callback: (chunk: Uint8Array) => void,
+  ) => () => void
   onStreamDone: (streamId: string, callback: () => void) => () => void
-  onStreamError: (streamId: string, callback: (error: string) => void) => () => void
+  onStreamError: (
+    streamId: string,
+    callback: (error: string) => void,
+  ) => () => void
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
   onShortcutOpenSettings: (callback: () => void) => () => void
   onShortcutFind: (callback: () => void) => () => void
   // File changes
-  onFileChanged: (callback: (data: { filePath: string; type: string; subChatId: string }) => void) => () => void
+  onFileChanged: (
+    callback: (data: {
+      filePath: string
+      type: string
+      subChatId: string
+    }) => void,
+  ) => () => void
   // Git status changes (from file watcher)
-  onGitStatusChanged: (callback: (data: { worktreePath: string; changes: Array<{ path: string; type: "add" | "change" | "unlink" }> }) => void) => () => void
+  onGitStatusChanged: (
+    callback: (data: {
+      worktreePath: string
+      changes: Array<{ path: string; type: "add" | "change" | "unlink" }>
+    }) => void,
+  ) => () => void
+  onWorktreeSetupFailed: (
+    callback: (data: {
+      kind: "create-failed" | "create-timeout" | "setup-failed"
+      message: string
+      projectId: string
+      fallback?: { mode: "project-directory"; path: string }
+    }) => void,
+  ) => () => void
+  onWorktreeSetupApprovalRequired: (
+    callback: (data: {
+      chatId: string
+      projectId: string
+      worktreePath: string
+      source: string
+      configPath: string
+      commandHash: string
+      commands: string[]
+    }) => void,
+  ) => () => void
   subscribeToGitWatcher: (worktreePath: string) => Promise<void>
   unsubscribeFromGitWatcher: (worktreePath: string) => Promise<void>
   // VS Code theme scanning

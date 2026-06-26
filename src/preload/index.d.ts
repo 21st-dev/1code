@@ -18,6 +18,16 @@ export interface WorktreeSetupFailurePayload {
   }
 }
 
+export interface WorktreeSetupApprovalRequiredPayload {
+  chatId: string
+  projectId: string
+  worktreePath: string
+  source: string
+  configPath: string
+  commandHash: string
+  commands: string[]
+}
+
 export interface DesktopApi {
   // Platform info
   platform: NodeJS.Platform
@@ -62,13 +72,20 @@ export interface DesktopApi {
   logout: () => Promise<void>
   getPendingMcpImportPreview: () => Promise<McpImportPreview | null>
   clearPendingMcpImportPreview: () => Promise<{ success: boolean }>
-  onMcpImportPreview: (callback: (preview: McpImportPreview) => void) => () => void
+  onMcpImportPreview: (
+    callback: (preview: McpImportPreview) => void,
+  ) => () => void
 
   // Multi-window
-  newWindow: (options?: { chatId?: string; subChatId?: string }) => Promise<{ blocked: boolean } | void>
+  newWindow: (options?: {
+    chatId?: string
+    subChatId?: string
+  }) => Promise<{ blocked: boolean } | void>
 
   // Chat ownership — prevent same chat open in multiple windows
-  claimChat: (chatId: string) => Promise<{ ok: true } | { ok: false; ownerStableId: string }>
+  claimChat: (
+    chatId: string,
+  ) => Promise<{ ok: true } | { ok: false; ownerStableId: string }>
   releaseChat: (chatId: string) => Promise<void>
   focusChatOwner: (chatId: string) => Promise<boolean>
 
@@ -78,7 +95,12 @@ export interface DesktopApi {
   onShortcutFind: (callback: () => void) => () => void
 
   // Worktree setup failures
-  onWorktreeSetupFailed: (callback: (payload: WorktreeSetupFailurePayload) => void) => () => void
+  onWorktreeSetupFailed: (
+    callback: (payload: WorktreeSetupFailurePayload) => void,
+  ) => () => void
+  onWorktreeSetupApprovalRequired: (
+    callback: (payload: WorktreeSetupApprovalRequiredPayload) => void,
+  ) => () => void
 }
 
 declare global {

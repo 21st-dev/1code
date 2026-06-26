@@ -3,6 +3,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ClaudeLoginModal } from "../../components/dialogs/claude-login-modal"
 import { CodexLoginModal } from "../../components/dialogs/codex-login-modal"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogBody,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog"
 import { ResizableSidebar } from "../../components/ui/resizable-sidebar"
 import { TooltipProvider } from "../../components/ui/tooltip"
 import { WindowsTitleBar } from "../../components/windows-title-bar"
@@ -58,6 +69,16 @@ type WorktreeSetupEvent = {
     mode: "project-directory"
     path: string
   }
+}
+
+type WorktreeSetupApprovalRequiredEvent = {
+  chatId: string
+  projectId: string
+  worktreePath: string
+  source: string
+  configPath: string
+  commandHash: string
+  commands: string[]
 }
 
 // ============================================================================
@@ -282,6 +303,32 @@ export function AgentsLayout() {
   }, [sidebarOpen, isDesktop, isFullscreen, isSettingsView])
 
   const setChatId = useAgentSubChatStore((state) => state.setChatId)
+  const [pendingWorktreeSetupApproval, setPendingWorktreeSetupApproval] =
+    useState<WorktreeSetupApprovalRequiredEvent | null>(null)
+  const approveWorktreeSetupMutation =
+    trpc.worktreeConfig.approveAndRunSetup.useMutation({
+      onSuccess: (result) => {
+        if (result.success) {
+          toast.success(t("toast.worktree.setupCompleted"), {
+            description: t("toast.worktree.setupCompletedDescription", {
+              count: result.commandsRun,
+            }),
+          })
+          return
+        }
+
+        toast.error(t("toast.worktree.setupFailed"), {
+          description: result.errors[0] || undefined,
+          duration: 10000,
+        })
+      },
+      onError: (error) => {
+        toast.error(t("toast.worktree.setupFailed"), {
+          description: error.message,
+          duration: 10000,
+        })
+      },
+    })
 
   // Track if this is the initial load - skip auto-open on first load to respect saved state
   const isInitialLoadRef = useRef(true)
@@ -370,6 +417,20 @@ export function AgentsLayout() {
     t,
   ])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const desktopApi = window.desktopApi
+    if (!desktopApi?.onWorktreeSetupApprovalRequired) return
+
+    const unsubscribe = desktopApi.onWorktreeSetupApprovalRequired(
+      (payload) => {
+        setPendingWorktreeSetupApproval(payload)
+      },
+    )
+
+    return unsubscribe
+  }, [])
+
   // Clear sub-chat store when no chat is selected
   useEffect(() => {
     if (!selectedChatId) {
@@ -405,6 +466,16 @@ export function AgentsLayout() {
     setSidebarOpen(false)
   }, [setSidebarOpen])
 
+  const handleApproveWorktreeSetup = useCallback(() => {
+    if (!pendingWorktreeSetupApproval) return
+    const request = pendingWorktreeSetupApproval
+    setPendingWorktreeSetupApproval(null)
+    approveWorktreeSetupMutation.mutate({
+      chatId: request.chatId,
+      commandHash: request.commandHash,
+    })
+  }, [approveWorktreeSetupMutation, pendingWorktreeSetupApproval])
+
   return (
     <TooltipProvider delayDuration={300}>
       {/* Global queue processor - handles message queues for all sub-chats */}
@@ -416,6 +487,52 @@ export function AgentsLayout() {
         autoStartAuth={claudeLoginModalConfig.autoStartAuth}
       />
       <CodexLoginModal />
+      <AlertDialog
+        open={Boolean(pendingWorktreeSetupApproval)}
+        onOpenChange={(open) => {
+          if (!open) setPendingWorktreeSetupApproval(null)
+        }}
+      >
+        <AlertDialogContent className="w-[560px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("toast.worktree.setupApprovalTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("toast.worktree.setupApprovalDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogBody className="space-y-3">
+            <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+              <span className="text-muted-foreground">
+                {t("toast.worktree.setupApprovalSource")}
+              </span>
+              <span className="min-w-0 truncate font-mono">
+                {pendingWorktreeSetupApproval?.source}
+              </span>
+              <span className="text-muted-foreground">
+                {t("toast.worktree.setupApprovalPath")}
+              </span>
+              <span className="min-w-0 truncate font-mono">
+                {pendingWorktreeSetupApproval?.configPath}
+              </span>
+            </div>
+            <pre className="max-h-64 overflow-auto rounded-md border bg-muted/40 p-3 text-xs leading-5 whitespace-pre-wrap break-words">
+              {(pendingWorktreeSetupApproval?.commands ?? [])
+                .map((command) => `$ ${command}`)
+                .join("\n")}
+            </pre>
+          </AlertDialogBody>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {t("toast.worktree.setupApprovalSkip")}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleApproveWorktreeSetup}>
+              {t("toast.worktree.setupApprovalRun")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="flex flex-col w-full h-full relative overflow-hidden bg-background select-none">
         {/* Windows Title Bar (only shown on Windows with frameless window) */}
         <WindowsTitleBar />

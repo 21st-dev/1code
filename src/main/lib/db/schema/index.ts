@@ -1,5 +1,11 @@
 import { relations } from "drizzle-orm"
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core"
+import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core"
 import { createId } from "../utils"
 
 // ============ PROJECTS ============
@@ -30,30 +36,33 @@ export const projectsRelations = relations(projects, ({ many }) => ({
 }))
 
 // ============ CHATS ============
-export const chats = sqliteTable("chats", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  name: text("name"),
-  projectId: text("project_id")
-    .references(() => projects.id, { onDelete: "cascade" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  archivedAt: integer("archived_at", { mode: "timestamp" }),
-  // Worktree fields (for git isolation per chat)
-  worktreePath: text("worktree_path"),
-  branch: text("branch"),
-  baseBranch: text("base_branch"),
-  // PR tracking fields
-  prUrl: text("pr_url"),
-  prNumber: integer("pr_number"),
-}, (table) => [
-  index("chats_worktree_path_idx").on(table.worktreePath),
-])
+export const chats = sqliteTable(
+  "chats",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    name: text("name"),
+    projectId: text("project_id").references(() => projects.id, {
+      onDelete: "cascade",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    archivedAt: integer("archived_at", { mode: "timestamp" }),
+    // Worktree fields (for git isolation per chat)
+    worktreePath: text("worktree_path"),
+    branch: text("branch"),
+    baseBranch: text("base_branch"),
+    // PR tracking fields
+    prUrl: text("pr_url"),
+    prNumber: integer("pr_number"),
+  },
+  (table) => [index("chats_worktree_path_idx").on(table.worktreePath)],
+)
 
 export const chatsRelations = relations(chats, ({ one, many }) => ({
   project: one(projects, {
@@ -62,6 +71,36 @@ export const chatsRelations = relations(chats, ({ one, many }) => ({
   }),
   subChats: many(subChats),
 }))
+
+// ============ WORKTREE SETUP TRUST ============
+export const worktreeSetupTrustDecisions = sqliteTable(
+  "worktree_setup_trust_decisions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    configSource: text("config_source").notNull(),
+    configPath: text("config_path").notNull(),
+    commandHash: text("command_hash").notNull(),
+    decision: text("decision").notNull().default("approved"),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+  },
+  (table) => [
+    uniqueIndex("worktree_setup_trust_project_hash_idx").on(
+      table.projectId,
+      table.commandHash,
+    ),
+    index("worktree_setup_trust_project_idx").on(table.projectId),
+  ],
+)
 
 // ============ SUB-CHATS ============
 export const subChats = sqliteTable("sub_chats", {
@@ -148,18 +187,21 @@ export const claudeProviderConfig = sqliteTable("claude_provider_config", {
 
 // ============ LOCAL API PROVIDER CONFIGS ============
 // Stores encrypted OpenAI-compatible provider tokens for local utility features.
-export const localApiProviderConfigs = sqliteTable("local_api_provider_configs", {
-  id: text("id").primaryKey(), // e.g. "sub_chat_title" | "commit_message"
-  model: text("model").notNull(),
-  baseUrl: text("base_url").notNull(),
-  encryptedToken: text("encrypted_token").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-})
+export const localApiProviderConfigs = sqliteTable(
+  "local_api_provider_configs",
+  {
+    id: text("id").primaryKey(), // e.g. "sub_chat_title" | "commit_message"
+    model: text("model").notNull(),
+    baseUrl: text("base_url").notNull(),
+    encryptedToken: text("encrypted_token").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+  },
+)
 
 // ============ AGENT PROVIDER PROFILES ============
 // Runtime-neutral provider profiles for Claude, Codex, helpers, and local endpoints.
@@ -217,135 +259,154 @@ export const appAgents = sqliteTable("app_agents", {
 })
 
 // ============ HEADLESS AGENT JOBS ============
-export const agentJobs = sqliteTable("agent_jobs", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  retryOfJobId: text("retry_of_job_id"),
-  attempt: integer("attempt").notNull().default(1),
-  source: text("source").notNull(),
-  runtime: text("runtime").notNull(),
-  status: text("status").notNull().default("queued"),
-  mode: text("mode").notNull().default("agent"),
-  cwd: text("cwd").notNull(),
-  projectId: text("project_id").references(() => projects.id, {
-    onDelete: "set null",
-  }),
-  chatId: text("chat_id").references(() => chats.id, {
-    onDelete: "set null",
-  }),
-  subChatId: text("sub_chat_id").references(() => subChats.id, {
-    onDelete: "set null",
-  }),
-  promptPreview: text("prompt_preview"),
-  inputJson: text("input_json"),
-  apiConsumerId: text("api_consumer_id"),
-  apiConsumerRunId: text("api_consumer_run_id"),
-  artifactBaseDir: text("artifact_base_dir"),
-  artifactManifestPath: text("artifact_manifest_path"),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  startedAt: integer("started_at", { mode: "timestamp" }),
-  finishedAt: integer("finished_at", { mode: "timestamp" }),
-  exitCode: integer("exit_code"),
-  errorCode: text("error_code"),
-  errorMessage: text("error_message"),
-  resultJson: text("result_json"),
-  createdByVersion: text("created_by_version"),
-  workerId: text("worker_id"),
-  workerPid: integer("worker_pid"),
-  workerStartedAt: integer("worker_started_at", { mode: "timestamp" }),
-  heartbeatAt: integer("heartbeat_at", { mode: "timestamp" }),
-  cancelRequestedAt: integer("cancel_requested_at", { mode: "timestamp" }),
-  cancelRequestedBy: text("cancel_requested_by"),
-}, (table) => [
-  index("agent_jobs_status_idx").on(table.status),
-  index("agent_jobs_source_idx").on(table.source),
-  index("agent_jobs_runtime_idx").on(table.runtime),
-  index("agent_jobs_cwd_idx").on(table.cwd),
-  index("agent_jobs_created_at_idx").on(table.createdAt),
-  index("agent_jobs_heartbeat_at_idx").on(table.heartbeatAt),
-  index("agent_jobs_api_consumer_id_idx").on(table.apiConsumerId),
-  index("agent_jobs_api_consumer_run_id_idx").on(table.apiConsumerRunId),
-])
+export const agentJobs = sqliteTable(
+  "agent_jobs",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    retryOfJobId: text("retry_of_job_id"),
+    attempt: integer("attempt").notNull().default(1),
+    source: text("source").notNull(),
+    runtime: text("runtime").notNull(),
+    status: text("status").notNull().default("queued"),
+    mode: text("mode").notNull().default("agent"),
+    cwd: text("cwd").notNull(),
+    projectId: text("project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
+    chatId: text("chat_id").references(() => chats.id, {
+      onDelete: "set null",
+    }),
+    subChatId: text("sub_chat_id").references(() => subChats.id, {
+      onDelete: "set null",
+    }),
+    promptPreview: text("prompt_preview"),
+    inputJson: text("input_json"),
+    apiConsumerId: text("api_consumer_id"),
+    apiConsumerRunId: text("api_consumer_run_id"),
+    artifactBaseDir: text("artifact_base_dir"),
+    artifactManifestPath: text("artifact_manifest_path"),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    finishedAt: integer("finished_at", { mode: "timestamp" }),
+    exitCode: integer("exit_code"),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    resultJson: text("result_json"),
+    createdByVersion: text("created_by_version"),
+    workerId: text("worker_id"),
+    workerPid: integer("worker_pid"),
+    workerStartedAt: integer("worker_started_at", { mode: "timestamp" }),
+    heartbeatAt: integer("heartbeat_at", { mode: "timestamp" }),
+    cancelRequestedAt: integer("cancel_requested_at", { mode: "timestamp" }),
+    cancelRequestedBy: text("cancel_requested_by"),
+  },
+  (table) => [
+    index("agent_jobs_status_idx").on(table.status),
+    index("agent_jobs_source_idx").on(table.source),
+    index("agent_jobs_runtime_idx").on(table.runtime),
+    index("agent_jobs_cwd_idx").on(table.cwd),
+    index("agent_jobs_created_at_idx").on(table.createdAt),
+    index("agent_jobs_heartbeat_at_idx").on(table.heartbeatAt),
+    index("agent_jobs_api_consumer_id_idx").on(table.apiConsumerId),
+    index("agent_jobs_api_consumer_run_id_idx").on(table.apiConsumerRunId),
+  ],
+)
 
-export const agentJobEvents = sqliteTable("agent_job_events", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  jobId: text("job_id")
-    .notNull()
-    .references(() => agentJobs.id, { onDelete: "cascade" }),
-  sequence: integer("sequence").notNull(),
-  type: text("type").notNull(),
-  payloadJson: text("payload_json").notNull().default("{}"),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-}, (table) => [
-  uniqueIndex("agent_job_events_job_sequence_idx").on(
-    table.jobId,
-    table.sequence,
-  ),
-  index("agent_job_events_job_created_at_idx").on(table.jobId, table.createdAt),
-])
+export const agentJobEvents = sqliteTable(
+  "agent_job_events",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    jobId: text("job_id")
+      .notNull()
+      .references(() => agentJobs.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    type: text("type").notNull(),
+    payloadJson: text("payload_json").notNull().default("{}"),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+  },
+  (table) => [
+    uniqueIndex("agent_job_events_job_sequence_idx").on(
+      table.jobId,
+      table.sequence,
+    ),
+    index("agent_job_events_job_created_at_idx").on(
+      table.jobId,
+      table.createdAt,
+    ),
+  ],
+)
 
-export const agentSchedules = sqliteTable("agent_schedules", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  name: text("name").notNull(),
-  status: text("status").notNull().default("enabled"),
-  runtime: text("runtime").notNull(),
-  mode: text("mode").notNull().default("agent"),
-  cwd: text("cwd").notNull(),
-  projectId: text("project_id").references(() => projects.id, {
-    onDelete: "set null",
-  }),
-  promptPreview: text("prompt_preview"),
-  inputJson: text("input_json").notNull().default("{}"),
-  intervalSeconds: integer("interval_seconds").notNull(),
-  timezone: text("timezone").notNull().default("local"),
-  nextRunAt: integer("next_run_at", { mode: "timestamp" }),
-  lastRunAt: integer("last_run_at", { mode: "timestamp" }),
-  lastJobId: text("last_job_id").references(() => agentJobs.id, {
-    onDelete: "set null",
-  }),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-  disabledAt: integer("disabled_at", { mode: "timestamp" }),
-}, (table) => [
-  index("agent_schedules_status_idx").on(table.status),
-  index("agent_schedules_next_run_at_idx").on(table.nextRunAt),
-  index("agent_schedules_project_id_idx").on(table.projectId),
-  index("agent_schedules_last_job_id_idx").on(table.lastJobId),
-])
+export const agentSchedules = sqliteTable(
+  "agent_schedules",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    name: text("name").notNull(),
+    status: text("status").notNull().default("enabled"),
+    runtime: text("runtime").notNull(),
+    mode: text("mode").notNull().default("agent"),
+    cwd: text("cwd").notNull(),
+    projectId: text("project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
+    promptPreview: text("prompt_preview"),
+    inputJson: text("input_json").notNull().default("{}"),
+    intervalSeconds: integer("interval_seconds").notNull(),
+    timezone: text("timezone").notNull().default("local"),
+    nextRunAt: integer("next_run_at", { mode: "timestamp" }),
+    lastRunAt: integer("last_run_at", { mode: "timestamp" }),
+    lastJobId: text("last_job_id").references(() => agentJobs.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+    disabledAt: integer("disabled_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("agent_schedules_status_idx").on(table.status),
+    index("agent_schedules_next_run_at_idx").on(table.nextRunAt),
+    index("agent_schedules_project_id_idx").on(table.projectId),
+    index("agent_schedules_last_job_id_idx").on(table.lastJobId),
+  ],
+)
 
-export const agentScheduleRuns = sqliteTable("agent_schedule_runs", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => createId()),
-  scheduleId: text("schedule_id").references(() => agentSchedules.id, {
-    onDelete: "set null",
-  }),
-  jobId: text("job_id").references(() => agentJobs.id, {
-    onDelete: "set null",
-  }),
-  trigger: text("trigger").notNull(),
-  scheduledFor: integer("scheduled_for", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
-    () => new Date(),
-  ),
-}, (table) => [
-  index("agent_schedule_runs_schedule_id_idx").on(table.scheduleId),
-  index("agent_schedule_runs_job_id_idx").on(table.jobId),
-  index("agent_schedule_runs_created_at_idx").on(table.createdAt),
-])
+export const agentScheduleRuns = sqliteTable(
+  "agent_schedule_runs",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    scheduleId: text("schedule_id").references(() => agentSchedules.id, {
+      onDelete: "set null",
+    }),
+    jobId: text("job_id").references(() => agentJobs.id, {
+      onDelete: "set null",
+    }),
+    trigger: text("trigger").notNull(),
+    scheduledFor: integer("scheduled_for", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+      () => new Date(),
+    ),
+  },
+  (table) => [
+    index("agent_schedule_runs_schedule_id_idx").on(table.scheduleId),
+    index("agent_schedule_runs_job_id_idx").on(table.jobId),
+    index("agent_schedule_runs_created_at_idx").on(table.createdAt),
+  ],
+)
 
 export const agentJobsRelations = relations(agentJobs, ({ one, many }) => ({
   retryOfJob: one(agentJobs, {
@@ -379,34 +440,44 @@ export const agentJobEventsRelations = relations(agentJobEvents, ({ one }) => ({
   }),
 }))
 
-export const agentSchedulesRelations = relations(agentSchedules, ({ one, many }) => ({
-  project: one(projects, {
-    fields: [agentSchedules.projectId],
-    references: [projects.id],
+export const agentSchedulesRelations = relations(
+  agentSchedules,
+  ({ one, many }) => ({
+    project: one(projects, {
+      fields: [agentSchedules.projectId],
+      references: [projects.id],
+    }),
+    lastJob: one(agentJobs, {
+      fields: [agentSchedules.lastJobId],
+      references: [agentJobs.id],
+    }),
+    runs: many(agentScheduleRuns),
   }),
-  lastJob: one(agentJobs, {
-    fields: [agentSchedules.lastJobId],
-    references: [agentJobs.id],
-  }),
-  runs: many(agentScheduleRuns),
-}))
+)
 
-export const agentScheduleRunsRelations = relations(agentScheduleRuns, ({ one }) => ({
-  schedule: one(agentSchedules, {
-    fields: [agentScheduleRuns.scheduleId],
-    references: [agentSchedules.id],
+export const agentScheduleRunsRelations = relations(
+  agentScheduleRuns,
+  ({ one }) => ({
+    schedule: one(agentSchedules, {
+      fields: [agentScheduleRuns.scheduleId],
+      references: [agentSchedules.id],
+    }),
+    job: one(agentJobs, {
+      fields: [agentScheduleRuns.jobId],
+      references: [agentJobs.id],
+    }),
   }),
-  job: one(agentJobs, {
-    fields: [agentScheduleRuns.jobId],
-    references: [agentJobs.id],
-  }),
-}))
+)
 
 // ============ TYPE EXPORTS ============
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
 export type Chat = typeof chats.$inferSelect
 export type NewChat = typeof chats.$inferInsert
+export type WorktreeSetupTrustDecision =
+  typeof worktreeSetupTrustDecisions.$inferSelect
+export type NewWorktreeSetupTrustDecision =
+  typeof worktreeSetupTrustDecisions.$inferInsert
 export type SubChat = typeof subChats.$inferSelect
 export type NewSubChat = typeof subChats.$inferInsert
 export type ClaudeCodeCredential = typeof claudeCodeCredentials.$inferSelect
@@ -417,7 +488,8 @@ export type AnthropicSettings = typeof anthropicSettings.$inferSelect
 export type ClaudeProviderConfig = typeof claudeProviderConfig.$inferSelect
 export type NewClaudeProviderConfig = typeof claudeProviderConfig.$inferInsert
 export type LocalApiProviderConfig = typeof localApiProviderConfigs.$inferSelect
-export type NewLocalApiProviderConfig = typeof localApiProviderConfigs.$inferInsert
+export type NewLocalApiProviderConfig =
+  typeof localApiProviderConfigs.$inferInsert
 export type AgentProviderProfile = typeof agentProviderProfiles.$inferSelect
 export type NewAgentProviderProfile = typeof agentProviderProfiles.$inferInsert
 export type AgentProviderDefault = typeof agentProviderDefaults.$inferSelect

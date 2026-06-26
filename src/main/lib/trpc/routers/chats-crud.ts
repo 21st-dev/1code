@@ -18,7 +18,10 @@ import { gitCache } from "../../git/cache"
 import { resolveProjectChatWorktree } from "../../project-chat-worktree"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure } from "../index"
-import { sendWorktreeSetupFailure } from "./chats-helpers"
+import {
+  sendWorktreeSetupApprovalRequired,
+  sendWorktreeSetupFailure,
+} from "./chats-helpers"
 
 export const chatCrudProcedures = {
   /**
@@ -204,6 +207,8 @@ export const chatCrudProcedures = {
           branchType: input.branchType,
           onWorktreeFailure: (payload) =>
             sendWorktreeSetupFailure(requestingWindowId, payload),
+          onWorktreeSetupApprovalRequired: (request) =>
+            sendWorktreeSetupApprovalRequired(requestingWindowId, request),
         })
         console.log("[chats.create] worktree result:", worktreeResult)
         db.update(chats).set(worktreeResult).where(eq(chats.id, chat.id)).run()
@@ -256,6 +261,8 @@ export const chatCrudProcedures = {
         targetMode: input.targetMode,
         onWorktreeFailure: (payload) =>
           sendWorktreeSetupFailure(requestingWindowId, payload),
+        onWorktreeSetupApprovalRequired: (request) =>
+          sendWorktreeSetupApprovalRequired(requestingWindowId, request),
       })
     }),
 

@@ -1,17 +1,20 @@
-import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import { getDatabase, projects } from "../../db"
 import { eq } from "drizzle-orm"
+import { z } from "zod"
+import { chats, getDatabase, projects } from "../../db"
 import {
   detectWorktreeConfig,
-  saveWorktreeConfig,
   getAvailableConfigPaths,
+  saveWorktreeConfig,
   type WorktreeConfig,
 } from "../../git/worktree-config"
+import { approveAndExecuteWorktreeSetup } from "../../git/worktree-setup-trust"
+import { publicProcedure, router } from "../index"
 
 const WorktreeConfigSchema = z.object({
   "setup-worktree-unix": z.union([z.array(z.string()), z.string()]).optional(),
-  "setup-worktree-windows": z.union([z.array(z.string()), z.string()]).optional(),
+  "setup-worktree-windows": z
+    .union([z.array(z.string()), z.string()])
+    .optional(),
   "setup-worktree": z.union([z.array(z.string()), z.string()]).optional(),
 })
 
@@ -54,7 +57,10 @@ export const worktreeConfigRouter = router({
       z.object({
         projectId: z.string(),
         config: WorktreeConfigSchema,
-        target: z.enum(["locus", "cursor", "1code"]).or(z.string()).default("locus"),
+        target: z
+          .enum(["locus", "cursor", "1code"])
+          .or(z.string())
+          .default("locus"),
       }),
     )
     .mutation(async ({ input }) => {
@@ -96,5 +102,38 @@ export const worktreeConfigRouter = router({
       }
 
       return getAvailableConfigPaths(project.path)
+    }),
+
+  approveAndRunSetup: publicProcedure
+    .input(z.object({ chatId: z.string(), commandHash: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = getDatabase()
+      const chat = db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, input.chatId))
+        .get()
+
+      if (!chat?.projectId || !chat.worktreePath) {
+        throw new Error("Chat does not have a project worktree.")
+      }
+
+      const project = db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, chat.projectId))
+        .get()
+
+      if (!project) {
+        throw new Error("Project not found")
+      }
+
+      return approveAndExecuteWorktreeSetup({
+        projectId: project.id,
+        projectPath: project.path,
+        worktreePath: chat.worktreePath,
+        expectedCommandHash: input.commandHash,
+        db,
+      })
     }),
 })

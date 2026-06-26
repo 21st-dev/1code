@@ -2,6 +2,7 @@ import {
   createWorktreeForChat as defaultCreateWorktreeForChat,
   sanitizeProjectName,
   type WorktreeResult,
+  type WorktreeSetupApprovalRequired,
 } from "./git"
 import type { WorktreeSetupResult } from "./git/worktree-config"
 
@@ -28,7 +29,9 @@ export type CreateProjectChatWorktree = (
   selectedBaseBranch?: string,
   branchType?: "local" | "remote",
   options?: {
+    projectId?: string
     onSetupComplete?: (result: WorktreeSetupResult) => void
+    onSetupApprovalRequired?: (request: WorktreeSetupApprovalRequired) => void
   },
 ) => Promise<WorktreeResult>
 
@@ -40,6 +43,9 @@ export type ResolveProjectChatWorktreeInput = {
   branchType?: "local" | "remote"
   createWorktreeForChat?: CreateProjectChatWorktree
   onWorktreeFailure?: (payload: ProjectChatWorktreeFailurePayload) => void
+  onWorktreeSetupApprovalRequired?: (
+    request: WorktreeSetupApprovalRequired,
+  ) => void
 }
 
 export type ResolvedProjectChatWorktree = {
@@ -58,6 +64,7 @@ export async function resolveProjectChatWorktree(
     baseBranch,
     branchType,
     onWorktreeFailure,
+    onWorktreeSetupApprovalRequired,
   } = input
 
   if (!useWorktree) {
@@ -73,6 +80,7 @@ export async function resolveProjectChatWorktree(
     baseBranch,
     branchType,
     {
+      projectId: project.id,
       onSetupComplete: (setupResult: WorktreeSetupResult) => {
         if (setupResult.success) return
         const message =
@@ -84,6 +92,7 @@ export async function resolveProjectChatWorktree(
           projectId: project.id,
         })
       },
+      onSetupApprovalRequired: onWorktreeSetupApprovalRequired,
     },
   )
 
