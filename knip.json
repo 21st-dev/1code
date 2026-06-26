@@ -1,0 +1,33 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "electron.vite.config.ts",
+    "drizzle.config.ts",
+    "tailwind.config.js",
+    "postcss.config.js",
+    "src/main/index.ts",
+    "src/preload/index.ts",
+    "src/renderer/index.html",
+    "src/renderer/main.tsx",
+    "tests/**/*.test.ts",
+    "scripts/**/*.{js,cjs,mjs,ts}"
+  ],
+  "project": [
+    "*.config.{js,ts}",
+    "electron-shim.js",
+    "electron.vite.config.ts",
+    "src/**/*.{ts,tsx}",
+    "tests/**/*.ts",
+    "scripts/**/*.{js,cjs,mjs,ts}"
+  ],
+  "paths": {
+    "@/*": ["src/renderer/*"]
+  },
+  "include": ["files", "dependencies", "unlisted", "unresolved"],
+  "ignore": [
+    "electron-shim.js",
+    "src/renderer/lib/vendor/pierre-diffs-shiki-shim.ts",
+    "scripts/smoke-electron-app/**"
+  ],
+  "ignoreDependencies": ["@electron/rebuild"]
+}
