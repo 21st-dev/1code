@@ -360,7 +360,13 @@ describe("Qwen CLI setup status", () => {
     const missingSettingsDir = tempRoot()
     const invalidSettingsDir = tempRoot()
     const qwenPath = executableFile(installRoot)
-    writeFileSync(join(invalidSettingsDir, "settings.json"), "{", "utf8")
+    const noPrefixSecret = "plainSecret_ABCDEF123456"
+    const prefixedSecret = "sk-abcdefghijklmnopqrstuvwxyz123456"
+    writeFileSync(
+      join(invalidSettingsDir, "settings.json"),
+      `{"token":"${noPrefixSecret}","apiKey":"${prefixedSecret}",`,
+      "utf8",
+    )
 
     const missing = await resolveQwenCliSetupStatus({
       overridePath: qwenPath,
@@ -393,6 +399,15 @@ describe("Qwen CLI setup status", () => {
     expect(invalid.status.configuration.state).toBe("invalid")
     expect(invalid.status.configuration.settingsFilePresent).toBe(true)
     expect(invalid.status.configuration.parseError).toBeTruthy()
+    expect(invalid.status.configuration.parseError).toContain(
+      "Qwen settings.json is not valid JSON",
+    )
+    expect(invalid.status.configuration.parseError).not.toContain(
+      noPrefixSecret,
+    )
+    expect(invalid.status.configuration.parseError).not.toContain(
+      prefixedSecret,
+    )
   })
 
   test("does not read Qwen settings when the runtime gate is disabled", async () => {

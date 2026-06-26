@@ -186,6 +186,18 @@ function sanitizedBaseUrlOrigin(value: unknown): string | null {
   }
 }
 
+function qwenSettingsParseError(message: string): string {
+  const lineColumn = /\bline\s+(\d+)\s+column\s+(\d+)/i.exec(message)
+  if (lineColumn) {
+    return `Qwen settings.json is not valid JSON (line ${lineColumn[1]}, column ${lineColumn[2]}).`
+  }
+  const position = /\bposition\s+(\d+)/i.exec(message)
+  if (position) {
+    return `Qwen settings.json is not valid JSON (position ${position[1]}).`
+  }
+  return "Qwen settings.json is not valid JSON."
+}
+
 function providerModels(value: unknown): unknown[] {
   if (!value || typeof value !== "object") return []
   if (Array.isArray(value)) return value
@@ -320,7 +332,7 @@ function readQwenConfigurationSummary(
       selectedModel: null,
       providers: [],
       envKeysInSettings: [],
-      parseError: sanitizeForRenderer(message),
+      parseError: qwenSettingsParseError(message),
     }
   }
 }
