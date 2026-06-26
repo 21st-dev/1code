@@ -308,7 +308,7 @@ export const AgentToolRegistry: Record<string, ToolMeta> = {
           oldString,
           newString,
         )
-        return `<span style="font-size: 11px; color: light-dark(#587C0B, #A3BE8C)">+${addedLines}</span> <span style="font-size: 11px; color: light-dark(#AD0807, #AE5A62)">-${removedLines}</span>`
+        return `+${addedLines} -${removedLines}`
       }
 
       return ""
