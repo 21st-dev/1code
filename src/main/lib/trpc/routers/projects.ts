@@ -1,8 +1,6 @@
-import { exec } from "node:child_process"
 import { existsSync } from "node:fs"
 import { copyFile, mkdir, unlink } from "node:fs/promises"
 import { basename, extname, join } from "node:path"
-import { promisify } from "node:util"
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm"
 import { app, BrowserWindow, dialog } from "electron"
 import { z } from "zod"
@@ -19,9 +17,11 @@ import {
   removeProjectFromActiveListById,
   restoreProjectById,
 } from "../../projects/registry"
+import {
+  buildGitHubCloneTarget,
+  cloneGitHubRepository,
+} from "../../projects/github-clone"
 import { publicProcedure, router } from "../index"
-
-const execAsync = promisify(exec)
 
 export const projectsRouter = router({
   /**
@@ -247,45 +247,14 @@ export const projectsRouter = router({
    * Clone a GitHub repo and create a project
    */
   cloneFromGitHub: publicProcedure
-    .input(z.object({ repoUrl: z.string() }))
+    .input(z.object({ repoUrl: z.string().min(1) }).strict())
     .mutation(async ({ input }) => {
       const { repoUrl } = input
 
-      // Parse the URL to extract owner/repo
-      let owner: string | null = null
-      let repo: string | null = null
-
-      // Match HTTPS format: https://github.com/owner/repo
-      const httpsMatch = repoUrl.match(
-        /https?:\/\/github\.com\/([^/]+)\/([^/]+)/,
-      )
-      if (httpsMatch) {
-        owner = httpsMatch[1] || null
-        repo = httpsMatch[2]?.replace(/\.git$/, "") || null
-      }
-
-      // Match SSH format: git@github.com:owner/repo
-      const sshMatch = repoUrl.match(/git@github\.com:([^/]+)\/(.+)/)
-      if (sshMatch) {
-        owner = sshMatch[1] || null
-        repo = sshMatch[2]?.replace(/\.git$/, "") || null
-      }
-
-      // Match short format: owner/repo
-      const shortMatch = repoUrl.match(/^([^/]+)\/([^/]+)$/)
-      if (shortMatch) {
-        owner = shortMatch[1] || null
-        repo = shortMatch[2]?.replace(/\.git$/, "") || null
-      }
-
-      if (!owner || !repo) {
-        throw new Error("Invalid GitHub URL or repo format")
-      }
-
       // Clone to ~/.21st/repos/{owner}/{repo}
       const homePath = app.getPath("home")
-      const reposDir = join(homePath, ".21st", "repos", owner)
-      const clonePath = join(reposDir, repo)
+      const cloneTarget = buildGitHubCloneTarget(repoUrl, homePath)
+      const { repo, clonePath } = cloneTarget
 
       // Check if already cloned
       if (existsSync(clonePath)) {
@@ -303,12 +272,7 @@ export const projectsRouter = router({
         return project
       }
 
-      // Create repos directory
-      await mkdir(reposDir, { recursive: true })
-
-      // Clone the repo
-      const cloneUrl = `https://github.com/${owner}/${repo}.git`
-      await execAsync(`git clone "${cloneUrl}" "${clonePath}"`)
+      await cloneGitHubRepository(cloneTarget)
 
       // Get git info and create project
       const db = getDatabase()
