@@ -33,6 +33,7 @@ describe("renderer CSP policy", () => {
 
     expect(scriptSrc).toContain("'self'")
     expect(scriptSrc).not.toContain("'unsafe-eval'")
+    expect(scriptSrc).toContain("'wasm-unsafe-eval'")
     expect(scriptSrc).not.toContain("https://unpkg.com")
     expect(csp).not.toContain("https://unpkg.com")
   })

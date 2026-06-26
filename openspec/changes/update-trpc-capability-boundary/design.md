@@ -6,7 +6,7 @@ Current evidence:
 - `src/preload/index.ts:6` calls `exposeElectronTRPC()`, exposing the whole app router to the renderer.
 - `src/main/lib/trpc/routers/index.ts:42` mounts 32 routers; the folder contains 41 router files. The mounted `changes` router is composed from `src/main/lib/git/**`.
 - `src/main/windows/main.ts:493` has `sandbox: false` for electron-trpc and `webviewTag: true` at `:495`.
-- Renderer CSP initially allowed `unsafe-inline`, `unsafe-eval`, and remote scripts from `https://unpkg.com` in `src/renderer/index.html:6`. The emergency Phase 2 renderer XSS slice removes `unsafe-eval` and the remote script origin; `unsafe-inline` remains documented for the startup theme and global error handler inline scripts until those boot scripts move to a hashed or bundled path.
+- Renderer CSP initially allowed `unsafe-inline`, `unsafe-eval`, and remote scripts from `https://unpkg.com` in `src/renderer/index.html:6`. The emergency Phase 2 renderer XSS slice removes broad JavaScript `unsafe-eval` and the remote script origin; `wasm-unsafe-eval` remains for Shiki/Oniguruma WebAssembly syntax highlighting, and `unsafe-inline` remains documented for the startup theme and global error handler inline scripts until those boot scripts move to a hashed or bundled path.
 
 Threat model:
 - This is a local Electron app, not a remote multi-user API.

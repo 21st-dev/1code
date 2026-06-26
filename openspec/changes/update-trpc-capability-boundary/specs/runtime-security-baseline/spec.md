@@ -56,7 +56,7 @@ The renderer SHALL treat repository content, chat markdown, tool output, MCP out
 
 #### Scenario: Renderer CSP permits script execution
 - **WHEN** the renderer CSP is evaluated for the privileged app document
-- **THEN** it SHALL NOT allow `unsafe-eval` or remote script origins, and any remaining inline-script exception SHALL be documented with the code that blocks removal.
+- **THEN** it SHALL NOT allow broad JavaScript `unsafe-eval` or remote script origins, and any remaining inline-script or WebAssembly compilation exception SHALL be documented with the code that blocks removal.
 
 #### Scenario: Previewed web page attempts bridge access
 - **WHEN** a local browser preview or webview page executes JavaScript
