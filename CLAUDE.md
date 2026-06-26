@@ -69,10 +69,12 @@ src/
     │   │   ├── main/        # active-chat.tsx, new-chat-form.tsx
     │   │   ├── ui/          # Tool renderers, preview, diff view
     │   │   ├── commands/    # Slash commands (/plan, /agent, /clear)
+    │   │   ├── mentions/    # Agent composer mention editor
     │   │   ├── atoms/       # Jotai atoms for agent state
     │   │   └── stores/      # Zustand store for sub-chats
-    │   ├── sidebar/         # Chat list, archive, navigation
-    │   ├── sub-chats/       # Tab/sidebar sub-chat management
+    │   ├── sidebar/         # Chat list, sub-chat sidebar, archive, navigation
+    │   ├── settings/        # Settings shell/content
+    │   ├── details-sidebar/ # Terminal, trace, diff, browser, file detail panes
     │   └── layout/          # Main layout with resizable panels
     ├── components/ui/       # Radix UI wrappers (button, dialog, etc.)
     └── lib/
@@ -90,12 +92,28 @@ hooks live in `src/renderer/features/agents/lib/agent-chat-api.ts`.
 
 **Schema:** `src/main/lib/db/schema/index.ts`
 
-```typescript
-// Three main tables:
-projects    → id, name, path (local folder), timestamps
-chats       → id, name, projectId, worktree fields, timestamps
-sub_chats   → id, name, chatId, sessionId, mode, messages (JSON)
-```
+Current schema source defines these tables:
+
+| Table | Purpose |
+|-------|---------|
+| `projects` | Registered local project folders plus git metadata and removal state |
+| `chats` | Project or folderless chat threads, worktree fields, archive state, PR tracking |
+| `worktree_setup_trust_decisions` | Per-project approval decisions for repository-provided worktree setup commands |
+| `sub_chats` | Runtime sessions, mode, stream id, and persisted message JSON for each chat tab |
+| `claude_code_credentials` | Legacy encrypted Claude Code credential row |
+| `anthropic_accounts` | Multi-account Claude Code OAuth credential envelopes |
+| `anthropic_settings` | Active Anthropic account pointer |
+| `claude_provider_config` | Legacy single Claude-compatible provider config |
+| `local_api_provider_configs` | Encrypted helper-provider configs for local utility calls |
+| `agent_provider_profiles` | Runtime-neutral provider profiles, headers, target runtimes, diagnostics |
+| `agent_provider_defaults` | Default profile/model bindings by purpose |
+| `app_agents` | Locus-managed reusable agent profiles |
+| `agent_jobs` | Headless/API/daemon/schedule job records and lifecycle state |
+| `agent_job_events` | Ordered durable events for agent jobs |
+| `agent_schedules` | Recurring local agent schedule definitions |
+| `agent_schedule_runs` | Schedule trigger to job linkage records |
+
+Schema details live in `src/main/lib/db/schema/index.ts`; treat that file as the table source of truth.
 
 **Auto-migration:** On app start, `initDatabase()` runs migrations from `drizzle/` folder (dev) or `resources/migrations` (packaged).
 
@@ -121,23 +139,26 @@ const projectChats = db.select().from(chats).where(eq(chats.projectId, id)).all(
 - **Zustand**: Sub-chat tabs and pinned state (persisted to localStorage)
 - **React Query**: Server state via tRPC (auto-caching, refetch)
 
-### Claude Integration
-- Dynamic import of `@anthropic-ai/claude-agent-sdk` for desktop chat
-- Bundled Claude Code executable for local runtime/auth surfaces
-- Two modes: "plan" (read-only) and "agent" (full permissions)
-- Session resume via `sessionId` stored in SubChat
-- Message streaming via tRPC subscription (`claude.onMessage`)
+### Runtime Integrations
+- Claude Code: `@anthropic-ai/claude-agent-sdk` for desktop chat plus bundled Claude Code executable for local runtime/auth surfaces
+- Codex: bundled Codex CLI/app-server adapter for desktop chat, provider binding, approvals, and headless/batch fallback
+- Qwen Code: experimental desktop runtime behind the Qwen runtime feature gate
+- Kun: experimental desktop runtime behind the Kun feature gate, with CLI/config status and guarded shell approval
+- Ollama: local/offline Claude-compatible fallback and diagnostics for model availability
+- Headless jobs: Local Job API, CLI, daemon, schedule, and protocol runners using `src/main/lib/headless/`
+- Shared modes: "plan" (read-only) and "agent" (write-capable under the selected runtime policy)
+- Runtime capability truth lives in `src/shared/agent-runtime-capabilities.ts` and `src/main/lib/agent-runtime/runtime-registry.ts`
 
 ## Tech Stack
 
 | Layer | Tech |
 |-------|------|
-| Desktop | Electron 33.4.5, electron-vite, electron-builder |
-| UI | React 19, TypeScript 5.4.5, Tailwind CSS |
+| Desktop | Electron 39, electron-vite, electron-builder |
+| UI | React 19, TypeScript 5.x, Tailwind CSS |
 | Components | Radix UI, Lucide icons, Motion, Sonner |
 | State | Jotai, Zustand, React Query |
 | Backend | tRPC, Drizzle ORM, better-sqlite3 |
-| AI | @anthropic-ai/claude-agent-sdk, bundled Claude Code runtime |
+| AI runtimes | Claude Code, Codex, Qwen Code, Kun, Ollama, headless Local Job API |
 | Package Manager | bun |
 
 ## File Naming
@@ -245,20 +266,9 @@ npm version patch --no-git-tag-version
 
 Automatic update production readiness depends on signing. macOS builds need Developer ID signing plus notarization/stapling, and Windows NSIS builds should be code signed. Unsigned GitHub Release artifacts are internal test builds only and must be labeled that way.
 
-## Current Status (WIP)
+## Current Status
 
-**Done:**
-- Drizzle ORM setup with schema (projects, chats, sub_chats)
-- Auto-migration on app startup
-- tRPC routers structure
-
-**In Progress:**
-- ProjectSelector component (local folder picker)
-
-**Planned:**
-- Git worktree per chat (isolation)
-- Claude Code execution in worktree path
-- Full feature parity with web app
+Locus is a multi-runtime desktop workbench. Core shipped areas include Drizzle auto-migrations, project/chat/sub-chat persistence, worktree isolation with setup trust decisions, Claude and Codex desktop runtimes, experimental Qwen/Kun runtime gates, Ollama fallback, provider profiles, MCP registry/auth surfaces, app agents, and headless Local Job API jobs/schedules.
 
 ## Debug Mode
 
