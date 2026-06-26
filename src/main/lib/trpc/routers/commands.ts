@@ -1,22 +1,26 @@
-import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import { app } from "electron"
 import { execFile } from "node:child_process"
 import { createHash } from "node:crypto"
-import * as fs from "fs/promises"
-import * as path from "path"
-import * as os from "os"
+import * as fs from "node:fs/promises"
+import * as os from "node:os"
+import * as path from "node:path"
 import { stripVTControlCharacters } from "node:util"
+import { app } from "electron"
+import { z } from "zod"
+import { getBundledClaudeBinaryPath } from "../../claude"
+import { resolveDirentType } from "../../fs/dirent"
+import {
+  assertRelativePathBoundary,
+  resolvePathWithinRoot,
+} from "../../fs/path-boundary"
+import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
 import { getPluginComponentPaths } from "../../plugins"
 import { discoverAllowedClaudePluginRuntimeComponents } from "../../plugins/runtime-gates"
-import { resolveDirentType } from "../../fs/dirent"
-import { parseMarkdownFrontmatter } from "../../markdown/frontmatter"
-import { getEnabledPlugins } from "./claude-settings"
-import { getBundledClaudeBinaryPath } from "../../claude"
 import {
   getRuntimeExecutableStatus,
   type RuntimeExecutableStatus,
 } from "../../runtime-executable"
+import { publicProcedure, router } from "../index"
+import { getEnabledPlugins } from "./claude-settings"
 
 export interface FileCommand {
   name: string
@@ -172,7 +176,11 @@ const OFFICIAL_COMMAND_PROVIDERS: OfficialProviderDefinition[] = [
 ]
 
 function getOfficialCommandIndexPath(): string {
-  return path.join(app.getPath("userData"), "command-guide", "official-index.json")
+  return path.join(
+    app.getPath("userData"),
+    "command-guide",
+    "official-index.json",
+  )
 }
 
 function emptyOfficialProviderSnapshot(
@@ -215,13 +223,18 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-async function fetchOfficialText(source: OfficialCommandSourceDefinition): Promise<{
+async function fetchOfficialText(
+  source: OfficialCommandSourceDefinition,
+): Promise<{
   text: string
   etag: string | null
   lastModified: string | null
 }> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), OFFICIAL_COMMAND_TIMEOUT_MS)
+  const timeout = setTimeout(
+    () => controller.abort(),
+    OFFICIAL_COMMAND_TIMEOUT_MS,
+  )
 
   try {
     const response = await fetch(source.url, {
@@ -343,7 +356,9 @@ function parseMarkdownCommandTables(
     const descriptionIndex = headers.findIndex(
       (header) => header.includes("description") || header.includes("purpose"),
     )
-    const exampleIndex = headers.findIndex((header) => header.includes("example"))
+    const exampleIndex = headers.findIndex((header) =>
+      header.includes("example"),
+    )
     const maturityIndex = headers.findIndex(
       (header) => header.includes("type") || header.includes("status"),
     )
@@ -390,7 +405,10 @@ function parseMarkdownCommandTables(
   return entries
 }
 
-function extractExportedArray(markdown: string, arrayName: string): string | null {
+function extractExportedArray(
+  markdown: string,
+  arrayName: string,
+): string | null {
   const declaration = `export const ${arrayName} = [`
   const declarationIndex = markdown.indexOf(declaration)
   if (declarationIndex === -1) return null
@@ -416,7 +434,7 @@ function extractExportedArray(markdown: string, arrayName: string): string | nul
       continue
     }
 
-    if (char === "\"" || char === "'" || char === "`") {
+    if (char === '"' || char === "'" || char === "`") {
       quote = char
       continue
     }
@@ -455,7 +473,7 @@ function extractObjectLiterals(body: string): string[] {
       continue
     }
 
-    if (char === "\"" || char === "'" || char === "`") {
+    if (char === '"' || char === "'" || char === "`") {
       quote = char
       continue
     }
@@ -475,7 +493,10 @@ function extractObjectLiterals(body: string): string[] {
   return objects
 }
 
-function readJsStringProperty(objectLiteral: string, property: string): string | null {
+function readJsStringProperty(
+  objectLiteral: string,
+  property: string,
+): string | null {
   const match = objectLiteral.match(
     new RegExp(
       `${property}\\s*:\\s*("((?:\\\\.|[^"\\\\])*)"|'((?:\\\\.|[^'\\\\])*)'|\`((?:\\\\.|[^\`\\\\])*)\`)`,
@@ -487,7 +508,7 @@ function readJsStringProperty(objectLiteral: string, property: string): string |
 
   return rawValue
     .replace(/\\n/g, " ")
-    .replace(/\\"/g, "\"")
+    .replace(/\\"/g, '"')
     .replace(/\\'/g, "'")
     .replace(/\\\\/g, "\\")
     .replace(/\s+/g, " ")
@@ -656,7 +677,9 @@ async function refreshOfficialCommandIndex(): Promise<OfficialCommandIndexSnapsh
   const providers = await Promise.all(
     OFFICIAL_COMMAND_PROVIDERS.map(async (provider) => {
       const sourceResults = await Promise.all(
-        provider.sources.map((source) => refreshOfficialSource(source, fetchedAt)),
+        provider.sources.map((source) =>
+          refreshOfficialSource(source, fetchedAt),
+        ),
       )
       const entries = dedupeOfficialEntries(
         sourceResults.flatMap((result) => result.entries),
@@ -666,11 +689,17 @@ async function refreshOfficialCommandIndex(): Promise<OfficialCommandIndexSnapsh
         .filter((source) => source.error)
       const previousProvider = previousProviderById.get(provider.provider)
 
-      if (entries.length === 0 && failedSources.length === sourceResults.length) {
+      if (
+        entries.length === 0 &&
+        failedSources.length === sourceResults.length
+      ) {
         if (previousProvider?.entries.length) {
           return {
             ...previousProvider,
-            error: failedSources.map((source) => source.error).filter(Boolean).join("; "),
+            error: failedSources
+              .map((source) => source.error)
+              .filter(Boolean)
+              .join("; "),
           }
         }
 
@@ -681,7 +710,10 @@ async function refreshOfficialCommandIndex(): Promise<OfficialCommandIndexSnapsh
           updatedAt: null,
           entries: [],
           sources: sourceResults.map((result) => result.source),
-          error: failedSources.map((source) => source.error).filter(Boolean).join("; "),
+          error: failedSources
+            .map((source) => source.error)
+            .filter(Boolean)
+            .join("; "),
         }
       }
 
@@ -774,7 +806,9 @@ function runReadOnlyRuntimeCommand(
         },
       },
       (error, stdout, stderr) => {
-        const output = cleanCommandOutput([stdout, stderr].filter(Boolean).join("\n"))
+        const output = cleanCommandOutput(
+          [stdout, stderr].filter(Boolean).join("\n"),
+        )
         if (error) {
           resolve({
             output,
@@ -955,7 +989,12 @@ async function scanCommandsDirectory(
 /**
  * Generate command .md content from name, description, and body
  */
-function generateCommandMd(command: { name: string; description: string; content: string; argumentHint?: string }): string {
+function generateCommandMd(command: {
+  name: string
+  description: string
+  content: string
+  argumentHint?: string
+}): string {
   const frontmatter: string[] = []
   if (command.description) {
     frontmatter.push(`description: ${command.description}`)
@@ -980,6 +1019,47 @@ function resolveCommandPath(displayPath: string, projectPath?: string): string {
     return path.join(projectPath, displayPath)
   }
   return displayPath
+}
+
+function getUserCommandsDir(): string {
+  return path.join(os.homedir(), ".claude", "commands")
+}
+
+function getProjectCommandsDir(projectPath: string): string {
+  return path.join(projectPath, ".claude", "commands")
+}
+
+function isHomeDisplayPath(displayPath: string): boolean {
+  return (
+    displayPath === "~" ||
+    displayPath.startsWith("~/") ||
+    displayPath.startsWith("~\\")
+  )
+}
+
+function resolveEditableCommandPath(
+  displayPath: string,
+  projectPath?: string,
+): string {
+  if (isHomeDisplayPath(displayPath)) {
+    const absolutePath = resolveCommandPath(displayPath)
+    return resolvePathWithinRoot({
+      targetPath: absolutePath,
+      rootPath: getUserCommandsDir(),
+    })
+  }
+
+  assertRelativePathBoundary(displayPath)
+
+  if (!projectPath) {
+    throw new Error("Project path required for project command")
+  }
+
+  const absolutePath = resolveCommandPath(displayPath, projectPath)
+  return resolvePathWithinRoot({
+    targetPath: absolutePath,
+    rootPath: getProjectCommandsDir(projectPath),
+  })
 }
 
 export const commandsRouter = router({
@@ -1051,15 +1131,23 @@ export const commandsRouter = router({
       const enabledPluginSources = await getEnabledPlugins()
       const allowedPluginComponents =
         await discoverAllowedClaudePluginRuntimeComponents(enabledPluginSources)
-      const pluginCommandsPromises = allowedPluginComponents.map(async ({ plugin }) => {
-        const paths = getPluginComponentPaths(plugin)
-        try {
-          const commands = await scanCommandsDirectory(paths.commands, "plugin")
-          return commands.map((cmd) => ({ ...cmd, pluginName: plugin.source }))
-        } catch {
-          return []
-        }
-      })
+      const pluginCommandsPromises = allowedPluginComponents.map(
+        async ({ plugin }) => {
+          const paths = getPluginComponentPaths(plugin)
+          try {
+            const commands = await scanCommandsDirectory(
+              paths.commands,
+              "plugin",
+            )
+            return commands.map((cmd) => ({
+              ...cmd,
+              pluginName: plugin.source,
+            }))
+          } catch {
+            return []
+          }
+        },
+      )
 
       // Scan all directories in parallel
       const [userCommands, projectCommands, ...pluginCommandsArrays] =
@@ -1080,19 +1168,17 @@ export const commandsRouter = router({
   getContent: publicProcedure
     .input(z.object({ path: z.string(), projectPath: z.string().optional() }))
     .query(async ({ input }) => {
-      // Security: prevent path traversal
-      if (input.path.includes("..")) {
-        throw new Error("Invalid path")
-      }
-
       try {
-        const absolutePath = resolveCommandPath(input.path, input.projectPath)
+        const absolutePath = resolveEditableCommandPath(
+          input.path,
+          input.projectPath,
+        )
         const content = await fs.readFile(absolutePath, "utf-8")
         const { content: body } = parseMarkdownFrontmatter(content)
         return { content: body.trim() }
       } catch (err) {
         console.error(`[commands] Failed to read command content:`, err)
-        return { content: "" }
+        throw new Error("Invalid command path")
       }
     }),
 
@@ -1105,12 +1191,18 @@ export const commandsRouter = router({
         argumentHint: z.string().optional(),
         source: z.enum(["user", "project"]),
         projectPath: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-      const safeName = input.name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+      const safeName = input.name
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
       if (!safeName) {
-        throw new Error("Command name must contain at least one alphanumeric character")
+        throw new Error(
+          "Command name must contain at least one alphanumeric character",
+        )
       }
 
       let targetDir: string
@@ -1161,15 +1253,13 @@ export const commandsRouter = router({
         content: z.string(),
         argumentHint: z.string().optional(),
         projectPath: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-      // Security: prevent path traversal
-      if (input.path.includes("..")) {
-        throw new Error("Invalid path")
-      }
-
-      const absolutePath = resolveCommandPath(input.path, input.projectPath)
+      const absolutePath = resolveEditableCommandPath(
+        input.path,
+        input.projectPath,
+      )
 
       // Verify file exists before writing
       await fs.access(absolutePath)
@@ -1190,14 +1280,13 @@ export const commandsRouter = router({
       z.object({
         path: z.string(),
         projectPath: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
-      if (input.path.includes("..")) {
-        throw new Error("Invalid path")
-      }
-
-      const absolutePath = resolveCommandPath(input.path, input.projectPath)
+      const absolutePath = resolveEditableCommandPath(
+        input.path,
+        input.projectPath,
+      )
       await fs.access(absolutePath)
       await fs.unlink(absolutePath)
 

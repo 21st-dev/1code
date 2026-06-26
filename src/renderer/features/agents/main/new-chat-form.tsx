@@ -2040,7 +2040,13 @@ export function NewChatForm({
 
         // For text files that are small enough, read content and store it
         // Show file chip, content will be added to prompt on send
-        if (isTextFile && isSmallEnough && filePath) {
+        if (
+          isTextFile &&
+          isSmallEnough &&
+          filePath &&
+          validatedProject?.path &&
+          filePath.startsWith(validatedProject.path)
+        ) {
           // Add file chip for visual representation
           editorRef.current?.insertMention({
             id: mentionId,
@@ -2052,7 +2058,10 @@ export function NewChatForm({
 
           // Read and cache content (will be added to prompt on send)
           try {
-            const content = await trpcUtils.files.readFile.fetch({ filePath })
+            const content = await trpcUtils.files.readFile.fetch({
+              filePath,
+              projectPath: validatedProject.path,
+            })
             fileContentsRef.current.set(mentionId, content)
           } catch (err) {
             // If reading fails, chip is still there - agent can try to read via path

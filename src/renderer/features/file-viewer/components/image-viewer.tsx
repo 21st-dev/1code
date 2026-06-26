@@ -62,7 +62,7 @@ export function ImageViewer({
   }, [absolutePath, preferredEditor, openInAppMutation])
 
   const { data, isLoading, error } = trpc.files.readBinaryFile.useQuery(
-    { filePath: absolutePath },
+    { filePath: absolutePath, projectPath },
     { staleTime: 60000 },
   )
 

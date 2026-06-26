@@ -1,16 +1,23 @@
-import { z } from "zod"
-import { router, publicProcedure } from "../index"
-import { readdir, stat, readFile, rename as fsRename, rm } from "node:fs/promises"
-import { join, relative, basename, extname, dirname, resolve, isAbsolute } from "node:path"
-import { shell } from "electron"
 import { watch } from "node:fs"
+import {
+  rename as fsRename,
+  readdir,
+  readFile,
+  stat,
+} from "node:fs/promises"
+import { basename, dirname, extname, join, relative, resolve } from "node:path"
 import { observable } from "@trpc/server/observable"
+import { shell } from "electron"
+import { z } from "zod"
+import { chats, getDatabase, projects } from "../../db"
+import { resolvePathWithinRoot } from "../../fs/path-boundary"
 import {
   cleanupStaleLongTextAttachments,
   deleteLongTextAttachment,
   isLongTextAttachmentLocalRef,
   stageLongTextAttachment,
 } from "../../long-text-attachments"
+import { publicProcedure, router } from "../index"
 
 // Directories to ignore when scanning
 const IGNORED_DIRS = new Set([
@@ -44,11 +51,7 @@ const IGNORED_DIRS = new Set([
 ])
 
 // Files to ignore
-const IGNORED_FILES = new Set([
-  ".DS_Store",
-  "Thumbs.db",
-  ".gitkeep",
-])
+const IGNORED_FILES = new Set([".DS_Store", "Thumbs.db", ".gitkeep"])
 
 const ALLOWED_HIDDEN_FILES = new Set([
   ".editorconfig",
@@ -67,12 +70,7 @@ const SENSITIVE_FILE_NAMES = new Set([
   ".pypirc",
 ])
 
-const SENSITIVE_FILE_EXTENSIONS = new Set([
-  ".key",
-  ".pem",
-  ".p12",
-  ".pfx",
-])
+const SENSITIVE_FILE_EXTENSIONS = new Set([".key", ".pem", ".p12", ".pfx"])
 
 function isHiddenFile(name: string): boolean {
   return name.startsWith(".") && !ALLOWED_HIDDEN_FILES.has(name)
@@ -119,7 +117,10 @@ interface FileEntry {
 
 // Cache for file and folder listings (bounded LRU)
 const MAX_CACHE_ENTRIES = 20
-const fileListCache = new Map<string, { entries: FileEntry[]; timestamp: number }>()
+const fileListCache = new Map<
+  string,
+  { entries: FileEntry[]; timestamp: number }
+>()
 const CACHE_TTL = 5000 // 5 seconds
 
 /**
@@ -127,19 +128,57 @@ const CACHE_TTL = 5000 // 5 seconds
  * Checks for null bytes and ensures the resolved path stays within the expected parent.
  */
 function validatePathSafe(targetPath: string, allowedParent?: string): void {
-  if (targetPath.includes("\0")) {
-    throw new Error("Path contains invalid characters")
-  }
-  if (!isAbsolute(targetPath)) {
-    throw new Error("Path must be absolute")
-  }
-  const resolved = resolve(targetPath)
   if (allowedParent) {
-    const resolvedParent = resolve(allowedParent)
-    if (!resolved.startsWith(resolvedParent + "/") && resolved !== resolvedParent) {
-      throw new Error("Path escapes allowed directory")
-    }
+    resolvePathWithinRoot({ targetPath, rootPath: allowedParent })
+    return
   }
+  resolvePathWithinRoot({ targetPath, rootPath: dirname(targetPath) })
+}
+
+function resolveRegisteredReadRoot(rootPath: string): string {
+  const resolvedRoot = resolve(rootPath)
+  const db = getDatabase()
+  const registeredProject = db
+    .select({
+      path: projects.path,
+      removedAt: projects.removedAt,
+    })
+    .from(projects)
+    .all()
+    .some(
+      (project) => !project.removedAt && resolve(project.path) === resolvedRoot,
+    )
+
+  if (registeredProject) {
+    return resolvedRoot
+  }
+
+  const registeredWorktree = db
+    .select({ worktreePath: chats.worktreePath })
+    .from(chats)
+    .all()
+    .some(
+      (chat) =>
+        typeof chat.worktreePath === "string" &&
+        resolve(chat.worktreePath) === resolvedRoot,
+    )
+
+  if (!registeredWorktree) {
+    throw new Error("File read root is not registered")
+  }
+
+  return resolvedRoot
+}
+
+function resolveReadableFilePath(input: {
+  filePath: string
+  projectPath: string
+}): string {
+  const rootPath = resolveRegisteredReadRoot(input.projectPath)
+  return resolvePathWithinRoot({
+    targetPath: input.filePath,
+    rootPath,
+  })
 }
 
 function validateFileName(name: string): void {
@@ -184,13 +223,20 @@ async function scanDirectory(
           entry.name.startsWith(".") &&
           !entry.name.startsWith(".github") &&
           !entry.name.startsWith(".vscode")
-        ) continue
+        )
+          continue
 
         // Add the folder itself to results
         entries.push({ path: relativePath, type: "folder" })
 
         // Recurse into subdirectory
-        const subEntries = await scanDirectory(rootPath, fullPath, depth + 1, maxDepth, options)
+        const subEntries = await scanDirectory(
+          rootPath,
+          fullPath,
+          depth + 1,
+          maxDepth,
+          options,
+        )
         entries.push(...subEntries)
       } else if (entry.isFile()) {
         // Skip ignored files
@@ -198,10 +244,13 @@ async function scanDirectory(
         if (
           !options.includeHiddenAndSensitive &&
           (isHiddenFile(entry.name) || isSensitiveFile(entry.name))
-        ) continue
+        )
+          continue
 
         // Check extension
-        const ext = entry.name.includes(".") ? "." + entry.name.split(".").pop()?.toLowerCase() : ""
+        const ext = entry.name.includes(".")
+          ? "." + entry.name.split(".").pop()?.toLowerCase()
+          : ""
         if (IGNORED_EXTENSIONS.has(ext)) {
           // Allow specific lock files
           if (!ALLOWED_LOCK_FILES.has(entry.name)) continue
@@ -260,7 +309,13 @@ function filterEntries(
   query: string,
   limit: number,
   typeFilter?: "file" | "folder",
-): Array<{ id: string; label: string; path: string; repository: string; type: "file" | "folder" }> {
+): Array<{
+  id: string
+  label: string
+  path: string
+  repository: string
+  type: "file" | "folder"
+}> {
   const queryLower = query.toLowerCase()
 
   // Filter entries that match the query and optional type filter
@@ -294,7 +349,7 @@ function filterEntries(
       const bStarts = bName.startsWith(queryLower)
       if (aStarts && !bStarts) return -1
       if (!aStarts && bStarts) return 1
-      
+
       // Priority 3: If both start with query, shorter name = better match
       if (aStarts && bStarts) {
         if (aName.length !== bName.length) {
@@ -338,10 +393,16 @@ export const filesRouter = router({
         limit: z.number().min(1).max(5000).default(50),
         typeFilter: z.enum(["file", "folder"]).optional(),
         includeHiddenAndSensitive: z.boolean().default(false),
-      })
+      }),
     )
     .query(async ({ input }) => {
-      const { projectPath, query, limit, typeFilter, includeHiddenAndSensitive } = input
+      const {
+        projectPath,
+        query,
+        limit,
+        typeFilter,
+        includeHiddenAndSensitive,
+      } = input
 
       if (!projectPath) {
         return []
@@ -356,7 +417,9 @@ export const filesRouter = router({
         }
 
         // Get entry list (cached or fresh scan)
-        const entries = await getEntryList(projectPath, { includeHiddenAndSensitive })
+        const entries = await getEntryList(projectPath, {
+          includeHiddenAndSensitive,
+        })
 
         // Filter and sort by query
         return filterEntries(entries, query, limit, typeFilter)
@@ -381,16 +444,17 @@ export const filesRouter = router({
    * Read file contents from filesystem
    */
   readFile: publicProcedure
-    .input(z.object({ filePath: z.string() }))
+    .input(z.object({ filePath: z.string(), projectPath: z.string() }))
     .query(async ({ input }) => {
-      const { filePath } = input
-
       try {
+        const filePath = resolveReadableFilePath(input)
         const content = await readFile(filePath, "utf-8")
         return content
       } catch (error) {
-        console.error(`[files] Error reading file ${filePath}:`, error)
-        throw new Error(`Failed to read file: ${error instanceof Error ? error.message : "Unknown error"}`)
+        console.error(`[files] Error reading file ${input.filePath}:`, error)
+        throw new Error(
+          `Failed to read file: ${error instanceof Error ? error.message : "Unknown error"}`,
+        )
       }
     }),
 
@@ -399,16 +463,20 @@ export const filesRouter = router({
    * Returns structured result with error reasons
    */
   readTextFile: publicProcedure
-    .input(z.object({ filePath: z.string() }))
+    .input(z.object({ filePath: z.string(), projectPath: z.string() }))
     .query(async ({ input }) => {
-      const { filePath } = input
       const MAX_SIZE = 2 * 1024 * 1024 // 2 MB
 
       try {
+        const filePath = resolveReadableFilePath(input)
         const fileStat = await stat(filePath)
 
         if (fileStat.size > MAX_SIZE) {
-          return { ok: false as const, reason: "too-large" as const, byteLength: fileStat.size }
+          return {
+            ok: false as const,
+            reason: "too-large" as const,
+            byteLength: fileStat.size,
+          }
         }
 
         const buffer = await readFile(filePath)
@@ -416,7 +484,11 @@ export const filesRouter = router({
         // Check if binary by looking for null bytes in first 8KB
         const sample = buffer.subarray(0, 8192)
         if (sample.includes(0)) {
-          return { ok: false as const, reason: "binary" as const, byteLength: fileStat.size }
+          return {
+            ok: false as const,
+            reason: "binary" as const,
+            byteLength: fileStat.size,
+          }
         }
 
         const content = buffer.toString("utf-8")
@@ -424,7 +496,11 @@ export const filesRouter = router({
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Unknown error"
         if (msg.includes("ENOENT") || msg.includes("no such file")) {
-          return { ok: false as const, reason: "not-found" as const, byteLength: 0 }
+          return {
+            ok: false as const,
+            reason: "not-found" as const,
+            byteLength: 0,
+          }
         }
         throw new Error(`Failed to read file: ${msg}`)
       }
@@ -434,16 +510,20 @@ export const filesRouter = router({
    * Read a binary file as base64 (for images)
    */
   readBinaryFile: publicProcedure
-    .input(z.object({ filePath: z.string() }))
+    .input(z.object({ filePath: z.string(), projectPath: z.string() }))
     .query(async ({ input }) => {
-      const { filePath } = input
       const MAX_SIZE = 20 * 1024 * 1024 // 20 MB
 
       try {
+        const filePath = resolveReadableFilePath(input)
         const fileStat = await stat(filePath)
 
         if (fileStat.size > MAX_SIZE) {
-          return { ok: false as const, reason: "too-large" as const, byteLength: fileStat.size }
+          return {
+            ok: false as const,
+            reason: "too-large" as const,
+            byteLength: fileStat.size,
+          }
         }
 
         const buffer = await readFile(filePath)
@@ -471,7 +551,11 @@ export const filesRouter = router({
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Unknown error"
         if (msg.includes("ENOENT") || msg.includes("no such file")) {
-          return { ok: false as const, reason: "not-found" as const, byteLength: 0 }
+          return {
+            ok: false as const,
+            reason: "not-found" as const,
+            byteLength: 0,
+          }
         }
         throw new Error(`Failed to read binary file: ${msg}`)
       }
@@ -485,11 +569,15 @@ export const filesRouter = router({
     .input(z.object({ projectPath: z.string() }))
     .subscription(({ input }) => {
       return observable<{ filename: string; eventType: string }>((emit) => {
-        const watcher = watch(input.projectPath, { recursive: true }, (eventType, filename) => {
-          if (filename) {
-            emit.next({ filename, eventType })
-          }
-        })
+        const watcher = watch(
+          input.projectPath,
+          { recursive: true },
+          (eventType, filename) => {
+            if (filename) {
+              emit.next({ filename, eventType })
+            }
+          },
+        )
 
         return () => {
           watcher.close()
@@ -504,7 +592,7 @@ export const filesRouter = router({
         text: z.string(),
         filename: z.string().optional(),
         kind: z.enum(["pasted", "chatHistory"]).default("pasted"),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const attachment = await stageLongTextAttachment(input)
@@ -526,7 +614,7 @@ export const filesRouter = router({
         subChatId: z.string(),
         text: z.string(),
         filename: z.string().optional(),
-      })
+      }),
     )
     .mutation(async ({ input }) => {
       const attachment = await stageLongTextAttachment({
@@ -551,7 +639,11 @@ export const filesRouter = router({
     }),
 
   cleanupLongTextAttachments: publicProcedure
-    .input(z.object({ olderThanMs: z.number().int().positive().optional() }).optional())
+    .input(
+      z
+        .object({ olderThanMs: z.number().int().positive().optional() })
+        .optional(),
+    )
     .mutation(async ({ input }) => ({
       deleted: await cleanupStaleLongTextAttachments(input?.olderThanMs),
     })),
@@ -560,10 +652,12 @@ export const filesRouter = router({
    * Rename a file or folder
    */
   renameFile: publicProcedure
-    .input(z.object({
-      absolutePath: z.string(),
-      newName: z.string().min(1),
-    }))
+    .input(
+      z.object({
+        absolutePath: z.string(),
+        newName: z.string().min(1),
+      }),
+    )
     .mutation(async ({ input }) => {
       const { absolutePath, newName } = input
 
@@ -584,9 +678,11 @@ export const filesRouter = router({
    * Delete a file or folder (move to trash)
    */
   deleteFile: publicProcedure
-    .input(z.object({
-      absolutePath: z.string(),
-    }))
+    .input(
+      z.object({
+        absolutePath: z.string(),
+      }),
+    )
     .mutation(async ({ input }) => {
       validatePathSafe(input.absolutePath)
       await shell.trashItem(input.absolutePath)

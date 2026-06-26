@@ -1831,7 +1831,13 @@ export const ChatInputArea = memo(function ChatInputArea({
 
         // For text files that are small enough, read content and cache it
         // Show file chip, content will be added to prompt on send
-        if (isTextFile && isSmallEnough && filePath) {
+        if (
+          isTextFile &&
+          isSmallEnough &&
+          filePath &&
+          projectPath &&
+          filePath.startsWith(projectPath)
+        ) {
           // Add file chip for visual representation
           editorRef.current?.insertMention({
             id: mentionId,
@@ -1843,7 +1849,10 @@ export const ChatInputArea = memo(function ChatInputArea({
 
           // Read and cache content (will be added to prompt on send)
           try {
-            const content = await trpcUtils.files.readFile.fetch({ filePath })
+            const content = await trpcUtils.files.readFile.fetch({
+              filePath,
+              projectPath,
+            })
             onCacheFileContent?.(mentionId, content)
           } catch (err) {
             // If reading fails, chip is still there - agent can try to read via path

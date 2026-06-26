@@ -32,6 +32,7 @@ export async function expandCustomSlashCommand(
 
     const { content } = await trpcClient.commands.getContent.query({
       path: cmd.path,
+      projectPath,
     })
     return content.replace(/\$ARGUMENTS/g, args.trim())
   } catch (error) {

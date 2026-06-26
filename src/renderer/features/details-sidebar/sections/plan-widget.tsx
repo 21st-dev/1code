@@ -1,22 +1,29 @@
 "use client"
 
-import { memo, useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { useAtom } from "jotai"
-import { Button } from "@/components/ui/button"
-import { Kbd } from "@/components/ui/kbd"
-import { cn } from "@/lib/utils"
-import { PlanIcon, ExpandIcon, CollapseIcon, IconSpinner } from "@/components/ui/icons"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChatMarkdownRenderer } from "@/components/chat-markdown-renderer"
-import { trpc } from "@/lib/trpc"
-import { planContentCacheAtomFamily } from "../atoms"
-import type { AgentMode } from "../../agents/atoms"
+import { Button } from "@/components/ui/button"
+import {
+  CollapseIcon,
+  ExpandIcon,
+  IconSpinner,
+  PlanIcon,
+} from "@/components/ui/icons"
+import { Kbd } from "@/components/ui/kbd"
 import { useI18n } from "@/lib/i18n"
+import { trpc } from "@/lib/trpc"
+import { cn } from "@/lib/utils"
+import type { AgentMode } from "../../agents/atoms"
+import { planContentCacheAtomFamily } from "../atoms"
 
 interface PlanWidgetProps {
   /** Chat ID for cache */
   chatId: string
   /** Active sub-chat ID for plan fetching */
   activeSubChatId?: string | null
+  /** Registered project or worktree root for plan reads */
+  projectPath: string | null
   /** Path to the plan file */
   planPath: string | null
   /** Plan refetch trigger */
@@ -38,6 +45,7 @@ interface PlanWidgetProps {
 export const PlanWidget = memo(function PlanWidget({
   chatId,
   activeSubChatId,
+  projectPath,
   planPath,
   refetchTrigger,
   mode = "agent",
@@ -56,7 +64,9 @@ export const PlanWidget = memo(function PlanWidget({
   const bottomGradientRef = useRef<HTMLDivElement>(null)
 
   // Plan content cache to avoid flashing loading state
-  const [planCache, setPlanCache] = useAtom(planContentCacheAtomFamily(effectiveChatId))
+  const [planCache, setPlanCache] = useAtom(
+    planContentCacheAtomFamily(effectiveChatId),
+  )
 
   // Fetch plan file content using tRPC
   const {
@@ -64,7 +74,10 @@ export const PlanWidget = memo(function PlanWidget({
     isLoading,
     error,
     refetch,
-  } = trpc.files.readFile.useQuery({ filePath: planPath! }, { enabled: !!planPath })
+  } = trpc.files.readFile.useQuery(
+    { filePath: planPath ?? "", projectPath: projectPath ?? "" },
+    { enabled: !!planPath && !!projectPath },
+  )
 
   // Update cache when content loads successfully
   useEffect(() => {
@@ -181,7 +194,9 @@ export const PlanWidget = memo(function PlanWidget({
               size="icon"
               onClick={handleToggleExpand}
               className="h-5 w-5 p-0 hover:bg-foreground/10 text-muted-foreground hover:text-foreground rounded-md transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] flex-shrink-0"
-              aria-label={isExpanded ? t("details.collapsePlan") : t("details.expandPlan")}
+              aria-label={
+                isExpanded ? t("details.collapsePlan") : t("details.expandPlan")
+              }
             >
               <div className="relative w-3.5 h-3.5">
                 <ExpandIcon
@@ -225,7 +240,7 @@ export const PlanWidget = memo(function PlanWidget({
                 ref={contentRef}
                 className={cn(
                   "px-2 py-2 allow-text-selection",
-                  isExpanded ? "" : "max-h-64 overflow-hidden"
+                  isExpanded ? "" : "max-h-64 overflow-hidden",
                 )}
               >
                 <ChatMarkdownRenderer content={displayContent} size="sm" />

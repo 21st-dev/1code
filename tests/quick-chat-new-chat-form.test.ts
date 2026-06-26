@@ -101,7 +101,8 @@ describe("quick chat new chat form", () => {
     expect(draftBlock).toContain("generateDraftId()")
     expect(draftBlock).toContain("saveGlobalDrafts(globalDrafts)")
 
-    expect(form).toContain("trpcUtils.files.readFile.fetch({ filePath })")
+    expect(form).toContain("trpcUtils.files.readFile.fetch({")
+    expect(form).toContain("projectPath: validatedProject.path")
     expect(form).toContain("fileContents: fileContentsRef.current.entries()")
   })
 })

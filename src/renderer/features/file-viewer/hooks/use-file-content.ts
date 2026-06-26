@@ -54,9 +54,9 @@ export function useFileContent(
   const enabled = !!absolutePath
 
   const { data, isLoading, error, refetch } = trpc.files.readTextFile.useQuery(
-    { filePath: absolutePath || "" },
+    { filePath: absolutePath || "", projectPath: projectPath || "" },
     {
-      enabled,
+      enabled: enabled && !!projectPath,
       staleTime: 30000,
       refetchOnWindowFocus: false,
     },

@@ -76,7 +76,7 @@ export function MarkdownViewer({
   }, [filePath, projectPath])
 
   const { data, isLoading, error, refetch } = trpc.files.readTextFile.useQuery(
-    { filePath: absolutePath },
+    { filePath: absolutePath, projectPath },
     { staleTime: 30000 },
   )
 

@@ -120,11 +120,15 @@
 
 ### High
 
-**R2 — tRPC 文件路由可读任意绝对路径（无项目根约束）** · **✓核对**
-- `files.readFile`/`readTextFile` 收 `z.object({ filePath: z.string() })` 后直接 `readFile(filePath)`：[files.ts:383-395](src/main/lib/trpc/routers/files.ts:383)、[files.ts:401](src/main/lib/trpc/routers/files.ts:401)。renderer 可取 `/etc/passwd`、`~/.ssh/id_rsa`、`.env` 等。结合"tRPC 无认证"，渲染层一旦被注入即可外泄。
+**R2 — tRPC 文件路由可读任意绝对路径（无项目根约束）** · **已修 / ✓核对**
+- 原问题：`files.readFile`/`readTextFile` 收 `z.object({ filePath: z.string() })` 后直接 `readFile(filePath)`，renderer 可取 `/etc/passwd`、`~/.ssh/id_rsa`、`.env` 等。结合"tRPC 无认证"，渲染层一旦被注入即可外泄。
+- 修复：文件读取入口现在要求 `projectPath`，且 main 进程先确认该 root 是已登记 project path 或 chat worktree path，再用共享 [path-boundary.ts](src/main/lib/fs/path-boundary.ts) 校验目标解析后仍在 root 内。同步覆盖 `readFile`、`readTextFile` 和同类 `readBinaryFile` 读出口。
+- 测试：[trpc-path-boundaries.test.ts](tests/trpc-path-boundaries.test.ts) 覆盖 root 外绝对路径读取被拒、伪造未登记 root 被拒，payload 未读出。Commit：本提交 `fix: bound renderer file and command paths`。
 
-**R3 — `commands` 路由 `..` 子串校验可被绝对路径绕过 → 任意读/写/删** · **✓核对**
-- [commands.ts:1084](src/main/lib/trpc/routers/commands.ts:1084) 用 `input.path.includes("..")` 判断；传入不含 `..` 的绝对路径即通过，`resolveCommandPath` 原样返回。`getContent`/`update`/`delete` 同模式（agent 报 [1168/1196](src/main/lib/trpc/routers/commands.ts:1168)，待核对）。
+**R3 — `commands` 路由 `..` 子串校验可被绝对路径绕过 → 任意读/写/删** · **已修 / ✓核对**
+- 原问题：[commands.ts](src/main/lib/trpc/routers/commands.ts) 用 `input.path.includes("..")` 判断；传入不含 `..` 的绝对路径即通过，`resolveCommandPath` 原样返回。`getContent`/`update`/`delete` 同模式。
+- 修复：`getContent`/`update`/`delete` 统一走 command path resolver，拒绝 null byte、绝对路径和 `..` 路径段；解析后目标必须落在 `~/.claude/commands` 或当前项目 `.claude/commands` 内。
+- 测试：[trpc-path-boundaries.test.ts](tests/trpc-path-boundaries.test.ts) 覆盖项目命令可读、绝对路径 get/update/delete 被拒，payload 未读出。Commit：本提交 `fix: bound renderer file and command paths`。
 
 **R4 — `files.renameFile` / `deleteFile` 无项目根约束** · **待核对**
 - [files.ts:562](src/main/lib/trpc/routers/files.ts:562)、[files.ts:586](src/main/lib/trpc/routers/files.ts:586)：`validatePathSafe` 未带 `allowedParent`，只校验绝对+无空字节，可重命名/回收任意可写文件。

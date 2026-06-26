@@ -114,6 +114,7 @@ export function ExpandedWidgetSidebar({
         return (
           <PlanSection
             chatId={activeSubChatId || chatId}
+            projectPath={worktreePath}
             planPath={planPath}
             refetchTrigger={planRefetchTrigger}
             isExpanded

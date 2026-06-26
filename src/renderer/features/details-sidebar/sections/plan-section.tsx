@@ -19,6 +19,7 @@ import { planContentCacheAtomFamily } from "../atoms"
 
 interface PlanSectionProps {
   chatId: string
+  projectPath: string | null
   planPath: string | null
   refetchTrigger?: number
   isExpanded?: boolean
@@ -33,6 +34,7 @@ interface PlanSectionProps {
  */
 export const PlanSection = memo(function PlanSection({
   chatId,
+  projectPath,
   planPath,
   refetchTrigger,
   isExpanded = false,
@@ -56,8 +58,8 @@ export const PlanSection = memo(function PlanSection({
     error,
     refetch,
   } = trpc.files.readFile.useQuery(
-    { filePath: planPath ?? "" },
-    { enabled: !!planPath },
+    { filePath: planPath ?? "", projectPath: projectPath ?? "" },
+    { enabled: !!planPath && !!projectPath },
   )
 
   // Update cache when content loads successfully
