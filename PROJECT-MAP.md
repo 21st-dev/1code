@@ -45,7 +45,7 @@
   - 入口 [src/main/index.ts](src/main/index.ts)（927 行）：app 生命周期、协议/deep-link 注册（[index.ts:491-521](src/main/index.ts:491)、[index.ts:887-892](src/main/index.ts:887)）、headless CLI 分支（[index.ts:50](src/main/index.ts:50)，imports [10-12](src/main/index.ts:10)）。
   - 窗口 [src/main/windows/main.ts](src/main/windows/main.ts)（684 行）：唯一窗口创建 + 原始 `ipcMain.handle` 处理器。
   - preload [src/preload/index.ts](src/preload/index.ts)：`exposeElectronTRPC()`（[:6](src/preload/index.ts:6)）+ `webUtils.getPathForFile`（[:9-11](src/preload/index.ts:9)）+ `desktopApi`（[:14-167](src/preload/index.ts:14)）。
-- **tRPC 信任模型（关键）**：Context 只有 `{ getWindow }`（[trpc/index.ts:8-10](src/main/lib/trpc/index.ts:8)），**无认证中间件、无 per-call principal**。全部 32 个挂载 router 都是 `publicProcedure`（[routers/index.ts:40-76](src/main/lib/trpc/routers/index.ts:40)）。**渲染进程里任何能跑的代码（含被注入内容）都能调用每一个 router**。**✓核对**
+- **tRPC 信任模型（关键）**：Context 只有 `{ getWindow }`（[trpc/index.ts:8-10](src/main/lib/trpc/index.ts:8)），**无认证中间件、无 per-call principal**。全部 32 个挂载 router 都是 `publicProcedure`（[routers/index.ts:40-76](src/main/lib/trpc/routers/index.ts:40)）。**渲染进程里任何能跑的代码（含被注入内容）都能调用每一个 router**。**提案中 / ✓核对**：见 OpenSpec change [update-trpc-capability-boundary](openspec/changes/update-trpc-capability-boundary/proposal.md)。
 - **数据流**：UI → AI SDK transport（[ipc-chat-transport.ts:332](src/renderer/features/agents/lib/ipc-chat-transport.ts:332)）→ tRPC `claude.chat` 订阅（[claude.ts:58-80](src/main/lib/trpc/routers/claude.ts:58)）→ Agent SDK 跑捆绑 `claude` 二进制 → 流式 `UIMessageChunk` 回传 → 落库 `sub_chats.messages`（JSON）。
 
 ---
@@ -55,7 +55,7 @@
 | 子系统 | 核心文件 | 关键抽象 / 扩展点 | 坑 |
 |---|---|---|---|
 | **IPC/preload** | [preload/index.ts](src/preload/index.ts) | `desktopApi` 频道、`exposeElectronTRPC` | 暴露面大：`shell:open-external`、`vscode:load-theme`(任意路径)、`dialog:save-file`、`git:subscribe-watcher`(任意路径)、`unlockDevTools`。旧 `onStream*` 频道已删（§5）。 |
-| **tRPC 层** | [trpc/index.ts](src/main/lib/trpc/index.ts)、[routers/](src/main/lib/trpc/routers/) | 32 个挂载 router；`changes` = git router | 无 auth；多个 router 收 `z.string()` 路径不做根目录约束（§5 High 簇）。 |
+| **tRPC 层** | [trpc/index.ts](src/main/lib/trpc/index.ts)、[routers/](src/main/lib/trpc/routers/) | 32 个挂载 router；`changes` = git router | 无 auth；多个 router 收 `z.string()` 路径不做根目录约束（§5 High 簇）。结构性能力/信任边界提案：[update-trpc-capability-boundary](openspec/changes/update-trpc-capability-boundary/proposal.md)。 |
 | **认证/凭证** | [auth-manager.ts](src/main/auth-manager.ts)、[auth-store.ts](src/main/auth-store.ts)、[secure-storage.ts](src/main/lib/secure-storage.ts)、[mcp-auth.ts](src/main/lib/mcp-auth.ts) | `encryptStringForStorage` 走 safeStorage；写入若不可用则**抛错拒绝存明文**（[secure-storage.ts:134-152](src/main/lib/secure-storage.ts:134)，好姿态 ✓） | `AuthManager` 是空壳；MCP token 明文落 `~/.claude.json`；`FALLBACK_PREFIX` 旁路解密分支。 |
 | **agent runtime** | [agent-runtime/](src/main/lib/agent-runtime/)（permission-policy / preflight / scope-expansion） | mode→controlLevel→SDK permissionMode 映射（[permission-policy.ts:611-746](src/main/lib/agent-runtime/permission-policy.ts:611)）；`preflight` 用 DB 校验 cwd（[preflight.ts:157-165](src/main/lib/agent-runtime/preflight.ts:157)） | plan 模式 `MultiEdit` 漏拦；`updatedInput` 不校验。 |
 | **agent guard** | [agent-guard/](src/main/lib/agent-guard/)（contract / decision / audit / checkpoint / active-contracts） | 仅 `agent`+scopeContract（"Guarded"）时生效；shell 允许走白名单（[decision.ts:612-677](src/main/lib/agent-guard/decision.ts:612)） | observe 模式（agent 无契约）**不走** guard；`requiresUserApproval` 仅咨询性。 |
@@ -135,6 +135,10 @@
 - 本轮验证：`bun test --isolate tests/worktree-setup-rce-regression.test.ts tests/worktree-setup-trust.test.ts tests/worktree-config.test.ts` 8 pass；`bun run check` 全绿，1266 pass / 0 fail。
 
 ### High
+
+**R0 — tRPC 能力/信任边界结构性缺口** · **提案中 / ✓核对**
+- 本地 Electron 威胁模型不是“远程攻击者带 token 调 API”，而是“不可信仓库/chat/markdown/工具输出/预览网页驱动渲染层代码，再借 public tRPC 让主进程执行特权操作”。
+- 已提交 OpenSpec 提案：[update-trpc-capability-boundary](openspec/changes/update-trpc-capability-boundary/proposal.md)。设计稿扫了 `src/main/lib/trpc/routers/` 41 个 router 文件和挂载的 `changes` git router，按 shell/路径/URL/写操作列危险过程清单，并建议 A 输入信任收敛先行、C 渲染层加固次之、B 能力/同意中间件作为结构性兜底。
 
 **R2 — tRPC 文件路由可读任意绝对路径（无项目根约束）** · **已修 / ✓核对**
 - 原问题：`files.readFile`/`readTextFile` 收 `z.object({ filePath: z.string() })` 后直接 `readFile(filePath)`，renderer 可取 `/etc/passwd`、`~/.ssh/id_rsa`、`.env` 等。结合"tRPC 无认证"，渲染层一旦被注入即可外泄。
