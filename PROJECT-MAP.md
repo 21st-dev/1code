@@ -109,12 +109,14 @@
 
 ### Critical
 
-**R0a — 渲染层 XSS → public tRPC terminal RCE 链** · **已证实 / 待修 / ✓核对**
+**R0a — 渲染层 XSS → public tRPC terminal RCE 链** · **已修 / ✓核对**
 - 可利用性结论：链条成立。只要不可信内容能在特权 renderer main world 执行 JS，就能触达 `window.electronTRPC`，进而构造 public tRPC mutation；`terminal.createOrAttach` 仍接收 renderer 提供的 `cwd` 与 `initialCommands` 并建 PTY（[terminal.ts](src/main/lib/trpc/routers/terminal.ts)）。
 - subtitle 路径：`AgentToolCall` 把 `subtitleStr` 原样写进 `dangerouslySetInnerHTML`（[agent-tool-call.tsx](src/renderer/features/agents/ui/agent-tool-call.tsx)）。上游 `AgentToolRegistry` 的 subtitle 来自 `part.input` / `part.output`，包括 Task 描述、Grep/Glob pattern/path、Bash command、WebSearch query、Plan title、Task subject、Thinking text 等；这些可由模型、仓库内容、MCP/tool 输入输出间接控制（[agent-tool-registry.tsx](src/renderer/features/agents/ui/agent-tool-registry.tsx)）。
 - Mermaid 路径：```mermaid 块由主 markdown 渲染器转给 `MermaidBlock`（[chat-markdown-renderer.tsx](src/renderer/components/chat-markdown-renderer.tsx)）；`MermaidBlock` 使用 `securityLevel: "loose"` 并把 `mermaid.render()` 返回的 SVG 直接插入两处 `dangerouslySetInnerHTML`（[mermaid-block.tsx](src/renderer/components/mermaid-block.tsx)）。受控 Electron fixture 证明 loose `click` 指令可生成 `javascript:` SVG href，真实点击后执行 JS 并发出 `terminal.createOrAttach` mutation 形状消息。
-- CSP 放大因素：[index.html](src/renderer/index.html) 当前 `script-src` 允许 `'unsafe-inline'` / `'unsafe-eval'` 和 `https://unpkg.com`；受控 Electron fixture 证明 raw subtitle `<img onerror>` 可在 renderer 执行并触达 `electronTRPC` bridge。
-- 非本单范围：本条先关闭 renderer XSS 前置条件；`terminal.createOrAttach` capability/consent/server-resolved cwd 硬化留在 `update-trpc-capability-boundary` 后续 Phase 1/3。
+- CSP 放大因素：修复前 [index.html](src/renderer/index.html) 的 `script-src` 允许 `'unsafe-inline'` / `'unsafe-eval'` 和 `https://unpkg.com`；受控 Electron fixture 证明 raw subtitle `<img onerror>` 可在 renderer 执行并触达 `electronTRPC` bridge。
+- 修复：Mermaid 改 strict mode，并用 DOMPurify + DOMParser/XMLSerializer 二次剥离 `script`、`foreignObject`、事件属性和 `href`/`xlink:href` 后再插入；`AgentToolCall` subtitle 改为 React 文本渲染，Edit 统计改纯文本；CSP 去掉 `unsafe-eval` 和 `https://unpkg.com` 远程脚本源，`unsafe-inline` 因启动 theme/error inline scripts 暂留并已在 HTML 注释中记录。
+- 回归测试：[renderer-mermaid-xss.test.ts](tests/renderer-mermaid-xss.test.ts)、[renderer-agent-tool-call-xss.test.tsx](tests/renderer-agent-tool-call-xss.test.tsx)、[renderer-csp-policy.test.ts](tests/renderer-csp-policy.test.ts)、[renderer-html-sinks.test.ts](tests/renderer-html-sinks.test.ts)。Commits：`217ee604`（可利用性记录）、`9f29ebfd`（Mermaid SVG 净化）、`b270b6a9`（subtitle 文本渲染）、本提交（CSP/OpenSpec/文档 closeout）。
+- 非本单范围：本条关闭 renderer XSS 前置条件；`terminal.createOrAttach` capability/consent/server-resolved cwd 硬化留在 `update-trpc-capability-boundary` 后续 Phase 1/3。
 
 **R1 — 打开恶意仓库即触发任意 shell 执行（malicious-repo RCE，无确认）** · **已修 / ✓核对**
 - 原问题：`.locus/worktree.json` / `.cursor/worktrees.json` / `.1code/worktree.json` 里的 setup 命令来自仓库内容，旧路径会在建 chat 的 worktree 后台直接执行。`.cursor/worktrees.json` 兼容性使"现存 Cursor 仓库已带毒"成为现实向量。
