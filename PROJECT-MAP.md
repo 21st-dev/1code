@@ -9,6 +9,7 @@
 > - 风险条目标注核对状态：**✓核对** = 本次已亲自打开源码确认；**待核对** = agent 报告、`file:line` 可点验但未逐行复核。
 > - 严重度：Critical / High / Medium / Low / Info。
 > - **2026-06-26 P0 修复追记**：Critical R1 已在 `codex/harden-worktree-setup-trust` 上改为显式 trust gate，仓库提供的 setup 命令默认不执行。
+> - **2026-06-27 P2 清理追记**：正式 `knip.json` 已提交；确认死代码/双路径、未声明依赖、CLAUDE.md 陈旧项已按表内 commit 闭环。安全行为和 tRPC 认证边界未在本轮改动。
 
 ## 0. 机械基线（审计参照）
 
@@ -16,7 +17,7 @@
 
 ⚠️ 基线注意点（不是失败，是参照失真）：
 - `lint` 实为 `lint:changed`（[package.json:39-40](package.json:39)），只 lint 改动文件；干净树上等于空跑。全量 lint 是 `lint:all`（`biome check .`），`check` **不**跑它。所以"绿 lint"不代表全库 lint 干净。**✓核对**
-- `knip` 在 macOS 上首跑因无 GNU `timeout` 直接失败（`command not found: timeout`），需注意别误信第一版空结果。本审计已用带 entry 配置重跑（见 §5.7）。**✓核对**
+- `knip` 在 macOS 上首跑因无 GNU `timeout` 直接失败（`command not found: timeout`），需注意别误信第一版空结果。当前已提交正式 `knip.json`，`bunx knip --reporter compact` 退出码 0（见 §5.7）。**✓核对**
 
 ---
 
@@ -53,14 +54,14 @@
 
 | 子系统 | 核心文件 | 关键抽象 / 扩展点 | 坑 |
 |---|---|---|---|
-| **IPC/preload** | [preload/index.ts](src/preload/index.ts) | `desktopApi` 频道、`exposeElectronTRPC` | 暴露面大：`shell:open-external`、`vscode:load-theme`(任意路径)、`dialog:save-file`、`git:subscribe-watcher`(任意路径)、`unlockDevTools`。`onStream*` 频道已死（§5）。 |
+| **IPC/preload** | [preload/index.ts](src/preload/index.ts) | `desktopApi` 频道、`exposeElectronTRPC` | 暴露面大：`shell:open-external`、`vscode:load-theme`(任意路径)、`dialog:save-file`、`git:subscribe-watcher`(任意路径)、`unlockDevTools`。旧 `onStream*` 频道已删（§5）。 |
 | **tRPC 层** | [trpc/index.ts](src/main/lib/trpc/index.ts)、[routers/](src/main/lib/trpc/routers/) | 32 个挂载 router；`changes` = git router | 无 auth；多个 router 收 `z.string()` 路径不做根目录约束（§5 High 簇）。 |
 | **认证/凭证** | [auth-manager.ts](src/main/auth-manager.ts)、[auth-store.ts](src/main/auth-store.ts)、[secure-storage.ts](src/main/lib/secure-storage.ts)、[mcp-auth.ts](src/main/lib/mcp-auth.ts) | `encryptStringForStorage` 走 safeStorage；写入若不可用则**抛错拒绝存明文**（[secure-storage.ts:134-152](src/main/lib/secure-storage.ts:134)，好姿态 ✓） | `AuthManager` 是空壳；MCP token 明文落 `~/.claude.json`；`FALLBACK_PREFIX` 旁路解密分支。 |
 | **agent runtime** | [agent-runtime/](src/main/lib/agent-runtime/)（permission-policy / preflight / scope-expansion） | mode→controlLevel→SDK permissionMode 映射（[permission-policy.ts:611-746](src/main/lib/agent-runtime/permission-policy.ts:611)）；`preflight` 用 DB 校验 cwd（[preflight.ts:157-165](src/main/lib/agent-runtime/preflight.ts:157)） | plan 模式 `MultiEdit` 漏拦；`updatedInput` 不校验。 |
 | **agent guard** | [agent-guard/](src/main/lib/agent-guard/)（contract / decision / audit / checkpoint / active-contracts） | 仅 `agent`+scopeContract（"Guarded"）时生效；shell 允许走白名单（[decision.ts:612-677](src/main/lib/agent-guard/decision.ts:612)） | observe 模式（agent 无契约）**不走** guard；`requiresUserApproval` 仅咨询性。 |
 | **命令执行/worktree** | [git/worktree-config.ts](src/main/lib/git/worktree-config.ts)、[git/worktree.ts](src/main/lib/git/worktree.ts)、[git/worktree-setup-trust.ts](src/main/lib/git/worktree-setup-trust.ts)、[git/security/](src/main/lib/git/security/) | worktree 内 fs 操作有 `assertRegisteredWorktree`+realpath 约束（[secure-fs.ts](src/main/lib/git/security/secure-fs.ts)，好姿态 ✓）；仓库 setup 命令现在由 trust owner 按命令指纹审批后才执行 | R1 已修；后续仍要处理 tRPC 路径边界和 MCP token 明文（High）。 |
-| **数据层** | [db/schema/index.ts](src/main/lib/db/schema/index.ts)、[db/index.ts](src/main/lib/db/index.ts)、[drizzle/](drizzle/) | 15 张表；dev/打包迁移路径分流（[db/index.ts:31-38](src/main/lib/db/index.ts:31)） | `sub_chats.messages` 是无校验 JSON；`claude_code_credentials` 标 DEPRECATED 但永不删。 |
-| **renderer 状态** | [shared/chat-message-normalizer.ts](src/shared/chat-message-normalizer.ts)、[agents/atoms/](src/renderer/features/agents/atoms/)、[agents/stores/](src/renderer/features/agents/stores/) | hydration 单入口 normalize（[agent-chat-api.ts:51](src/renderer/features/agents/lib/agent-chat-api.ts:51)） | sub-chat mode 三处存储；多处死代码/分叉（§5）。 |
+| **数据层** | [db/schema/index.ts](src/main/lib/db/schema/index.ts)、[db/index.ts](src/main/lib/db/index.ts)、[drizzle/](drizzle/) | 16 张表；dev/打包迁移路径分流（[db/index.ts:31-38](src/main/lib/db/index.ts:31)） | `sub_chats.messages` 是无校验 JSON；`claude_code_credentials` 标 DEPRECATED 但永不删。 |
+| **renderer 状态** | [shared/chat-message-normalizer.ts](src/shared/chat-message-normalizer.ts)、[agents/atoms/](src/renderer/features/agents/atoms/)、[agents/stores/](src/renderer/features/agents/stores/) | hydration 单入口 normalize（[agent-chat-api.ts:51](src/renderer/features/agents/lib/agent-chat-api.ts:51)） | sub-chat mode 三处存储；确认死代码/分叉项已在 P2 清理（§5）。 |
 | **headless/job** | [headless/](src/main/lib/headless/)（cli-dispatcher / daemon / job-runner / job-store） | 从 [index.ts:10-12](src/main/index.ts:10) 进入；`agent_jobs`/`agent_schedules` 表 | 非交互执行路径，权限收敛是 [[policy-grant-scope-enforcement-parked]] 关注点。 |
 
 ---
@@ -186,20 +187,22 @@
 
 | 编号 | 项 | file:line | 核对 |
 |---|---|---|---|
-| D1 | **整棵 `features/mentions/` 死**（providers/search/registry/hooks/types 全无外部 import），活的是 `agents/mentions/` | [src/renderer/features/mentions/](src/renderer/features/mentions/) | **✓核对（0 外部引用）** |
-| D2 | preload `onStreamChunk/onStreamDone/onStreamError` **两端皆死**：renderer 0 消费者、main 无 `stream:*` 发送方 | [preload/index.ts:106-120](src/preload/index.ts:106) | **✓核对** |
-| D3 | `features/changes/components/*/` 子文件夹组件集无外部 import（疑似被废弃的并行实现） | [src/renderer/features/changes/components/](src/renderer/features/changes/components/) | **✓核对（0 外部引用）** |
-| D4 | 三份分叉的 `pluralize.ts`（md5 各异）：agents/utils、sidebar/utils、lib/utils | [agents/utils/pluralize.ts](src/renderer/features/agents/utils/pluralize.ts) 等 | **✓核对** |
-| D5 | `AuthManager.isAuthenticated()` 恒 false、`getUser()` 恒 null；`AuthStore` 加密机制从不被调用 | [auth-manager.ts:11-17](src/main/auth-manager.ts:11) | **✓核对** |
+| D1 | **整棵 `features/mentions/` 死**（providers/search/registry/hooks/types 全无外部 import），活的是 `agents/mentions/` | 已删除；保留的 prefix 常量在 [mention-prefixes.ts](src/renderer/features/agents/mentions/mention-prefixes.ts) | **已修 / ✓核对**。Commit：`c51f0782` |
+| D2 | preload `onStreamChunk/onStreamDone/onStreamError` **两端皆死**：renderer 0 消费者、main 无 `stream:*` 发送方 | [preload/index.ts](src/preload/index.ts) | **已修 / ✓核对**。Commit：`d3784254` |
+| D3 | `features/changes/components/*/` 子文件夹组件集无外部 import（疑似被废弃的并行实现） | 剩余活组件为 `changes-file-filter`、`commit-input`、`history-view`、`diff-sidebar-header`、`file-list-item` 等实际引用路径 | **已修 / ✓核对**。Commit：`69fb275f` |
+| D4 | 三份分叉的 `pluralize.ts`（md5 各异）：agents/utils、sidebar/utils、lib/utils | 三份均已删除；grep/knip 确认无调用方 | **已修 / ✓核对**。Commit：`c429fe7c`、`69fb275f` |
+| D5 | `AuthManager.isAuthenticated()` 恒 false、`getUser()` 恒 null；`AuthStore` 加密机制从不被调用 | [auth-manager.ts:11-17](src/main/auth-manager.ts:11) | **待评估 / 本轮保留**：牵动认证布线，按 P2 纪律不删。 |
 | D6 | `claude_code_credentials` 表标 DEPRECATED 但无迁移删除；仅为"迁移走"而读 | [schema/index.ts:96-104](src/main/lib/db/schema/index.ts:96) | **✓核对** |
 | D7 | `syncMessagesAtom` 导出但自述"not used"、0 调用方 | [message-store.ts:994-999](src/renderer/features/agents/stores/message-store.ts:994) | 待核对 |
-| D8 | `@agentclientprotocol/sdk` **被用但不在 package.json**（依赖卫生，影响可复现构建） | [codex/tool-permission.ts:7](src/main/lib/codex/tool-permission.ts:7) | **✓核对（knip）** |
+| D8 | `@agentclientprotocol/sdk` **被用但不在 package.json**（依赖卫生，影响可复现构建） | [codex/tool-permission.ts:7](src/main/lib/codex/tool-permission.ts:7) | **已修 / ✓核对（knip）**：`package.json` pin 为 `0.4.9`。Commit：`7eca3997` |
+| D9 | `CLAUDE.md` 陈旧：自述 3 表 / 单一 Claude 集成，误导后续 AI 会话 | [CLAUDE.md](CLAUDE.md) | **已修 / ✓核对**：更新为当前 16 表与 Claude/Codex/Qwen/Ollama/Kun/headless-job runtime 现实。Commit：`40f28cd2` |
 
 ### 5.7 knip 全清单（候选，需逐条核对）
 
-带 entry 配置（scratchpad，未提交）重跑结果（默认无配置时为 323 文件误报，已校正）：
-- **未用文件 67**、未用导出 599、未用导出类型 20、未用依赖 5（`@git-diff-view/react`、`@git-diff-view/shiki`、`@radix-ui/react-accordion`、`date-fns`、`electron-log`）、未用 devDep 4、未列出依赖 5（含 D8）。
-- ⚠️ 仍含误报：preload `desktopApi` 是运行时 contextBridge 对象、插件经 `import(url.href)` 动态加载（[developer-loader.ts:94](src/main/lib/plugins/developer-loader.ts:94)），均不在 import 图内。**因此 67/599 是候选名单，非定论**；本审计仅把已亲自核对的 D1–D8 列为确认项，其余须删除前逐条验证（如 `date-fns`/`electron-log` 是否真未用）。
+正式 [knip.json](knip.json) 已提交，真实入口覆盖 Electron main/preload/renderer、tests、config 和手动维护脚本。当前 `bunx knip --reporter compact` 退出码 0。
+- 检查范围收敛到 `files`、`dependencies`、`unlisted`、`unresolved`。未用 export/type 暂不作为删除依据，避免把类型桶、barrel 和测试守卫误判成死代码。
+- 已确认死文件/依赖在 `69fb275f` 删除或修正。新增/修正的未声明直接依赖包括 `@agentclientprotocol/sdk@0.4.9`、`@radix-ui/react-visually-hidden@1.2.3`、`builder-util-runtime@9.2.10`、`@types/hast@3.0.4`。
+- 配置中的保留项：`electron-shim.js`（外部/手动 Electron shim 候选，不按源码 import 图删除）、`src/renderer/lib/vendor/pierre-diffs-shiki-shim.ts`（`electron.vite.config.ts` 通过字符串路径喂给 Vite plugin）、`scripts/smoke-electron-app/**`（手动 smoke app fixture）、`@electron/rebuild`（`ensure-electron-native-modules.mjs` 按 CLI 路径调用）。
 
 ---
 
@@ -213,13 +216,13 @@
 6. **`settingSources:["project","user"]`**（[agent-sdk-query-options.ts:272](src/main/lib/claude/agent-sdk-query-options.ts:272)）：恶意仓库的 `.claude/` 项目级设置能向 SDK 注入多少（system prompt / 工具配置）？范围待确认。
 7. **`allFullThemesAtom` 是否有命令式写入方**（[lib/atoms/index.ts:479](src/renderer/lib/atoms/index.ts:479)）：若无，主题选择 UI 恒空。
 8. **`<webview>` 分区是否继承 `webSecurity:true` 与 file: CORS 策略**：影响 R16 实际可利用性。
-9. **CLAUDE.md 已严重过时**：自述"3 张表 / 简单 Claude+Codex app"，实为 15 表 + Claude/Codex/Qwen/Ollama/Kun/MCP/headless-job/schedule 等。文档与实现的偏离本身是新贡献者的坑（Info）。
+9. **CLAUDE.md 已更新**：见 D9，当前记录为 16 表 + Claude/Codex/Qwen/Ollama/Kun/headless-job runtime 现实。
 
 ---
 
 ## 附：方法论与置信度
 
 - 6 风险区域各由只读专家 agent 审（③ runtime → ② auth → ①④ ipc/fs → ⑤⑥ data/renderer），叠加 `knip`。
-- 本人**亲自打开源码核对**了：Critical R1 全链、High R2/R3/R5、Medium R7、死代码 D1–D6/D8、基线、schema、tRPC 信任模型、发消息流程。标 **✓核对**。
+- 本人**亲自打开源码核对**了：Critical R1 全链、High R2/R3/R5、Medium R7、死代码 D1–D6/D8/D9、基线、schema、tRPC 信任模型、发消息流程。标 **✓核对**。
 - 标 **待核对** 的条目均带可点验 `file:line`，但未逐行复核——修复前建议先打开确认。
 - 后续若要"修到达标"，停止条件建议：`bun run check` 绿 + `knip`（带正式 `knip.json`）0 确认死代码 + R1/R2/R3/R5 闭环。
