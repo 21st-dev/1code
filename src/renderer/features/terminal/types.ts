@@ -1,3 +1,5 @@
+import type { TerminalInitialCommandIntent } from "../../../shared/terminal-initial-command-intents"
+
 export interface TerminalDataEvent {
   type: "data"
   data: string
@@ -14,11 +16,11 @@ export type TerminalEvent = TerminalDataEvent | TerminalExitEvent
 export interface TerminalProps {
   paneId: string
   cwd: string
-  workspaceId?: string
+  workspaceId: string
   /** Terminal scope key for shared terminal support */
   scopeKey?: string
   tabId?: string
-  initialCommands?: string[]
+  initialCommandIntents?: TerminalInitialCommandIntent[]
   initialCwd?: string
 }
 

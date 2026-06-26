@@ -24,6 +24,7 @@ import { getDefaultTerminalBg } from "@/features/terminal/helpers"
 import { Terminal } from "@/features/terminal/terminal"
 import { TerminalModeSwitcher } from "@/features/terminal/terminal-mode-switcher"
 import { TerminalTabs } from "@/features/terminal/terminal-tabs"
+import type { TerminalInitialCommandIntent } from "../../../../shared/terminal-initial-command-intents"
 import type { TerminalInstance } from "@/features/terminal/types"
 import { fullThemeDataAtom } from "@/lib/atoms"
 import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
@@ -37,7 +38,7 @@ interface TerminalWidgetProps {
   cwd: string
   workspaceId: string
   tabId?: string
-  initialCommands?: string[]
+  initialCommandIntents?: TerminalInitialCommandIntent[]
   onExpand?: () => void
 }
 
@@ -73,7 +74,7 @@ export const TerminalWidget = memo(function TerminalWidget({
   cwd,
   workspaceId,
   tabId,
-  initialCommands,
+  initialCommandIntents,
   onExpand,
 }: TerminalWidgetProps) {
   const { t } = useI18n()
@@ -431,7 +432,7 @@ export const TerminalWidget = memo(function TerminalWidget({
                 workspaceId={workspaceId}
                 scopeKey={terminalKey}
                 tabId={tabId}
-                initialCommands={initialCommands}
+                initialCommandIntents={initialCommandIntents}
                 initialCwd={cwd}
               />
             </motion.div>

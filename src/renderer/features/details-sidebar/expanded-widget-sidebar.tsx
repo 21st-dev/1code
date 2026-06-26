@@ -24,6 +24,7 @@ import { DiffSection } from "./sections/diff-section"
 import { InfoSection } from "./sections/info-section"
 import { PlanSection } from "./sections/plan-section"
 import { TerminalSection } from "./sections/terminal-section"
+import type { TerminalInitialCommandIntent } from "../../../shared/terminal-initial-command-intents"
 import type { ParsedDiffFile } from "./types"
 
 interface ExpandedWidgetSidebarProps {
@@ -34,7 +35,7 @@ interface ExpandedWidgetSidebarProps {
   /** Terminal scope key shared with the full terminal renderer */
   terminalScopeKey?: string
   terminalTabId?: string
-  terminalInitialCommands?: string[]
+  terminalInitialCommandIntents?: TerminalInitialCommandIntent[]
   /** Plan path for plan section */
   planPath: string | null
   /** Plan refetch trigger */
@@ -58,7 +59,7 @@ export function ExpandedWidgetSidebar({
   worktreePath,
   terminalScopeKey,
   terminalTabId,
-  terminalInitialCommands,
+  terminalInitialCommandIntents,
   planPath,
   planRefetchTrigger,
   activeSubChatId,
@@ -130,7 +131,7 @@ export function ExpandedWidgetSidebar({
             cwd={worktreePath}
             workspaceId={chatId}
             tabId={terminalTabId}
-            initialCommands={terminalInitialCommands}
+            initialCommandIntents={terminalInitialCommandIntents}
             isExpanded
           />
         ) : null

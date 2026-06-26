@@ -855,8 +855,7 @@ export const InfoSection = memo(function InfoSection({
         paneId,
         workspaceId: chatId,
         scopeKey: terminalScopeKey,
-        cwd: worktreePath,
-        initialCommands: ["gh auth login"],
+        initialCommandIntents: ["github-cli-auth-login"],
       },
       {
         onSuccess: () => {

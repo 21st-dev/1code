@@ -5,6 +5,10 @@ import { router, publicProcedure } from "../index"
 import { observable } from "@trpc/server/observable"
 import { terminalManager } from "../../terminal/manager"
 import type { TerminalEvent } from "../../terminal/types"
+import {
+	terminalCreateOrAttachInputSchema,
+	resolveTrustedCreateSessionParams,
+} from "../../terminal/trusted-session-input"
 import { TRPCError } from "@trpc/server"
 
 export const terminalRouter = router({
@@ -13,21 +17,11 @@ export const terminalRouter = router({
 	 * Returns serializedState for recovery if reattaching.
 	 */
 	createOrAttach: publicProcedure
-		.input(
-			z.object({
-				paneId: z.string().min(1),
-				tabId: z.string().optional(),
-				workspaceId: z.string().optional(),
-				scopeKey: z.string().optional(),
-				cols: z.number().int().positive().optional(),
-				rows: z.number().int().positive().optional(),
-				cwd: z.string().optional(),
-				initialCommands: z.array(z.string()).optional(),
-			}),
-		)
+		.input(terminalCreateOrAttachInputSchema)
 		.mutation(async ({ input }) => {
 			try {
-				const result = await terminalManager.createOrAttach(input)
+				const params = await resolveTrustedCreateSessionParams(input)
+				const result = await terminalManager.createOrAttach(params)
 				return {
 					paneId: input.paneId,
 					isNew: result.isNew,

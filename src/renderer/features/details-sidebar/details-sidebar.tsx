@@ -38,6 +38,7 @@ import { useResolvedHotkeyDisplay } from "@/lib/hotkeys"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { ChangedFile } from "../../../shared/changes-types"
+import type { TerminalInitialCommandIntent } from "../../../shared/terminal-initial-command-intents"
 import type { AgentMode } from "../agents/atoms"
 import {
   detailsSidebarAutoOpenSuppressedAtom,
@@ -181,7 +182,7 @@ interface DetailsSidebarProps {
   /** Terminal scope key shared with the full terminal renderer */
   terminalScopeKey?: string
   terminalTabId?: string
-  terminalInitialCommands?: string[]
+  terminalInitialCommandIntents?: TerminalInitialCommandIntent[]
   /** Plan path for plan section */
   planPath: string | null
   /** Current agent mode (plan or agent) */
@@ -231,7 +232,7 @@ export function DetailsSidebar({
   worktreePath,
   terminalScopeKey,
   terminalTabId,
-  terminalInitialCommands,
+  terminalInitialCommandIntents,
   planPath,
   mode,
   onBuildPlan,
@@ -542,7 +543,7 @@ export function DetailsSidebar({
                     cwd={worktreePath}
                     workspaceId={chatId}
                     tabId={terminalTabId}
-                    initialCommands={terminalInitialCommands}
+                    initialCommandIntents={terminalInitialCommandIntents}
                     onExpand={onExpandTerminal}
                   />
                 )

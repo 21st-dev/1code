@@ -16,6 +16,7 @@ import { getDefaultTerminalBg } from "@/features/terminal/helpers"
 import { Terminal } from "@/features/terminal/terminal"
 import { TerminalModeSwitcher } from "@/features/terminal/terminal-mode-switcher"
 import { TerminalTabs } from "@/features/terminal/terminal-tabs"
+import type { TerminalInitialCommandIntent } from "../../../../shared/terminal-initial-command-intents"
 import type { TerminalInstance } from "@/features/terminal/types"
 import { fullThemeDataAtom } from "@/lib/atoms"
 import { useI18n } from "@/lib/i18n"
@@ -27,7 +28,7 @@ interface TerminalSectionProps {
   cwd: string
   workspaceId: string
   tabId?: string
-  initialCommands?: string[]
+  initialCommandIntents?: TerminalInitialCommandIntent[]
   isExpanded?: boolean
   /** Render header with tabs separately (for widget card integration) */
   renderHeader?: (header: ReactNode) => void
@@ -62,7 +63,7 @@ export function TerminalSection({
   cwd,
   workspaceId,
   tabId,
-  initialCommands,
+  initialCommandIntents,
   isExpanded = false,
   renderHeader,
   onTerminalBgChange,
@@ -329,7 +330,7 @@ export function TerminalSection({
               workspaceId={workspaceId}
               scopeKey={terminalKey}
               tabId={tabId}
-              initialCommands={initialCommands}
+              initialCommandIntents={initialCommandIntents}
               initialCwd={cwd}
             />
           </motion.div>
@@ -385,7 +386,7 @@ export function TerminalSection({
               workspaceId={workspaceId}
               scopeKey={terminalKey}
               tabId={tabId}
-              initialCommands={initialCommands}
+              initialCommandIntents={initialCommandIntents}
               initialCwd={cwd}
             />
           </motion.div>

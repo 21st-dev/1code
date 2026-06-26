@@ -34,7 +34,7 @@ export function Terminal({
   workspaceId,
   scopeKey,
   tabId,
-  initialCommands,
+  initialCommandIntents,
   initialCwd,
 }: TerminalProps) {
   const { t } = useI18n()
@@ -204,7 +204,6 @@ export function Terminal({
           scopeKey,
           cols: xterm.cols,
           rows: xterm.rows,
-          cwd: terminalCwdRef.current || cwd,
         },
         {
           onSuccess: (result) => {
@@ -257,8 +256,7 @@ export function Terminal({
         scopeKey,
         cols: xterm.cols,
         rows: xterm.rows,
-        cwd: initialCwd || cwd,
-        initialCommands,
+        initialCommandIntents,
       },
       {
         onSuccess: (result) => {
@@ -362,7 +360,7 @@ export function Terminal({
     }
     // Note: terminalCwd is accessed via ref to avoid remounting on cwd changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paneId, cwd, workspaceId, tabId, initialCwd, initialCommands, isDark])
+  }, [paneId, cwd, workspaceId, tabId, initialCommandIntents, isDark])
 
   // Update theme when isDark changes or VS Code theme changes (without recreating terminal)
   useEffect(() => {
