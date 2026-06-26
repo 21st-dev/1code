@@ -12,6 +12,10 @@ import {
 } from "./ui/dialog"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden"
+import {
+  MERMAID_SECURITY_LEVEL,
+  sanitizeMermaidSvg,
+} from "../lib/security/mermaid-svg-sanitizer"
 
 // Lazy load mermaid to avoid bundle size impact (~500KB)
 let mermaidPromise: Promise<typeof import("mermaid")> | null = null
@@ -127,7 +131,7 @@ const getMermaidConfig = (isDark: boolean): Record<string, unknown> => ({
         titleColor: "#18181b",
         edgeLabelBackground: "#fafafa",
       },
-  securityLevel: "loose" as const,
+  securityLevel: MERMAID_SECURITY_LEVEL,
   fontFamily: "inherit",
 })
 
@@ -238,15 +242,16 @@ const MermaidBlockInner = memo(function MermaidBlockInner({
       const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 
       const { svg } = await mermaid.render(id, code)
+      const sanitizedSvg = sanitizeMermaidSvg(svg)
 
       // Check again if this render is still current
       if (currentRenderId !== renderIdRef.current) return
 
       // Cache the result for future remounts
       const cacheKey = `${code}-${isDark ? 'dark' : 'light'}`
-      mermaidCache.set(cacheKey, svg)
+      mermaidCache.set(cacheKey, sanitizedSvg)
 
-      setRenderState({ status: "success", svg })
+      setRenderState({ status: "success", svg: sanitizedSvg })
       lastRenderedCodeRef.current = code
       lastRenderedThemeRef.current = isDark
 

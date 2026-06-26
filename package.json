@@ -54,8 +54,8 @@
     "postinstall": "node scripts/ensure-electron-native-modules.mjs --force && node scripts/patch-electron-dev.mjs"
   },
   "dependencies": {
-    "@ai-sdk/react": "^3.0.14",
     "@agentclientprotocol/sdk": "0.4.9",
+    "@ai-sdk/react": "^3.0.14",
     "@anthropic-ai/claude-agent-sdk": "0.3.177",
     "@mcpc-tech/acp-ai-provider": "^0.2.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -98,6 +98,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "diff": "^8.0.3",
+    "dompurify": "^3.4.11",
     "drizzle-orm": "^0.45.1",
     "electron-updater": "^6.8.3",
     "jotai": "^2.11.1",
@@ -149,6 +150,7 @@
     "electron": "~39.4.0",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.0.0",
+    "happy-dom": "^20.10.6",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.4.5",
