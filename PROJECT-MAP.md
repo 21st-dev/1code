@@ -110,13 +110,19 @@
 ### Critical
 
 **R0a — 渲染层 XSS → public tRPC terminal RCE 链** · **已修 / ✓核对**
-- 可利用性结论：链条成立。只要不可信内容能在特权 renderer main world 执行 JS，就能触达 `window.electronTRPC`，进而构造 public tRPC mutation；`terminal.createOrAttach` 仍接收 renderer 提供的 `cwd` 与 `initialCommands` 并建 PTY（[terminal.ts](src/main/lib/trpc/routers/terminal.ts)）。
+- 可利用性结论：链条成立。修复前只要不可信内容能在特权 renderer main world 执行 JS，就能触达 `window.electronTRPC`，进而构造 public tRPC mutation；当时 `terminal.createOrAttach` 接收 renderer 提供的 `cwd` 与 `initialCommands` 并建 PTY（[terminal.ts](src/main/lib/trpc/routers/terminal.ts)）。
 - subtitle 路径：`AgentToolCall` 把 `subtitleStr` 原样写进 `dangerouslySetInnerHTML`（[agent-tool-call.tsx](src/renderer/features/agents/ui/agent-tool-call.tsx)）。上游 `AgentToolRegistry` 的 subtitle 来自 `part.input` / `part.output`，包括 Task 描述、Grep/Glob pattern/path、Bash command、WebSearch query、Plan title、Task subject、Thinking text 等；这些可由模型、仓库内容、MCP/tool 输入输出间接控制（[agent-tool-registry.tsx](src/renderer/features/agents/ui/agent-tool-registry.tsx)）。
 - Mermaid 路径：```mermaid 块由主 markdown 渲染器转给 `MermaidBlock`（[chat-markdown-renderer.tsx](src/renderer/components/chat-markdown-renderer.tsx)）；`MermaidBlock` 使用 `securityLevel: "loose"` 并把 `mermaid.render()` 返回的 SVG 直接插入两处 `dangerouslySetInnerHTML`（[mermaid-block.tsx](src/renderer/components/mermaid-block.tsx)）。受控 Electron fixture 证明 loose `click` 指令可生成 `javascript:` SVG href，真实点击后执行 JS 并发出 `terminal.createOrAttach` mutation 形状消息。
 - CSP 放大因素：修复前 [index.html](src/renderer/index.html) 的 `script-src` 允许 `'unsafe-inline'` / `'unsafe-eval'` 和 `https://unpkg.com`；受控 Electron fixture 证明 raw subtitle `<img onerror>` 可在 renderer 执行并触达 `electronTRPC` bridge。
 - 修复：Mermaid 改 strict mode，并用 DOMPurify + DOMParser/XMLSerializer 二次剥离 `script`、`foreignObject`、事件属性和 `href`/`xlink:href` 后再插入；`AgentToolCall` subtitle 改为 React 文本渲染，Edit 统计改纯文本；CSP 去掉 broad JS `unsafe-eval` 和 `https://unpkg.com` 远程脚本源，仅保留 Shiki/Oniguruma 语法高亮所需的 `wasm-unsafe-eval`，`unsafe-inline` 因启动 theme/error inline scripts 暂留并已在 HTML 注释中记录。
 - 回归测试：[renderer-mermaid-xss.test.ts](tests/renderer-mermaid-xss.test.ts)、[renderer-agent-tool-call-xss.test.tsx](tests/renderer-agent-tool-call-xss.test.tsx)、[renderer-csp-policy.test.ts](tests/renderer-csp-policy.test.ts)、[renderer-html-sinks.test.ts](tests/renderer-html-sinks.test.ts)。Commits：`217ee604`（可利用性记录）、`9f29ebfd`（Mermaid SVG 净化）、`b270b6a9`（subtitle 文本渲染）、`5619551d`（CSP/OpenSpec/文档 closeout）、本提交（CSP WebAssembly 例外）。
-- 非本单范围：本条关闭 renderer XSS 前置条件；`terminal.createOrAttach` capability/consent/server-resolved cwd 硬化留在 `update-trpc-capability-boundary` 后续 Phase 1/3。
+- 非本单范围：本条关闭 renderer XSS 前置条件；`terminal.createOrAttach` 的 cwd/initial command 输入信任收敛已由 R0b 关闭，`terminal.write` capability/consent 留在 `update-trpc-capability-boundary` 后续 Phase 3。
+
+**R0b — terminal / cloneFromGitHub 命令执行 sink 输入信任收敛** · **已修 / ✓核对**
+- terminal 修复：`terminal.createOrAttach` 的 tRPC 输入改为 strict schema，renderer 不再能传 raw `cwd` 或 `initialCommands`；main 进程从登记的 chat/workspace 记录解析 cwd，校验 canonical `scopeKey`/`paneId`，只把白名单 `initialCommandIntents` 映射为 app 自己拥有的命令。目前唯一 intent 是 GitHub 登录按钮用的 `github-cli-auth-login` → `gh auth login`。Commit：`87ff09c4`。
+- clone 修复：`projects.cloneFromGitHub` 不再拼 shell 字符串；renderer `repoUrl` 先被解析为受约束的 GitHub `owner/repo` 身份，拒绝 shell 元字符、URL 额外 path/query/fragment 和 `--upload-pack` 等 git 参数注入，再用 `execFile` argv 调 `git clone -- <url> <path>`。Commit：`a3eeee3f`。
+- 回归测试：[terminal-create-session-boundary.test.ts](tests/terminal-create-session-boundary.test.ts) 覆盖伪造 cwd/scope、旧 XSS payload 形状里的 raw `initialCommands`、任意命令字符串伪装 intent、白名单 `gh auth login`；[github-clone-boundary.test.ts](tests/github-clone-boundary.test.ts) 覆盖 repoUrl shell 元字符、git clone 参数注入和 argv clone。
+- 残余边界：本单按 0b 输入信任收敛关闭 `createOrAttach` 启动命令和 clone shell 注入；`terminal.write` 仍是交互式 PTY 输入面，后续 Phase 3 capability/consent 单独处理，未在本单混入。
 
 **R1 — 打开恶意仓库即触发任意 shell 执行（malicious-repo RCE，无确认）** · **已修 / ✓核对**
 - 原问题：`.locus/worktree.json` / `.cursor/worktrees.json` / `.1code/worktree.json` 里的 setup 命令来自仓库内容，旧路径会在建 chat 的 worktree 后台直接执行。`.cursor/worktrees.json` 兼容性使"现存 Cursor 仓库已带毒"成为现实向量。

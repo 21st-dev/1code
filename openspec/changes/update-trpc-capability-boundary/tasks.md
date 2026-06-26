@@ -10,9 +10,11 @@
 - [ ] 1.3 Update `commands`, `agents`, and `skills` project-scoped routes so renderer input uses registered project/chat identity instead of raw `projectPath` or `cwd`.
 - [ ] 1.4 Update runtime start routes (`claude.chat`, `codex.chat`, `agentRuntime.chat`) so cwd/projectPath are derived from `chatId`/`subChatId` server-side and forged renderer cwd is rejected.
 - [ ] 1.5 Update terminal routes so `createOrAttach` and `listDirectory` resolve cwd from registered workspace/chat state or a dialog token before spawning/reading.
+- [x] 1.5a Emergency command sink subset: update `terminal.createOrAttach` so renderer input no longer carries raw `cwd` or `initialCommands`; the main process resolves cwd from the registered chat/workspace and maps only whitelisted `initialCommandIntents` to app-owned commands.
 - [ ] 1.6 Update MCP and provider route inputs so project-scoped config writes resolve project roots server-side and command/url/env inputs receive explicit validation.
-- [ ] 1.7 Replace shell-string git clone in `projects.cloneFromGitHub` with argv-based execution and constrained GitHub repo identity.
+- [x] 1.7 Replace shell-string git clone in `projects.cloneFromGitHub` with argv-based execution and constrained GitHub repo identity.
 - [ ] 1.8 Add adversarial tests for absolute paths, traversal, symlink escapes, forged cwd/projectPath, raw command/config writes, and unregistered roots.
+- [x] 1.8a Emergency command sink subset tests: cover forged terminal cwd/scope, legacy raw `initialCommands` payloads, arbitrary command strings masquerading as intents, whitelisted `gh auth login`, GitHub clone shell metacharacters, Git clone option injection, and argv clone execution.
 - [ ] 1.9 Add an architecture guard for new dangerous router input fields without an approved resolver.
 
 ## 2. Phase 2 - Renderer Hardening

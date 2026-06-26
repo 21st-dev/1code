@@ -25,8 +25,27 @@ Renderer-reachable runtime and terminal start procedures SHALL derive cwd, proje
 - **THEN** the main process SHALL reject or ignore the forged cwd and SHALL NOT start the runtime in the attacker-selected directory.
 
 #### Scenario: Terminal request includes initial commands
-- **WHEN** a renderer requests a terminal session with initial commands or terminal input
-- **THEN** the main process SHALL require an approved terminal workspace capability before starting or writing to the PTY.
+- **WHEN** a renderer requests a terminal session with startup commands
+- **THEN** the renderer SHALL send only predefined initial command intent IDs, and the main process SHALL reject raw command strings and resolve allowed intents to app-owned commands before starting the PTY.
+
+#### Scenario: Terminal request forges cwd
+- **WHEN** a renderer requests a terminal session with a cwd or scope that differs from the server-side chat or workspace record
+- **THEN** the main process SHALL reject the forged request and SHALL NOT start the PTY in the attacker-selected directory.
+
+#### Scenario: Terminal writes arbitrary input
+- **WHEN** a renderer writes arbitrary terminal input to an existing PTY
+- **THEN** the main process SHALL require a future approved terminal input capability before writing to the PTY.
+
+### Requirement: GitHub Clone Uses Constrained Repository Identity
+Renderer-reachable GitHub clone procedures SHALL parse renderer input into a GitHub owner/repository identity and SHALL execute Git through argv without shell interpretation.
+
+#### Scenario: GitHub clone receives shell metacharacters
+- **WHEN** a renderer submits a repository URL or shorthand containing shell metacharacters, extra URL path/query/fragment data, or Git clone option injection
+- **THEN** the main process SHALL reject the input before spawning Git.
+
+#### Scenario: GitHub clone executes
+- **WHEN** a renderer submits a valid GitHub repository identity
+- **THEN** the main process SHALL construct the canonical `https://github.com/<owner>/<repo>.git` clone URL and SHALL invoke `git clone` with argv, not a shell string.
 
 ### Requirement: Dangerous Operations Require Capability Decisions
 Renderer-reachable procedures that perform shell execution, arbitrary file writes or deletes, external app or URL opens, plugin/native activation, MCP command writes, credential imports/removals, remote git writes, update install, or destructive debug actions SHALL declare a capability class and pass a capability decision before performing the side effect.
