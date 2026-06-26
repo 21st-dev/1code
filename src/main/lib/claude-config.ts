@@ -48,10 +48,12 @@ export interface McpServerConfig {
   _locusPluginMcp?: LocusPluginMcpProvenance
   _locusMcpRegistry?: Record<string, unknown>
   _oauth?: {
-    accessToken: string
+    accessToken?: string
     refreshToken?: string
     clientId?: string
     expiresAt?: number
+    tokenType?: string
+    hasTokens?: boolean
   }
   [key: string]: unknown
 }

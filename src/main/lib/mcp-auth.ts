@@ -2,15 +2,21 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { BrowserWindow } from 'electron';
+import { getClaudeShellEnvironment } from './claude/env';
 import {
-  getMcpServerConfig,
   GLOBAL_MCP_PATH,
   getLocusPluginMcpProvenance,
+  getMcpServerConfig,
   readClaudeConfig,
   updateClaudeConfigAtomic,
   updateMcpServerConfig,
 } from './claude-config';
-import { getClaudeShellEnvironment } from './claude/env';
+import { assertOfficialCloudAllowed, openExternalUrl } from './local-only';
+import {
+  type McpOAuthTokensForStorage,
+  readMcpOAuthTokens,
+  saveMcpOAuthTokens,
+} from './mcp-oauth-token-store';
 import { CraftOAuth, fetchOAuthMetadata, getMcpBaseUrl, type OAuthMetadata, type OAuthTokens } from './oauth';
 import { discoverPluginMcpServers } from './plugins';
 import {
@@ -18,7 +24,6 @@ import {
   getEnabledPlugins,
 } from './trpc/routers/claude-settings';
 import { bringToFront } from './window';
-import { assertOfficialCloudAllowed, openExternalUrl } from './local-only';
 
 
 /**
@@ -171,6 +176,93 @@ export async function fetchMcpToolsStdio(config: {
 import { AUTH_SERVER_PORT, IS_DEV } from '../constants';
 
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
+
+type McpOAuthConfig = {
+  accessToken?: string;
+  refreshToken?: string;
+  clientId?: string;
+  expiresAt?: number;
+  tokenType?: string;
+  hasTokens?: boolean;
+}
+
+function removeAuthorizationHeader(
+  headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) return undefined;
+
+  const next = Object.fromEntries(
+    Object.entries(headers).filter(([key]) => key.toLowerCase() !== 'authorization'),
+  );
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function oauthMetadata(input: {
+  tokens?: Pick<McpOAuthTokensForStorage, 'clientId' | 'expiresAt' | 'tokenType'> | null;
+  fallback?: McpOAuthConfig;
+}): McpOAuthConfig {
+  return {
+    hasTokens: true,
+    ...(input.tokens?.clientId || input.fallback?.clientId
+      ? { clientId: input.tokens?.clientId ?? input.fallback?.clientId }
+      : {}),
+    ...(input.tokens?.expiresAt || input.fallback?.expiresAt
+      ? { expiresAt: input.tokens?.expiresAt ?? input.fallback?.expiresAt }
+      : {}),
+    ...(input.tokens?.tokenType || input.fallback?.tokenType
+      ? { tokenType: input.tokens?.tokenType ?? input.fallback?.tokenType }
+      : {}),
+  };
+}
+
+function materializeAuthorizationHeaders(
+  headers: Record<string, string> | undefined,
+  accessToken: string,
+): Record<string, string> {
+  return {
+    ...(headers || {}),
+    Authorization: `Bearer ${accessToken}`,
+  };
+}
+
+async function resolveMcpOAuthTokens(input: {
+  serverName: string;
+  projectPath: string;
+  serverConfig: { _oauth?: McpOAuthConfig } | undefined;
+}): Promise<McpOAuthTokensForStorage | null> {
+  const storedTokens = readMcpOAuthTokens({
+    serverName: input.serverName,
+    projectPath: input.projectPath,
+  });
+  if (storedTokens?.accessToken) {
+    return storedTokens;
+  }
+
+  const legacyOauth = input.serverConfig?._oauth;
+  if (!legacyOauth?.accessToken) return null;
+
+  const legacyTokens: McpOAuthTokensForStorage = {
+    accessToken: legacyOauth.accessToken,
+    ...(legacyOauth.refreshToken ? { refreshToken: legacyOauth.refreshToken } : {}),
+    ...(legacyOauth.clientId ? { clientId: legacyOauth.clientId } : {}),
+    ...(legacyOauth.expiresAt ? { expiresAt: legacyOauth.expiresAt } : {}),
+    ...(legacyOauth.tokenType ? { tokenType: legacyOauth.tokenType } : {}),
+  };
+
+  await saveTokensToClaudeJson(
+    input.serverName,
+    input.projectPath,
+    {
+      accessToken: legacyTokens.accessToken,
+      refreshToken: legacyTokens.refreshToken,
+      expiresAt: legacyTokens.expiresAt,
+      tokenType: legacyTokens.tokenType ?? 'Bearer',
+    },
+    legacyTokens.clientId,
+  );
+
+  return legacyTokens;
+}
 
 function getMcpOAuthRedirectUri(): string {
   return IS_DEV
@@ -340,7 +432,7 @@ export async function handleMcpOAuthCallback(code: string, state: string): Promi
       pending.clientSecret
     );
 
-    // 3. Save to ~/.claude.json
+    // 3. Save encrypted tokens and scrub plaintext Claude config fields.
     await saveTokensToClaudeJson(pending.serverName, pending.projectPath, tokens, pending.clientId);
 
     // 4. Notify renderer (tools will be fetched on demand via tRPC)
@@ -399,14 +491,16 @@ export async function refreshMcpToken(
       return null;
     }
 
-    const oauth = serverConfig._oauth as {
-      accessToken?: string;
-      refreshToken?: string;
-      clientId?: string;
-      expiresAt?: number;
-    } | undefined;
+    const oauth = serverConfig._oauth as McpOAuthConfig | undefined;
+    const storedTokens = await resolveMcpOAuthTokens({
+      serverName,
+      projectPath: resolvedProjectPath,
+      serverConfig,
+    });
+    const refreshToken = storedTokens?.refreshToken;
+    const clientId = storedTokens?.clientId ?? oauth?.clientId;
 
-    if (!oauth?.refreshToken || !oauth?.clientId) {
+    if (!refreshToken || !clientId) {
       console.log(`[MCP Refresh] No refresh token or clientId for ${serverName}`);
       return null;
     }
@@ -419,10 +513,10 @@ export async function refreshMcpToken(
       { onStatus: () => {}, onError: () => {} }
     );
 
-    const tokens = await craftOAuth.refreshAccessToken(oauth.refreshToken, oauth.clientId);
+    const tokens = await craftOAuth.refreshAccessToken(refreshToken, clientId);
 
-    // Update ~/.claude.json with new tokens
-    await saveTokensToClaudeJson(serverName, resolvedProjectPath, tokens, oauth.clientId);
+    // Store refreshed tokens in app-owned safeStorage and scrub Claude config.
+    await saveTokensToClaudeJson(serverName, resolvedProjectPath, tokens, clientId);
 
     console.log(`[MCP Refresh] Successfully refreshed token for ${serverName}`);
     return tokens.accessToken;
@@ -444,43 +538,45 @@ export async function ensureMcpTokensFresh(
   const updatedServers = { ...mcpServers };
 
   for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
-    const oauth = serverConfig._oauth as {
-      accessToken?: string;
-      refreshToken?: string;
-      clientId?: string;
-      expiresAt?: number;
-    } | undefined;
+    const oauth = serverConfig._oauth as McpOAuthConfig | undefined;
+    const storedTokens = await resolveMcpOAuthTokens({
+      serverName,
+      projectPath,
+      serverConfig,
+    });
 
     // Skip servers without OAuth
-    if (!oauth?.accessToken) continue;
+    if (!storedTokens?.accessToken) continue;
 
     // Check if token needs refresh (within 5 min of expiry)
-    if (needsRefresh(oauth.expiresAt)) {
+    let accessToken = storedTokens.accessToken;
+    let tokenMetadata: McpOAuthTokensForStorage = storedTokens;
+    if (needsRefresh(storedTokens.expiresAt ?? oauth?.expiresAt)) {
       console.log(`[MCP] Token for ${serverName} expires soon, refreshing...`);
       const newToken = await refreshMcpToken(serverName, projectPath);
 
       if (newToken) {
-        // Update the server config with the new token
-        updatedServers[serverName] = {
-          ...serverConfig,
-          headers: {
-            ...(serverConfig.headers || {}),
-            Authorization: `Bearer ${newToken}`,
-          },
-          _oauth: {
-            ...oauth,
-            accessToken: newToken,
-          },
-        };
+        accessToken = newToken;
+        tokenMetadata = readMcpOAuthTokens({ serverName, projectPath }) ?? storedTokens;
       }
     }
+
+    // Materialize Authorization only in memory for the SDK/runtime.
+    updatedServers[serverName] = {
+      ...serverConfig,
+      headers: materializeAuthorizationHeaders(
+        serverConfig.headers as Record<string, string> | undefined,
+        accessToken,
+      ),
+      _oauth: oauthMetadata({ tokens: tokenMetadata, fallback: oauth }),
+    };
   }
 
   return updatedServers;
 }
 
 /**
- * Save OAuth tokens to ~/.claude.json atomically.
+ * Save OAuth tokens to app-owned safeStorage and scrub ~/.claude.json.
  * Uses a mutex to prevent race conditions when multiple concurrent
  * token refreshes try to update the config simultaneously.
  */
@@ -490,6 +586,18 @@ async function saveTokensToClaudeJson(
   tokens: OAuthTokens,
   clientId?: string
 ): Promise<void> {
+  await saveMcpOAuthTokens({
+    serverName,
+    projectPath,
+    tokens: {
+      accessToken: tokens.accessToken,
+      ...(tokens.refreshToken ? { refreshToken: tokens.refreshToken } : {}),
+      ...(clientId ? { clientId } : {}),
+      ...(tokens.expiresAt ? { expiresAt: tokens.expiresAt } : {}),
+      ...(tokens.tokenType ? { tokenType: tokens.tokenType } : {}),
+    },
+  });
+
   await updateClaudeConfigAtomic((config) => {
     // Get existing server config to preserve existing headers and determine type
     const existingConfig = getMcpServerConfig(config, projectPath, serverName) || {};
@@ -498,24 +606,24 @@ async function saveTokensToClaudeJson(
     // Determine transport type from URL (SDK expects explicit type for HTTP servers)
     const serverType = serverUrl?.endsWith('/sse') ? 'sse' : 'http';
 
-    // Build headers with Authorization (preserve any existing headers)
+    // Preserve non-auth headers but never write bearer tokens into Claude config.
     const existingHeaders = (existingConfig.headers as Record<string, string>) || {};
-    const headers = {
-      ...existingHeaders,
-      Authorization: `Bearer ${tokens.accessToken}`,
-    };
+    const headers = removeAuthorizationHeader(existingHeaders);
 
     return updateMcpServerConfig(config, projectPath, serverName, {
       // SDK-required fields
       type: serverType,
+      authType: 'oauth',
       headers,
       // Internal tracking (for token refresh, status checking)
-      _oauth: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        clientId,
-        expiresAt: tokens.expiresAt,
-      },
+      _oauth: oauthMetadata({
+        tokens: {
+          clientId,
+          expiresAt: tokens.expiresAt,
+          tokenType: tokens.tokenType,
+        },
+        fallback: existingConfig._oauth as McpOAuthConfig | undefined,
+      }),
     });
   });
 }
@@ -562,11 +670,16 @@ export async function getMcpAuthStatus(
 ): Promise<{ hasTokens: boolean; isExpired?: boolean }> {
   try {
     const config = await readClaudeConfig();
-    const oauth = getMcpServerConfig(config, projectPath, serverName)?._oauth;
+    const serverConfig = getMcpServerConfig(config, projectPath, serverName);
+    const tokens = await resolveMcpOAuthTokens({
+      serverName,
+      projectPath,
+      serverConfig,
+    });
 
-    if (!oauth?.accessToken) return { hasTokens: false };
+    if (!tokens?.accessToken) return { hasTokens: false };
 
-    const isExpired = oauth.expiresAt ? Date.now() > oauth.expiresAt : false;
+    const isExpired = tokens.expiresAt ? Date.now() > tokens.expiresAt : false;
     return { hasTokens: true, isExpired };
   } catch {
     return { hasTokens: false };

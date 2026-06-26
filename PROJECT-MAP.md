@@ -133,8 +133,10 @@
 **R4 — `files.renameFile` / `deleteFile` 无项目根约束** · **待核对**
 - [files.ts:562](src/main/lib/trpc/routers/files.ts:562)、[files.ts:586](src/main/lib/trpc/routers/files.ts:586)：`validatePathSafe` 未带 `allowedParent`，只校验绝对+无空字节，可重命名/回收任意可写文件。
 
-**R5 — MCP OAuth token 明文落 `~/.claude.json`** · **✓核对**
-- [mcp-auth.ts:508-519](src/main/lib/mcp-auth.ts:508)：`_oauth: { accessToken, refreshToken, clientId, expiresAt }` 明文写入，且 `Authorization: Bearer <token>` 进 headers。该文件与 Claude Code CLI 共享、同用户任意进程可读。缓解：与 DB 凭证一样先 `encryptStringForStorage` 再写。
+**R5 — MCP OAuth token 明文落 `~/.claude.json`** · **已修 / ✓核对**
+- 原问题：[mcp-auth.ts](src/main/lib/mcp-auth.ts) 旧路径把 `_oauth.accessToken` / `_oauth.refreshToken` 明文写入，且 `Authorization: Bearer <token>` 进 headers。该文件与 Claude Code CLI 共享、同用户任意进程可读。
+- 修复：MCP OAuth access/refresh token 移入 app-owned safeStorage store：[mcp-oauth-token-store.ts](src/main/lib/mcp-oauth-token-store.ts)。`~/.claude.json` 仅保留 `authType`、`clientId`、`expiresAt`、`hasTokens` 等非敏感元数据；SDK/runtime 前才在内存里 materialize `Authorization`。遇到 legacy 明文 `_oauth` 时先迁移加密，再 scrub Claude config。
+- 测试：[mcp-oauth-token-storage.test.ts](tests/mcp-oauth-token-storage.test.ts) 覆盖 legacy 明文迁移后 Claude config 与 token store 不含 payload、refresh 后新 token 只进入密文 store。Commit：本提交 `fix: store MCP OAuth tokens with safeStorage`。
 
 **R6 — sub-chat mode 三处存储、无单一真相源** · **待核对**
 - Jotai atom（[atoms/index.ts:403-419](src/renderer/features/agents/atoms/index.ts:403)，localStorage）/ Zustand（[sub-chat-store.ts:306-315](src/renderer/features/agents/stores/sub-chat-store.ts:306)，仅内存）/ SQLite（[agent-chat-api.ts:208](src/renderer/features/agents/lib/agent-chat-api.ts:208) 写 DB）。调用点更新不一致，DB 在 reload 后胜出并静默丢弃 localStorage 值；mode 直接关系 plan/agent 安全级别。

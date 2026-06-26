@@ -269,6 +269,10 @@ function getServerStatusFromConfig(serverConfig: McpServerConfig): string {
     return "connected"
   }
 
+  if (oauth?.hasTokens === true) {
+    return "connected"
+  }
+
   if (oauth?.accessToken && !headers?.Authorization) {
     return "needs-auth"
   }
