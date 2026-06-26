@@ -123,23 +123,6 @@ contextBridge.exposeInMainWorld("desktopApi", {
     return () => ipcRenderer.removeListener("mcp-import:preview", handler)
   },
 
-  // Stream event listeners
-  onStreamChunk: (streamId: string, callback: (chunk: Uint8Array) => void) => {
-    const handler = (_event: unknown, chunk: Uint8Array) => callback(chunk)
-    ipcRenderer.on(`stream:${streamId}:chunk`, handler)
-    return () => ipcRenderer.removeListener(`stream:${streamId}:chunk`, handler)
-  },
-  onStreamDone: (streamId: string, callback: () => void) => {
-    const handler = () => callback()
-    ipcRenderer.on(`stream:${streamId}:done`, handler)
-    return () => ipcRenderer.removeListener(`stream:${streamId}:done`, handler)
-  },
-  onStreamError: (streamId: string, callback: (error: string) => void) => {
-    const handler = (_event: unknown, error: string) => callback(error)
-    ipcRenderer.on(`stream:${streamId}:error`, handler)
-    return () => ipcRenderer.removeListener(`stream:${streamId}:error`, handler)
-  },
-
   // Shortcut events (from main process menu accelerators)
   onShortcutNewAgent: (callback: () => void) => {
     const handler = () => callback()
@@ -341,15 +324,6 @@ export interface DesktopApi {
   clearPendingMcpImportPreview: () => Promise<{ success: boolean }>
   onMcpImportPreview: (
     callback: (preview: McpImportPreview) => void,
-  ) => () => void
-  onStreamChunk: (
-    streamId: string,
-    callback: (chunk: Uint8Array) => void,
-  ) => () => void
-  onStreamDone: (streamId: string, callback: () => void) => () => void
-  onStreamError: (
-    streamId: string,
-    callback: (error: string) => void,
   ) => () => void
   // Shortcuts
   onShortcutNewAgent: (callback: () => void) => () => void
