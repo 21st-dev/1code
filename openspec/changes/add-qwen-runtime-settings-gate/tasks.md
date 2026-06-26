@@ -66,7 +66,8 @@
 - [x] 5.5 Real Electron GUI smoke with isolated `LOCUS_USER_DATA_DIR`: default
       Qwen off, toggle on shows Qwen setup guidance, Qwen CLI detected does not
       complete onboarding, toggle off hides Qwen again.
-      Evidence: `/tmp/locus-qwen-gate-smoke2.U2wdXA` with
+      Evidence: `electron-gui-smoke-2026-06-26.md` recorded
+      `/tmp/locus-qwen-gate-smoke2.U2wdXA` with
       `LOCUS_DISABLE_SAFE_STORAGE=1`, fake `qwen 0.18.5-smoke`, screenshots
       under `/tmp/locus-qwen-smoke2-*.png`; Qwen off hidden by default, Qwen on
       showed localized setup guidance without completing onboarding, Settings
