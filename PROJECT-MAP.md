@@ -146,8 +146,10 @@
 - 修复：`getContent`/`update`/`delete` 统一走 command path resolver，拒绝 null byte、绝对路径和 `..` 路径段；解析后目标必须落在 `~/.claude/commands` 或当前项目 `.claude/commands` 内。
 - 测试：[trpc-path-boundaries.test.ts](tests/trpc-path-boundaries.test.ts) 覆盖项目命令可读、绝对路径 get/update/delete 被拒，payload 未读出。Commit：本提交 `fix: bound renderer file and command paths`。
 
-**R4 — `files.renameFile` / `deleteFile` 无项目根约束** · **待核对**
-- [files.ts:562](src/main/lib/trpc/routers/files.ts:562)、[files.ts:586](src/main/lib/trpc/routers/files.ts:586)：`validatePathSafe` 未带 `allowedParent`，只校验绝对+无空字节，可重命名/回收任意可写文件。
+**R4 — `files.search/watchChanges/renameFile/deleteFile` 缺登记根约束** · **已修 / ✓核对**
+- 原问题：[files.ts](src/main/lib/trpc/routers/files.ts) 的 `search`/`watchChanges` 接收 renderer `projectPath` 后直接扫描或监视；`renameFile`/`deleteFile` 只收 `absolutePath`，旧 `validatePathSafe` 没有绑定登记 root，可被渲染层驱动去搜、监视、重命名或回收项目外路径。
+- 修复：文件 route 复用登记 project/chat worktree root resolver；`search` 在扫描前、`watchChanges` 在创建 watcher 前拒绝未登记 root；`renameFile`/`deleteFile` 输入新增 `projectPath`，目标路径和 rename 后路径都经 [path-boundary.ts](src/main/lib/fs/path-boundary.ts) 限定在登记 root 内，renderer 文件树调用传当前 worktree root。
+- 测试：[trpc-path-boundaries.test.ts](tests/trpc-path-boundaries.test.ts) 覆盖 search/watch 未登记 root 被拒、rename/delete 项目外目标被拒、rename `newName` 携带路径分隔符或 `..` 被拒。验证：`bun test tests/trpc-path-boundaries.test.ts` 6 pass；`openspec validate update-trpc-capability-boundary --strict --no-interactive` 通过；`bun run check` 全绿（1290 pass / 0 fail）。Commit：本提交 `fix: bound file sinks to registered roots`。
 
 **R5 — MCP OAuth token 明文落 `~/.claude.json`** · **已修 / ✓核对**
 - 原问题：[mcp-auth.ts](src/main/lib/mcp-auth.ts) 旧路径把 `_oauth.accessToken` / `_oauth.refreshToken` 明文写入，且 `Authorization: Bearer <token>` 进 headers。该文件与 Claude Code CLI 共享、同用户任意进程可读。

@@ -17,6 +17,14 @@ Renderer-reachable procedures SHALL resolve filesystem targets from registered m
 - **WHEN** a renderer-reachable route receives a path containing traversal, a null byte, or a symlink escape outside the approved root
 - **THEN** the main process SHALL reject the request before reading, writing, watching, opening, or deleting the target.
 
+#### Scenario: File search or watch uses an unregistered root
+- **WHEN** a renderer asks the file search or watch route to operate on a project path that is not a registered project path or chat worktree path
+- **THEN** the main process SHALL reject the request before scanning or watching the directory.
+
+#### Scenario: File rename or delete targets a path outside the registered root
+- **WHEN** a renderer asks the file rename or delete route to operate on an absolute path outside the supplied registered project or chat worktree root
+- **THEN** the main process SHALL reject the request before renaming or deleting the target.
+
 ### Requirement: Runtime And Shell Starts Use Server-Resolved Context
 Renderer-reachable runtime and terminal start procedures SHALL derive cwd, project path, runtime permission context, and project-scoped configuration from server-side chat, sub-chat, project, or workspace records.
 

@@ -111,6 +111,83 @@ describe("tRPC path boundaries", () => {
     ).rejects.toThrow("File read root is not registered")
   })
 
+  test("file search and watch reject attacker-selected unregistered roots", async () => {
+    const rootPath = await makeTempDir("locus-files-search-unregistered-")
+    await writeText(join(rootPath, "payload.txt"), "UNREGISTERED_PAYLOAD")
+
+    const caller = filesRouter.createCaller({ getWindow: () => null })
+
+    await expect(
+      caller.search({ projectPath: rootPath, query: "", limit: 50 }),
+    ).rejects.toThrow("File read root is not registered")
+    await expect(
+      Promise.resolve().then(() => caller.watchChanges({ projectPath: rootPath })),
+    ).rejects.toThrow("File read root is not registered")
+  })
+
+  test("file rename and delete reject targets outside registered roots", async () => {
+    const projectPath = await makeTempDir("locus-files-write-project-")
+    const secretRoot = await makeTempDir("locus-files-write-secret-")
+    const allowedPath = join(projectPath, "src", "allowed.txt")
+    const secretPath = join(secretRoot, "secret.txt")
+
+    await writeText(allowedPath, "allowed")
+    await writeText(secretPath, "SECRET_PAYLOAD")
+    testDb
+      .insert(schema.projects)
+      .values({
+        id: "project-files-write-boundary",
+        name: "Files Write Boundary",
+        path: projectPath,
+      })
+      .run()
+
+    const caller = filesRouter.createCaller({ getWindow: () => null })
+
+    await expect(
+      caller.renameFile({
+        projectPath,
+        absolutePath: secretPath,
+        newName: "renamed.txt",
+      }),
+    ).rejects.toThrow("Path escapes allowed directory")
+    await expect(
+      caller.deleteFile({ projectPath, absolutePath: secretPath }),
+    ).rejects.toThrow("Path escapes allowed directory")
+  })
+
+  test("file rename rejects replacement names with traversal or separators", async () => {
+    const projectPath = await makeTempDir("locus-files-rename-project-")
+    const filePath = join(projectPath, "src", "allowed.txt")
+
+    await writeText(filePath, "allowed")
+    testDb
+      .insert(schema.projects)
+      .values({
+        id: "project-files-rename-boundary",
+        name: "Files Rename Boundary",
+        path: projectPath,
+      })
+      .run()
+
+    const caller = filesRouter.createCaller({ getWindow: () => null })
+
+    await expect(
+      caller.renameFile({
+        projectPath,
+        absolutePath: filePath,
+        newName: "../escape.txt",
+      }),
+    ).rejects.toThrow("File name cannot contain path separators")
+    await expect(
+      caller.renameFile({
+        projectPath,
+        absolutePath: filePath,
+        newName: "..",
+      }),
+    ).rejects.toThrow("Invalid file name")
+  })
+
   test("command routes reject absolute paths outside command directories", async () => {
     const projectPath = await makeTempDir("locus-commands-project-")
     const secretRoot = await makeTempDir("locus-commands-secret-")

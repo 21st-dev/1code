@@ -521,12 +521,13 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
         break
 
       case "delete": {
+        if (!worktreePath) return
         const label = node.type === "folder"
           ? t("details.files.folder")
           : t("details.files.file")
         if (window.confirm(t("details.files.moveToTrash", { name: node.name }))) {
           deleteMutation.mutate(
-            { absolutePath },
+            { absolutePath, projectPath: worktreePath },
             {
               onSuccess: () => {
                 toast.success(t("details.files.movedToTrash", { name: node.name }))
@@ -541,14 +542,18 @@ export const FilesTab = memo(forwardRef<FilesTabHandle, FilesTabProps>(function 
         break
       }
     }
-  }, [toAbsolute, activateFile, openInAppMutation, openInFinderMutation, preferredEditor, deleteMutation, invalidateFiles, t])
+  }, [toAbsolute, activateFile, openInAppMutation, openInFinderMutation, preferredEditor, deleteMutation, invalidateFiles, t, worktreePath])
 
   const handleRenameSave = useCallback(async (newName: string) => {
     if (!renameTarget || !worktreePath) return
     const absolutePath = toAbsolute(renameTarget.path)
     setRenameLoading(true)
     try {
-      await renameMutation.mutateAsync({ absolutePath, newName })
+      await renameMutation.mutateAsync({
+        absolutePath,
+        newName,
+        projectPath: worktreePath,
+      })
       toast.success(t("details.files.renamedTo", { name: newName }))
 
       // Update expanded paths: replace old path prefix with new

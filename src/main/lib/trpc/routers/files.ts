@@ -123,19 +123,7 @@ const fileListCache = new Map<
 >()
 const CACHE_TTL = 5000 // 5 seconds
 
-/**
- * Validate that a path doesn't contain path traversal attacks.
- * Checks for null bytes and ensures the resolved path stays within the expected parent.
- */
-function validatePathSafe(targetPath: string, allowedParent?: string): void {
-  if (allowedParent) {
-    resolvePathWithinRoot({ targetPath, rootPath: allowedParent })
-    return
-  }
-  resolvePathWithinRoot({ targetPath, rootPath: dirname(targetPath) })
-}
-
-function resolveRegisteredReadRoot(rootPath: string): string {
+function resolveRegisteredFileRoot(rootPath: string): string {
   const resolvedRoot = resolve(rootPath)
   const db = getDatabase()
   const registeredProject = db
@@ -170,11 +158,11 @@ function resolveRegisteredReadRoot(rootPath: string): string {
   return resolvedRoot
 }
 
-function resolveReadableFilePath(input: {
+function resolveFilePathWithinRegisteredRoot(input: {
   filePath: string
   projectPath: string
 }): string {
-  const rootPath = resolveRegisteredReadRoot(input.projectPath)
+  const rootPath = resolveRegisteredFileRoot(input.projectPath)
   return resolvePathWithinRoot({
     targetPath: input.filePath,
     rootPath,
@@ -408,16 +396,18 @@ export const filesRouter = router({
         return []
       }
 
+      const rootPath = resolveRegisteredFileRoot(projectPath)
+
       try {
         // Verify the path exists and is a directory
-        const pathStat = await stat(projectPath)
+        const pathStat = await stat(rootPath)
         if (!pathStat.isDirectory()) {
-          console.warn(`[files] Not a directory: ${projectPath}`)
+          console.warn(`[files] Not a directory: ${rootPath}`)
           return []
         }
 
         // Get entry list (cached or fresh scan)
-        const entries = await getEntryList(projectPath, {
+        const entries = await getEntryList(rootPath, {
           includeHiddenAndSensitive,
         })
 
@@ -447,7 +437,7 @@ export const filesRouter = router({
     .input(z.object({ filePath: z.string(), projectPath: z.string() }))
     .query(async ({ input }) => {
       try {
-        const filePath = resolveReadableFilePath(input)
+        const filePath = resolveFilePathWithinRegisteredRoot(input)
         const content = await readFile(filePath, "utf-8")
         return content
       } catch (error) {
@@ -468,7 +458,7 @@ export const filesRouter = router({
       const MAX_SIZE = 2 * 1024 * 1024 // 2 MB
 
       try {
-        const filePath = resolveReadableFilePath(input)
+        const filePath = resolveFilePathWithinRegisteredRoot(input)
         const fileStat = await stat(filePath)
 
         if (fileStat.size > MAX_SIZE) {
@@ -515,7 +505,7 @@ export const filesRouter = router({
       const MAX_SIZE = 20 * 1024 * 1024 // 20 MB
 
       try {
-        const filePath = resolveReadableFilePath(input)
+        const filePath = resolveFilePathWithinRegisteredRoot(input)
         const fileStat = await stat(filePath)
 
         if (fileStat.size > MAX_SIZE) {
@@ -568,9 +558,11 @@ export const filesRouter = router({
   watchChanges: publicProcedure
     .input(z.object({ projectPath: z.string() }))
     .subscription(({ input }) => {
+      const rootPath = resolveRegisteredFileRoot(input.projectPath)
+
       return observable<{ filename: string; eventType: string }>((emit) => {
         const watcher = watch(
-          input.projectPath,
+          rootPath,
           { recursive: true },
           (eventType, filename) => {
             if (filename) {
@@ -654,23 +646,28 @@ export const filesRouter = router({
   renameFile: publicProcedure
     .input(
       z.object({
+        projectPath: z.string(),
         absolutePath: z.string(),
         newName: z.string().min(1),
       }),
     )
     .mutation(async ({ input }) => {
-      const { absolutePath, newName } = input
+      const { absolutePath, newName, projectPath } = input
 
-      validatePathSafe(absolutePath)
+      const rootPath = resolveRegisteredFileRoot(projectPath)
+      const targetPath = resolvePathWithinRoot({
+        targetPath: absolutePath,
+        rootPath,
+      })
       validateFileName(newName)
 
-      const dir = dirname(absolutePath)
-      const newPath = join(dir, newName)
+      const dir = dirname(targetPath)
+      const newPath = resolvePathWithinRoot({
+        targetPath: join(dir, newName),
+        rootPath,
+      })
 
-      // Ensure the new path stays in the same directory
-      validatePathSafe(newPath, dir)
-
-      await fsRename(absolutePath, newPath)
+      await fsRename(targetPath, newPath)
       return { success: true, newPath }
     }),
 
@@ -680,12 +677,17 @@ export const filesRouter = router({
   deleteFile: publicProcedure
     .input(
       z.object({
+        projectPath: z.string(),
         absolutePath: z.string(),
       }),
     )
     .mutation(async ({ input }) => {
-      validatePathSafe(input.absolutePath)
-      await shell.trashItem(input.absolutePath)
+      const rootPath = resolveRegisteredFileRoot(input.projectPath)
+      const targetPath = resolvePathWithinRoot({
+        targetPath: input.absolutePath,
+        rootPath,
+      })
+      await shell.trashItem(targetPath)
       return { success: true }
     }),
 })
