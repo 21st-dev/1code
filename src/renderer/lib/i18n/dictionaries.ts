@@ -511,6 +511,37 @@ export const en = {
   "settings.models.qwenCli.docs": "Docs",
   "settings.models.qwenCli.authHint":
     "Run qwen, then use /auth inside the Qwen Code CLI.",
+  "settings.models.qwenCli.configTitle": "Qwen-managed configuration",
+  "settings.models.qwenCli.configState.configured": "Configured",
+  "settings.models.qwenCli.configState.missing": "Needs configuration",
+  "settings.models.qwenCli.configState.invalid": "Invalid settings",
+  "settings.models.qwenCli.configUnknown": "unknown",
+  "settings.models.qwenCli.configHint.loading":
+    "Loading Qwen CLI configuration metadata.",
+  "settings.models.qwenCli.configHint.configured":
+    "Qwen CLI is set to auth {authType} and model {model}. Locus displays this only; Qwen Code still owns the provider setup.",
+  "settings.models.qwenCli.configHint.missing":
+    "No usable Qwen settings were found. Run qwen and use /auth, or configure ~/.qwen/settings.json.",
+  "settings.models.qwenCli.configHint.invalid":
+    "Qwen settings exist but could not be parsed. Fix ~/.qwen/settings.json, then retry.",
+  "settings.models.qwenCli.configRuntimeManaged":
+    "This is not a Locus Provider Profile and does not use the Locus provider gateway.",
+  "settings.models.qwenCli.configParseError":
+    "Settings parse error: {error}",
+  "settings.models.qwenCli.configSelectedAuth":
+    "Selected auth: {authType}",
+  "settings.models.qwenCli.configSelectedModel":
+    "Selected model: {model}",
+  "settings.models.qwenCli.configEnvFilePresent": ".env file found",
+  "settings.models.qwenCli.configEnvFileMissing": ".env file not found",
+  "settings.models.qwenCli.configEnvKeys":
+    "Env keys declared in settings: {keys}",
+  "settings.models.qwenCli.configProvidersTitle": "Configured providers",
+  "settings.models.qwenCli.configProviderModels": "{count} models",
+  "settings.models.qwenCli.configProviderOrigin": "Origin: {origin}",
+  "settings.models.qwenCli.configProviderEnvKey": "Env: {envKey}",
+  "settings.models.qwenCli.configNoProviders":
+    "No modelProviders entries were found in Qwen settings.",
   "settings.models.qwenCli.overridePath": "Executable path override",
   "settings.models.qwenCli.overrideHint":
     "Use an absolute path when the desktop app cannot see your shell PATH. This stores only the path, never Qwen auth files or provider secrets.",
@@ -4185,6 +4216,37 @@ export const zhCN: Partial<Record<TranslationKey, string>> = {
   "settings.models.qwenCli.docs": "文档",
   "settings.models.qwenCli.authHint":
     "运行 qwen，然后在 Qwen Code CLI 里使用 /auth。",
+  "settings.models.qwenCli.configTitle": "Qwen 管理的配置",
+  "settings.models.qwenCli.configState.configured": "已配置",
+  "settings.models.qwenCli.configState.missing": "需要配置",
+  "settings.models.qwenCli.configState.invalid": "设置无效",
+  "settings.models.qwenCli.configUnknown": "未知",
+  "settings.models.qwenCli.configHint.loading":
+    "正在读取 Qwen CLI 配置元数据。",
+  "settings.models.qwenCli.configHint.configured":
+    "Qwen CLI 当前选择 auth {authType} 和模型 {model}。Locus 这里只展示摘要，提供方设置仍由 Qwen Code 管理。",
+  "settings.models.qwenCli.configHint.missing":
+    "没有找到可用的 Qwen 设置。请运行 qwen 并使用 /auth，或配置 ~/.qwen/settings.json。",
+  "settings.models.qwenCli.configHint.invalid":
+    "Qwen 设置文件存在，但无法解析。修复 ~/.qwen/settings.json 后再重试。",
+  "settings.models.qwenCli.configRuntimeManaged":
+    "这不是 Locus 提供方配置，也不会走 Locus provider gateway。",
+  "settings.models.qwenCli.configParseError":
+    "设置解析错误：{error}",
+  "settings.models.qwenCli.configSelectedAuth":
+    "当前 auth：{authType}",
+  "settings.models.qwenCli.configSelectedModel":
+    "当前模型：{model}",
+  "settings.models.qwenCli.configEnvFilePresent": "已找到 .env 文件",
+  "settings.models.qwenCli.configEnvFileMissing": "未找到 .env 文件",
+  "settings.models.qwenCli.configEnvKeys":
+    "settings 中声明的环境变量名：{keys}",
+  "settings.models.qwenCli.configProvidersTitle": "已配置的提供方",
+  "settings.models.qwenCli.configProviderModels": "{count} 个模型",
+  "settings.models.qwenCli.configProviderOrigin": "Origin：{origin}",
+  "settings.models.qwenCli.configProviderEnvKey": "Env：{envKey}",
+  "settings.models.qwenCli.configNoProviders":
+    "Qwen settings 中没有找到 modelProviders 条目。",
   "settings.models.qwenCli.overridePath": "可执行文件路径覆盖",
   "settings.models.qwenCli.overrideHint":
     "当桌面应用看不到你的命令行 PATH 时，填写绝对路径。这里只保存路径，不写入 Qwen 认证文件或提供方密钥。",

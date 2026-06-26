@@ -270,4 +270,149 @@ describe("Qwen CLI setup status", () => {
       readFileSync(getQwenCliSettingsPath({ userDataPath }), "utf8"),
     ).toContain('"executablePath": null')
   })
+
+  test("summarizes Qwen settings without exposing provider secrets", async () => {
+    const installRoot = tempRoot()
+    const qwenSettingsDir = tempRoot()
+    const qwenPath = executableFile(installRoot)
+    writeFileSync(
+      join(qwenSettingsDir, ".env"),
+      "OPENAI_API_KEY=sk-env-secret-value\n",
+      "utf8",
+    )
+    writeFileSync(
+      join(qwenSettingsDir, "settings.json"),
+      JSON.stringify({
+        env: {
+          OPENAI_API_KEY: "sk-settings-secret-value",
+          CUSTOM_GATEWAY_TOKEN: "secret-token-value",
+        },
+        security: {
+          auth: {
+            selectedType: "openai",
+          },
+        },
+        model: {
+          name: "qwen3-coder-plus",
+        },
+        modelProviders: {
+          openai: {
+            protocol: "openai",
+            models: [
+              {
+                id: "qwen3-coder-plus",
+                name: "Qwen3 Coder Plus",
+                envKey: "OPENAI_API_KEY",
+                baseUrl:
+                  "https://user:password@example.test/v1?api_key=secret",
+              },
+            ],
+          },
+        },
+      }),
+      "utf8",
+    )
+
+    const resolved = await resolveQwenCliSetupStatus({
+      overridePath: qwenPath,
+      ignoreSavedOverride: true,
+      qwenSettingsDir,
+      probeVersion: async () => ({
+        ok: true,
+        value: "qwen 0.18.5",
+        error: null,
+      }),
+    })
+
+    expect(resolved.status.configuration).toMatchObject({
+      state: "configured",
+      settingsFilePresent: true,
+      envFilePresent: true,
+      selectedAuthType: "openai",
+      selectedModel: "qwen3-coder-plus",
+      envKeysInSettings: ["OPENAI_API_KEY", "CUSTOM_GATEWAY_TOKEN"],
+      providers: [
+        {
+          authType: "openai",
+          protocol: "openai",
+          modelCount: 1,
+          models: [
+            {
+              id: "qwen3-coder-plus",
+              name: "Qwen3 Coder Plus",
+              envKey: "OPENAI_API_KEY",
+              baseUrlOrigin: "https://example.test",
+            },
+          ],
+        },
+      ],
+    })
+    const rendererPayload = JSON.stringify(resolved.status)
+    expect(rendererPayload).not.toContain("sk-env-secret-value")
+    expect(rendererPayload).not.toContain("sk-settings-secret-value")
+    expect(rendererPayload).not.toContain("secret-token-value")
+    expect(rendererPayload).not.toContain("user:password")
+    expect(rendererPayload).not.toContain("api_key=secret")
+  })
+
+  test("reports missing or invalid Qwen settings as configuration state only", async () => {
+    const installRoot = tempRoot()
+    const missingSettingsDir = tempRoot()
+    const invalidSettingsDir = tempRoot()
+    const qwenPath = executableFile(installRoot)
+    writeFileSync(join(invalidSettingsDir, "settings.json"), "{", "utf8")
+
+    const missing = await resolveQwenCliSetupStatus({
+      overridePath: qwenPath,
+      ignoreSavedOverride: true,
+      qwenSettingsDir: missingSettingsDir,
+      probeVersion: async () => ({
+        ok: true,
+        value: "qwen 0.18.5",
+        error: null,
+      }),
+    })
+    expect(missing.status.ok).toBe(true)
+    expect(missing.status.configuration).toMatchObject({
+      state: "missing",
+      settingsFilePresent: false,
+      parseError: null,
+    })
+
+    const invalid = await resolveQwenCliSetupStatus({
+      overridePath: qwenPath,
+      ignoreSavedOverride: true,
+      qwenSettingsDir: invalidSettingsDir,
+      probeVersion: async () => ({
+        ok: true,
+        value: "qwen 0.18.5",
+        error: null,
+      }),
+    })
+    expect(invalid.status.ok).toBe(true)
+    expect(invalid.status.configuration.state).toBe("invalid")
+    expect(invalid.status.configuration.settingsFilePresent).toBe(true)
+    expect(invalid.status.configuration.parseError).toBeTruthy()
+  })
+
+  test("does not read Qwen settings when the runtime gate is disabled", async () => {
+    const qwenSettingsDir = tempRoot()
+    writeFileSync(join(qwenSettingsDir, ".env"), "OPENAI_API_KEY=sk-env\n")
+    writeFileSync(join(qwenSettingsDir, "settings.json"), "{", "utf8")
+
+    const disabled = await resolveQwenCliSetupStatus({
+      enabled: false,
+      qwenSettingsDir,
+      probeVersion: async () => {
+        throw new Error("version probe should not run")
+      },
+    })
+
+    expect(disabled.status.configuration).toMatchObject({
+      state: "disabled",
+      settingsFilePresent: false,
+      envFilePresent: false,
+      parseError: null,
+    })
+  })
 })

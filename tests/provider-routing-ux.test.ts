@@ -243,9 +243,20 @@ describe("provider routing UX source guards", () => {
     expect(runtimeModelSelectorSource).toContain(
       "agent.model.qwenRuntimeManaged",
     )
+    expect(modelsTabSource).toContain("qwenCliStatus?.configuration")
+    expect(modelsTabSource).toContain(
+      "settings.models.qwenCli.configRuntimeManaged",
+    )
+    expect(dictionariesSource).toContain(
+      "settings.models.qwenCli.configTitle",
+    )
+    expect(dictionariesSource).toContain(
+      "This is not a Locus Provider Profile",
+    )
     expect(runtimeModelSelectorSource).not.toContain(
       'targetRuntimes.includes("qwen-code")',
     )
+    expect(providerEditorSource).not.toContain('qwen-code: "')
     expect(newChatFormSource).toContain("lastSelectedKunModelSourceAtom")
     expect(newChatFormSource).toContain('selectedRuntimeProvider === "kun"')
     expect(chatInputAreaSource).toContain("subChatKunModelSourceAtomFamily")

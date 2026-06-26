@@ -236,6 +236,61 @@ function localizeQwenStatusText(value: string | null | undefined, t: Translate) 
   return value
 }
 
+function getQwenConfigurationBadgeClass(state: string | undefined): string {
+  switch (state) {
+    case "configured":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+    case "invalid":
+      return "border-red-500/30 bg-red-500/10 text-red-800 dark:text-red-200"
+    default:
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+  }
+}
+
+function getQwenConfigurationStateLabel(
+  state: string | undefined,
+  t: Translate,
+): string {
+  switch (state) {
+    case "configured":
+      return t("settings.models.qwenCli.configState.configured")
+    case "invalid":
+      return t("settings.models.qwenCli.configState.invalid")
+    case "disabled":
+      return t("common.disabled")
+    default:
+      return t("settings.models.qwenCli.configState.missing")
+  }
+}
+
+function getQwenConfigurationHint(
+  configuration:
+    | {
+        state: string
+        selectedAuthType: string | null
+        selectedModel: string | null
+      }
+    | null
+    | undefined,
+  t: Translate,
+): string {
+  if (!configuration) return t("settings.models.qwenCli.configHint.loading")
+  if (configuration.state === "configured") {
+    return t("settings.models.qwenCli.configHint.configured", {
+      authType:
+        configuration.selectedAuthType ??
+        t("settings.models.qwenCli.configUnknown"),
+      model:
+        configuration.selectedModel ??
+        t("settings.models.qwenCli.configUnknown"),
+    })
+  }
+  if (configuration.state === "invalid") {
+    return t("settings.models.qwenCli.configHint.invalid")
+  }
+  return t("settings.models.qwenCli.configHint.missing")
+}
+
 function getKunShellReasonLabel(reason: string, t: Translate) {
   return t(KUN_SHELL_REASON_LABELS[reason] ?? "settings.models.kunCli.unknown")
 }
@@ -2340,6 +2395,143 @@ export function AgentsModelsTab() {
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-3 border-t border-border pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        {t("settings.models.qwenCli.configTitle")}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs font-medium",
+                          getQwenConfigurationBadgeClass(
+                            qwenCliStatus?.configuration.state,
+                          ),
+                        )}
+                      >
+                        {getQwenConfigurationStateLabel(
+                          qwenCliStatus?.configuration.state,
+                          t,
+                        )}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {getQwenConfigurationHint(
+                        qwenCliStatus?.configuration,
+                        t,
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t("settings.models.qwenCli.configRuntimeManaged")}
+                    </p>
+                  </div>
+                </div>
+
+                {qwenCliStatus?.configuration.parseError && (
+                  <p className="text-xs text-red-700 dark:text-red-300">
+                    {t("settings.models.qwenCli.configParseError", {
+                      error: qwenCliStatus.configuration.parseError,
+                    })}
+                  </p>
+                )}
+
+                <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                  {qwenCliStatus?.configuration.selectedAuthType && (
+                    <div>
+                      {t("settings.models.qwenCli.configSelectedAuth", {
+                        authType: qwenCliStatus.configuration.selectedAuthType,
+                      })}
+                    </div>
+                  )}
+                  {qwenCliStatus?.configuration.selectedModel && (
+                    <div>
+                      {t("settings.models.qwenCli.configSelectedModel", {
+                        model: qwenCliStatus.configuration.selectedModel,
+                      })}
+                    </div>
+                  )}
+                  <div>
+                    {qwenCliStatus?.configuration.envFilePresent
+                      ? t("settings.models.qwenCli.configEnvFilePresent")
+                      : t("settings.models.qwenCli.configEnvFileMissing")}
+                  </div>
+                  {qwenCliStatus?.configuration.envKeysInSettings.length ? (
+                    <div className="break-all">
+                      {t("settings.models.qwenCli.configEnvKeys", {
+                        keys: qwenCliStatus.configuration.envKeysInSettings.join(
+                          ", ",
+                        ),
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+
+                {qwenCliStatus?.configuration.providers.length ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-foreground">
+                      {t("settings.models.qwenCli.configProvidersTitle")}
+                    </p>
+                    {qwenCliStatus.configuration.providers.map((provider) => (
+                      <div
+                        key={`${provider.authType}:${provider.protocol ?? ""}`}
+                        className="space-y-1 border-t border-border pt-2 first:border-t-0 first:pt-0"
+                      >
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-medium text-foreground">
+                            {provider.authType}
+                          </span>
+                          {provider.protocol && (
+                            <span className="text-muted-foreground">
+                              {provider.protocol}
+                            </span>
+                          )}
+                          <Badge variant="outline" className="text-[11px]">
+                            {t("settings.models.qwenCli.configProviderModels", {
+                              count: provider.modelCount,
+                            })}
+                          </Badge>
+                        </div>
+                        {provider.models.length ? (
+                          <div className="flex flex-wrap gap-1">
+                            {provider.models.map((model) => (
+                              <span
+                                key={`${provider.authType}:${model.id}:${model.baseUrlOrigin ?? ""}`}
+                                className="max-w-full truncate rounded-sm bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                                title={[
+                                  model.name ?? model.id,
+                                  model.baseUrlOrigin
+                                    ? t(
+                                        "settings.models.qwenCli.configProviderOrigin",
+                                        { origin: model.baseUrlOrigin },
+                                      )
+                                    : null,
+                                  model.envKey
+                                    ? t(
+                                        "settings.models.qwenCli.configProviderEnvKey",
+                                        { envKey: model.envKey },
+                                      )
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              >
+                                {model.name ?? model.id}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {t("settings.models.qwenCli.configNoProviders")}
+                  </p>
+                )}
               </div>
 
               <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-[1fr_auto_auto] sm:items-center">
