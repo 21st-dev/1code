@@ -1,16 +1,16 @@
 "use client"
 
 import { createContext, useContext, useMemo } from "react"
-import { getFileIconByExtension } from "./agents-file-mention"
-import { SkillIcon, CustomAgentIcon, OriginalMCPIcon } from "../../../components/ui/icons"
-import { UnknownFileIcon } from "../../../icons/framework-icons"
-import { MENTION_PREFIXES } from "./agents-mentions-editor"
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "../../../components/ui/hover-card"
+import { CustomAgentIcon, OriginalMCPIcon, SkillIcon } from "../../../components/ui/icons"
+import { UnknownFileIcon } from "../../../icons/framework-icons"
 import { useI18n } from "../../../lib/i18n"
+import { getFileIconByExtension } from "./agents-file-mention"
+import { MENTION_PREFIXES } from "./mention-prefixes"
 
 /**
  * Context for opening files in the file viewer sidebar.

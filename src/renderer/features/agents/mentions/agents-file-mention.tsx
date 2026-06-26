@@ -1,39 +1,39 @@
 "use client"
 
-import { cn } from "../../../lib/utils"
-import { trpc } from "../../../lib/trpc"
 import { keepPreviousData } from "@tanstack/react-query"
+import { useAtomValue } from "jotai"
+import { ChevronRight, Eye, EyeOff } from "lucide-react"
 import {
+  createElement,
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  createElement,
-  memo,
 } from "react"
-import { flushSync, createPortal } from "react-dom"
+import { createPortal, flushSync } from "react-dom"
 import { createRoot } from "react-dom/client"
-import { useAtomValue } from "jotai"
-import type { FileMentionOption } from "./agents-mentions-editor"
-import { MENTION_PREFIXES } from "./agents-mentions-editor"
-import { sessionInfoAtom } from "../../../lib/atoms"
-import { useI18n } from "../../../lib/i18n"
 import {
+  CustomAgentIcon,
   FilesIcon,
   IconSpinner,
-  SkillIcon,
-  CustomAgentIcon,
   OriginalMCPIcon,
+  SkillIcon,
 } from "../../../components/ui/icons"
-import { ChevronRight, Eye, EyeOff } from "lucide-react"
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "../../../components/ui/tooltip"
+import { sessionInfoAtom } from "../../../lib/atoms"
+import { useI18n } from "../../../lib/i18n"
+import { trpc } from "../../../lib/trpc"
+import { cn } from "../../../lib/utils"
+import type { FileMentionOption } from "./agents-mentions-editor"
+import { MENTION_PREFIXES } from "./mention-prefixes"
 
 // Custom folder icon matching design
 function FolderOpenIcon({ className }: { className?: string }) {
@@ -53,44 +53,45 @@ function FolderOpenIcon({ className }: { className?: string }) {
     </svg>
   )
 }
+
 import {
-  TypeScriptIcon,
-  JavaScriptIcon,
-  PythonIcon,
-  GoIcon,
-  RustIcon,
-  CodeIcon,
-  ReactIcon,
-  MarkdownInfoIcon,
-  MarkdownIcon,
-  CSSIcon,
-  HTMLIcon,
-  SCSSIcon,
-  JSONIcon,
-  YAMLIcon,
-  ShellIcon,
-  SQLIcon,
-  GraphQLIcon,
-  PrismaIcon,
-  DockerIcon,
-  TOMLIcon,
-  JavaIcon,
+  AstroIcon,
   CIcon,
+  CodeIcon,
   CppIcon,
   CSharpIcon,
-  PHPIcon,
-  RubyIcon,
-  KotlinIcon,
-  VueIcon,
-  SvelteIcon,
-  AstroIcon,
-  SwiftIcon,
-  PDFIcon,
-  SVGIcon,
-  TxtIcon,
+  CSSIcon,
+  DockerIcon,
   GitIcon,
+  GoIcon,
+  GraphQLIcon,
+  HTMLIcon,
+  JavaIcon,
+  JavaScriptIcon,
+  JSONIcon,
+  KotlinIcon,
+  MarkdownIcon,
+  MarkdownInfoIcon,
   NpmIcon,
+  PDFIcon,
+  PHPIcon,
+  PrismaIcon,
+  PythonIcon,
+  ReactIcon,
+  RubyIcon,
+  RustIcon,
+  SCSSIcon,
+  ShellIcon,
+  SQLIcon,
+  SVGIcon,
+  SvelteIcon,
+  SwiftIcon,
+  TOMLIcon,
+  TxtIcon,
+  TypeScriptIcon,
   UnknownFileIcon,
+  VueIcon,
+  YAMLIcon,
 } from "../../../icons/framework-icons"
 
 interface ChangedFile {

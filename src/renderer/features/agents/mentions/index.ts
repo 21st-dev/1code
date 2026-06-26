@@ -1,18 +1,17 @@
+export { AgentsFileMention } from "./agents-file-mention"
 export {
   AgentsMentionsEditor,
   type AgentsMentionsEditorHandle,
   type FileMentionOption,
   type SlashTriggerPayload,
-  MENTION_PREFIXES,
 } from "./agents-mentions-editor"
-
-export { AgentsFileMention } from "./agents-file-mention"
+export { MENTION_PREFIXES } from "./mention-prefixes"
 
 export {
-  useRenderFileMentions,
-  RenderFileMentions,
   extractFileMentions,
-  hasFileMentions,
   FileOpenProvider,
+  hasFileMentions,
+  RenderFileMentions,
   useFileOpen,
+  useRenderFileMentions,
 } from "./render-file-mentions"

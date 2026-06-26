@@ -11,6 +11,7 @@ import {
   memo,
 } from "react"
 import { createFileIconElement } from "./agents-file-mention"
+import { MENTION_PREFIXES } from "./mention-prefixes"
 
 // Threshold for skipping expensive trigger detection (characters)
 // Should be >= MAX_PASTE_LENGTH from paste-text.ts to avoid processing large pasted content
@@ -32,19 +33,6 @@ export interface FileMentionOption {
   source?: "user" | "project" | "plugin" | "registry" | "app" // skill/agent source
   mcpServer?: string // MCP server name for tools
 }
-
-// Mention ID prefixes
-export const MENTION_PREFIXES = {
-  FILE: "file:",
-  FOLDER: "folder:",
-  SKILL: "skill:",
-  AGENT: "agent:",
-  TOOL: "tool:", // MCP tools
-  QUOTE: "quote:", // Selected text from assistant messages
-  DIFF: "diff:", // Selected text from diff sidebar
-  PASTED: "pasted:", // Large pasted text saved as files
-  CHAT_HISTORY: "chatHistory:", // Chat history from another sub-chat/provider
-} as const
 
 type TriggerPayload = {
   searchText: string

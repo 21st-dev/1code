@@ -1,15 +1,15 @@
-import { MENTION_PREFIXES } from "../../mentions/types/core"
-import { utf8ToBase64 } from "../utils/base64"
+import {
+  type ChatImageAttachment,
+  isSupportedChatImageMediaType,
+  toChatImageAttachmentPart,
+} from "../../../../shared/chat-attachments"
+import type { CanonicalAgentUserMessagePart } from "../../../../shared/chat-message"
 import type {
   LongTextAttachment,
 } from "../../../../shared/long-text-attachments"
 import { toLongTextAttachmentPart } from "../../../../shared/long-text-attachments"
-import {
-  isSupportedChatImageMediaType,
-  toChatImageAttachmentPart,
-  type ChatImageAttachment,
-} from "../../../../shared/chat-attachments"
-import type { CanonicalAgentUserMessagePart } from "../../../../shared/chat-message"
+import { MENTION_PREFIXES } from "../mentions/mention-prefixes"
+import { utf8ToBase64 } from "../utils/base64"
 
 type SendableImage = {
   id?: string
