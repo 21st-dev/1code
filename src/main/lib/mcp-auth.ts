@@ -2,6 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { BrowserWindow, shell } from 'electron';
+import net from 'node:net';
 import {
   getMcpServerConfig,
   GLOBAL_MCP_PATH,
@@ -13,6 +14,10 @@ import { getClaudeShellEnvironment } from './claude/env';
 import { CraftOAuth, fetchOAuthMetadata, getMcpBaseUrl, type OAuthMetadata, type OAuthTokens } from './oauth';
 import { discoverPluginMcpServers } from './plugins';
 import { bringToFront } from './window';
+import {
+  extractLoopbackMcpBridgeEndpoint,
+  resolveHostCompatibleMcpStdioConfig,
+} from './mcp-stdio-compat';
 
 
 /**
@@ -83,6 +88,83 @@ const BLOCKED_ENV_VARS = [
   'OPENAI_API_KEY',
 ];
 
+function isTcpPortListening(host: string, port: number, timeoutMs = 300): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port });
+    let settled = false;
+
+    const finish = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(value);
+    };
+
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => finish(true));
+    socket.once('error', () => finish(false));
+    socket.once('timeout', () => finish(false));
+  });
+}
+
+function reserveFreeLoopbackPort(host: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+
+    server.once('error', reject);
+    server.listen(0, host, () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : null;
+      server.close(() => {
+        if (port) {
+          resolve(port);
+        } else {
+          reject(new Error(`Unable to reserve a free port on ${host}`));
+        }
+      });
+    });
+  });
+}
+
+async function avoidLoopbackBridgePortCollision(config: {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+}): Promise<{
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+}> {
+  const endpoint = extractLoopbackMcpBridgeEndpoint(config.env);
+  if (!endpoint) return config;
+
+  const isListening = await isTcpPortListening(endpoint.host, endpoint.port);
+  if (!isListening) return config;
+
+  try {
+    const fallbackPort = await reserveFreeLoopbackPort(endpoint.host);
+    console.warn(
+      `[MCP] ${endpoint.host}:${endpoint.port} is already in use; probing stdio server with temporary ${endpoint.portEnvKey}=${fallbackPort}`,
+    );
+    return {
+      ...config,
+      env: {
+        ...config.env,
+        [endpoint.portEnvKey]: String(fallbackPort),
+      },
+    };
+  } catch (error) {
+    console.warn(
+      `[MCP] ${endpoint.host}:${endpoint.port} is already in use and no temporary probe port could be reserved:`,
+      error,
+    );
+    return config;
+  }
+}
+
 /**
  * Fetch tools from a stdio-based MCP server
  * Uses shell environment to ensure proper PATH (homebrew, nvm, etc.) in production
@@ -91,6 +173,8 @@ export async function fetchMcpToolsStdio(config: {
   command: string;
   args?: string[];
   env?: Record<string, string>;
+  cwd?: string;
+  sourcePath?: string | null;
 }): Promise<McpToolInfo[]> {
   let transport: StdioClientTransport | null = null;
 
@@ -113,10 +197,26 @@ export async function fetchMcpToolsStdio(config: {
       }
     }
 
+    const launchConfig = resolveHostCompatibleMcpStdioConfig(config);
+    if (!launchConfig.ok) {
+      console.warn(`[MCP] Skipping stdio server probe: ${launchConfig.reason}`);
+      return [];
+    }
+
+    if (launchConfig.rewrites.length > 0) {
+      const rewritten = launchConfig.rewrites
+        .map((rewrite) => `${rewrite.from} -> ${rewrite.to}`)
+        .join(', ');
+      console.log(`[MCP] Applied stdio path mapping: ${rewritten}`);
+    }
+
+    const stdioConfig = await avoidLoopbackBridgePortCollision(launchConfig.config);
+
     transport = new StdioClientTransport({
-      command: config.command,
-      args: config.args,
-      env: { ...safeEnv, ...config.env },
+      command: stdioConfig.command,
+      args: stdioConfig.args,
+      env: { ...safeEnv, ...stdioConfig.env },
+      cwd: stdioConfig.cwd,
     });
 
     await client.connect(transport);
@@ -139,14 +239,14 @@ export async function fetchMcpToolsStdio(config: {
   }
 }
 
-import { AUTH_SERVER_PORT, IS_DEV } from '../constants';
+import { getAuthServerPort, IS_DEV } from '../constants';
 
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
 
 function getMcpOAuthRedirectUri(): string {
   return IS_DEV
-    ? `http://localhost:${AUTH_SERVER_PORT}/callback`
-    : `http://127.0.0.1:${AUTH_SERVER_PORT}/callback`;
+    ? `http://localhost:${getAuthServerPort()}/callback`
+    : `http://127.0.0.1:${getAuthServerPort()}/callback`;
 }
 
 interface PendingOAuth {

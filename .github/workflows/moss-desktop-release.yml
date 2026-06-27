@@ -1,0 +1,95 @@
+name: Moss Desktop Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: electron-updater channel
+        required: true
+        default: latest
+        type: choice
+        options:
+          - latest
+          - beta
+
+jobs:
+  macos-release:
+    name: Build, sign, notarize, and verify macOS artifacts
+    runs-on: macos-latest
+    timeout-minutes: 120
+    env:
+      APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Download bundled runtimes
+        run: |
+          bun run claude:download:all
+          bun run codex:download:all
+
+      - name: Verify runtime and source gates
+        run: |
+          bun run test:runtime
+          bun run ts:check --pretty false
+
+      - name: Build app
+        run: bun run build
+
+      - name: Verify Apple release credentials
+        run: bun run release:credentials:strict
+
+      - name: Package signed macOS artifacts
+        run: |
+          rm -rf release
+          bun run package:mac
+
+      - name: Smoke packaged app bundle
+        run: bun run test:packaged-app-smoke
+
+      - name: Notarize and staple release artifacts
+        run: bun run release:notarize
+
+      - name: Generate update manifests
+        run: node scripts/generate-update-manifest.mjs --channel "${{ inputs.channel }}"
+
+      - name: Prepare release upload plan
+        run: node scripts/upload-release.mjs --dry-run --channel "${{ inputs.channel }}"
+
+      - name: Audit signed release evidence
+        run: bun run release:evidence:audit --require-notarization
+
+      - name: Verify commercial release evidence
+        run: node scripts/verify-release-packaging.mjs --require-artifacts --require-bundled-binaries --require-notarization --require-upload-plan
+
+      - name: Upload verified release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: moss-desktop-macos-${{ inputs.channel }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*mac*.yml
+            release/notarization-*.json
+            release/codesign-*.txt
+            release/staple-*.txt
+            release/spctl-*.txt
+            .1code/program/packaged-app-smoke/**/report.json
+            .1code/program/release-credentials/**/report.json
+            .1code/program/release-evidence-audit/**/report.json
+            .1code/program/release-upload/**/manifest.json
+          if-no-files-found: error

@@ -3,6 +3,11 @@ import simpleGit from "simple-git";
 import { z } from "zod";
 import { publicProcedure, router } from "../trpc";
 import { assertRegisteredWorktree, secureFs } from "./security";
+import {
+	getReadOnlyGitStatusFallback,
+	isRecoverableGitStatusError,
+	limitChangedFilesForStatus,
+} from "./status-fallback";
 import { applyNumstatToFiles } from "./utils/apply-numstat";
 import {
 	parseGitLog,
@@ -34,40 +39,59 @@ export const createStatusRouter = () => {
 				const git = simpleGit(input.worktreePath);
 				const defaultBranch = input.defaultBranch || "main";
 
-				const status = await git.status();
-				const parsed = parseGitStatus(status);
+				let result: GitChangesStatus;
+				try {
+					const status = await git.status(["--untracked-files=normal"]);
+					const parsed = parseGitStatus(status);
+					const staged = limitChangedFilesForStatus(parsed.staged);
+					const unstaged = limitChangedFilesForStatus(parsed.unstaged);
+					const untracked = limitChangedFilesForStatus(parsed.untracked);
 
-				// Run independent git operations in parallel (VS Code style)
-				const [branchComparison, trackingStatus] = await Promise.all([
-					getBranchComparison(git, defaultBranch),
-					getTrackingBranchStatus(git),
-				]);
+					// Run independent git operations in parallel (VS Code style)
+					const [branchComparison, trackingStatus] = await Promise.all([
+						getBranchComparison(git, defaultBranch),
+						getTrackingBranchStatus(git),
+					]);
 
-				// Run numstat operations in parallel
-				await Promise.all([
-					applyNumstatToFiles(git, parsed.staged, [
-						"diff",
-						"--cached",
-						"--numstat",
-					]),
-					applyNumstatToFiles(git, parsed.unstaged, ["diff", "--numstat"]),
-					applyUntrackedLineCount(input.worktreePath, parsed.untracked),
-				]);
+					// Run numstat operations in parallel
+					await Promise.all([
+						applyNumstatToFiles(git, staged, [
+							"diff",
+							"--cached",
+							"--numstat",
+						]),
+						applyNumstatToFiles(git, unstaged, ["diff", "--numstat"]),
+						applyUntrackedLineCount(input.worktreePath, untracked),
+					]);
 
-				const result: GitChangesStatus = {
-					branch: parsed.branch,
-					defaultBranch,
-					againstBase: branchComparison.againstBase,
-					commits: branchComparison.commits,
-					staged: parsed.staged,
-					unstaged: parsed.unstaged,
-					untracked: parsed.untracked,
-					ahead: branchComparison.ahead,
-					behind: branchComparison.behind,
-					pushCount: trackingStatus.pushCount,
-					pullCount: trackingStatus.pullCount,
-					hasUpstream: trackingStatus.hasUpstream,
-				};
+					result = {
+						branch: parsed.branch,
+						defaultBranch,
+						againstBase: branchComparison.againstBase,
+						commits: branchComparison.commits,
+						staged,
+						unstaged,
+						untracked,
+						ahead: branchComparison.ahead,
+						behind: branchComparison.behind,
+						pushCount: trackingStatus.pushCount,
+						pullCount: trackingStatus.pullCount,
+						hasUpstream: trackingStatus.hasUpstream,
+					};
+				} catch (error) {
+					if (!isRecoverableGitStatusError(error)) {
+						throw error;
+					}
+
+					console.warn("[getStatus] Native git unavailable; using read-only fallback:", {
+						worktreePath: input.worktreePath,
+						error: error instanceof Error ? error.message : String(error),
+					});
+					result = await getReadOnlyGitStatusFallback(
+						input.worktreePath,
+						defaultBranch,
+					);
+				}
 
 				// Store in cache
 				gitCache.setStatus(input.worktreePath, result);

@@ -896,8 +896,27 @@ export interface WorktreeResult {
 	error?: string;
 }
 
+export interface WorktreeCreatedContext {
+	worktreePath: string;
+	branch?: string;
+	baseBranch?: string;
+}
+
 export interface CreateWorktreeForChatOptions {
+	onCreated?: (context: WorktreeCreatedContext) => Promise<void> | void;
 	onSetupComplete?: (result: WorktreeSetupResult) => void;
+}
+
+async function notifyWorktreeCreated(
+	options: CreateWorktreeForChatOptions | undefined,
+	context: WorktreeCreatedContext,
+): Promise<void> {
+	try {
+		await options?.onCreated?.(context);
+	} catch (error) {
+		const errorMsg = error instanceof Error ? error.message : String(error);
+		console.warn(`[worktree] onCreated hook failed: ${errorMsg}`);
+	}
 }
 
 /**
@@ -920,6 +939,7 @@ export async function createWorktreeForChat(
 		const isRepo = await git.checkIsRepo();
 
 		if (!isRepo) {
+			await notifyWorktreeCreated(options, { worktreePath: projectPath });
 			return { success: true, worktreePath: projectPath };
 		}
 
@@ -938,6 +958,7 @@ export async function createWorktreeForChat(
 		const startPoint = branchType === "local" ? baseBranch : `origin/${baseBranch}`;
 
 		await createWorktree(projectPath, branch, worktreePath, startPoint);
+		await notifyWorktreeCreated(options, { worktreePath, branch, baseBranch });
 
 		// Run worktree setup commands in BACKGROUND (don't block chat creation)
 		// This allows the user to start chatting immediately while deps install

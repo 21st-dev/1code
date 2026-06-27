@@ -73,6 +73,11 @@ export const subChats = sqliteTable("sub_chats", {
     .notNull()
     .references(() => chats.id, { onDelete: "cascade" }),
   sessionId: text("session_id"), // Claude SDK session ID for resume
+  engine: text("engine").notNull().default("claude-code"), // "claude-code" | "codex" | "hermes" | "custom-acp"
+  engineSessionId: text("engine_session_id"), // Native engine session ID for resume
+  engineConfigDir: text("engine_config_dir"), // Per-engine config/session projection dir
+  modelId: text("model_id"), // Last selected runtime model for this sub-chat
+  runtimeMetadata: text("runtime_metadata"), // JSON object for engine-specific metadata
   streamId: text("stream_id"), // Track in-progress streams
   mode: text("mode").notNull().default("agent"), // "plan" | "agent"
   messages: text("messages").notNull().default("[]"), // JSON array

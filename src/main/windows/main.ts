@@ -10,16 +10,26 @@ import {
   nativeImage,
   dialog,
 } from "electron"
-import { join } from "path"
+import { join, isAbsolute } from "path"
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs"
+import { homedir } from "os"
+import { fileURLToPath } from "url"
 import { createIPCHandler } from "trpc-electron/main"
 import { createAppRouter } from "../lib/trpc/routers"
 import { getAuthManager, handleAuthCode, getBaseUrl } from "../index"
 import { registerGitWatcherIPC } from "../lib/git/watcher"
 import { hasActiveClaudeSessions, abortAllClaudeSessions } from "../lib/trpc/routers/claude"
 import { hasActiveCodexStreams, abortAllCodexStreams } from "../lib/trpc/routers/codex"
+import { hasActiveHermesStreams, abortAllHermesStreams } from "../lib/trpc/routers/hermes"
 import { registerThemeScannerIPC } from "../lib/vscode-theme-scanner"
 import { windowManager } from "./window-manager"
+import {
+  createLocalCodexAutomation,
+  deleteLocalCodexAutomation,
+  listLocalCodexAutomations,
+  runLocalCodexAutomationNow,
+  updateLocalCodexAutomation,
+} from "../lib/codex-automations"
 
 // Flag to bypass close confirmation when app.quit() has already been confirmed
 let isQuitting = false
@@ -35,6 +45,27 @@ function getWindowFromEvent(
   const webContents = event.sender
   const win = BrowserWindow.fromWebContents(webContents)
   return win && !win.isDestroyed() ? win : null
+}
+
+function normalizeShellPath(input: string): string | null {
+  if (typeof input !== "string") return null
+  const trimmedPath = input.trim()
+  if (!trimmedPath) return null
+
+  if (trimmedPath.startsWith("file://")) {
+    try {
+      return fileURLToPath(trimmedPath)
+    } catch {
+      return null
+    }
+  }
+
+  if (trimmedPath === "~") return homedir()
+  if (trimmedPath.startsWith("~/")) {
+    return join(homedir(), trimmedPath.slice(2))
+  }
+
+  return isAbsolute(trimmedPath) ? trimmedPath : null
 }
 
 // Register IPC handlers for window operations (only once)
@@ -80,7 +111,7 @@ function registerIpcHandlers(): void {
   // Note: Update checking is now handled by auto-updater module (lib/auto-updater.ts)
   ipcMain.handle("app:set-badge", (event, count: number | null) => {
     const win = getWindowFromEvent(event)
-    if (process.platform === "darwin") {
+    if (process.platform === "darwin" && app.dock) {
       app.dock.setBadge(count ? String(count) : "")
     } else if (process.platform === "win32" && win) {
       // Windows: Update title with count as fallback
@@ -285,9 +316,40 @@ function registerIpcHandlers(): void {
   })
 
   // Shell
-  ipcMain.handle("shell:open-external", (_event, url: string) =>
-    shell.openExternal(url),
-  )
+  ipcMain.handle("shell:open-external", async (_event, url: string) => {
+    if (typeof url !== "string") return { ok: false, reason: "invalid-url" }
+    const trimmedUrl = url.trim()
+    if (!trimmedUrl) return { ok: false, reason: "invalid-url" }
+
+    try {
+      const parsedUrl = new URL(trimmedUrl)
+      if (!["http:", "https:", "mailto:"].includes(parsedUrl.protocol)) {
+        return { ok: false, reason: "unsupported-protocol" }
+      }
+      await shell.openExternal(parsedUrl.toString())
+      return { ok: true }
+    } catch {
+      return { ok: false, reason: "invalid-url" }
+    }
+  })
+
+  ipcMain.handle("shell:open-path", async (_event, targetPath: string) => {
+    const localPath = normalizeShellPath(targetPath)
+    if (!localPath) return { ok: false, reason: "invalid-path" }
+
+    const error = await shell.openPath(localPath)
+    if (error) return { ok: false, reason: error }
+    return { ok: true }
+  })
+
+  ipcMain.handle("shell:reveal-path", async (_event, targetPath: string) => {
+    const localPath = normalizeShellPath(targetPath)
+    if (!localPath) return { ok: false, reason: "invalid-path" }
+    if (!existsSync(localPath)) return { ok: false, reason: "path-not-found" }
+
+    shell.showItemInFolder(localPath)
+    return { ok: true }
+  })
 
   // Clipboard
   ipcMain.handle("clipboard:write", (_event, text: string) =>
@@ -345,6 +407,45 @@ function registerIpcHandlers(): void {
       return false
     }
   }
+
+  // Local Codex automations. These mirror the Codex Desktop
+  // ~/.codex/automations/<id>/automation.toml contract for offline parity.
+  ipcMain.handle("codex-automations:list", async (event) => {
+    if (!validateSender(event)) return []
+    return listLocalCodexAutomations()
+  })
+
+  ipcMain.handle(
+    "codex-automations:create",
+    async (event, input: Record<string, unknown>) => {
+      if (!validateSender(event)) return null
+      return createLocalCodexAutomation(input ?? {})
+    },
+  )
+
+  ipcMain.handle(
+    "codex-automations:update",
+    async (event, input: Record<string, unknown>) => {
+      if (!validateSender(event)) return null
+      return updateLocalCodexAutomation(input ?? {})
+    },
+  )
+
+  ipcMain.handle(
+    "codex-automations:delete",
+    async (event, input: Record<string, unknown>) => {
+      if (!validateSender(event)) return null
+      return deleteLocalCodexAutomation(input ?? {})
+    },
+  )
+
+  ipcMain.handle(
+    "codex-automations:run-now",
+    async (event, input: Record<string, unknown>) => {
+      if (!validateSender(event)) return null
+      return runLocalCodexAutomationNow(input ?? {})
+    },
+  )
 
   ipcMain.handle("auth:get-user", (event) => {
     if (!validateSender(event)) return null
@@ -642,8 +743,18 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       contextIsolation: true,
       sandbox: false, // Required for electron-trpc
       webSecurity: true,
+      webviewTag: true,
       partition: "persist:main", // Use persistent session for cookies
     },
+  })
+
+  window.webContents.on("will-attach-webview", (event, webPreferences) => {
+    delete webPreferences.preload
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+    webPreferences.sandbox = true
+    webPreferences.webSecurity = true
+    webPreferences.allowRunningInsecureContent = false
   })
 
   // Register window with manager and get stable ID for localStorage namespacing
@@ -710,7 +821,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       if (!input.shift) {
         // Block Cmd+R entirely
         event.preventDefault()
-      } else if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
+      } else if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveHermesStreams()) {
         // Cmd+Shift+R with active streams — intercept and confirm
         event.preventDefault()
         dialog
@@ -728,6 +839,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
             if (response === 1) {
               abortAllClaudeSessions()
               abortAllCodexStreams()
+              abortAllHermesStreams()
               window.webContents.reloadIgnoringCache()
             }
           })
@@ -737,7 +849,14 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
 
   // Handle external links
   window.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    try {
+      const parsedUrl = new URL(url)
+      if (["http:", "https:", "mailto:"].includes(parsedUrl.protocol)) {
+        shell.openExternal(parsedUrl.toString()).catch(() => undefined)
+      }
+    } catch {
+      // Ignore malformed window-open requests instead of surfacing a main-process error.
+    }
     return { action: "deny" }
   })
 
@@ -748,10 +867,11 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
       // Still abort sessions gracefully so partial state is saved
       abortAllClaudeSessions()
       abortAllCodexStreams()
+      abortAllHermesStreams()
       return
     }
 
-    if (hasActiveClaudeSessions() || hasActiveCodexStreams()) {
+    if (hasActiveClaudeSessions() || hasActiveCodexStreams() || hasActiveHermesStreams()) {
       event.preventDefault()
       dialog
         .showMessageBox(window, {
@@ -768,6 +888,7 @@ export function createWindow(options?: { chatId?: string; subChatId?: string }):
           if (response === 1) {
             abortAllClaudeSessions()
             abortAllCodexStreams()
+            abortAllHermesStreams()
             window.destroy()
           }
         })
