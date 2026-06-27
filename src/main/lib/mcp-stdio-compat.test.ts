@@ -1,5 +1,42 @@
 import { describe, expect, test } from "bun:test"
-import { resolveHostCompatibleMcpStdioConfig } from "./mcp-stdio-compat"
+import {
+  extractLoopbackMcpBridgeEndpoint,
+  resolveHostCompatibleMcpStdioConfig,
+} from "./mcp-stdio-compat"
+
+describe("extractLoopbackMcpBridgeEndpoint", () => {
+  test("detects a loopback MCP bridge endpoint from env", () => {
+    expect(
+      extractLoopbackMcpBridgeEndpoint({
+        HOOLA_CANVAS_MCP_BRIDGE_HOST: "127.0.0.1",
+        HOOLA_CANVAS_MCP_BRIDGE_PORT: "47841",
+      }),
+    ).toEqual({
+      host: "127.0.0.1",
+      port: 47841,
+      hostEnvKey: "HOOLA_CANVAS_MCP_BRIDGE_HOST",
+      portEnvKey: "HOOLA_CANVAS_MCP_BRIDGE_PORT",
+    })
+  })
+
+  test("ignores non-loopback bridge endpoints", () => {
+    expect(
+      extractLoopbackMcpBridgeEndpoint({
+        HOOLA_CANVAS_MCP_BRIDGE_HOST: "0.0.0.0",
+        HOOLA_CANVAS_MCP_BRIDGE_PORT: "47841",
+      }),
+    ).toBeNull()
+  })
+
+  test("ignores invalid bridge ports", () => {
+    expect(
+      extractLoopbackMcpBridgeEndpoint({
+        HOOLA_CANVAS_MCP_BRIDGE_HOST: "127.0.0.1",
+        HOOLA_CANVAS_MCP_BRIDGE_PORT: "70000",
+      }),
+    ).toBeNull()
+  })
+})
 
 describe("resolveHostCompatibleMcpStdioConfig", () => {
   test("maps a Windows project root path through the source project path", () => {

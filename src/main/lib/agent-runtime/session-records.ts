@@ -1,113 +1,121 @@
-import { getAgentRuntimeManifest } from "./manifests"
+import { getAgentRuntimeManifest } from "./manifests";
 import {
   buildMossForkSnapshot,
   buildMossRollbackSnapshot,
   mergeMossSessionControlMetadata,
   type MossForkSnapshot,
   type MossRollbackSnapshot,
-} from "./session-actions"
-import { AGENT_ENGINE_IDS, DEFAULT_AGENT_ENGINE_ID, type AgentEngineId } from "./types"
+} from "./session-actions";
+import {
+  AGENT_ENGINE_IDS,
+  DEFAULT_AGENT_ENGINE_ID,
+  type AgentEngineId,
+} from "./types";
 
 export interface MossSessionSubChatRecord {
-  id: string
-  chatId: string
-  name: string | null
-  mode: string
-  messages: string
-  sessionId: string | null
-  engine: string | null
-  engineSessionId: string | null
-  engineConfigDir: string | null
-  modelId: string | null
-  runtimeMetadata: string | null
+  id: string;
+  chatId: string;
+  name: string | null;
+  mode: string;
+  messages: string;
+  sessionId: string | null;
+  engine: string | null;
+  engineSessionId: string | null;
+  engineConfigDir: string | null;
+  modelId: string | null;
+  runtimeMetadata: string | null;
 }
 
 export interface MossForkSubChatInsertValues {
-  id: string
-  chatId: string
-  name: string
-  mode: string
-  messages: string
-  sessionId: string | null
-  engine: AgentEngineId
-  engineSessionId: string | null
-  engineConfigDir: string | null
-  modelId: string | null
-  runtimeMetadata: string
+  id: string;
+  chatId: string;
+  name: string;
+  mode: string;
+  messages: string;
+  sessionId: string | null;
+  engine: AgentEngineId;
+  engineSessionId: string | null;
+  engineConfigDir: string | null;
+  modelId: string | null;
+  runtimeMetadata: string;
 }
 
 export interface MossRollbackSubChatUpdateValues {
-  messages: string
-  sessionId: string | null
-  engineSessionId: string | null
-  runtimeMetadata: string
-  updatedAt: Date
+  messages: string;
+  sessionId: string | null;
+  engineSessionId: string | null;
+  runtimeMetadata: string;
+  updatedAt: Date;
 }
 
 export interface BuildMossForkSubChatRecordInput {
-  sourceSubChat: MossSessionSubChatRecord
-  targetSubChatId: string
-  targetName: string
-  targetMessageId?: string
-  targetMessageIndex?: number
-  nativeBridgePlan?: unknown
-  forceTranscript?: boolean
-  fallbackReason?: string
-  metadata?: Record<string, unknown>
+  sourceSubChat: MossSessionSubChatRecord;
+  targetSubChatId: string;
+  targetName: string;
+  targetMessageId?: string;
+  targetMessageIndex?: number;
+  nativeBridgePlan?: unknown;
+  forceTranscript?: boolean;
+  fallbackReason?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface BuildMossForkSubChatRecordResult {
-  engine: AgentEngineId
-  sourceNativeSessionId: string | null
-  snapshot: MossForkSnapshot
-  nativeSessionLinked: boolean
-  insertValues: MossForkSubChatInsertValues
+  engine: AgentEngineId;
+  sourceNativeSessionId: string | null;
+  snapshot: MossForkSnapshot;
+  nativeSessionLinked: boolean;
+  insertValues: MossForkSubChatInsertValues;
 }
 
 export interface BuildMossRollbackSubChatUpdateInput {
-  subChat: MossSessionSubChatRecord
-  targetMessageId?: string
-  targetSdkMessageUuid?: string
-  appliedGitCheckpoint?: boolean
-  nativeBridgePlan?: unknown
-  metadata?: Record<string, unknown>
+  subChat: MossSessionSubChatRecord;
+  targetMessageId?: string;
+  targetSdkMessageUuid?: string;
+  strictTarget?: boolean;
+  appliedGitCheckpoint?: boolean;
+  nativeBridgePlan?: unknown;
+  metadata?: Record<string, unknown>;
 }
 
 export interface BuildMossRollbackSubChatUpdateResult {
-  engine: AgentEngineId
-  sourceNativeSessionId: string | null
-  snapshot: MossRollbackSnapshot
-  nativeSessionLinked: boolean
-  updateValues: MossRollbackSubChatUpdateValues
+  engine: AgentEngineId;
+  sourceNativeSessionId: string | null;
+  snapshot: MossRollbackSnapshot;
+  nativeSessionLinked: boolean;
+  updateValues: MossRollbackSubChatUpdateValues;
 }
 
 export function normalizeMossSessionRecordEngine(
   value: string | null | undefined,
 ): AgentEngineId {
   return AGENT_ENGINE_IDS.includes(value as AgentEngineId)
-    ? value as AgentEngineId
-    : DEFAULT_AGENT_ENGINE_ID
+    ? (value as AgentEngineId)
+    : DEFAULT_AGENT_ENGINE_ID;
 }
 
 export function nativeSessionIdForMossSessionRecord(
   subChat: Pick<MossSessionSubChatRecord, "engineSessionId" | "sessionId">,
   engine: AgentEngineId,
 ): string | null {
-  return subChat.engineSessionId ?? (engine === "claude-code" ? subChat.sessionId : null)
+  return (
+    subChat.engineSessionId ??
+    (engine === "claude-code" ? subChat.sessionId : null)
+  );
 }
 
 export function buildMossForkSubChatRecord(
   input: BuildMossForkSubChatRecordInput,
 ): BuildMossForkSubChatRecordResult {
-  const engine = normalizeMossSessionRecordEngine(input.sourceSubChat.engine)
-  const manifest = getAgentRuntimeManifest(engine)
+  const engine = normalizeMossSessionRecordEngine(input.sourceSubChat.engine);
+  const manifest = getAgentRuntimeManifest(engine);
   const originalNativeSessionId = nativeSessionIdForMossSessionRecord(
     input.sourceSubChat,
     engine,
-  )
+  );
   const sourceNativeSessionId = input.forceTranscript
     ? null
-    : originalNativeSessionId
+    : originalNativeSessionId;
   const snapshot = buildMossForkSnapshot({
     engine,
     nativeSessionId: sourceNativeSessionId,
@@ -115,8 +123,8 @@ export function buildMossForkSubChatRecord(
     features: manifest.features,
     targetMessageId: input.targetMessageId,
     targetMessageIndex: input.targetMessageIndex,
-  })
-  const nativeSessionLinked = snapshot.nativeSessionLinked
+  });
+  const nativeSessionLinked = snapshot.nativeSessionLinked;
   const runtimeMetadata = mergeMossSessionControlMetadata(
     input.sourceSubChat.runtimeMetadata,
     {
@@ -132,7 +140,7 @@ export function buildMossForkSubChatRecord(
       ...(input.fallbackReason ? { fallbackReason: input.fallbackReason } : {}),
       ...(input.metadata ?? {}),
     },
-  )
+  );
 
   return {
     engine,
@@ -155,18 +163,18 @@ export function buildMossForkSubChatRecord(
       modelId: input.sourceSubChat.modelId,
       runtimeMetadata,
     },
-  }
+  };
 }
 
 export function buildMossRollbackSubChatUpdate(
   input: BuildMossRollbackSubChatUpdateInput,
 ): BuildMossRollbackSubChatUpdateResult {
-  const engine = normalizeMossSessionRecordEngine(input.subChat.engine)
-  const manifest = getAgentRuntimeManifest(engine)
+  const engine = normalizeMossSessionRecordEngine(input.subChat.engine);
+  const manifest = getAgentRuntimeManifest(engine);
   const sourceNativeSessionId = nativeSessionIdForMossSessionRecord(
     input.subChat,
     engine,
-  )
+  );
   const snapshot = buildMossRollbackSnapshot({
     engine,
     nativeSessionId: sourceNativeSessionId,
@@ -174,8 +182,9 @@ export function buildMossRollbackSubChatUpdate(
     features: manifest.features,
     targetMessageId: input.targetMessageId,
     targetSdkMessageUuid: input.targetSdkMessageUuid,
-  })
-  const nativeSessionLinked = snapshot.nativeSessionLinked
+    strictTarget: input.strictTarget,
+  });
+  const nativeSessionLinked = snapshot.nativeSessionLinked;
 
   return {
     engine,
@@ -197,6 +206,8 @@ export function buildMossRollbackSubChatUpdate(
           nativeSessionLinked,
           targetMessageId: snapshot.targetMessageId,
           targetSdkMessageUuid: snapshot.targetSdkMessageUuid,
+          nativeRollbackTurnCount: snapshot.nativeRollbackTurnCount,
+          ...(input.strictTarget ? { strictTarget: true } : {}),
           appliedGitCheckpoint: Boolean(input.appliedGitCheckpoint),
           nativeBridgePlan: input.nativeBridgePlan,
           ...(input.metadata ?? {}),
@@ -204,5 +215,5 @@ export function buildMossRollbackSubChatUpdate(
       ),
       updatedAt: new Date(),
     },
-  }
+  };
 }

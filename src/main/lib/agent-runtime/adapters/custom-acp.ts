@@ -1,9 +1,15 @@
 import { getAgentRuntimeManifest } from "../manifests"
+import {
+  createUnsupportedAgentRuntimeControlResult,
+  createUnsupportedAgentRuntimeReceipt,
+  streamUnsupportedAgentRuntimeRun,
+} from "../runtime-run-ledger"
 import type {
   AgentRuntimeAdapter,
   AgentRuntimeAvailability,
   AgentRuntimeHealth,
   AgentRuntimeSessionRef,
+  AgentRuntimeStartRequest,
 } from "../types"
 
 async function inspectCustomAcpRuntime(): Promise<AgentRuntimeHealth> {
@@ -22,6 +28,18 @@ async function inspectCustomAcpRuntime(): Promise<AgentRuntimeHealth> {
   }
 }
 
+function unsupportedCustomAcpRun(
+  action: "start" | "resume",
+  request: AgentRuntimeStartRequest,
+) {
+  return createUnsupportedAgentRuntimeReceipt({
+    action,
+    request,
+    reason:
+      "Configure a Moss Custom ACP endpoint or command adapter before starting sessions.",
+  })
+}
+
 export const customAcpAdapter: AgentRuntimeAdapter = {
   manifest: getAgentRuntimeManifest("custom-acp"),
   async inspect(
@@ -33,5 +51,26 @@ export const customAcpAdapter: AgentRuntimeAdapter = {
     _session: AgentRuntimeSessionRef,
   ): Promise<AgentRuntimeAvailability> {
     return (await inspectCustomAcpRuntime()).availability
+  },
+  async start(request) {
+    return unsupportedCustomAcpRun("start", request)
+  },
+  async resume(request) {
+    return unsupportedCustomAcpRun("resume", request)
+  },
+  stream(request) {
+    return streamUnsupportedAgentRuntimeRun(unsupportedCustomAcpRun("start", request))
+  },
+  async stop(request) {
+    return createUnsupportedAgentRuntimeControlResult(
+      request,
+      "Custom ACP stop requires a configured endpoint or command adapter.",
+    )
+  },
+  async submitToolResult(request) {
+    return createUnsupportedAgentRuntimeControlResult(
+      request,
+      "Custom ACP tool result submission requires a configured endpoint or command adapter.",
+    )
   },
 }

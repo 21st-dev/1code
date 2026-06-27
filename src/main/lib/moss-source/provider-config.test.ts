@@ -157,6 +157,7 @@ providers:
           expect(hermes.baseUrlSource).toBe("inline")
           expect(hermes.baseUrlEnv).toBeUndefined()
           expect(hermes.env.HERMES_BASE_URL).toBe("https://hermes.test/v1")
+          expect(hermes.env.HERMES_INFERENCE_MODEL).toBe("moss-custom")
 
           const claude = await resolveMossProviderForEngine({
             projectPath,
@@ -374,6 +375,7 @@ providers:
       expect(hermes.mode).toBe("bundled-quota")
       expect(hermes.model).toBe("moss-default")
       expect(hermes.env.HERMES_MODEL).toBe("moss-default")
+      expect(hermes.env.HERMES_INFERENCE_MODEL).toBe("moss-default")
       expect(hermes.warnings).toEqual([])
 
       const codex = await resolveMossProviderForEngine({
@@ -382,8 +384,8 @@ providers:
       })
       expect(codex.status).toBe("resolved")
       expect(codex.providerId).toBe("moss")
-      expect(codex.model).toBe("gpt-5.5/high")
-      expect(codex.env.CODEX_MODEL).toBe("gpt-5.5/high")
+      expect(codex.model).toBe("gpt-5.5/medium")
+      expect(codex.env.CODEX_MODEL).toBe("gpt-5.5/medium")
 
       const claude = await resolveMossProviderForEngine({
         projectPath,

@@ -15,6 +15,13 @@ export interface McpPathMapping {
   to: string
 }
 
+export interface McpLoopbackBridgeEndpoint {
+  host: string
+  port: number
+  hostEnvKey: string
+  portEnvKey: string
+}
+
 export type McpStdioCompatResult =
   | {
       ok: true
@@ -53,6 +60,43 @@ const NODE_OPTIONS_WITH_VALUE = new Set([
   "--import",
 ])
 const LOCAL_SCRIPT_EXTENSIONS = /\.(?:[cm]?js|[cm]?ts|tsx)$/i
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"])
+
+function isLoopbackHost(value: string): boolean {
+  return LOOPBACK_HOSTS.has(value.trim().toLowerCase())
+}
+
+function parseTcpPort(value: string): number | null {
+  const port = Number(value)
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) return null
+  return port
+}
+
+export function extractLoopbackMcpBridgeEndpoint(
+  env?: Record<string, string>,
+): McpLoopbackBridgeEndpoint | null {
+  if (!env) return null
+
+  for (const [portEnvKey, portValue] of Object.entries(env)) {
+    if (!portEnvKey.endsWith("_MCP_BRIDGE_PORT")) continue
+
+    const hostEnvKey = `${portEnvKey.slice(0, -"_PORT".length)}_HOST`
+    const host = env[hostEnvKey]
+    if (!host || !isLoopbackHost(host)) continue
+
+    const port = parseTcpPort(portValue)
+    if (!port) continue
+
+    return {
+      host,
+      port,
+      hostEnvKey,
+      portEnvKey,
+    }
+  }
+
+  return null
+}
 
 function parseWindowsPath(value: string): { root: string; rest: string } | null {
   const match = value.match(WINDOWS_ABSOLUTE_PATH)

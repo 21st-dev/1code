@@ -2,7 +2,10 @@ import { AGENT_ENGINE_IDS, type AgentEngineId } from "../agent-runtime/types"
 import * as fs from "fs/promises"
 import * as path from "path"
 import { buildGovernedResourceProjection } from "../shared-resources/governance"
-import type { EngineResourceProjection } from "../shared-resources/types"
+import type {
+  EngineResourceProjection,
+  SharedResource,
+} from "../shared-resources/types"
 import { ensureMossSource } from "./bootstrap"
 import {
   materializeMossProjection,
@@ -56,6 +59,7 @@ export interface MaterializeMossEngineProjectionOptions {
   engineId: AgentEngineId
   dryRun?: boolean
   createIfMissing?: boolean
+  expectedResourceIds?: readonly string[]
 }
 
 export interface MaterializeMossWorkspaceProjectionsOptions {
@@ -63,6 +67,7 @@ export interface MaterializeMossWorkspaceProjectionsOptions {
   engines?: readonly AgentEngineId[]
   dryRun?: boolean
   createIfMissing?: boolean
+  expectedResourceIds?: readonly string[]
 }
 
 export interface MaterializedMossWorkspaceProjections {
@@ -98,6 +103,8 @@ const MOSS_LINK_ENTRIES = [
   { source: "subagents", type: "dir" },
   { source: "providers.yaml", type: "file" },
 ] as const
+const RESOURCE_DISCOVERY_MAX_ATTEMPTS = 20
+const RESOURCE_DISCOVERY_RETRY_DELAY_MS = 50
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -152,6 +159,105 @@ function summarizeProjectionResults(
   }
 }
 
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function missingExpectedResourceIds(
+  resources: SharedResource[],
+  expectedResourceIds: readonly string[] | undefined,
+): string[] {
+  if (!expectedResourceIds?.length) return []
+
+  const actualResourceIds = new Set(resources.map((resource) => resource.id))
+  return expectedResourceIds.filter((resourceId) => !actualResourceIds.has(resourceId))
+}
+
+async function discoverMossSourceResourcesForProjection(params: {
+  projectPath: string
+  expectedResourceIds?: readonly string[]
+}): Promise<SharedResource[]> {
+  let resources: SharedResource[] = []
+  for (let attempt = 0; attempt < RESOURCE_DISCOVERY_MAX_ATTEMPTS; attempt += 1) {
+    resources = await discoverMossSourceResources(params.projectPath)
+    if (missingExpectedResourceIds(resources, params.expectedResourceIds).length === 0) {
+      return resources
+    }
+    if (attempt < RESOURCE_DISCOVERY_MAX_ATTEMPTS - 1) {
+      await sleep(RESOURCE_DISCOVERY_RETRY_DELAY_MS)
+    }
+  }
+
+  const missing = missingExpectedResourceIds(resources, params.expectedResourceIds)
+  throw new Error(
+    `Moss Unified Source did not discover expected resource(s): ${missing.join(", ")}`,
+  )
+}
+
+function emptyProjectionSummary(): MossEngineProjectionSummary {
+  return summarizeProjectionResults([])
+}
+
+function skippedProjectionResult(params: {
+  projectPath: string
+  engineId: AgentEngineId
+  reason: string
+}): MaterializedMossEngineProjection {
+  return {
+    engineId: params.engineId,
+    projectPath: params.projectPath,
+    projectionStatus: "skipped",
+    warnings: [],
+    results: [],
+    summary: emptyProjectionSummary(),
+    reason: params.reason,
+  }
+}
+
+async function materializeMossEngineProjectionFromSnapshot(params: {
+  projectPath: string
+  engineId: AgentEngineId
+  snapshot: { projections: EngineResourceProjection[] }
+  dryRun?: boolean
+}): Promise<MaterializedMossEngineProjection> {
+  const projection = params.snapshot.projections.find(
+    (item) => item.engineId === params.engineId,
+  )
+
+  if (!projection) {
+    return skippedProjectionResult({
+      engineId: params.engineId,
+      projectPath: params.projectPath,
+      reason: `No projection is registered for ${params.engineId}.`,
+    })
+  }
+
+  const results = await materializeMossProjection({
+    projectPath: params.projectPath,
+    projection,
+    dryRun: params.dryRun,
+  })
+
+  return {
+    engineId: params.engineId,
+    projectPath: params.projectPath,
+    projectionStatus: projection.status,
+    warnings: projection.warnings,
+    results,
+    summary: summarizeProjectionResults(results),
+  }
+}
+
+function buildProjectionSnapshot(
+  projectPath: string,
+  resources: SharedResource[],
+) {
+  return buildGovernedResourceProjection({
+    projectPath,
+    resources,
+  })
+}
+
 export async function materializeMossEngineProjection(
   options: MaterializeMossEngineProjectionOptions,
 ): Promise<MaterializedMossEngineProjection> {
@@ -159,52 +265,46 @@ export async function materializeMossEngineProjection(
     await ensureMossSource({ projectPath: options.projectPath })
   }
 
-  const resources = await discoverMossSourceResources(options.projectPath)
+  const resources = await discoverMossSourceResourcesForProjection({
+    projectPath: options.projectPath,
+    expectedResourceIds: options.expectedResourceIds,
+  })
   if (resources.length === 0) {
-    return {
+    return skippedProjectionResult({
       engineId: options.engineId,
       projectPath: options.projectPath,
-      projectionStatus: "skipped",
-      warnings: [],
-      results: [],
-      summary: summarizeProjectionResults([]),
       reason: "No .moss Unified Source was found for this project.",
-    }
+    })
   }
 
-  const snapshot = buildGovernedResourceProjection({
-    projectPath: options.projectPath,
-    resources,
-  })
-  const projection = snapshot.projections.find(
-    (item) => item.engineId === options.engineId,
-  )
-
-  if (!projection) {
-    return {
-      engineId: options.engineId,
-      projectPath: options.projectPath,
-      projectionStatus: "skipped",
-      warnings: [],
-      results: [],
-      summary: summarizeProjectionResults([]),
-      reason: `No projection is registered for ${options.engineId}.`,
-    }
-  }
-
-  const results = await materializeMossProjection({
-    projectPath: options.projectPath,
-    projection,
-    dryRun: options.dryRun,
-  })
-
-  return {
+  return materializeMossEngineProjectionFromSnapshot({
     engineId: options.engineId,
     projectPath: options.projectPath,
-    projectionStatus: projection.status,
-    warnings: projection.warnings,
-    results,
-    summary: summarizeProjectionResults(results),
+    snapshot: buildProjectionSnapshot(options.projectPath, resources),
+    dryRun: options.dryRun,
+  })
+}
+
+function failedProjectionResult(params: {
+  projectPath: string
+  engineId: AgentEngineId
+  error: unknown
+}): FailedMossEngineProjection {
+  return {
+    engineId: params.engineId,
+    projectPath: params.projectPath,
+    projectionStatus: "skipped",
+    warnings: [],
+    results: [],
+    summary: {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      conflict: 0,
+      unsupported: 0,
+      total: 0,
+    },
+    reason: params.error instanceof Error ? params.error.message : String(params.error),
   }
 }
 
@@ -214,22 +314,11 @@ export async function materializeMossEngineProjectionSafely(
   try {
     return await materializeMossEngineProjection(options)
   } catch (error) {
-    return {
-      engineId: options.engineId,
+    return failedProjectionResult({
       projectPath: options.projectPath,
-      projectionStatus: "skipped",
-      warnings: [],
-      results: [],
-      summary: {
-        created: 0,
-        updated: 0,
-        skipped: 0,
-        conflict: 0,
-        unsupported: 0,
-        total: 0,
-      },
-      reason: error instanceof Error ? error.message : String(error),
-    }
+      engineId: options.engineId,
+      error,
+    })
   }
 }
 
@@ -241,15 +330,45 @@ export async function materializeMossWorkspaceProjections(
   }
 
   const engines = options.engines ?? AGENT_ENGINE_IDS
+  const resources = await discoverMossSourceResourcesForProjection({
+    projectPath: options.projectPath,
+    expectedResourceIds: options.expectedResourceIds,
+  })
+  if (resources.length === 0) {
+    return {
+      projectPath: options.projectPath,
+      dryRun: Boolean(options.dryRun),
+      projections: engines.map((engineId) =>
+        skippedProjectionResult({
+          engineId,
+          projectPath: options.projectPath,
+          reason: "No .moss Unified Source was found for this project.",
+        }),
+      ),
+    }
+  }
+
+  const snapshot = buildProjectionSnapshot(options.projectPath, resources)
   const projections: MossEngineProjectionResult[] = []
   for (const engineId of engines) {
-    projections.push(
-      await materializeMossEngineProjectionSafely({
-        projectPath: options.projectPath,
-        engineId,
-        dryRun: options.dryRun,
-      }),
-    )
+    try {
+      projections.push(
+        await materializeMossEngineProjectionFromSnapshot({
+          projectPath: options.projectPath,
+          engineId,
+          snapshot,
+          dryRun: options.dryRun,
+        }),
+      )
+    } catch (error) {
+      projections.push(
+        failedProjectionResult({
+          projectPath: options.projectPath,
+          engineId,
+          error,
+        }),
+      )
+    }
   }
 
   return {

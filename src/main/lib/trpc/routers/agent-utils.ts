@@ -1,10 +1,13 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
-import matter from "gray-matter"
 import { discoverInstalledPlugins, getPluginComponentPaths } from "../../plugins"
 import { resolveDirentType } from "../../fs/dirent"
 import { getEnabledPlugins } from "./claude-settings"
+import {
+  parseMossFrontmatter,
+  stringifyMossFrontmatter,
+} from "../../moss-source/frontmatter"
 
 // Valid model values for agents
 export const VALID_AGENT_MODELS = ["sonnet", "opus", "haiku", "inherit"] as const
@@ -22,7 +25,7 @@ export interface ParsedAgent {
 
 // Agent with source/path metadata
 export interface FileAgent extends ParsedAgent {
-  source: "user" | "project" | "plugin"
+  source: "moss" | "user" | "project" | "plugin"
   pluginName?: string
   path: string
 }
@@ -44,7 +47,7 @@ export function parseAgentMd(
   filename: string
 ): Partial<ParsedAgent> {
   try {
-    const { data, content: body } = matter(content)
+    const { data, content: body } = parseMossFrontmatter(content)
 
     // Parse tools - can be comma-separated string or array
     let tools: string[] | undefined
@@ -70,7 +73,8 @@ export function parseAgentMd(
 
     // Validate model
     const model =
-      data.model && VALID_AGENT_MODELS.includes(data.model)
+      typeof data.model === "string" &&
+      VALID_AGENT_MODELS.includes(data.model as AgentModel)
         ? (data.model as AgentModel)
         : undefined
 
@@ -100,20 +104,21 @@ export function generateAgentMd(agent: {
   disallowedTools?: string[]
   model?: AgentModel
 }): string {
-  const frontmatter: string[] = []
-  frontmatter.push(`name: ${agent.name}`)
-  frontmatter.push(`description: ${agent.description}`)
+  const frontmatter: Record<string, unknown> = {
+    name: agent.name,
+    description: agent.description,
+  }
   if (agent.tools && agent.tools.length > 0) {
-    frontmatter.push(`tools: ${agent.tools.join(", ")}`)
+    frontmatter.tools = agent.tools.join(", ")
   }
   if (agent.disallowedTools && agent.disallowedTools.length > 0) {
-    frontmatter.push(`disallowedTools: ${agent.disallowedTools.join(", ")}`)
+    frontmatter.disallowedTools = agent.disallowedTools.join(", ")
   }
   if (agent.model && agent.model !== "inherit") {
-    frontmatter.push(`model: ${agent.model}`)
+    frontmatter.model = agent.model
   }
 
-  return `---\n${frontmatter.join("\n")}\n---\n\n${agent.prompt}`
+  return stringifyMossFrontmatter(`\n\n${agent.prompt}`, frontmatter)
 }
 
 /**
@@ -125,6 +130,7 @@ export async function loadAgent(
   cwd?: string
 ): Promise<ParsedAgent | null> {
   const locations = [
+    ...(cwd ? [path.join(cwd, ".moss", "subagents")] : []),
     path.join(os.homedir(), ".claude", "agents"),
     ...(cwd ? [path.join(cwd, ".claude", "agents")] : []),
   ]
@@ -188,7 +194,7 @@ export async function loadAgent(
  */
 export async function scanAgentsDirectory(
   dir: string,
-  source: "user" | "project" | "plugin",
+  source: "moss" | "user" | "project" | "plugin",
   basePath?: string // For project agents, the cwd to make paths relative to
 ): Promise<FileAgent[]> {
   const agents: FileAgent[] = []
@@ -217,9 +223,9 @@ export async function scanAgentsDirectory(
           const parsed = parseAgentMd(content, entry.name)
 
           if (parsed.description && parsed.prompt) {
-            // For project agents, show relative path; for user agents, show ~/.claude/... path
+            // For project and Moss agents, show relative path; for user agents, show ~/.claude/... path
             let displayPath: string
-            if (source === "project" && basePath) {
+            if ((source === "project" || source === "moss") && basePath) {
               displayPath = path.relative(basePath, agentPath)
             } else {
               // For user agents, show ~/.claude/agents/... format

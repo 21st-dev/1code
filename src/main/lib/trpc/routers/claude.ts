@@ -10,7 +10,7 @@ import {
   buildClaudeEnv,
   checkOfflineFallback,
   createTransformer,
-  getBundledClaudeBinaryPath,
+  resolveClaudeCodeExecutable,
   logClaudeEnv,
   logRawClaudeMessage,
   type UIMessageChunk,
@@ -41,6 +41,13 @@ import {
 } from "../../mcp-auth"
 import { fetchOAuthMetadata, getMcpBaseUrl } from "../../oauth"
 import { discoverPluginMcpServers } from "../../plugins"
+import { buildAgentRuntimeLaunchPlan } from "../../agent-runtime/launch-plan"
+import { persistAgentRuntimeSession } from "../../agent-runtime/session-store"
+import {
+  getMossProviderSecret,
+  resolveMossProviderForEngine,
+  type ResolvedMossProvider,
+} from "../../moss-source"
 import { publicProcedure, router } from "../index"
 import { buildAgentsOption } from "./agent-utils"
 import {
@@ -143,6 +150,19 @@ function parseMentions(prompt: string): {
     fileMentions,
     folderMentions,
     toolMentions,
+  }
+}
+
+function buildClaudeCustomConfigFromMossProvider(
+  provider: ResolvedMossProvider,
+  fallbackModel?: string,
+): { model: string; token: string; baseUrl: string } | undefined {
+  if (provider.status !== "resolved" || !provider.apiKey) return undefined
+
+  return {
+    model: provider.model || fallbackModel || "opus",
+    token: provider.apiKey,
+    baseUrl: provider.baseUrl || "https://api.anthropic.com",
   }
 }
 
@@ -424,6 +444,7 @@ const MCP_FETCH_TIMEOUT_MS = 40_000
  */
 async function fetchToolsForServer(
   serverConfig: McpServerConfig,
+  options: { sourcePath?: string | null } = {},
 ): Promise<McpToolInfo[]> {
   const timeoutPromise = new Promise<McpToolInfo[]>((_, reject) =>
     setTimeout(() => reject(new Error("Timeout")), MCP_FETCH_TIMEOUT_MS),
@@ -448,6 +469,8 @@ async function fetchToolsForServer(
           command,
           args: (serverConfig as any).args,
           env: (serverConfig as any).env,
+          cwd: (serverConfig as any).cwd,
+          sourcePath: options.sourcePath,
         })
       } catch {
         return []
@@ -494,7 +517,7 @@ export async function getAllMcpConfigHandler() {
           let needsAuth = false
 
           try {
-            tools = await fetchToolsForServer(serverConfig)
+            tools = await fetchToolsForServer(serverConfig, { sourcePath: scope })
           } catch (error) {
             console.error(`[MCP] Failed to fetch tools for ${name}:`, error)
           }
@@ -980,6 +1003,20 @@ export const claudeRouter = router({
             // 2.5. AUTO-FALLBACK: Check internet and switch to Ollama if offline
             // Only check if offline mode is enabled in settings
             const claudeCodeToken = getClaudeCodeToken()
+            const mossProviderLookupPath =
+              input.projectPath ||
+              resolveProjectPathFromWorktree(input.cwd) ||
+              input.cwd
+            const mossProvider = await resolveMossProviderForEngine({
+              projectPath: mossProviderLookupPath,
+              engineId: "claude-code",
+              requestedModelId: input.model,
+              createIfMissing: true,
+              secretResolver: { getSecret: getMossProviderSecret },
+            })
+            if (mossProvider.warnings.length > 0) {
+              console.warn("[claude] Moss provider warnings:", mossProvider.warnings)
+            }
             const offlineResult = await checkOfflineFallback(
               input.customConfig,
               claudeCodeToken,
@@ -998,13 +1035,25 @@ export const claudeRouter = router({
             }
 
             // Use offline config if available
-            const finalCustomConfig = offlineResult.config || input.customConfig
+            const mossCustomConfig =
+              input.customConfig
+                ? undefined
+                : buildClaudeCustomConfigFromMossProvider(
+                    mossProvider,
+                    input.model,
+                  )
+            const finalCustomConfig =
+              offlineResult.config || input.customConfig || mossCustomConfig
+            const isUsingMossProviderConfig =
+              Boolean(mossCustomConfig) && finalCustomConfig === mossCustomConfig
             const isUsingOllama = offlineResult.isUsingOllama
 
             // Track connection method for analytics
             let connectionMethod = "claude-subscription" // default (Claude Code OAuth)
             if (isUsingOllama) {
               connectionMethod = "offline-ollama"
+            } else if (isUsingMossProviderConfig) {
+              connectionMethod = "moss-provider"
             } else if (finalCustomConfig) {
               // Has custom config = either API key or custom model
               const isDefaultAnthropicUrl =
@@ -1126,13 +1175,22 @@ export const claudeRouter = router({
               prompt = createPromptWithImages()
             }
 
+            const mossProviderEnv =
+              mossProvider.status === "resolved" ? mossProvider.env : {}
+            const customClaudeEnv = {
+              ...mossProviderEnv,
+              ...(finalCustomConfig
+                ? {
+                    ANTHROPIC_AUTH_TOKEN: finalCustomConfig.token,
+                    ANTHROPIC_BASE_URL: finalCustomConfig.baseUrl,
+                  }
+                : {}),
+            }
+
             // Build full environment for Claude SDK (includes HOME, PATH, etc.)
             const claudeEnv = buildClaudeEnv({
-              ...(finalCustomConfig && {
-                customEnv: {
-                  ANTHROPIC_AUTH_TOKEN: finalCustomConfig.token,
-                  ANTHROPIC_BASE_URL: finalCustomConfig.baseUrl,
-                },
+              ...(Object.keys(customClaudeEnv).length > 0 && {
+                customEnv: customClaudeEnv,
               }),
               enableTasks: input.enableTasks ?? true,
             })
@@ -1399,7 +1457,7 @@ export const claudeRouter = router({
 
             // Build final env - only add OAuth token if we have one AND no existing API config
             // Existing CLI config takes precedence over OAuth
-            const finalEnv = {
+            const finalEnv: Record<string, string> = {
               ...claudeEnv,
               ...(claudeCodeToken &&
                 !hasExistingApiConfig && {
@@ -1439,8 +1497,11 @@ export const claudeRouter = router({
               "[claude-auth] ============================================",
             )
 
-            // Get bundled Claude binary path
-            const claudeBinaryPath = getBundledClaudeBinaryPath()
+            const claudeExecutable = resolveClaudeCodeExecutable()
+            const claudeBinaryPath = claudeExecutable.path
+            console.log(
+              `[claude-binary] Using ${claudeExecutable.source} Claude Code executable: ${claudeBinaryPath}`,
+            )
 
             const resumeSessionId =
               input.sessionId || existingSessionId || undefined
@@ -1864,19 +1925,19 @@ ${prompt}
                           : ""
                       if (!/\.md$/i.test(filePath)) {
                         return {
-                          behavior: "deny",
+                          behavior: "deny" as const,
                           message:
                             'Only ".md" files can be modified in plan mode.',
                         }
                       }
                     } else if (toolName == "ExitPlanMode") {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `IMPORTANT: DONT IMPLEMENT THE PLAN UNTIL THE EXPLIT COMMAND. THE PLAN WAS **ONLY** PRESENTED TO USER, FINISH CURRENT MESSAGE AS SOON AS POSSIBLE`,
                       }
                     } else if (PLAN_MODE_BLOCKED_TOOLS.has(toolName)) {
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: `Tool "${toolName}" blocked in plan mode.`,
                       }
                     }
@@ -1937,7 +1998,7 @@ ${prompt}
                         result: errorMessage,
                       } as UIMessageChunk)
                       return {
-                        behavior: "deny",
+                        behavior: "deny" as const,
                         message: errorMessage,
                       }
                     }
@@ -1945,6 +2006,12 @@ ${prompt}
                     // Update the tool part with answers result for approved
                     const answers = (response.updatedInput as any)?.answers
                     const answerResult = { answers }
+                    const updatedInput =
+                      response.updatedInput &&
+                      typeof response.updatedInput === "object" &&
+                      !Array.isArray(response.updatedInput)
+                        ? (response.updatedInput as Record<string, unknown>)
+                        : toolInput
                     if (askToolPart) {
                       askToolPart.result = answerResult
                       askToolPart.state = "result"
@@ -1956,12 +2023,12 @@ ${prompt}
                       result: answerResult,
                     } as UIMessageChunk)
                     return {
-                      behavior: "allow",
-                      updatedInput: response.updatedInput,
+                      behavior: "allow" as const,
+                      updatedInput,
                     }
                   }
                   return {
-                    behavior: "allow",
+                    behavior: "allow" as const,
                     updatedInput: toolInput,
                   }
                 },
@@ -2006,6 +2073,84 @@ ${prompt}
             let policyRetryNeeded = false
             let messageCount = 0
             let pendingFinishChunk: UIMessageChunk | null = null
+            const runtimeMetadataBase = {
+              cwd: input.cwd,
+              projectPath: input.projectPath ?? null,
+              offlineMode: isUsingOllama,
+              sdkPermissionMode:
+                input.mode === "plan" ? "plan" : "bypassPermissions",
+              mcpServerCount: mcpServersFiltered
+                ? Object.keys(mcpServersFiltered).length
+                : 0,
+              historyEnabled,
+              hasImages: Boolean(input.images?.length),
+              mossProviderStatus: mossProvider.status,
+              mossProviderId: mossProvider.providerId ?? null,
+              mossProviderMode: mossProvider.mode ?? null,
+              usingMossProviderConfig: isUsingMossProviderConfig,
+            }
+            const launchRunId = `claude:${input.subChatId}:${Date.now()}`
+            const claudeProviderRoute = isUsingMossProviderConfig
+              ? "moss-provider"
+              : finalCustomConfig
+                ? isUsingOllama
+                  ? "ollama-compatible"
+                  : "custom-api"
+                : "claude-code"
+            const buildClaudeLaunchPlan = (params: {
+              nativeSessionId?: string | null
+              resultSubtype: "running" | "success" | "error" | "cancelled"
+              error?: string | null
+            }) =>
+              buildAgentRuntimeLaunchPlan({
+                runId: launchRunId,
+                session: {
+                  subChatId: input.subChatId,
+                  chatId: input.chatId,
+                  engineId: "claude-code",
+                  nativeSessionId:
+                    params.nativeSessionId ?? resumeSessionId ?? null,
+                  modelId: resolvedModel ?? null,
+                  permissionMode: input.mode,
+                  cwd: input.cwd,
+                  projectPath: input.projectPath ?? null,
+                  runtimeConfigDir: isolatedConfigDir,
+                },
+                nativeSessionStrategy: resumeSessionId ? "resume" : "continue",
+                transport: "claude-code-sdk",
+                providerRoute: claudeProviderRoute,
+                projectionStatus: "ready",
+                resultSubtype: params.resultSubtype,
+                metadata: {
+                  offlineMode: isUsingOllama,
+                  historyEnabled,
+                  mcpServerCount: mcpServersFiltered
+                    ? Object.keys(mcpServersFiltered).length
+                    : 0,
+                  agentCount: Object.keys(agentsOption).length,
+                  mossProviderStatus: mossProvider.status,
+                  usingMossProviderConfig: isUsingMossProviderConfig,
+                  ...(params.error ? { error: params.error } : {}),
+                },
+              })
+
+            persistAgentRuntimeSession({
+              subChatId: input.subChatId,
+              engine: "claude-code",
+              nativeSessionId: resumeSessionId ?? null,
+              configDir: isolatedConfigDir,
+              modelId: resolvedModel ?? null,
+              permissionMode: input.mode,
+              metadata: {
+                ...runtimeMetadataBase,
+                resultSubtype: "running",
+              },
+              launchPlan: buildClaudeLaunchPlan({
+                nativeSessionId: resumeSessionId ?? null,
+                resultSubtype: "running",
+              }),
+              updateLegacySessionId: true,
+            })
 
             // eslint-disable-next-line no-constant-condition
             while (true) {
@@ -2505,7 +2650,7 @@ ${prompt}
                     `[claude] Session not found - clearing invalid sessionId from database`,
                   )
                   db.update(subChats)
-                    .set({ sessionId: null })
+                    .set({ sessionId: null, engineSessionId: null })
                     .where(eq(subChats.id, input.subChatId))
                     .run()
 
@@ -2622,6 +2767,37 @@ ${prompt}
                   }
                 }
 
+                persistAgentRuntimeSession({
+                  subChatId: input.subChatId,
+                  engine: "claude-code",
+                  nativeSessionId:
+                    metadata.sessionId ?? currentSessionId ?? resumeSessionId ?? null,
+                  configDir: isolatedConfigDir,
+                  modelId: resolvedModel ?? null,
+                  permissionMode: input.mode,
+                  metadata: {
+                    ...runtimeMetadataBase,
+                    resultSubtype: abortController.signal.aborted
+                      ? "cancelled"
+                      : "error",
+                    sdkMessageUuid: metadata.sdkMessageUuid ?? null,
+                    errorCategory,
+                    error: errorContext,
+                  },
+                  launchPlan: buildClaudeLaunchPlan({
+                    nativeSessionId:
+                      metadata.sessionId ??
+                      currentSessionId ??
+                      resumeSessionId ??
+                      null,
+                    resultSubtype: abortController.signal.aborted
+                      ? "cancelled"
+                      : "error",
+                    error: errorContext,
+                  }),
+                  updateLegacySessionId: true,
+                })
+
                 console.log(
                   `[SD] M:END sub=${subId} reason=stream_error cat=${errorCategory} n=${chunkCount} last=${lastChunkType}`,
                 )
@@ -2652,6 +2828,26 @@ ${prompt}
               console.log(
                 `[SD] M:END sub=${subId} reason=no_response n=${chunkCount}`,
               )
+              persistAgentRuntimeSession({
+                subChatId: input.subChatId,
+                engine: "claude-code",
+                nativeSessionId: metadata.sessionId ?? resumeSessionId ?? null,
+                configDir: isolatedConfigDir,
+                modelId: resolvedModel ?? null,
+                permissionMode: input.mode,
+                metadata: {
+                  ...runtimeMetadataBase,
+                  resultSubtype: "error",
+                  sdkMessageUuid: metadata.sdkMessageUuid ?? null,
+                  error: "No response received from Claude",
+                },
+                launchPlan: buildClaudeLaunchPlan({
+                  nativeSessionId: metadata.sessionId ?? resumeSessionId ?? null,
+                  resultSubtype: "error",
+                  error: "No response received from Claude",
+                }),
+                updateLegacySessionId: true,
+              })
               safeEmit({ type: "finish" } as UIMessageChunk)
               safeComplete()
               return
@@ -2669,6 +2865,28 @@ ${prompt}
             }
 
             const savedSessionId = metadata.sessionId
+            persistAgentRuntimeSession({
+              subChatId: input.subChatId,
+              engine: "claude-code",
+              nativeSessionId: savedSessionId ?? null,
+              configDir: isolatedConfigDir,
+              modelId: resolvedModel ?? null,
+              permissionMode: input.mode,
+              metadata: {
+                ...runtimeMetadataBase,
+                resultSubtype: abortController.signal.aborted
+                  ? "cancelled"
+                  : "success",
+                sdkMessageUuid: metadata.sdkMessageUuid ?? null,
+              },
+              launchPlan: buildClaudeLaunchPlan({
+                nativeSessionId: savedSessionId ?? null,
+                resultSubtype: abortController.signal.aborted
+                  ? "cancelled"
+                  : "success",
+              }),
+              updateLegacySessionId: true,
+            })
 
             if (parts.length > 0) {
               const assistantMessage = {
@@ -2939,7 +3157,7 @@ ${prompt}
         transport: z.enum(["stdio", "http"]),
         command: z.string().optional(),
         args: z.array(z.string()).optional(),
-        env: z.record(z.string()).optional(),
+        env: z.record(z.string(), z.string()).optional(),
         url: z.string().url().optional(),
         authType: z.enum(["none", "oauth", "bearer"]).optional(),
         bearerToken: z.string().optional(),
@@ -3017,7 +3235,7 @@ ${prompt}
           .optional(),
         command: z.string().optional(),
         args: z.array(z.string()).optional(),
-        env: z.record(z.string()).optional(),
+        env: z.record(z.string(), z.string()).optional(),
         url: z.string().url().optional(),
         authType: z.enum(["none", "oauth", "bearer"]).optional(),
         bearerToken: z.string().optional(),

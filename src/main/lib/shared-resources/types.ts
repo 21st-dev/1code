@@ -11,6 +11,11 @@ export type SharedResourceKind =
   | "instruction"
   | "hook"
   | "provider"
+  | "config"
+  | "automation"
+  | "connector"
+  | "app"
+  | "tool"
 
 export type SharedResourceScope = "moss" | "project" | "user" | "plugin" | "engine"
 
@@ -88,4 +93,42 @@ export interface SharedResourceSnapshot {
   resources: SharedResource[]
   conflicts: SharedResourceConflict[]
   projections: EngineResourceProjection[]
+}
+
+export type SharedResourceRuntimeGateStatus = "passed" | "blocked"
+
+export type SharedResourceRuntimeGateIssueKind =
+  | "missing-projection"
+  | "unsupported-projection"
+  | "manual-review-conflict"
+  | "unsafe-projected-resource"
+  | "withheld-approval"
+  | "shadowed-resource"
+  | "partial-projection"
+
+export interface SharedResourceRuntimeGateIssue {
+  id: string
+  kind: SharedResourceRuntimeGateIssueKind
+  severity: "blocker" | "warning"
+  message: string
+  resourceId?: string
+  conflictKey?: string
+}
+
+export interface SharedResourceRuntimeGate {
+  version: 1
+  engineId: AgentEngineId
+  status: SharedResourceRuntimeGateStatus
+  resourceCount: number
+  projectionStatus?: EngineResourceProjection["status"]
+  mappingCount: number
+  blockers: SharedResourceRuntimeGateIssue[]
+  warnings: SharedResourceRuntimeGateIssue[]
+  summary: {
+    conflictCount: number
+    manualReviewConflictCount: number
+    pendingApprovalCount: number
+    shadowedResourceCount: number
+    unsafeProjectedResourceCount: number
+  }
 }

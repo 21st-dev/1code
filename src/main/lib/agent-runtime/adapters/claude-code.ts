@@ -8,11 +8,17 @@ import {
   getDatabase,
 } from "../../db"
 import { getAgentRuntimeManifest } from "../manifests"
+import {
+  createUnsupportedAgentRuntimeControlResult,
+  createUnsupportedAgentRuntimeReceipt,
+  streamUnsupportedAgentRuntimeRun,
+} from "../runtime-run-ledger"
 import type {
   AgentRuntimeAdapter,
   AgentRuntimeAvailability,
   AgentRuntimeHealth,
   AgentRuntimeSessionRef,
+  AgentRuntimeStartRequest,
 } from "../types"
 
 function getClaudeStoredAuthMethod(): "oauth" | null {
@@ -107,6 +113,18 @@ async function inspectClaudeRuntime(): Promise<AgentRuntimeHealth> {
   }
 }
 
+function unsupportedClaudeRun(
+  action: "start" | "resume",
+  request: AgentRuntimeStartRequest,
+) {
+  return createUnsupportedAgentRuntimeReceipt({
+    action,
+    request,
+    reason:
+      "Claude Code lifecycle is still owned by the existing SDK transport; the unified Moss adapter bridge is not connected yet.",
+  })
+}
+
 export const claudeCodeAdapter: AgentRuntimeAdapter = {
   manifest: getAgentRuntimeManifest("claude-code"),
   async inspect(
@@ -118,5 +136,26 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
     _session: AgentRuntimeSessionRef,
   ): Promise<AgentRuntimeAvailability> {
     return (await inspectClaudeRuntime()).availability
+  },
+  async start(request) {
+    return unsupportedClaudeRun("start", request)
+  },
+  async resume(request) {
+    return unsupportedClaudeRun("resume", request)
+  },
+  stream(request) {
+    return streamUnsupportedAgentRuntimeRun(unsupportedClaudeRun("start", request))
+  },
+  async stop(request) {
+    return createUnsupportedAgentRuntimeControlResult(
+      request,
+      "Claude Code unified stop requires the SDK transport bridge slice.",
+    )
+  },
+  async submitToolResult(request) {
+    return createUnsupportedAgentRuntimeControlResult(
+      request,
+      "Claude Code unified tool result submission requires the SDK transport bridge slice.",
+    )
   },
 }

@@ -1,6 +1,10 @@
 import { BrowserWindow, ipcMain, app } from "electron"
 import log from "electron-log"
-import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater"
+import {
+  autoUpdater,
+  type UpdateInfo,
+  type ProgressInfo,
+} from "electron-updater"
 import { readFileSync, writeFileSync, existsSync } from "fs"
 import { join } from "path"
 
@@ -65,6 +69,7 @@ function saveChannel(channel: UpdateChannel): void {
 }
 
 let getAllWindows: (() => BrowserWindow[]) | null = null
+let updateIpcHandlersRegistered = false
 
 /**
  * Send update event to all renderer windows
@@ -110,7 +115,7 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
   // Add cache-busting to update requests
   autoUpdater.requestHeaders = {
     "Cache-Control": "no-cache, no-store, must-revalidate",
-    "Pragma": "no-cache",
+    Pragma: "no-cache",
   }
 
   // Event: Checking for updates
@@ -178,15 +183,22 @@ export async function initAutoUpdater(getWindows: () => BrowserWindow[]) {
   })
 
   // Register IPC handlers
-  registerIpcHandlers()
+  registerAutoUpdaterIpcHandlers()
 
   log.info("[AutoUpdater] Initialized with feed URL:", CDN_BASE)
 }
 
 /**
- * Register IPC handlers for update operations
+ * Register IPC handlers for update operations.
+ *
+ * The renderer asks for update state/channel in both packaged and dev builds.
+ * Dev still needs these handlers registered, but should not initialize
+ * electron-updater or perform network update checks.
  */
-function registerIpcHandlers() {
+export function registerAutoUpdaterIpcHandlers() {
+  if (updateIpcHandlersRegistered) return
+  updateIpcHandlersRegistered = true
+
   // Check for updates
   ipcMain.handle("update:check", async (_event, force?: boolean) => {
     if (!app.isPackaged) {
@@ -201,7 +213,10 @@ function registerIpcHandlers() {
           provider: "generic",
           url: `${CDN_BASE}${cacheBuster}`,
         })
-        log.info("[AutoUpdater] Force check with cache-busting:", `${CDN_BASE}${cacheBuster}`)
+        log.info(
+          "[AutoUpdater] Force check with cache-busting:",
+          `${CDN_BASE}${cacheBuster}`,
+        )
       }
       const result = await autoUpdater.checkForUpdates()
       // Reset feed URL back to normal after force check

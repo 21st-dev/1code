@@ -48,7 +48,7 @@ providers:
       claude-code:
         model: opus
       codex:
-        model: gpt-5.5/high
+        model: gpt-5.5/medium
       custom-acp:
         model: custom-acp
   custom:
@@ -63,7 +63,7 @@ providers:
       claude-code:
         model: opus
       codex:
-        model: gpt-5.5/high
+        model: gpt-5.5/medium
         authMethod: openai-api-key
       custom-acp:
         model: custom-acp

@@ -419,7 +419,10 @@ function buildEngineEnv(params: {
       }
     }
   } else if (params.engineId === "hermes") {
-    if (params.model) env.HERMES_MODEL = params.model
+    if (params.model) {
+      env.HERMES_MODEL = params.model
+      env.HERMES_INFERENCE_MODEL = params.model
+    }
     if (params.baseUrl) env.HERMES_BASE_URL = params.baseUrl
     if (params.apiKey) env.HERMES_API_KEY = params.apiKey
   } else if (params.engineId === "custom-acp") {

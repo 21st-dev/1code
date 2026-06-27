@@ -13,6 +13,8 @@ export {
   lastSelectedModelIdAtom,
   lastSelectedAgentIdAtom,
   lastSelectedRepoAtom,
+  defaultAgentApprovalPolicyAtom,
+  defaultAgentPermissionProfileAtom,
   selectedProjectAtom,
   agentsUnseenChangesAtom,
   agentsSubChatUnseenChangesAtom,
@@ -68,6 +70,8 @@ export {
   type AgentsDebugMode,
   type SubChatFileChange,
   type AgentMode,
+  type AgentApprovalPolicy,
+  type AgentPermissionProfile,
 
   // Mode utilities
   AGENT_MODES,
@@ -185,17 +189,39 @@ export type SettingsTab =
   | "profile"
   | "appearance"
   | "preferences"
+  | "capabilities"
+  | "agent"
+  | "billing"
+  | "code-review"
   | "models"
+  | "runtime"
+  | "desktop"
+  | "release"
+  | "configuration"
+  | "personalization"
+  | "pets"
+  | "environment"
+  | "hooks"
+  | "memory"
   | "skills"
   | "agents"
   | "mcp"
   | "plugins"
+  | "archived-conversations"
   | "worktrees"
   | "projects"
   | "debug"
   | "beta"
   | "keyboard"
 export const agentsSettingsDialogActiveTabAtom = atom<SettingsTab>("preferences")
+
+export type AppLanguage = "zh-CN" | "en-US"
+
+export const appLanguageAtom = atomWithStorage<AppLanguage>(
+  "app:language",
+  "zh-CN",
+)
+
 // Derived atom: maps settings open/close to desktopView navigation
 export const agentsSettingsDialogOpenAtom = atom(
   (get) => get(_desktopViewAtom) === "settings",
@@ -209,6 +235,126 @@ export type CustomClaudeConfig = {
   token: string
   baseUrl: string
 }
+
+export type AgentEnvironmentSettings = {
+  inheritShellEnvironment: boolean
+  redactSensitiveValues: boolean
+  requireHookConfirmation: boolean
+  hookRunnerEnabled: boolean
+  allowedVariables: string[]
+}
+
+export const DEFAULT_AGENT_ENVIRONMENT_SETTINGS: AgentEnvironmentSettings = {
+  inheritShellEnvironment: true,
+  redactSensitiveValues: true,
+  requireHookConfirmation: true,
+  hookRunnerEnabled: false,
+  allowedVariables: [
+    "PATH",
+    "HOME",
+    "SHELL",
+    "LANG",
+    "NODE_ENV",
+    "GIT_AUTHOR_NAME",
+    "GIT_AUTHOR_EMAIL",
+  ],
+}
+
+export const agentEnvironmentSettingsAtom =
+  atomWithStorage<AgentEnvironmentSettings>(
+    "agents:environment-settings",
+    DEFAULT_AGENT_ENVIRONMENT_SETTINGS,
+  )
+
+export type AgentCapabilitiesSettings = {
+  unifiedSourceEnabled: boolean
+  memoryEnabled: boolean
+  skillsEnabled: boolean
+  mcpEnabled: boolean
+  pluginsEnabled: boolean
+  hooksEnabled: boolean
+  requireMcpApproval: boolean
+}
+
+export const DEFAULT_AGENT_CAPABILITIES_SETTINGS: AgentCapabilitiesSettings = {
+  unifiedSourceEnabled: true,
+  memoryEnabled: true,
+  skillsEnabled: true,
+  mcpEnabled: true,
+  pluginsEnabled: true,
+  hooksEnabled: false,
+  requireMcpApproval: true,
+}
+
+export const agentCapabilitiesSettingsAtom =
+  atomWithStorage<AgentCapabilitiesSettings>(
+    "agents:capabilities-settings",
+    DEFAULT_AGENT_CAPABILITIES_SETTINGS,
+  )
+
+export type AgentCodeReviewTriggerPolicy =
+  | "manual"
+  | "pull-request"
+  | "push-and-pull-request"
+
+export type AgentCodeReviewRateLimitPolicy =
+  | "warn-before-expensive"
+  | "respect-provider-limit"
+  | "disable-when-low"
+
+export type AgentCodeReviewSettings = {
+  automaticReviewEnabled: boolean
+  exhaustiveReviewEnabled: boolean
+  triggerPolicy: AgentCodeReviewTriggerPolicy
+  rateLimitCreditPolicy: AgentCodeReviewRateLimitPolicy
+  requireProviderReadiness: boolean
+}
+
+export const DEFAULT_AGENT_CODE_REVIEW_SETTINGS: AgentCodeReviewSettings = {
+  automaticReviewEnabled: false,
+  exhaustiveReviewEnabled: false,
+  triggerPolicy: "manual",
+  rateLimitCreditPolicy: "warn-before-expensive",
+  requireProviderReadiness: true,
+}
+
+export const agentCodeReviewSettingsAtom =
+  atomWithStorage<AgentCodeReviewSettings>(
+    "agents:code-review-settings",
+    DEFAULT_AGENT_CODE_REVIEW_SETTINGS,
+  )
+
+export type AgentDesktopParitySettings = {
+  globalSearchEnabled: boolean
+  automationMonitorEnabled: boolean
+  browserToolsEnabled: boolean
+  requireComputerControlApproval: boolean
+  shareConnectionsAcrossEngines: boolean
+  includeArchivedConversations: boolean
+  appSnapshotsEnabled: boolean
+  gitBranchPrefix: string
+  worktreeRoot: string
+  openTargetLabel: string
+}
+
+export const DEFAULT_AGENT_DESKTOP_PARITY_SETTINGS: AgentDesktopParitySettings = {
+  globalSearchEnabled: true,
+  automationMonitorEnabled: true,
+  browserToolsEnabled: true,
+  requireComputerControlApproval: true,
+  shareConnectionsAcrossEngines: true,
+  includeArchivedConversations: true,
+  appSnapshotsEnabled: true,
+  gitBranchPrefix: "codex/",
+  worktreeRoot: ".1code/worktrees",
+  openTargetLabel: "Ghostty",
+}
+
+export const agentDesktopParitySettingsAtom =
+  atomWithStorage<AgentDesktopParitySettings>(
+    "agents:desktop-parity-settings",
+    DEFAULT_AGENT_DESKTOP_PARITY_SETTINGS,
+  )
 
 // Model profile system - support multiple configs
 export type ModelProfile = {
@@ -664,6 +810,14 @@ export const recordingHotkeyForActionAtom = atom<string | null>(null)
 // Login modal (shown when Claude Code auth fails)
 export const agentsLoginModalOpenAtom = atom<boolean>(false)
 export const codexLoginModalOpenAtom = atom<boolean>(false)
+
+export type CodexLoginModalConfig = {
+  autoStart: boolean
+}
+
+export const codexLoginModalConfigAtom = atom<CodexLoginModalConfig>({
+  autoStart: true,
+})
 
 export type ClaudeLoginModalConfig = {
   hideCustomModelSettingsLink: boolean

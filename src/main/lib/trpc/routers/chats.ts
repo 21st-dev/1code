@@ -4,6 +4,11 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import simpleGit from "simple-git"
 import { z } from "zod"
+import {
+  getCodexOutputArtifactsFromBlocks,
+  normalizeCodexConversationBlocksFromMessage,
+  type CodexOutputArtifact,
+} from "../../../../shared/codex-tool-normalizer"
 import { getAuthManager } from "../../../index"
 import {
   trackPRCreated,
@@ -11,6 +16,21 @@ import {
   trackWorkspaceCreated,
   trackWorkspaceDeleted,
 } from "../../analytics"
+import {
+  AGENT_ENGINE_IDS,
+  DEFAULT_AGENT_ENGINE_ID,
+  buildMossForkSnapshot,
+  getAgentRuntimeManifest,
+  mergeMossSessionControlMetadata,
+  type AgentEngineId,
+  type AgentPermissionMode,
+} from "../../agent-runtime"
+import {
+  readCodexNativeSessionEventsById,
+  recoverCodexNativeMessagesFromSessionEvents,
+  type CodexNativeRecoveredMessage,
+} from "../../agent-runtime/codex-native-recovery"
+import { shouldClearStaleAgentStreamId } from "../../agent-runtime/stale-stream-state"
 import { chats, getDatabase, projects, subChats } from "../../db"
 import {
   createWorktreeForChat,
@@ -24,9 +44,19 @@ import { computeContentHash, gitCache } from "../../git/cache"
 import { splitUnifiedDiffByFile } from "../../git/diff-parser"
 import { execWithShellEnv } from "../../git/shell-env"
 import { applyRollbackStash } from "../../git/stash"
+import {
+  linkMossSourceIntoWorkspace,
+  materializeMossWorkspaceProjections,
+} from "../../moss-source"
 import { checkInternetConnection, checkOllamaStatus } from "../../ollama"
 import { terminalManager } from "../../terminal/manager"
 import { publicProcedure, router } from "../index"
+import {
+  buildEmptySubChatValues,
+  buildInitialSubChatValues,
+} from "./chat-runtime-selection"
+import { hasActiveCodexStreamForSubChat } from "./codex"
+import { hasActiveHermesStreamForSubChat } from "./hermes"
 
 type WorktreeSetupFailurePayload = {
   kind: "create-failed" | "setup-failed"
@@ -34,9 +64,153 @@ type WorktreeSetupFailurePayload = {
   projectId: string
 }
 
+type WorktreeSetupEventPayload = {
+  kind: "create-started" | "created" | "setup-complete" | "setup-failed" | "create-failed"
+  chatId: string
+  projectId: string
+  clientRequestId?: string | null
+  projectName?: string | null
+  worktreePath?: string | null
+  branch?: string | null
+  baseBranch?: string | null
+  output?: string[]
+  errors?: string[]
+  message?: string
+}
+
+const permissionModeSchema = z.enum([
+  "plan",
+  "agent",
+  "bypass",
+  "read-only",
+  "ask-approval",
+  "full-access",
+  "custom",
+])
+
+function buildInitialRuntimeMetadata(
+  permissionMode: AgentPermissionMode | undefined,
+): string | undefined {
+  return permissionMode
+    ? JSON.stringify({ permissionMode })
+    : undefined
+}
+
+type ChatOutputArtifactRow = {
+  id: string
+  artifact: CodexOutputArtifact
+  chatId: string
+  chatName: string | null
+  subChatId: string
+  subChatName: string | null
+  projectId: string | null
+  projectName: string | null
+  projectPath: string | null
+  engine: string | null
+  createdAt: Date | null
+  updatedAt: Date | null
+}
+
+type ArtifactCandidateSubChat = {
+  chatId: string
+  chatName: string | null
+  chatCreatedAt: Date | null
+  chatUpdatedAt: Date | null
+  projectId: string | null
+  projectName: string | null
+  projectPath: string | null
+  subChatId: string
+  subChatName: string | null
+  subChatCreatedAt: Date | null
+  subChatUpdatedAt: Date | null
+  engine: string | null
+  messages: string | null
+}
+
+function safeParseMessageList(value: string | null): unknown[] {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function extractLibraryArtifactsFromSubChat(
+  row: ArtifactCandidateSubChat,
+): ChatOutputArtifactRow[] {
+  const messages = safeParseMessageList(row.messages)
+  const outputArtifacts: ChatOutputArtifactRow[] = []
+
+  messages.forEach((message, messageIndex) => {
+    const messageRecord =
+      typeof message === "object" && message !== null
+        ? (message as Record<string, unknown>)
+        : null
+    if (!messageRecord || messageRecord.role !== "assistant") return
+
+    const messageId =
+      typeof messageRecord.id === "string" && messageRecord.id.trim()
+        ? messageRecord.id
+        : `message-${messageIndex}`
+    const blocks = normalizeCodexConversationBlocksFromMessage(messageRecord, {
+      chatStatus: "idle",
+      turnId: messageId,
+    })
+
+    getCodexOutputArtifactsFromBlocks(blocks).forEach((artifact, artifactIndex) => {
+      outputArtifacts.push({
+        id: [
+          row.chatId,
+          row.subChatId,
+          messageId,
+          artifact.id || `artifact-${artifactIndex}`,
+        ].join(":"),
+        artifact: {
+          ...artifact,
+          id: [
+            row.chatId,
+            row.subChatId,
+            messageId,
+            artifact.id || `artifact-${artifactIndex}`,
+          ].join(":"),
+        },
+        chatId: row.chatId,
+        chatName: row.chatName,
+        subChatId: row.subChatId,
+        subChatName: row.subChatName,
+        projectId: row.projectId,
+        projectName: row.projectName,
+        projectPath: row.projectPath,
+        engine: row.engine,
+        createdAt: row.subChatCreatedAt ?? row.chatCreatedAt,
+        updatedAt: row.subChatUpdatedAt ?? row.chatUpdatedAt,
+      })
+    })
+  })
+
+  return outputArtifacts
+}
+
 function sendWorktreeSetupFailure(
   windowId: number | null,
   payload: WorktreeSetupFailurePayload,
+): void {
+  sendWorktreeSetupPayload(windowId, "worktree:setup-failed", payload)
+}
+
+function sendWorktreeSetupEvent(
+  windowId: number | null,
+  payload: WorktreeSetupEventPayload,
+): void {
+  sendWorktreeSetupPayload(windowId, "worktree:setup-event", payload)
+}
+
+function sendWorktreeSetupPayload(
+  windowId: number | null,
+  channel: "worktree:setup-failed" | "worktree:setup-event",
+  payload: WorktreeSetupFailurePayload | WorktreeSetupEventPayload,
 ): void {
   const targets: BrowserWindow[] = []
 
@@ -53,7 +227,164 @@ function sendWorktreeSetupFailure(
 
   for (const window of targets) {
     if (window.isDestroyed()) continue
-    window.webContents.send("worktree:setup-failed", payload)
+    window.webContents.send(channel, payload)
+  }
+}
+
+async function recoverCodexNativeSubChatMessagesIfNeeded<
+  TSubChat extends {
+    id: string
+    engine: string
+    engineSessionId?: string | null
+    messages: string
+  },
+>(subChat: TSubChat): Promise<TSubChat> {
+  if (subChat.engine !== "codex" || !subChat.engineSessionId) {
+    return subChat
+  }
+
+  let messages: CodexNativeRecoveredMessage[]
+  try {
+    const parsedMessages = JSON.parse(subChat.messages || "[]")
+    if (!Array.isArray(parsedMessages)) return subChat
+    messages = parsedMessages
+  } catch {
+    return subChat
+  }
+
+  if (!messages.some((message) => message.role === "assistant")) {
+    return subChat
+  }
+
+  const sessionEvents = await readCodexNativeSessionEventsById(
+    subChat.engineSessionId,
+  )
+  if (sessionEvents.length === 0) return subChat
+
+  const recovery = recoverCodexNativeMessagesFromSessionEvents(
+    messages,
+    sessionEvents,
+  )
+  if (!recovery.changed) return subChat
+
+  const nextMessages = JSON.stringify(recovery.messages)
+  try {
+    getDatabase()
+      .update(subChats)
+      .set({ messages: nextMessages })
+      .where(eq(subChats.id, subChat.id))
+      .run()
+  } catch (error) {
+    console.warn("[chats] Failed to persist recovered Codex native messages:", error)
+  }
+
+  return {
+    ...subChat,
+    messages: nextMessages,
+  }
+}
+
+async function clearStaleAgentStreamIdIfNeeded<
+  TSubChat extends {
+    id: string
+    engine: string
+    streamId?: string | null
+  },
+>(subChat: TSubChat): Promise<TSubChat> {
+  if (
+    !shouldClearStaleAgentStreamId(subChat, {
+      isActiveCodexStream: hasActiveCodexStreamForSubChat,
+      isActiveHermesStream: hasActiveHermesStreamForSubChat,
+    })
+  ) {
+    return subChat
+  }
+
+  try {
+    getDatabase()
+      .update(subChats)
+      .set({ streamId: null })
+      .where(eq(subChats.id, subChat.id))
+      .run()
+  } catch (error) {
+    console.warn("[chats] Failed to clear stale agent stream id:", error)
+  }
+
+  return {
+    ...subChat,
+    streamId: null,
+  }
+}
+
+async function normalizeLoadedSubChatRuntimeState<
+  TSubChat extends {
+    id: string
+    engine: string
+    engineSessionId?: string | null
+    messages: string
+    streamId?: string | null
+  },
+>(subChat: TSubChat): Promise<TSubChat> {
+  const recoveredSubChat = await recoverCodexNativeSubChatMessagesIfNeeded(subChat)
+  return clearStaleAgentStreamIdIfNeeded(recoveredSubChat)
+}
+
+async function materializeMossWorkspaceForChat(params: {
+  sourceProjectPath: string
+  workspacePath: string
+  chatId: string
+}): Promise<void> {
+  try {
+    const sourceLink = await linkMossSourceIntoWorkspace({
+      sourceProjectPath: params.sourceProjectPath,
+      workspacePath: params.workspacePath,
+    })
+    const projections = await materializeMossWorkspaceProjections({
+      projectPath: params.workspacePath,
+      createIfMissing: true,
+    })
+    const summary = projections.projections.reduce(
+      (acc, projection) => ({
+        created: acc.created + projection.summary.created,
+        updated: acc.updated + projection.summary.updated,
+        skipped: acc.skipped + projection.summary.skipped,
+        conflict: acc.conflict + projection.summary.conflict,
+        unsupported: acc.unsupported + projection.summary.unsupported,
+        total: acc.total + projection.summary.total,
+      }),
+      {
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        conflict: 0,
+        unsupported: 0,
+        total: 0,
+      },
+    )
+
+    if (sourceLink.status === "conflict" || summary.conflict > 0) {
+      console.warn("[moss-source] Workspace projection conflicts:", {
+        chatId: params.chatId,
+        workspacePath: params.workspacePath,
+        sourceLink,
+        summary,
+      })
+      return
+    }
+
+    console.log("[moss-source] Workspace projections refreshed:", {
+      chatId: params.chatId,
+      workspacePath: params.workspacePath,
+      sourceLinkStatus: sourceLink.status,
+      sourceLinkReason: sourceLink.reason,
+      summary,
+    })
+  } catch (error) {
+    console.warn("[moss-source] Workspace projection refresh failed:", {
+      chatId: params.chatId,
+      workspacePath: params.workspacePath,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 }
 
@@ -230,6 +561,65 @@ export const chatsRouter = router({
     }),
 
   /**
+   * List local output artifacts across non-archived chats.
+   * This backs the desktop Library route without coupling it to a single agent engine.
+   */
+  listOutputArtifacts: publicProcedure
+    .input(
+      z
+        .object({
+          projectId: z.string().optional(),
+          limit: z.number().int().min(1).max(1000).optional(),
+        })
+        .optional(),
+    )
+    .query(({ input }): ChatOutputArtifactRow[] => {
+      const db = getDatabase()
+      const conditions = [
+        isNull(chats.archivedAt),
+        sql`(
+          ${subChats.messages} LIKE '%generated-image%' OR
+          ${subChats.messages} LIKE '%data-output%' OR
+          ${subChats.messages} LIKE '%resource_link%' OR
+          ${subChats.messages} LIKE '%embedded_resource%' OR
+          ${subChats.messages} LIKE '%tool-Write%' OR
+          ${subChats.messages} LIKE '%tool-Edit%' OR
+          ${subChats.messages} LIKE '%tool-write:%' OR
+          ${subChats.messages} LIKE '%tool-edit:%'
+        )`,
+      ]
+      if (input?.projectId) {
+        conditions.push(eq(chats.projectId, input.projectId))
+      }
+
+      const rows = db
+        .select({
+          chatId: chats.id,
+          chatName: chats.name,
+          chatCreatedAt: chats.createdAt,
+          chatUpdatedAt: chats.updatedAt,
+          projectId: chats.projectId,
+          projectName: projects.name,
+          projectPath: projects.path,
+          subChatId: subChats.id,
+          subChatName: subChats.name,
+          subChatCreatedAt: subChats.createdAt,
+          subChatUpdatedAt: subChats.updatedAt,
+          engine: subChats.engine,
+          messages: subChats.messages,
+        })
+        .from(subChats)
+        .innerJoin(chats, eq(subChats.chatId, chats.id))
+        .leftJoin(projects, eq(chats.projectId, projects.id))
+        .where(and(...conditions))
+        .orderBy(desc(subChats.updatedAt))
+        .limit(input?.limit ?? 500)
+        .all()
+
+      return rows.flatMap((row) => extractLibraryArtifactsFromSubChat(row))
+    }),
+
+  /**
    * List archived chats (optionally filter by project)
    */
   listArchived: publicProcedure
@@ -253,17 +643,22 @@ export const chatsRouter = router({
    */
   get: publicProcedure
     .input(z.object({ id: z.string() }))
-    .query(({ input }) => {
+    .query(async ({ input }) => {
       const db = getDatabase()
       const chat = db.select().from(chats).where(eq(chats.id, input.id)).get()
       if (!chat) return null
 
-      const chatSubChats = db
+      const loadedSubChats = db
         .select()
         .from(subChats)
         .where(eq(subChats.chatId, input.id))
         .orderBy(subChats.createdAt)
         .all()
+      const chatSubChats = await Promise.all(
+        loadedSubChats.map((subChat) =>
+          normalizeLoadedSubChatRuntimeState(subChat),
+        ),
+      )
 
       const project = db
         .select()
@@ -282,6 +677,7 @@ export const chatsRouter = router({
       z.object({
         projectId: z.string(),
         name: z.string().optional(),
+        engine: z.enum(AGENT_ENGINE_IDS).optional(),
         model: z.string().optional(),
         initialMessage: z.string().optional(),
         initialMessageParts: z
@@ -309,7 +705,9 @@ export const chatsRouter = router({
         baseBranch: z.string().optional(), // Branch to base the worktree off
         branchType: z.enum(["local", "remote"]).optional(), // Whether baseBranch is local or remote
         useWorktree: z.boolean().default(true), // If false, work directly in project dir
+        clientRequestId: z.string().optional(),
         mode: z.enum(["plan", "agent"]).default("agent"),
+        permissionMode: permissionModeSchema.optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -364,11 +762,14 @@ export const chatsRouter = router({
 
       const subChat = db
         .insert(subChats)
-        .values({
+        .values(buildInitialSubChatValues({
           chatId: chat.id,
+          engine: input.engine,
+          model: input.model,
           mode: input.mode,
           messages: initialMessages,
-        })
+          runtimeMetadata: buildInitialRuntimeMetadata(input.permissionMode),
+        }))
         .returning()
         .get()
       console.log("[chats.create] created subChat:", subChat)
@@ -388,6 +789,14 @@ export const chatsRouter = router({
           "type:",
           input.branchType,
         )
+        sendWorktreeSetupEvent(requestingWindowId, {
+          kind: "create-started",
+          chatId: chat.id,
+          projectId: project.id,
+          clientRequestId: input.clientRequestId ?? null,
+          projectName: project.name,
+          branch: input.baseBranch ?? null,
+        })
         const result = await createWorktreeForChat(
           project.path,
           sanitizeProjectName(project.name),
@@ -395,7 +804,38 @@ export const chatsRouter = router({
           input.baseBranch,
           input.branchType,
           {
+            onCreated: ({ worktreePath, branch, baseBranch }) => {
+              sendWorktreeSetupEvent(requestingWindowId, {
+                kind: "created",
+                chatId: chat.id,
+                projectId: project.id,
+                clientRequestId: input.clientRequestId ?? null,
+                projectName: project.name,
+                worktreePath,
+                branch: branch ?? null,
+                baseBranch: baseBranch ?? input.baseBranch ?? null,
+                output: [`Created worktree at ${worktreePath}`],
+              })
+              return materializeMossWorkspaceForChat({
+                sourceProjectPath: project.path,
+                workspacePath: worktreePath,
+                chatId: chat.id,
+              })
+            },
             onSetupComplete: (setupResult: WorktreeSetupResult) => {
+              sendWorktreeSetupEvent(requestingWindowId, {
+                kind: setupResult.success ? "setup-complete" : "setup-failed",
+                chatId: chat.id,
+                projectId: project.id,
+                clientRequestId: input.clientRequestId ?? null,
+                projectName: project.name,
+                output: setupResult.output,
+                errors: setupResult.errors,
+                message: setupResult.success
+                  ? "Worktree setup complete."
+                  : setupResult.errors[0] ||
+                    "Worktree setup failed. Check your setup commands.",
+              })
               if (setupResult.success) return
               const message =
                 setupResult.errors[0] ||
@@ -426,6 +866,15 @@ export const chatsRouter = router({
           }
         } else {
           console.warn(`[Worktree] Failed: ${result.error}`)
+          sendWorktreeSetupEvent(requestingWindowId, {
+            kind: "create-failed",
+            chatId: chat.id,
+            projectId: project.id,
+            clientRequestId: input.clientRequestId ?? null,
+            projectName: project.name,
+            message: result.error || "Worktree creation failed.",
+            errors: result.error ? [result.error] : [],
+          })
           sendWorktreeSetupFailure(requestingWindowId, {
             kind: "create-failed",
             message: result.error || "Worktree creation failed.",
@@ -437,6 +886,11 @@ export const chatsRouter = router({
             .where(eq(chats.id, chat.id))
             .run()
           worktreeResult = { worktreePath: project.path }
+          await materializeMossWorkspaceForChat({
+            sourceProjectPath: project.path,
+            workspacePath: project.path,
+            chatId: chat.id,
+          })
         }
       } else {
         // Local mode: use project path directly, no branch info
@@ -446,10 +900,16 @@ export const chatsRouter = router({
           .where(eq(chats.id, chat.id))
           .run()
         worktreeResult = { worktreePath: project.path }
+        await materializeMossWorkspaceForChat({
+          sourceProjectPath: project.path,
+          workspacePath: project.path,
+          chatId: chat.id,
+        })
       }
 
       const response = {
         ...chat,
+        clientRequestId: input.clientRequestId ?? null,
         worktreePath: worktreeResult.worktreePath || project.path,
         branch: worktreeResult.branch,
         baseBranch: worktreeResult.baseBranch,
@@ -683,15 +1143,17 @@ export const chatsRouter = router({
    */
   getSubChat: publicProcedure
     .input(z.object({ id: z.string() }))
-    .query(({ input }) => {
+    .query(async ({ input }) => {
       const db = getDatabase()
-      const subChat = db
+      const loadedSubChat = db
         .select()
         .from(subChats)
         .where(eq(subChats.id, input.id))
         .get()
 
-      if (!subChat) return null
+      if (!loadedSubChat) return null
+      const subChat =
+        await normalizeLoadedSubChatRuntimeState(loadedSubChat)
 
       const chat = db
         .select()
@@ -718,6 +1180,8 @@ export const chatsRouter = router({
       z.object({
         chatId: z.string(),
         name: z.string().optional(),
+        engine: z.enum(AGENT_ENGINE_IDS).optional(),
+        model: z.string().optional(),
         mode: z.enum(["plan", "agent"]).default("agent"),
       }),
     )
@@ -725,12 +1189,13 @@ export const chatsRouter = router({
       const db = getDatabase()
       return db
         .insert(subChats)
-        .values({
+        .values(buildEmptySubChatValues({
           chatId: input.chatId,
           name: input.name,
+          engine: input.engine,
+          model: input.model,
           mode: input.mode,
-          messages: "[]",
-        })
+        }))
         .returning()
         .get()
     }),
@@ -773,28 +1238,22 @@ export const chatsRouter = router({
       }
       if (cutoffIndex === -1) throw new Error("Message not found")
 
-      // 3. Slice messages up to and including the target
-      const messagesToFork = allMessages.slice(0, cutoffIndex + 1)
-
-      // 4. Find sdkMessageUuid of last assistant message (for resumeSessionAt)
-      const lastAssistant = [...messagesToFork]
-        .reverse()
-        .find((m: any) => m.role === "assistant")
-      const forkAtSdkUuid = lastAssistant?.metadata?.sdkMessageUuid || null
-
-      // 5. Generate new IDs for all messages + set shouldForkResume on last assistant
-      const forkedMessages = messagesToFork.map((msg: any, i: number) => ({
-        ...msg,
-        id: `fork-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
-        metadata: {
-          ...msg.metadata,
-          shouldResume: undefined,
-          ...(msg === lastAssistant &&
-            forkAtSdkUuid && {
-              shouldForkResume: true,
-            }),
-        },
-      }))
+      const sourceEngine = AGENT_ENGINE_IDS.includes(
+        sourceSubChat.engine as AgentEngineId,
+      )
+        ? sourceSubChat.engine as AgentEngineId
+        : DEFAULT_AGENT_ENGINE_ID
+      const manifest = getAgentRuntimeManifest(sourceEngine)
+      const sourceNativeSessionId =
+        sourceSubChat.engineSessionId ??
+        (sourceEngine === "claude-code" ? sourceSubChat.sessionId : null)
+      let snapshot = buildMossForkSnapshot({
+        engine: sourceEngine,
+        nativeSessionId: sourceNativeSessionId,
+        messages: allMessages,
+        features: manifest.features,
+        targetMessageIndex: cutoffIndex,
+      })
 
       // 6. Generate fork name: [N] originalName
       let forkName = input.name
@@ -821,21 +1280,49 @@ export const chatsRouter = router({
         forkName = `[${maxN + 1}] ${baseName}`
       }
 
-      // 7. Insert new sub-chat with sessionId from original (needed for resume)
-      const newSubChat = db
+      const buildForkRuntimeMetadata = (
+        mode: typeof snapshot.mode,
+        extra?: Record<string, unknown>,
+      ) =>
+        mergeMossSessionControlMetadata(sourceSubChat.runtimeMetadata, {
+          action: "fork",
+          mode,
+          source: "fork-sub-chat",
+          sourceSubChatId: input.subChatId,
+          sourceEngineSessionId:
+            sourceSubChat.engineSessionId ?? sourceSubChat.sessionId ?? null,
+          nativeSessionLinked,
+          targetMessageId: input.messageId,
+          targetMessageIndex: cutoffIndex,
+          forkAtSdkUuid: snapshot.forkAtSdkUuid,
+          ...(extra ?? {}),
+        })
+
+      let nativeSessionLinked = snapshot.nativeSessionLinked
+
+      // 7. Insert new sub-chat. Only engines with a verified native bridge keep
+      // native session identity; all others fork the transcript and start fresh.
+      let newSubChat = db
         .insert(subChats)
         .values({
           chatId: sourceSubChat.chatId,
           name: forkName,
           mode: sourceSubChat.mode,
-          messages: JSON.stringify(forkedMessages),
-          sessionId: sourceSubChat.sessionId,
+          messages: JSON.stringify(snapshot.messages),
+          sessionId: nativeSessionLinked ? sourceSubChat.sessionId : null,
+          engine: sourceEngine,
+          engineSessionId: nativeSessionLinked
+            ? sourceSubChat.engineSessionId ?? sourceSubChat.sessionId
+            : null,
+          engineConfigDir: sourceSubChat.engineConfigDir,
+          modelId: sourceSubChat.modelId,
+          runtimeMetadata: buildForkRuntimeMetadata(snapshot.mode),
         })
         .returning()
         .get()
 
-      // 8. Copy .jsonl session files to the new isolated config dir
-      if (sourceSubChat.sessionId) {
+      // 8. Copy Claude .jsonl session files to the new isolated config dir
+      if (nativeSessionLinked && sourceEngine === "claude-code") {
         try {
           const { app } = await import("electron")
           const userDataPath = app.getPath("userData")
@@ -859,28 +1346,50 @@ export const chatsRouter = router({
 
           if (sourceDirExists) {
             await fs.cp(sourceDir, targetDir, { recursive: true })
+          } else {
+            throw new Error("Claude session files were not available to copy")
           }
         } catch (err) {
           console.warn("[forkSubChat] Failed to copy session files:", err)
-          // Clear shouldForkResume since there's no .jsonl to fork from
-          for (const m of forkedMessages) {
-            if (m.metadata?.shouldForkResume) {
-              delete m.metadata.shouldForkResume
-            }
-          }
-          db.update(subChats)
-            .set({ messages: JSON.stringify(forkedMessages) })
+          snapshot = buildMossForkSnapshot({
+            engine: sourceEngine,
+            nativeSessionId: null,
+            messages: allMessages,
+            features: manifest.features,
+            targetMessageIndex: cutoffIndex,
+          })
+          nativeSessionLinked = false
+          newSubChat = db
+            .update(subChats)
+            .set({
+              messages: JSON.stringify(snapshot.messages),
+              sessionId: null,
+              engineSessionId: null,
+              runtimeMetadata: buildForkRuntimeMetadata(snapshot.mode, {
+                nativeSessionLinked,
+                fallbackReason: "Claude session files were not available to copy.",
+              }),
+              updatedAt: new Date(),
+            })
             .where(eq(subChats.id, newSubChat.id))
-            .run()
+            .returning()
+            .get()
         }
       }
 
-      console.log("[forkSubChat] Created", { id: newSubChat.id, name: forkName, messages: forkedMessages.length })
+      console.log("[forkSubChat] Created", {
+        id: newSubChat.id,
+        name: forkName,
+        messages: snapshot.messageCount,
+        mode: snapshot.mode,
+      })
 
       return {
         subChat: newSubChat,
-        messageCount: forkedMessages.length,
-        forkAtSdkUuid,
+        messageCount: snapshot.messageCount,
+        forkAtSdkUuid: snapshot.forkAtSdkUuid,
+        mode: snapshot.mode,
+        nativeSessionLinked,
       }
     }),
 

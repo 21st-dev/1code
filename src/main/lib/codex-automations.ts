@@ -14,7 +14,12 @@ type AutomationInput = Record<string, unknown>
 const AUTOMATION_FILE_NAME = "automation.toml"
 const AUTOMATION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/
 const HERMES_AUTOMATION_MODEL_ID = "moss-default"
-const AUTOMATION_ENGINE_IDS = ["hermes", "codex", "claude-code"] as const
+const AUTOMATION_ENGINE_IDS = [
+  "hermes",
+  "codex",
+  "claude-code",
+  "custom-acp",
+] as const
 type LocalAutomationEngineId = (typeof AUTOMATION_ENGINE_IDS)[number]
 
 export function getCodexAutomationsRoot(): string {
@@ -339,13 +344,16 @@ function normalizeAutomationEngine(
   if (normalizedModel.startsWith("gpt-") || normalizedModel.includes("codex")) {
     return "codex"
   }
+  if (normalizedModel.includes("custom-acp")) {
+    return "custom-acp"
+  }
   return "hermes"
 }
 
 function isLocalAutomationEngineId(
   value: string | null,
 ): value is LocalAutomationEngineId {
-  return value === "hermes" || value === "codex" || value === "claude-code"
+  return AUTOMATION_ENGINE_IDS.includes(value as LocalAutomationEngineId)
 }
 
 function copyStringField(

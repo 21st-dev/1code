@@ -19,6 +19,10 @@ import {
 } from "../moss-source"
 import { getAgentRuntimeManifest } from "./manifests"
 import {
+  readNativeThreadReadSummaryFromMetadata,
+  type NativeThreadReadSummary,
+} from "./native-thread-summary"
+import {
   buildMossSessionActionPlan,
   type MossSessionActionPlan,
 } from "./session-actions"
@@ -75,6 +79,7 @@ export interface MossSessionControlEntry {
   actions: MossSessionActionPlan["actions"]
   providerId?: string
   providerModel?: string
+  nativeThreadRead: NativeThreadReadSummary | null
   updatedAt: string | null
   runtimeUpdatedAt: string | null
 }
@@ -309,6 +314,9 @@ function buildEntries(params: {
         actions: actionPlan.actions,
         providerId: params.providerRoutes[engine]?.providerId,
         providerModel: params.providerRoutes[engine]?.model,
+        nativeThreadRead: readNativeThreadReadSummaryFromMetadata(
+          subChat.runtimeMetadata,
+        ),
         updatedAt: toIsoString(subChat.updatedAt),
         runtimeUpdatedAt:
           typeof metadata.updatedAt === "string" ? metadata.updatedAt : null,

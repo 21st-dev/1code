@@ -8,6 +8,8 @@ import type {
   SharedResourceApproval,
   SharedResourceConflict,
   SharedResourceKind,
+  SharedResourceRuntimeGate,
+  SharedResourceRuntimeGateIssue,
   SharedResourceSnapshot,
 } from "./types"
 
@@ -21,6 +23,11 @@ const GOVERNED_RESOURCE_KINDS = new Set<SharedResourceKind>([
   "instruction",
   "hook",
   "provider",
+  "config",
+  "automation",
+  "connector",
+  "app",
+  "tool",
 ])
 
 const SCOPE_PRECEDENCE: Record<SharedResource["scope"], number> = {
@@ -38,7 +45,7 @@ function normalizeResourceName(name: string): string {
 function buildConflictKey(resource: SharedResource): string | undefined {
   if (!GOVERNED_RESOURCE_KINDS.has(resource.kind)) return undefined
 
-  const engineKey = resource.kind === "mcp" || resource.kind === "memory"
+  const engineKey = ["mcp", "memory", "config", "automation", "connector", "app", "tool"].includes(resource.kind)
     ? resource.engine ?? "shared"
     : "shared"
   return `${resource.kind}:${engineKey}:${normalizeResourceName(resource.name)}`
@@ -62,6 +69,50 @@ function getPrecedenceLabel(resource: SharedResource): string {
 
 function getDiscoverySource(resource: SharedResource): string {
   if (resource.scope === "moss") return "Moss Unified Source"
+
+  const codexResourceRole = resource.metadata?.codexResourceRole
+  if (resource.engine === "codex" && codexResourceRole === "plugin-manifest") {
+    return "Codex plugin manifest"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "plugin-skill") {
+    return "Codex plugin cache skill"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "user-skill") {
+    return "Codex skill directory"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "config") {
+    return "Codex config.toml"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "browser-config") {
+    return "Codex browser config.toml"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "auth") {
+    return "Codex auth state"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "hooks") {
+    return "Codex hooks.json"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "automation") {
+    return "Codex automation.toml"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "connector") {
+    return "Codex connector directory cache"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "codex-apps-server") {
+    return "Codex apps MCP server cache"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "codex-app-tool") {
+    return "Codex apps tool cache"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "remote-plugin-app") {
+    return "Codex remote plugin app catalog"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "plugin-app") {
+    return "Codex plugin app manifest"
+  }
+  if (resource.engine === "codex" && codexResourceRole === "plugin-mcp-server") {
+    return "Codex plugin MCP manifest"
+  }
 
   if (resource.kind === "mcp") {
     if (resource.scope === "plugin") return "plugin MCP manifest"
@@ -459,7 +510,17 @@ function buildEngineProjection(
     }
 
     if (engineId === "codex") {
-      if (resource.kind === "mcp" && resource.engine === "codex") {
+      if (
+        resource.engine === "codex" &&
+        ["skill", "plugin", "config", "provider", "hook", "automation", "connector", "app", "tool"].includes(resource.kind)
+      ) {
+        mappings.push({
+          resourceId: resource.id,
+          action: "native",
+          sourcePath: resource.path,
+          targetPath: resource.path,
+        })
+      } else if (resource.kind === "mcp" && resource.engine === "codex") {
         mappings.push({
           resourceId: resource.id,
           action: "native",
@@ -516,5 +577,146 @@ export function buildGovernedResourceProjection(params: {
     resources: governed.resources,
     conflicts: governed.conflicts,
     projections,
+  }
+}
+
+function runtimeGateIssue(
+  issue: Omit<SharedResourceRuntimeGateIssue, "id">,
+): SharedResourceRuntimeGateIssue {
+  const anchor =
+    issue.resourceId ?? issue.conflictKey ?? issue.kind
+  return {
+    id: `${issue.kind}:${anchor}`,
+    ...issue,
+  }
+}
+
+function resourceIsConflictLoser(resource: SharedResource): boolean {
+  return Boolean(
+    resource.conflict &&
+      resource.conflict.resolution === "winner-by-precedence" &&
+      resource.conflict.winnerResourceId !== resource.id,
+  )
+}
+
+function resourceRequiresPendingApproval(resource: SharedResource): boolean {
+  return Boolean(resource.approval?.required && !resource.approval.approved)
+}
+
+function mappingForResource(
+  projection: EngineResourceProjection | undefined,
+  resource: SharedResource,
+): ResourcePathMapping | undefined {
+  return projection?.mappings.find((mapping) => mapping.resourceId === resource.id)
+}
+
+export function buildSharedResourceRuntimeGate(params: {
+  engineId: AgentEngineId
+  snapshot: Pick<SharedResourceSnapshot, "resources" | "conflicts" | "projections">
+}): SharedResourceRuntimeGate {
+  const projection = params.snapshot.projections.find(
+    (item) => item.engineId === params.engineId,
+  )
+  const blockers: SharedResourceRuntimeGateIssue[] = []
+  const warnings: SharedResourceRuntimeGateIssue[] = []
+
+  if (!projection) {
+    blockers.push(runtimeGateIssue({
+      kind: "missing-projection",
+      severity: "blocker",
+      message: `${params.engineId} has no shared-resource projection.`,
+    }))
+  } else if (projection.status === "unsupported") {
+    blockers.push(runtimeGateIssue({
+      kind: "unsupported-projection",
+      severity: "blocker",
+      message: `${params.engineId} cannot launch with shared-resource projection status unsupported.`,
+    }))
+  } else if (projection.status === "partial") {
+    warnings.push(runtimeGateIssue({
+      kind: "partial-projection",
+      severity: "warning",
+      message: `${params.engineId} starts with explicit projection warnings: ${projection.warnings.join(" ")}`,
+    }))
+  }
+
+  for (const conflict of params.snapshot.conflicts) {
+    if (conflict.resolution !== "manual-review") continue
+    blockers.push(runtimeGateIssue({
+      kind: "manual-review-conflict",
+      severity: "blocker",
+      message: `${conflict.name} requires manual resource conflict review before launch.`,
+      conflictKey: conflict.key,
+    }))
+  }
+
+  let pendingApprovalCount = 0
+  let shadowedResourceCount = 0
+  let unsafeProjectedResourceCount = 0
+
+  for (const resource of params.snapshot.resources) {
+    const mapping = mappingForResource(projection, resource)
+    const pendingApproval = resourceRequiresPendingApproval(resource)
+    const shadowed = resourceIsConflictLoser(resource)
+
+    if (pendingApproval) {
+      pendingApprovalCount += 1
+      if (mapping) {
+        unsafeProjectedResourceCount += 1
+        blockers.push(runtimeGateIssue({
+          kind: "unsafe-projected-resource",
+          severity: "blocker",
+          message: `${resource.name} is pending approval but is still projected to ${params.engineId}.`,
+          resourceId: resource.id,
+        }))
+      } else {
+        warnings.push(runtimeGateIssue({
+          kind: "withheld-approval",
+          severity: "warning",
+          message: `${resource.name} is withheld until approval is granted.`,
+          resourceId: resource.id,
+        }))
+      }
+    }
+
+    if (shadowed) {
+      shadowedResourceCount += 1
+      if (mapping) {
+        unsafeProjectedResourceCount += 1
+        blockers.push(runtimeGateIssue({
+          kind: "unsafe-projected-resource",
+          severity: "blocker",
+          message: `${resource.name} is shadowed by a higher precedence resource but is still projected to ${params.engineId}.`,
+          resourceId: resource.id,
+        }))
+      } else {
+        warnings.push(runtimeGateIssue({
+          kind: "shadowed-resource",
+          severity: "warning",
+          message: `${resource.name} is shadowed and withheld from ${params.engineId}.`,
+          resourceId: resource.id,
+        }))
+      }
+    }
+  }
+
+  return {
+    version: 1,
+    engineId: params.engineId,
+    status: blockers.length === 0 ? "passed" : "blocked",
+    resourceCount: params.snapshot.resources.length,
+    projectionStatus: projection?.status,
+    mappingCount: projection?.mappings.length ?? 0,
+    blockers,
+    warnings,
+    summary: {
+      conflictCount: params.snapshot.conflicts.length,
+      manualReviewConflictCount: params.snapshot.conflicts.filter(
+        (conflict) => conflict.resolution === "manual-review",
+      ).length,
+      pendingApprovalCount,
+      shadowedResourceCount,
+      unsafeProjectedResourceCount,
+    },
   }
 }

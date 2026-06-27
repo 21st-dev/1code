@@ -165,4 +165,37 @@ updated_at = 1781687761313
       await rm(codexHome, { force: true, recursive: true })
     }
   })
+
+  test("persists the selected Custom ACP engine for local automations", async () => {
+    const originalCodexHome = process.env.CODEX_HOME
+    const codexHome = await useTempCodexHome()
+    try {
+      const created = await createLocalCodexAutomation({
+        name: "Custom ACP 自动化",
+        prompt: "用自定义 ACP 检查当前工作区。",
+        model: "custom-acp",
+        engine: "custom-acp",
+      })
+
+      expect(created).toMatchObject({
+        model: "custom-acp",
+        engine: "custom-acp",
+        source: "codex-local",
+      })
+
+      const toml = await readFile(
+        join(codexHome, "automations", created.id, "automation.toml"),
+        "utf8",
+      )
+      expect(toml).toContain('model = "custom-acp"')
+      expect(toml).toContain('engine = "custom-acp"')
+    } finally {
+      if (originalCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = originalCodexHome
+      }
+      await rm(codexHome, { force: true, recursive: true })
+    }
+  })
 })

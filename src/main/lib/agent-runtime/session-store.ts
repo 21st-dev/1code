@@ -1,6 +1,10 @@
 import { eq } from "drizzle-orm"
 import { getDatabase, subChats } from "../db"
 import type { AgentEngineId, AgentPermissionMode } from "./types"
+import {
+  mergeAgentRuntimeLaunchPlanMetadata,
+  type AgentRuntimeLaunchPlan,
+} from "./launch-plan"
 
 type RuntimeMetadata = Record<string, unknown>
 
@@ -9,20 +13,37 @@ export type PersistAgentRuntimeSessionInput = {
   engine: AgentEngineId
   nativeSessionId?: string | null
   configDir?: string | null
+  providerInstanceId?: string | null
   modelId?: string | null
+  modelSelection?: {
+    instanceId: string
+    modelId: string
+    options?: Record<string, unknown>
+  } | null
   permissionMode?: AgentPermissionMode
   metadata?: RuntimeMetadata
+  launchPlan?: AgentRuntimeLaunchPlan
   updateLegacySessionId?: boolean
 }
 
 function serializeMetadata(
   input: PersistAgentRuntimeSessionInput,
 ): string {
-  return JSON.stringify({
+  const metadata = {
     ...(input.metadata ?? {}),
+    ...(input.providerInstanceId
+      ? { providerInstanceId: input.providerInstanceId }
+      : {}),
+    ...(input.modelSelection ? { modelSelection: input.modelSelection } : {}),
     ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
     updatedAt: new Date().toISOString(),
-  })
+  }
+
+  return JSON.stringify(
+    input.launchPlan
+      ? mergeAgentRuntimeLaunchPlanMetadata(metadata, input.launchPlan)
+      : metadata,
+  )
 }
 
 export function persistAgentRuntimeSession(

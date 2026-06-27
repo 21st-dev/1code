@@ -3,6 +3,7 @@ import type {
   AgentRuntimeConversationBlock,
   AgentRuntimeStreamEvent,
 } from "./types"
+import { providerRuntimeEventToStreamEvent } from "./provider-runtime-contract"
 
 const CONVERSATION_BLOCK_TYPES = new Set([
   "exec",
@@ -101,6 +102,9 @@ function normalizeConversationBlockUpdate(
 export function normalizeRuntimeStreamEvent(
   chunk: Record<string, unknown>,
 ): AgentRuntimeStreamEvent | null {
+  const providerRuntimeEvent = providerRuntimeEventToStreamEvent(chunk)
+  if (providerRuntimeEvent) return providerRuntimeEvent
+
   if (chunk.type === "text" && typeof chunk.text === "string") {
     return { type: "text", text: chunk.text }
   }

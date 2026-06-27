@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process"
+import { constants, statSync } from "node:fs"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import path from "node:path"
 import { StringDecoder } from "node:string_decoder"
 import type { AgentPermissionMode } from "./types"
@@ -52,6 +53,16 @@ export interface BuildCodexNativeSessionBridgePlanInput {
   includeJson?: boolean
   skipGitRepoCheck?: boolean
   imagePaths?: string[] | null
+  env?: NodeJS.ProcessEnv | null
+}
+
+export interface ResolveCodexNativeCommandInput {
+  command?: string | null
+  env?: NodeJS.ProcessEnv | Record<string, string | undefined> | null
+  homeDir?: string | null
+  platform?: NodeJS.Platform
+  pathDelimiter?: string
+  isExecutableFile?: (filePath: string) => boolean
 }
 
 export interface CodexNativeCommandRunnerInput {
@@ -93,6 +104,18 @@ export type CodexNativeToolEvent =
       title?: string
       isError?: boolean
     }
+
+export type CodexNativeTextAppendKind =
+  | "fresh"
+  | "suffix"
+  | "overlap"
+  | "duplicate"
+  | "separate"
+
+export interface CodexNativeTextAppendResult {
+  appendText: string
+  kind: CodexNativeTextAppendKind
+}
 
 export interface CodexExecResumeEventSummary {
   nativeSessionId?: string
@@ -147,9 +170,140 @@ export interface CodexExecResumeBridgeResult
   events: CodexJsonlEvent[]
 }
 
+const MIN_CODEX_NATIVE_TEXT_OVERLAP = 8
+const MIN_CODEX_NATIVE_REPEATED_FINAL_TEXT_LENGTH = 80
+
+function normalizeCodexNativeComparableText(value: string): string {
+  return value.replace(/\r\n/g, "\n")
+}
+
+function codexNativeTextOverlapLength(
+  existingText: string,
+  nextText: string,
+): number {
+  const maxLength = Math.min(existingText.length, nextText.length)
+
+  for (let length = maxLength; length >= MIN_CODEX_NATIVE_TEXT_OVERLAP; length--) {
+    if (existingText.endsWith(nextText.slice(0, length))) {
+      return length
+    }
+  }
+
+  return 0
+}
+
+export function reconcileCodexNativeTextAppend(
+  existingText: string,
+  nextText: string,
+): CodexNativeTextAppendResult {
+  if (!nextText) return { appendText: "", kind: "duplicate" }
+  if (!existingText) return { appendText: nextText, kind: "fresh" }
+  if (nextText.startsWith(existingText)) {
+    const appendText = nextText.slice(existingText.length)
+    return {
+      appendText,
+      kind: appendText ? "suffix" : "duplicate",
+    }
+  }
+  if (existingText.includes(nextText)) {
+    return { appendText: "", kind: "duplicate" }
+  }
+
+  const overlapLength = codexNativeTextOverlapLength(existingText, nextText)
+  if (overlapLength > 0) {
+    const appendText = nextText.slice(overlapLength)
+    return {
+      appendText,
+      kind: appendText ? "overlap" : "duplicate",
+    }
+  }
+
+  return { appendText: nextText, kind: "separate" }
+}
+
+export function isCodexNativeRepeatedFinalText(
+  existingText: string,
+  nextText: string,
+): boolean {
+  const existing = normalizeCodexNativeComparableText(existingText).trim()
+  const next = normalizeCodexNativeComparableText(nextText).trim()
+  if (
+    existing.length < MIN_CODEX_NATIVE_REPEATED_FINAL_TEXT_LENGTH ||
+    next.length <= existing.length ||
+    !next.startsWith(existing)
+  ) {
+    return false
+  }
+
+  const repeatedSuffix = next.slice(existing.length)
+  if (repeatedSuffix.length % existing.length !== 0) return false
+
+  return repeatedSuffix === existing.repeat(repeatedSuffix.length / existing.length)
+}
+
 function cleanString(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim()
   return trimmed ? trimmed : undefined
+}
+
+function defaultIsExecutableFile(filePath: string): boolean {
+  try {
+    const stats = statSync(filePath)
+    if (!stats.isFile()) return false
+    if (process.platform === "win32") return true
+    return (stats.mode & constants.X_OK) !== 0
+  } catch {
+    return false
+  }
+}
+
+function uniqueCleanStrings(values: Array<string | undefined>): string[] {
+  return Array.from(
+    new Set(values.map((value) => cleanString(value)).filter(Boolean) as string[]),
+  )
+}
+
+export function resolveCodexNativeCommand(
+  input: ResolveCodexNativeCommandInput = {},
+): string {
+  const explicitCommand = cleanString(input.command)
+  if (explicitCommand) return explicitCommand
+
+  const env = input.env ?? process.env
+  const platform = input.platform ?? process.platform
+  const binaryName = platform === "win32" ? "codex.exe" : "codex"
+  const configuredPath =
+    cleanString(env.MOSS_CODEX_CLI_PATH) ?? cleanString(env.CODEX_CLI_PATH)
+  const isExecutableFile = input.isExecutableFile ?? defaultIsExecutableFile
+
+  if (configuredPath) {
+    if (!isExecutableFile(configuredPath)) {
+      throw new Error(`[codex] Configured Codex CLI not found at ${configuredPath}.`)
+    }
+
+    return configuredPath
+  }
+
+  const home = cleanString(input.homeDir) ?? homedir()
+  const delimiter =
+    input.pathDelimiter ?? (platform === "win32" ? ";" : path.delimiter)
+  const pathValue = platform === "win32" ? env.PATH ?? env.Path : env.PATH
+  const pathCandidates =
+    pathValue
+      ?.split(delimiter)
+      .map((pathEntry) => cleanString(pathEntry))
+      .filter(Boolean)
+      .map((pathEntry) => path.join(pathEntry!, binaryName)) ?? []
+  const candidates = uniqueCleanStrings([
+    path.join(home, ".local", "bin", binaryName),
+    path.join(home, ".bun", "bin", binaryName),
+    path.join(home, "bin", binaryName),
+    platform === "darwin" ? path.join("/opt/homebrew/bin", binaryName) : undefined,
+    platform === "darwin" ? path.join("/usr/local/bin", binaryName) : undefined,
+    ...pathCandidates,
+  ])
+
+  return candidates.find((candidate) => isExecutableFile(candidate)) ?? binaryName
 }
 
 export function splitCodexTextForStreamingDeltas(
@@ -245,23 +399,39 @@ function appendCodexExecPermissionArgs(
   args: string[],
   permissionMode: AgentPermissionMode,
 ): string[] {
-  if (permissionMode === "bypass") {
+  if (permissionMode === "bypass" || permissionMode === "full-access") {
     args.push("--dangerously-bypass-approvals-and-sandbox")
     return [
-      "Moss bypass maps to Codex dangerous approval and sandbox bypass.",
+      permissionMode === "full-access"
+        ? "Moss full-access maps to Codex dangerous approval and sandbox bypass."
+        : "Moss bypass maps to Codex dangerous approval and sandbox bypass.",
+    ]
+  }
+
+  if (permissionMode === "custom") {
+    return [
+      "Moss custom permissions defer sandbox and approval policy to Codex config.toml.",
     ]
   }
 
   const sandboxMode =
-    permissionMode === "plan" ? "read-only" : "workspace-write"
+    permissionMode === "plan" || permissionMode === "read-only"
+      ? "read-only"
+      : "workspace-write"
+  const approvalPolicy =
+    permissionMode === "ask-approval" || permissionMode === "read-only"
+      ? "on-request"
+      : "never"
   args.push("-c", `sandbox_mode=${tomlString(sandboxMode)}`)
-  args.push("-c", `approval_policy=${tomlString("never")}`)
+  args.push("-c", `approval_policy=${tomlString(approvalPolicy)}`)
 
   return [
-    permissionMode === "plan"
-      ? "Moss plan mode maps to Codex read-only sandbox for non-interactive resume."
-      : "Moss agent mode maps to Codex workspace-write sandbox for non-interactive resume.",
-    "Codex exec resume is non-interactive, so approvals are set to never.",
+    permissionMode === "plan" || permissionMode === "read-only"
+      ? "Moss read-only permissions map to Codex read-only sandbox."
+      : "Moss workspace permissions map to Codex workspace-write sandbox.",
+    approvalPolicy === "on-request"
+      ? "Moss ask-approval permissions map to Codex on-request approvals."
+      : "Legacy Moss agent permissions keep Codex exec approvals disabled for compatibility.",
   ]
 }
 
@@ -298,19 +468,32 @@ function appendCodexTuiPermissionArgs(
   args: string[],
   permissionMode: AgentPermissionMode,
 ): string[] {
-  if (permissionMode === "bypass") {
+  if (permissionMode === "bypass" || permissionMode === "full-access") {
     args.push("--dangerously-bypass-approvals-and-sandbox")
     return [
-      "Moss bypass maps to Codex dangerous approval and sandbox bypass.",
+      permissionMode === "full-access"
+        ? "Moss full-access maps to Codex dangerous approval and sandbox bypass."
+        : "Moss bypass maps to Codex dangerous approval and sandbox bypass.",
     ]
   }
 
-  args.push("-s", permissionMode === "plan" ? "read-only" : "workspace-write")
+  if (permissionMode === "custom") {
+    return [
+      "Moss custom permissions defer sandbox and approval policy to Codex config.toml.",
+    ]
+  }
+
+  args.push(
+    "-s",
+    permissionMode === "plan" || permissionMode === "read-only"
+      ? "read-only"
+      : "workspace-write",
+  )
   args.push("-a", "on-request")
   return [
-    permissionMode === "plan"
-      ? "Moss plan mode maps to Codex read-only sandbox."
-      : "Moss agent mode maps to Codex workspace-write sandbox.",
+    permissionMode === "plan" || permissionMode === "read-only"
+      ? "Moss read-only permissions map to Codex read-only sandbox."
+      : "Moss workspace permissions map to Codex workspace-write sandbox.",
     "Codex native fork is TUI-backed, so interactive approvals remain available.",
   ]
 }
@@ -348,7 +531,10 @@ function appendPromptArg(
 export function buildCodexNativeSessionBridgePlan(
   input: BuildCodexNativeSessionBridgePlanInput,
 ): CodexNativeSessionBridgePlan {
-  const command = cleanString(input.command) ?? "codex"
+  const command = resolveCodexNativeCommand({
+    command: input.command,
+    env: input.env,
+  })
   const cwd = requireCleanString(input.cwd, "working directory")
   const modelId = cleanString(input.modelId)
   const permissionMode = input.permissionMode ?? "agent"
@@ -1169,8 +1355,24 @@ export function summarizeCodexExecResumeEvents(
         accumulatedDeltaText += text
         summary.lastText = accumulatedDeltaText
       } else {
-        accumulatedDeltaText = ""
-        summary.lastText = text
+        const existingText = accumulatedDeltaText || summary.lastText || ""
+        if (isCodexNativeRepeatedFinalText(existingText, text)) {
+          summary.lastText = existingText
+        } else if (accumulatedDeltaText) {
+          const textAppend = reconcileCodexNativeTextAppend(
+            accumulatedDeltaText,
+            text,
+          )
+          if (textAppend.kind !== "separate") {
+            accumulatedDeltaText += textAppend.appendText
+            summary.lastText = accumulatedDeltaText
+          } else {
+            accumulatedDeltaText = ""
+            summary.lastText = text
+          }
+        } else {
+          summary.lastText = text
+        }
       }
     }
     const usage = extractUsage(event)
@@ -1388,6 +1590,7 @@ export async function runCodexExecBridge(
     prompt,
     promptSource: "stdin",
     imagePaths: materializedImages.imagePaths,
+    env: input.env,
   })
   const runner = input.runner ?? spawnCodexNativeCommand
   const forwardedEventKeys = new Set<string>()

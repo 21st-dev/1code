@@ -42,6 +42,29 @@ let pluginCache: { plugins: PluginInfo[]; timestamp: number } | null = null
 let mcpCache: { configs: PluginMcpConfig[]; timestamp: number } | null = null
 const CACHE_TTL_MS = 30000 // 30 seconds - plugins don't change often during a session
 
+function normalizePluginMcpServerConfig(
+  config: McpServerConfig,
+  pluginPath: string,
+): McpServerConfig {
+  const command = (config as { command?: unknown }).command
+  if (typeof command !== "string" || command.trim() === "") {
+    return config
+  }
+
+  const rawCwd = (config as { cwd?: unknown }).cwd
+  const cwd =
+    typeof rawCwd === "string" && rawCwd.trim() !== ""
+      ? path.isAbsolute(rawCwd)
+        ? rawCwd
+        : path.resolve(pluginPath, rawCwd)
+      : pluginPath
+
+  return {
+    ...config,
+    cwd,
+  }
+}
+
 /**
  * Clear plugin caches (for testing/manual invalidation)
  */
@@ -190,7 +213,10 @@ export async function discoverPluginMcpServers(): Promise<PluginMcpConfig[]> {
       const validServers: Record<string, McpServerConfig> = {}
       for (const [name, config] of Object.entries(serversObj)) {
         if (config && typeof config === "object" && !Array.isArray(config)) {
-          validServers[name] = config as McpServerConfig
+          validServers[name] = normalizePluginMcpServerConfig(
+            config as McpServerConfig,
+            plugin.path,
+          )
         }
       }
 

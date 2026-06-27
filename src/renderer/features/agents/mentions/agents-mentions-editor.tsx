@@ -1,6 +1,7 @@
 "use client"
 
 import { cn } from "../../../lib/utils"
+import { detectSlashCommandTextTrigger } from "../commands/slash-command-trigger"
 import {
   forwardRef,
   useCallback,
@@ -29,7 +30,7 @@ export interface FileMentionOption {
   description?: string // skill/agent/tool description
   tools?: string[] // agent allowed tools
   model?: string // agent model
-  source?: "user" | "project" // skill/agent source
+  source?: "moss" | "user" | "project" | "plugin" // skill/agent source
   mcpServer?: string // MCP server name for tools
 }
 
@@ -471,10 +472,13 @@ function walkTreeOnce(root: HTMLElement, range: Range | null): TreeWalkResult {
     }
   }
 
-  // Validate / trigger - check if space/newline after it
+  // Validate / trigger using the same line-scoped parser as command search tests.
   if (slashIndex !== -1) {
-    const afterSlash = textBeforeCursor.slice(slashIndex + 1)
-    if (afterSlash.includes(" ") || afterSlash.includes("\n")) {
+    const slashTrigger = detectSlashCommandTextTrigger(
+      textBeforeCursor,
+      textBeforeCursor.length,
+    )
+    if (!slashTrigger || slashTrigger.rangeStart !== slashIndex) {
       slashIndex = -1
       slashPosition = null
     }
@@ -1365,7 +1369,7 @@ export const AgentsMentionsEditor = memo(
       return (
         <div className="relative">
           {!hasContent && placeholder && (
-            <div className="pointer-events-none absolute left-1 top-1 text-sm text-muted-foreground/60 whitespace-pre-wrap">
+            <div className="codex-editor-placeholder pointer-events-none absolute left-1 top-1 whitespace-pre-wrap">
               {placeholder}
             </div>
           )}
@@ -1383,8 +1387,9 @@ export const AgentsMentionsEditor = memo(
             }}
             onFocus={onFocus}
             onBlur={onBlur}
+            data-codex-composer-editor
             className={cn(
-              "min-h-[24px] outline-none whitespace-pre-wrap break-words text-sm relative",
+              "codex-composer-editor relative min-h-[24px] whitespace-pre-wrap break-words outline-none",
               disabled && "opacity-50 cursor-not-allowed",
               className,
             )}

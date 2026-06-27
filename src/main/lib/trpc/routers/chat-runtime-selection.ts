@@ -25,12 +25,16 @@ export function buildInitialSubChatValues(input: {
   model?: string
   mode: ChatMode
   messages: string
+  runtimeMetadata?: string
 }) {
   return {
     chatId: input.chatId,
     ...resolveChatRuntimeSelection(input),
     mode: input.mode,
     messages: input.messages,
+    ...(input.runtimeMetadata
+      ? { runtimeMetadata: input.runtimeMetadata }
+      : {}),
   }
 }
 

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import { resolveHermesRuntime } from "../hermes/runtime"
 import type { AgentPermissionMode } from "./types"
 
 export type HermesNativeBridgeAction = "resume" | "fork" | "rollback"
@@ -114,7 +115,9 @@ function requireCleanString(
 export function buildHermesNativeSessionBridgePlan(
   input: BuildHermesNativeSessionBridgePlanInput,
 ): HermesNativeSessionBridgePlan {
-  const command = cleanString(input.command) ?? "hermes"
+  const command = cleanString(input.command) ??
+    resolveHermesRuntime().executable ??
+    "hermes"
   const cwd = requireCleanString(input.cwd, "working directory")
   const sessionId = requireCleanString(input.sessionId, "session id")
   const modelId = cleanString(input.modelId)
@@ -123,6 +126,9 @@ export function buildHermesNativeSessionBridgePlan(
   if (input.action === "resume") {
     const args = ["--resume", sessionId]
     const prompt = cleanString(input.prompt)
+    if (modelId) {
+      args.push("-m", modelId)
+    }
     const promptSource =
       input.promptSource === "none" || !prompt ? "none" : "argument"
     if (promptSource === "argument" && prompt) {
@@ -270,10 +276,11 @@ export async function runHermesCliResumeBridge(
   })
   const stdout = cleanString(result.stdout)
   const stderr = cleanString(result.stderr)
-  const error =
-    result.exitCode === 0
-      ? undefined
-      : stderr ?? stdout ?? `Hermes exited with ${result.exitCode}.`
+  const error = detectHermesCliError({
+    exitCode: result.exitCode,
+    stdout,
+    stderr,
+  })
 
   return {
     ...result,
@@ -283,4 +290,21 @@ export async function runHermesCliResumeBridge(
     ...(error ? { error } : {}),
     success: result.exitCode === 0 && !error,
   }
+}
+
+function detectHermesCliError(input: {
+  exitCode: number | null
+  stdout?: string
+  stderr?: string
+}): string | undefined {
+  if (input.exitCode !== 0) {
+    return input.stderr ?? input.stdout ?? `Hermes exited with ${input.exitCode}.`
+  }
+
+  const text = input.stderr ?? input.stdout
+  if (text && /^API call failed after \d+ retries:/i.test(text)) {
+    return text
+  }
+
+  return undefined
 }
